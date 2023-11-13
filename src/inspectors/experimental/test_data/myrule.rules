@@ -1,0 +1,7 @@
+# Mikes rule file
+
+alert ip any any <> any any
+(
+    msg:"tcp rule fired";
+)
+
