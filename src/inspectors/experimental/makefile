@@ -31,4 +31,4 @@ endif
 
 .PHONY: demo
 demo: $(TARGET)
-	snort -v -r $(TESTDATA)/capture.pcap -c $(TESTDATA)/myconf.lua --plugin-path .
+	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTDATA)/myconf.lua --plugin-path .

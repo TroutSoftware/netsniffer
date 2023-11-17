@@ -32,6 +32,7 @@ static const char* s_help = "mkr playground inspector logger";
 using namespace snort;
 
 extern "C" void rust_pkg(const uint32_t len, const uint8_t* pkt);
+extern "C" void rust_payload(uint16_t size, const uint8_t *data);
 
 //-------------------------------------------------------------------------
 // logger
@@ -84,6 +85,7 @@ class MyInspectorLoggerInspector : public Inspector
 public:
     void eval(Packet*p) override {
         rust_pkg(p->pktlen, p->pkt);
+        rust_payload(p->dsize, p->data);
     }
     bool configure(SnortConfig* sc) override 
     //{ return TraceApi::override_logger_factory(sc, new MyInspectorLoggerFactory()); }
@@ -93,6 +95,7 @@ public:
 
     bool likes(Packet*) override
     {
+        std::cout << "Inspector presented with package" << std::endl;
         return true;
     }
 };
