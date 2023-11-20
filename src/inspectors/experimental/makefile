@@ -7,11 +7,11 @@ TARGET=experimental.so
 TESTDATA=test_data
 INCLUDEDIR=/usr/local/include/snort
 
-$(TARGET): $(RUSTLIBD) plugin_glue/inspector.cc
+$(TARGET): $(RUSTLIBD) plugin_glue/inspector.cc plugin_glue/type_ips_option.cc
 ifeq (,$(wildcard $(BUILDFOLDER)))
 	mkdir $(BUILDFOLDER)
 endif
-	g++ -fPIC -shared plugin_glue/inspector.cc $(RUSTLIBD) -I $(INCLUDEDIR) -o $(BUILDFOLDER)/$(TARGET)
+	g++ -fPIC -shared plugin_glue/inspector.cc plugin_glue/type_ips_option.cc $(RUSTLIBD) -I $(INCLUDEDIR) -o $(BUILDFOLDER)/$(TARGET)
 
 .PHONY: $(RUSTLIBD)
 $(RUSTLIBD):
@@ -31,4 +31,4 @@ endif
 
 .PHONY: demo
 demo: $(TARGET)
-	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTDATA)/myconf.lua --plugin-path .
+	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTDATA)/myconf.lua --plugin-path . -A alert_talos --warn-all

@@ -26,8 +26,8 @@
 
 #include <iostream>
 
-static const char* s_name = "mkr_inspector";
-static const char* s_help = "mkr playground inspector logger";
+static const char* s_name = "profinet";
+static const char* s_help = "profinet experimental inspector";
 
 using namespace snort;
 
@@ -69,18 +69,75 @@ public:
 
 class MyInspectorLoggerModule : public Module
 {
+    
+    // TODO: Should be an array, but written like this in the modbus code
+    struct ProfinetStats
+    {
+        PegCount reqCount;
+        PegCount respCount;
+    } profinetStats = {0,0};
+
+    static constexpr PegInfo peg_names[] =
+    {
+        { CountType::SUM, "requests", "total requests seen" },
+        { CountType::SUM, "responses", "total responses seen" },
+        // Indicate end of list
+        { CountType::END, nullptr, nullptr }
+    };
+    
 public:
     MyInspectorLoggerModule() : Module(s_name, s_help) { }
 
-    Usage get_usage() const override
-    { return GLOBAL; }
+    Usage get_usage() const override {
+        return GLOBAL;
+    }
+
+    //////////////// Peg functions ////////////////
+    const PegInfo* get_pegs() const override
+    {
+        return peg_names;
+    }
+
+    PegCount* get_counts() const override
+    {
+        return (PegCount*)&profinetStats;
+    }
+    ////////////// End peg functions //////////////
+
+
+    /////////// Configuration functions ///////////
+    virtual bool begin(const char *s, int i, SnortConfig*)
+    {
+        std::cout << "Begin parameter passing (" << i << ")" << std::endl;
+        if(s) std::cout << "  " << s << std::endl;
+        std::cout << "^------------" << std::endl;
+        return true;
+    }
+
+    virtual bool end(const char *s, int i, SnortConfig*)
+    {
+        std::cout << "End parameter passing (" << i << ")" << std::endl;
+        if(s) std::cout << "  " << s << std::endl;
+        std::cout << "^------------" << std::endl;
+        return true;
+    }
+
+    virtual bool set(const char *s, Value&, SnortConfig*)
+    {
+        std::cout << "Set parameter" << std::endl;
+        if(s) std::cout << "  " << s << std::endl;
+        std::cout << "^------------" << std::endl;
+        return true;
+    }
+
+    ///////// End configuration functions /////////
 };
 
 //-------------------------------------------------------------------------
 // inspector
 //-------------------------------------------------------------------------
 
-class MyInspectorLoggerInspector : public Inspector
+class ProfinetInspector : public Inspector
 {
 public:
     void eval(Packet*p) override {
@@ -95,9 +152,11 @@ public:
 
     bool likes(Packet*) override
     {
-        std::cout << "Inspector presented with package" << std::endl;
+        std::cout << "Profinet inspector presented with package" << std::endl;
         return true;
     }
+
+
 };
 
 //-------------------------------------------------------------------------
@@ -116,7 +175,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* ntl_ctor(Module*)
 {
-    return new MyInspectorLoggerInspector;
+    return new ProfinetInspector;
 }
 
 static void ntl_dtor(Inspector* p)
@@ -138,10 +197,10 @@ static const InspectApi ntl_api
         mod_ctor,
         mod_dtor
     },
-    IT_PROBE, //IT_SERVICE, //IT_CONTROL, //IT_PACKET, //IT_PROBE, //IT_PASSIVE,
-    PROTO_BIT__ALL, //PROTO_BIT__NONE,
+    IT_SERVICE, //IT_PROBE, //IT_SERVICE, //IT_CONTROL, //IT_PACKET, //IT_PROBE, //IT_PASSIVE,
+    PROTO_BIT__PDU, //PROTO_BIT__ALL, //PROTO_BIT__NONE,
     nullptr, // buffers
-    nullptr, // service
+    "profinet", //nullptr, // service
     nullptr, // pinit
     nullptr, // pterm
     nullptr, // tinit,
@@ -152,9 +211,12 @@ static const InspectApi ntl_api
     nullptr  // reset
 };
 
+extern const BaseApi* ips_profinet_type;
+
 SO_PUBLIC const BaseApi* snort_plugins[] =
 {
     &ntl_api.base,
+    ips_profinet_type,
     nullptr
 };
 

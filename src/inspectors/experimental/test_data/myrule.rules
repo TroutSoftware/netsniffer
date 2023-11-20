@@ -1,7 +1,17 @@
-# Mikes rule file
+# Mikes rule file, note - The two rules are seen as duplicate by snort... why???
 
-alert ip any any <> any any
+# alert ip 10.10.0.129 any -> any any
+# (
+#    msg:"detected package from 10.10.0.129";
+#    profinet_type: 2;
+# )
+
+
+alert ip 10.10.0.150 any -> any any
 (
-    msg:"tcp rule fired";
+    msg:"detected package from 10.10.0.150";
+    profinet_type: 1;
 )
+
+
 
