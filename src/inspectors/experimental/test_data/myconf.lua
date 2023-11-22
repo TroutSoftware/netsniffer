@@ -10,7 +10,7 @@ profinet =
 --    param2 = 23
 }
 
--- binder =
--- {
---     {when = { ports = '1566' }, use = { type = 'profinet' }, },
--- }
+binder =
+{
+  {when = { ports = '1566' }, use = { type = 'profinet' }, },
+}

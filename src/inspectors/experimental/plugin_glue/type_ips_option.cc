@@ -2,6 +2,8 @@
 #include "config.h"
 #endif
 
+#include <iostream>
+
 #include "framework/ips_option.h"
 #include "framework/module.h"
 #include "hash/hash_key_operations.h"
@@ -56,6 +58,7 @@ bool ModbusUnitOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus ModbusUnitOption::eval(Cursor&, Packet* p)
 {
+    std::cout << "ModbusUnitOption::eval called - ";
 /*    
     RuleProfile profile(modbus_unit_prof);  // cppcheck-suppress unreadVariable
 
@@ -72,7 +75,12 @@ IpsOption::EvalStatus ModbusUnitOption::eval(Cursor&, Packet* p)
         return MATCH;
 */
 
-    if (p->dsize > 2 && p->data[1] == unit) return MATCH;
+    if (p->dsize > 2 && p->data[1] == unit) {
+        std::cout << "returning match for unit: " << unit << std::endl;
+        return MATCH;
+    }
+
+    std::cout << "returning NO-match for unit: " << unit << " size: " << p->dsize << std::endl;
 
     return NO_MATCH;
 }

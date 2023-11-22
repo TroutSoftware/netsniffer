@@ -88,9 +88,9 @@ class MyInspectorLoggerModule : public Module
 public:
     MyInspectorLoggerModule() : Module(s_name, s_help) { }
 
-    Usage get_usage() const override {
-        return GLOBAL;
-    }
+//    Usage get_usage() const override {
+//        return GLOBAL;
+//    }
 
     //////////////// Peg functions ////////////////
     const PegInfo* get_pegs() const override
@@ -102,7 +102,7 @@ public:
     {
         return (PegCount*)&profinetStats;
     }
-    ////////////// End peg functions //////////////
+    ////////////// END peg functions //////////////
 
 
     /////////// Configuration functions ///////////
@@ -130,7 +130,19 @@ public:
         return true;
     }
 
-    ///////// End configuration functions /////////
+    ///////// END configuration functions /////////
+
+    //// Various functions for experimentation ////
+    bool is_bindable() const override
+    {
+        return true;
+    }
+
+    Usage get_usage() const override
+    {
+        return INSPECT;
+    }
+    // END Various functions for experimentation //
 };
 
 //-------------------------------------------------------------------------
