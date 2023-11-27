@@ -12,5 +12,8 @@ profinet =
 
 binder =
 {
-  {when = { ports = '1566' }, use = { type = 'profinet' }, },
+  {when = { proto = 'udp', ports = '1566' }, use = { type = 'profinet' }, },
+
+  {use = { action = 'allow' } },
+  
 }
