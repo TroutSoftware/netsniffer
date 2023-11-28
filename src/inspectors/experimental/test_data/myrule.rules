@@ -1,5 +1,12 @@
 # Mikes rule file, note - The two rules are seen as duplicate by snort... why???
 
+alert profinet any any -> any any
+(
+    sid:10000;
+    msg:"profinet package detected";
+    profinet_type: 0;
+)
+
 alert ip 10.10.0.129 any -> any any
 (
    sid: 10001;
@@ -15,11 +22,6 @@ alert ip 10.10.0.150 any -> any any
     profinet_type: 0;
 )
 
-alert profinet any any -> any any
-(
-    sid:10003;
-    msg:"profinet package detected";
-#    profinet_type: 0;
-)
+
 
 

@@ -13,6 +13,7 @@ profinet =
 binder =
 {
   {when = { proto = 'udp', ports = '1566' }, use = { type = 'profinet' }, },
+--    {when = { proto = 'udp', ports = '1566' } },
 
   {use = { action = 'allow' } },
   
