@@ -1,6 +1,27 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+// Copyright (c) Trout Software 2023
+
+// Modify the next two statics to set the module name, and help text for snort
+// Strings must be 0 terminated, as they are used unmodified by the C code
+/// cbindgen:ignore
+static MODULE_NAME:      &'static str = "trafic_log\0";
+/// cbindgen:ignore
+static MODULE_HELP_TEXT: &'static str = "trafic_log logging network trafic\0";
+
+
+// Export functions for module setup
+#[no_mangle]
+pub extern "C" fn getModuleName() -> *const u8 {
+    assert!(MODULE_NAME.ends_with("\0"));
+    MODULE_NAME.as_ptr()
 }
+
+#[no_mangle]
+pub extern "C" fn getModuleHelpText() -> *const u8 {
+    assert!(MODULE_HELP_TEXT.ends_with("\0"));    
+    MODULE_HELP_TEXT.as_ptr()
+}
+
+//// vvvv //// OLD DEPRECATED CODE BELOW //// vvvv ////
 
 #[no_mangle]
 pub extern "C" fn rust_init() {
@@ -20,6 +41,8 @@ pub extern "C" fn rust_pkg(len: u32, pkt: *const u8) {
     }
 }
 
+
+
 #[no_mangle]
 pub extern "C" fn rust_payload(size: u16, data: *const u8) {
     // Process the payload of the package
@@ -29,6 +52,8 @@ pub extern "C" fn rust_payload(size: u16, data: *const u8) {
         process_data(std::slice::from_raw_parts(data, size.try_into().unwrap()));
     }
 }
+
+
 
 // Safe rust code
 fn process_pkg(_data: &[u8]) {

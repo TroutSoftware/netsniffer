@@ -3,16 +3,16 @@
 #include "framework/inspector.h"
 #include "framework/module.h"
 #include "protocols/packet.h"
+#include "rustlink.h"
+
+#include <iostream>
 
 using namespace snort;
-
-static const char* s_name = "trafic_log";
-static const char* s_help = "trafic_log logging network trafic";
 
 class TrafficLogModule : public Module
 {
 public:
-    TrafficLogModule() : Module(s_name, s_help) { }
+    TrafficLogModule() : Module((char*)getModuleName(), (char*)getModuleHelpText()) { }
 };
 
 class TrafficLogInspector : public Inspector
@@ -24,6 +24,15 @@ private:
 
 };
 
+class myStaticClass
+{
+public:
+    myStaticClass()
+    {
+        std::cout << "------------------ Strange name: >" << getModuleName() << "<" << std::endl;
+    }
+} myStaticClass;
+
 const InspectApi reputation_api =
 {
     {
@@ -32,9 +41,9 @@ const InspectApi reputation_api =
         INSAPI_VERSION,
         0,
         API_RESERVED,
-        API_OPTIONS,
-        s_name,
-        s_help,
+        API_OPTIONS,   
+        (const char*)getModuleName(),
+        (const char*)getModuleHelpText(),
         []()->Module*{return new TrafficLogModule;},    // Module constructor
         [](Module* m){delete m;},                       // Module destructor
     },

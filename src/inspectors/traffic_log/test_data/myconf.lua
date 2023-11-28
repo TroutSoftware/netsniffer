@@ -10,6 +10,8 @@ trafic_log =
 --    param2 = 23
 }
 
+--myRustModule = {}
+
 -- binder =
 -- {
 --  {when = { proto = 'udp', ports = '1566' }, use = { type = 'traficlog' }, },
