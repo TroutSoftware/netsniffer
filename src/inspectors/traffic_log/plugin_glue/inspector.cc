@@ -12,26 +12,35 @@ using namespace snort;
 class TrafficLogModule : public Module
 {
 public:
-    TrafficLogModule() : Module((char*)getModuleName(), (char*)getModuleHelpText()) { }
+    TrafficLogModule() : Module((char*)getModuleName(), (char*)getModuleHelpText()) {
+        //std::cout << "**TrafficLogModule instantiated" << std::endl;        
+    }
+
+    Usage get_usage() const override
+    {
+        return GLOBAL; //INSPECT;
+    }    
 };
 
 class TrafficLogInspector : public Inspector
-{
-private:
-    void eval(Packet*p) override {
-        // This is the magic function that should be filled out
+{    
+    TrafficLogModule *module;
+    
+    void eval(Packet*packet) override {
+        //std::cout << "**Calling Rust from C" << std::endl;
+        snortEval(reinterpret_cast<SnortPacket>(packet));
     }
-
+public:
+    TrafficLogInspector(TrafficLogModule *module) : module(module) {
+        //std::cout << "**TrafficLogInspector instantiated" << std::endl;
+    }
 };
 
-class myStaticClass
-{
-public:
-    myStaticClass()
-    {
-        std::cout << "------------------ Strange name: >" << getModuleName() << "<" << std::endl;
-    }
-} myStaticClass;
+const uint8_t *getType(const void *packet) {
+    const char *type = reinterpret_cast<Packet*>(const_cast<void*>(packet))->get_type();
+    //std::cout << "** C++ snort says type is: " << type << std::endl;
+    return reinterpret_cast<const uint8_t*>(type);
+}
 
 const InspectApi reputation_api =
 {
@@ -47,15 +56,15 @@ const InspectApi reputation_api =
         []()->Module*{return new TrafficLogModule;},    // Module constructor
         [](Module* m){delete m;},                       // Module destructor
     },
-    IT_PASSIVE,
-    PROTO_BIT__ANY_IP,
+    IT_PROBE, 
+    PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, 
     nullptr, // buffers
     nullptr, // service
     nullptr, // pinit
     nullptr, // pterm
     nullptr, // tinit
     nullptr, // tterm
-    [](Module*)->Inspector*{return new TrafficLogInspector();},  // Inspector constructor
+    [](Module*module)->Inspector*{return new TrafficLogInspector((TrafficLogModule*)module);},  // Inspector constructor
     [](Inspector* p){delete p;},                    // Inspector destructor
     nullptr, // ssn
     nullptr  // reset
