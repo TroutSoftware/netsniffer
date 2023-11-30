@@ -8,6 +8,76 @@ static MODULE_NAME:      &'static str = "trafic_log\0";
 /// cbindgen:ignore
 static MODULE_HELP_TEXT: &'static str = "trafic_log logging network trafic\0";
 
+// Callbacks from the snort glue code
+#[no_mangle]
+pub extern "C" fn snortEval(packet: SnortPacket) {
+    println!("**Rust got packet");
+    let type_name = packet.get_type();
+    println!("**  type is: {type_name}");
+    if packet.has_ip() {
+        let src_ip = packet.get_src_ip();
+        println!("**  Src IP: {src_ip}");
+        let dst_ip = packet.get_dst_ip();
+        println!("**  Src IP: {dst_ip}");
+
+    } else {
+        println!("**  packet is not IP based");
+    }
+}
+
+
+// Definition of SnortPacket type, and Packet trait w. implementation for SnortPacket
+type SnortPacket = *const std::ffi::c_void;
+
+pub trait Packet {
+    fn get_type(&self) -> String;   // Returns a string like "UPD", "TCP", ... for the type of the packet
+    fn has_ip(&self) -> bool;       // Returns true if packet is IP based, otherwise returns false
+    fn get_src_ip(&self) -> String;   // Returns a string with the src addr (only valid if has_ip returns true)
+    fn get_dst_ip(&self) -> String;   // Returns a string with the dst addr (only valid if has_ip returns true)
+}
+
+impl Packet for SnortPacket {
+    fn get_type(&self) -> String {                
+        unsafe {
+            conv_cstring(getType(*self))
+        }        
+    }
+
+    fn has_ip(&self) -> bool {
+        unsafe {
+            hasIp(*self)
+        }
+    }
+
+    fn get_src_ip(&self) -> String {
+        unsafe {
+            let mut buffer: std::vec::Vec<u8> = std::vec::Vec::new();
+            buffer.resize(getMaxIpLen(), 0);
+            getSrcIp(*self, buffer.as_mut_ptr(), buffer.len());
+            conv_cstring(buffer.as_ptr())
+        }
+    }
+
+    fn get_dst_ip(&self) -> String {
+        unsafe {
+            let mut buffer: std::vec::Vec<u8> = std::vec::Vec::new();
+            buffer.resize(getMaxIpLen(), 0);
+            getDstIp(*self, buffer.as_mut_ptr(), buffer.len());
+            conv_cstring(buffer.as_ptr())
+        }
+    }
+
+}
+
+// Prototypes for calls to snort plugin glue code
+extern "C" {
+    fn getType(packet: SnortPacket) -> *const u8;   
+    fn hasIp(packet: SnortPacket) -> bool;
+    
+    fn getMaxIpLen() -> usize;  // Returns min lenght for the string that must be given to below functions
+    fn getSrcIp(packet: SnortPacket, srcData: *mut u8, srcLen: usize);
+    fn getDstIp(packet: SnortPacket, srcData: *mut u8, srcLen: usize);
+}
 
 // Export functions for module setup
 #[no_mangle]
@@ -22,48 +92,24 @@ pub extern "C" fn getModuleHelpText() -> *const u8 {
     MODULE_HELP_TEXT.as_ptr()
 }
 
-// Callbacks from the snort glue code
+// Helper functions for type conversion between C and Rust
 
-type SnortPacket = *const std::ffi::c_void;
-
-pub trait Packet {
-    fn get_type(&self) -> String;
-}
-
-impl Packet for SnortPacket {
-    fn get_type(&self) -> String {
-        let result: String;
-        
-        unsafe {
-            let data = getType(*self);
+fn conv_cstring(in_str: *const u8) -> String {
+    unsafe {
             let mut count = 0;
 
-            while *data.offset(count) != 0 {
+            while *in_str.offset(count) != 0 {
                 count += 1;
             }
 
-            let type_string = std::ptr::slice_from_raw_parts(data, usize::try_from(count).unwrap());
+            let out_slice = std::ptr::slice_from_raw_parts(in_str, usize::try_from(count).unwrap());
             
-            result = std::str::from_utf8(&*type_string).unwrap().to_string();
-        }
-        return result
-        //format!("unknown {result}")        
+            std::str::from_utf8(&*out_slice).unwrap().to_string()
     }
-
-
 }
 
 
-#[no_mangle]
-pub extern "C" fn snortEval(packet: SnortPacket) {
-    println!("**Rust got package");
-    let type_name = packet.get_type();
-    println!("**type is: {type_name}");
-}
-
-extern "C" {
-    fn getType(packet: SnortPacket) -> *const u8;
-}
+//////////////////////// END OF USEFULL CONTENT ////////////////////////
 
 
 /*
