@@ -18,7 +18,7 @@ pub extern "C" fn snortEval(packet: SnortPacket) {
         let src_ip = packet.get_src_ip();
         println!("**  Src IP: {src_ip}");
         let dst_ip = packet.get_dst_ip();
-        println!("**  Src IP: {dst_ip}");
+        println!("**  Dst IP: {dst_ip}");
 
     } else {
         println!("**  packet is not IP based");
