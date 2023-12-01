@@ -11,6 +11,7 @@ RUSTLIBD=$(RUSTBUILD)/debug/librust_lib.a
 RUSTCLINK=$(BUILDFOLDER)/rustlink.h
 TARGET=trafficlog.so
 TESTDATA=test_data
+TESTCONFIG=test_config
 INCLUDEDIR=/usr/local/include/snort
 
 $(TARGET): $(RUSTLIBD) plugin_glue/inspector.cc
@@ -38,4 +39,8 @@ endif
 
 .PHONY: demo
 demo: $(TARGET)
-	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTDATA)/myconf.lua --plugin-path . -A alert_talos --warn-all
+	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all 
+
+.PHONY: test-scan
+test-scan: $(TARGET)
+	snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
