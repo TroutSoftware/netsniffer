@@ -5,6 +5,11 @@ ifeq (, $(shell which cbindgen))
 $(error "You need to have a valid cbindgen installed to create the bindings between rust and C, e.g. on Ubuntu: sudo apt install cbindgen")
 endif
 
+ifeq (, $(shell which valgrind))
+$(error "You need to have a valid valgrind installed to run thread and memory checks on the code, e.g. on Ubuntu: sudo apt install valgrind")
+endif
+
+
 BUILDFOLDER=build
 RUSTBUILD=rust_lib/target
 RUSTLIBD=$(RUSTBUILD)/debug/librust_lib.a
@@ -44,3 +49,13 @@ demo: $(TARGET)
 .PHONY: test-scan
 test-scan: $(TARGET)
 	snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
+
+.PHONY: mem-check
+mem-check: $(TARGET)
+	valgrind --leak-check=yes snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
+
+.PHONY: thread-check
+thread-check: $(TARGET)
+	valgrind --tool=helgrind snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
+
+all-check: mem-check thread-check

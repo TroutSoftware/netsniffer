@@ -11,9 +11,9 @@ static MODULE_HELP_TEXT: &'static str = "trafic_log logging network trafic\0";
 // Callbacks from the snort glue code
 
 #[no_mangle]
-pub extern "C" fn snortEval(packet: SnortPacket) {   
+pub extern "C" fn snortEval(packet: SnortPacket) {
     let type_name = packet.get_type();
-    
+
     if packet.has_ip() {
         let src_ip = packet.get_src_ip();
         let dst_ip = packet.get_dst_ip();
@@ -35,10 +35,10 @@ pub trait Packet {
 }
 
 impl Packet for SnortPacket {
-    fn get_type(&self) -> String {                
+    fn get_type(&self) -> String {
         unsafe {
             conv_cstring(getType(*self))
-        }        
+        }
     }
 
     fn has_ip(&self) -> bool {
@@ -54,6 +54,7 @@ impl Packet for SnortPacket {
             getSrcIp(*self, buffer.as_mut_ptr(), buffer.len());
             conv_cstring(buffer.as_ptr())
         }
+
     }
 
     fn get_dst_ip(&self) -> String {
@@ -69,9 +70,9 @@ impl Packet for SnortPacket {
 
 // Prototypes for calls to snort plugin glue code
 extern "C" {
-    fn getType(packet: SnortPacket) -> *const u8;   
+    fn getType(packet: SnortPacket) -> *const u8;
     fn hasIp(packet: SnortPacket) -> bool;
-    
+
     fn getMaxIpLen() -> usize;  // Returns min lenght for the string that must be given to below functions
     fn getSrcIp(packet: SnortPacket, srcData: *mut u8, srcLen: usize);
     fn getDstIp(packet: SnortPacket, srcData: *mut u8, srcLen: usize);
@@ -86,7 +87,7 @@ pub extern "C" fn getModuleName() -> *const u8 {
 
 #[no_mangle]
 pub extern "C" fn getModuleHelpText() -> *const u8 {
-    assert!(MODULE_HELP_TEXT.ends_with("\0"));    
+    assert!(MODULE_HELP_TEXT.ends_with("\0"));
     MODULE_HELP_TEXT.as_ptr()
 }
 
@@ -101,7 +102,7 @@ fn conv_cstring(in_str: *const u8) -> String {
             }
 
             let out_slice = std::ptr::slice_from_raw_parts(in_str, usize::try_from(count).unwrap());
-            
+
             std::str::from_utf8(&*out_slice).unwrap().to_string()
     }
 }
