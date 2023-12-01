@@ -9,19 +9,17 @@ static MODULE_NAME:      &'static str = "trafic_log\0";
 static MODULE_HELP_TEXT: &'static str = "trafic_log logging network trafic\0";
 
 // Callbacks from the snort glue code
+
 #[no_mangle]
-pub extern "C" fn snortEval(packet: SnortPacket) {
-    println!("**Rust got packet");
+pub extern "C" fn snortEval(packet: SnortPacket) {   
     let type_name = packet.get_type();
-    println!("**  type is: {type_name}");
+    
     if packet.has_ip() {
         let src_ip = packet.get_src_ip();
-        println!("**  Src IP: {src_ip}");
         let dst_ip = packet.get_dst_ip();
-        println!("**  Dst IP: {dst_ip}");
-
+        println!("** {type_name}: {src_ip} -> {dst_ip}");
     } else {
-        println!("**  packet is not IP based");
+        println!("** packet is not IP based");
     }
 }
 
@@ -105,102 +103,5 @@ fn conv_cstring(in_str: *const u8) -> String {
             let out_slice = std::ptr::slice_from_raw_parts(in_str, usize::try_from(count).unwrap());
             
             std::str::from_utf8(&*out_slice).unwrap().to_string()
-    }
-}
-
-
-//////////////////////// END OF USEFULL CONTENT ////////////////////////
-
-
-/*
-type SnortPackage = std::ffi::c_void;
-
-trait Package {    
-    extern "C" fn eval(&self);
-}
-
-impl Package for *const SnortPackage {
-    #[no_mangle]
-    extern "C" fn eval(&self) {
-        println!("Snort got package");
-    }
-}
-*/
-/*
-impl SnortPackage {
-    #[no_mangle]
-    pub extern "C" fn eval(&self) {
-        println!("Snort got package");
-    }
-}
-*/
-
-//// vvvv //// OLD DEPRECATED CODE BELOW //// vvvv ////
-
-#[no_mangle]
-pub extern "C" fn rust_init() {
-    println!("This is rust code!");
-}
-
-#[no_mangle]
-pub extern "C" fn rust_add(a: i32, b: i32) -> i32 {
-    a+b
-}
-
-#[no_mangle]
-pub extern "C" fn rust_pkg(len: u32, pkt: *const u8) {
-    // Process the package, we are in unsafe land when touching pointers directly
-    unsafe {
-        process_pkg(std::slice::from_raw_parts(pkt, len.try_into().unwrap()));
-    }
-}
-
-
-
-#[no_mangle]
-pub extern "C" fn rust_payload(size: u16, data: *const u8) {
-    // Process the payload of the package
-
-    println!("Payload size is {size} bytes");
-    unsafe {
-        process_data(std::slice::from_raw_parts(data, size.try_into().unwrap()));
-    }
-}
-
-
-
-// Safe rust code
-fn process_pkg(_data: &[u8]) {
-    println!("Rust got new package:");
-
-    //for (i, &byte) in data.iter().enumerate() {
-    //    println!("mkr [{i}]='{byte}'");
-    //}
-    println!("---------------------");
-}
-
-fn process_data(data: &[u8]) {
-    println!("Rust got new payload:");
-
-    //for (i, &byte) in data.iter().enumerate() {
-    //    println!("mkr [{i}]='{byte}'");
-    //}
-
-    let version = data[0];
-    let ptype = data[1];
-    println!("Version: {version}");
-    println!("Type: {ptype}");
-    
-    println!("---------------------");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
     }
 }
