@@ -79,6 +79,7 @@ extern "C" {
 }
 
 // Export functions for module setup
+
 #[no_mangle]
 pub extern "C" fn getModuleName() -> *const u8 {
     assert!(MODULE_NAME.ends_with("\0"));

@@ -44,7 +44,7 @@ endif
 
 .PHONY: demo
 demo: $(TARGET)
-	snort -v -r $(TESTDATA)/profinet.pcap -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all 
+	snort -v -r $(TESTDATA)/capture2.pcap -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all
 
 .PHONY: test-scan
 test-scan: $(TARGET)
@@ -52,10 +52,10 @@ test-scan: $(TARGET)
 
 .PHONY: mem-check
 mem-check: $(TARGET)
-	valgrind --leak-check=yes snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
+	valgrind --leak-check=yes snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos -z 2 -q
 
 .PHONY: thread-check
 thread-check: $(TARGET)
-	valgrind --tool=helgrind snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all -z 2 -q
+	valgrind --tool=helgrind snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos -z 2 -q
 
 all-check: mem-check thread-check

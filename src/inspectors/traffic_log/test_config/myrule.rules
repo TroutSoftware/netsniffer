@@ -1,4 +1,4 @@
-# Mikes rule file, note - The two rules are seen as duplicate by snort... why???
+
 
 alert profinet any any -> any any
 (
