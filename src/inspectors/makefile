@@ -17,14 +17,15 @@ RUSTCLINK=$(BUILDFOLDER)/rustlink.h
 TARGET=trafficlog.so
 TESTDATA=test_data
 TESTCONFIG=test_config
-INCLUDEDIR=/usr/local/include/snort
+INCLUDEDIR= -I /usr/local/include/snort -I /opt/snort/include/snort/
+
 
 $(TARGET): $(RUSTLIBD) plugin_glue/inspector.cc
 ifeq (,$(wildcard $(BUILDFOLDER)))
 	mkdir $(BUILDFOLDER)
 endif
 	cd rust_lib; cbindgen -o ../$(RUSTCLINK)
-	g++ -fPIC -shared plugin_glue/inspector.cc $(RUSTLIBD) -I $(INCLUDEDIR) -I $(BUILDFOLDER) -o $(BUILDFOLDER)/$(TARGET)
+	g++ -fPIC -shared plugin_glue/inspector.cc $(RUSTLIBD) $(INCLUDEDIR) -I $(BUILDFOLDER) -o $(BUILDFOLDER)/$(TARGET)
 
 .PHONY: $(RUSTLIBD)
 $(RUSTLIBD):
@@ -44,7 +45,7 @@ endif
 
 .PHONY: demo
 demo: $(TARGET)
-	snort -v -r $(TESTDATA)/capture2.pcap -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos --warn-all
+	snort -v -r $(TESTCAP) -c $(TESTCONFIG)/min_cfg.lua --plugin-path . -A alert_talos --warn-all
 
 .PHONY: test-scan
 test-scan: $(TARGET)
@@ -59,3 +60,6 @@ thread-check: $(TARGET)
 	valgrind --tool=helgrind snort -v --pcap-dir $(TESTDATA) -c $(TESTCONFIG)/myconf.lua --plugin-path . -A alert_talos -z 2 -q
 
 all-check: mem-check thread-check
+
+newstuff:
+	snort -v -c test_config/min_cfg.lua --plugin-path . -A talos -r test_data/tcp_flow.pcap
