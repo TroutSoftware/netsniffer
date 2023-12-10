@@ -19,6 +19,8 @@ TESTDATA=test_data
 TESTCONFIG=test_config
 INCLUDEDIR= -I /usr/local/include/snort -I /opt/snort/include/snort/
 
+SNORT=/opt/snort/bin/snort
+
 
 $(TARGET): $(RUSTLIBD) plugin_glue/inspector.cc
 ifeq (,$(wildcard $(BUILDFOLDER)))
@@ -62,4 +64,4 @@ thread-check: $(TARGET)
 all-check: mem-check thread-check
 
 newstuff:
-	snort -v -c test_config/min_cfg.lua --plugin-path . -A talos -r test_data/tcp_flow.pcap
+	$(SNORT) -v -c test_config/min_cfg.lua --plugin-path p -A talos -r test_data/tcp_flow.pcap --warn-all

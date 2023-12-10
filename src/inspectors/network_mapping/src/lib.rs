@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 #[cxx::bridge]
 mod ffi {
     unsafe extern "C++" {
@@ -7,17 +5,28 @@ mod ffi {
 
         #[namespace = "snort"]
         type Packet;
+
+        fn is_from_client_originally(&self) -> bool;
+        fn has_ip(&self) -> bool;
+        fn get_type(&self) -> *const c_char;
+        fn is_tcp(&self) -> bool;
     }
 
     extern "Rust" {
-        fn eval_packet(pkt: Pin<&mut Packet>);
+        fn eval_packet(pkt: &Packet);
     }
 }
 
+use std::ffi::CStr;
 use crate::ffi::Packet;
 
-pub fn eval_packet(_pkt: Pin<&mut Packet>) {
-    println!("machinery in place!");
+pub fn eval_packet(pkt: &Packet) {
+    let client_orig = pkt.is_from_client_originally();
+    let has_ip = pkt.has_ip();
+    let of_type = unsafe{CStr::from_ptr(pkt.get_type())}.to_str().expect("invalid results from Snort");
+    let tcp = pkt.is_tcp();
+
+    println!("machinery in place {client_orig}, {has_ip}, {tcp} {of_type}");
 }
 
 // Callbacks from the snort glue code

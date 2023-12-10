@@ -9,19 +9,22 @@
 #include "sfip/sf_ip.h"
 
 #include "network_mapping/lib.rs.h"
+#include "rust.h"
 
 using namespace snort;
+
+static const Parameter nm_params[] = {
+    {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
+};
 
 class NetworkMappingModule : public Module {
 public:
   NetworkMappingModule()
-      : Module("network_mapping", "Help map resources in the network based on their comms") {
-    std::cout << "**NetworkMappingModule instantiated" << std::endl;
-  }
+      : Module("network_mapping",
+               "Help map resources in the network based on their comms",
+               nm_params) {}
 
-  Usage get_usage() const override {
-    return GLOBAL; // INSPECT;
-  }
+  Usage get_usage() const override { return GLOBAL; }
 };
 
 class NetworkMappingInspector : public Inspector {
@@ -29,19 +32,6 @@ class NetworkMappingInspector : public Inspector {
 
   void eval(Packet *packet) override {
     assert(packet);
-    // std::cout << "** sp: " << packet->ptrs.sp << std::endl;
-    // std::cout << "** dp: " << packet->ptrs.dp << std::endl;
-    std::cout << "** get_type(): " << packet->get_type() << std::endl;
-    std::cout << "** get_pseudo_type(): " << packet->get_pseudo_type()
-              << std::endl;
-    if (packet->flow == 0)
-      std::cout << "** packet->flow is null" << std::endl;
-    if (packet->flow != 0 && packet->flow->service == 0)
-      std::cout << "** packet->flow->service is null" << std::endl;
-    if (packet->flow && packet->flow->service) {
-      std::cout << "** flow.service: " << packet->flow->service << std::endl;
-    }
-
     eval_packet(*packet);
   }
 
@@ -60,7 +50,6 @@ public:
   };
 
   bool configure(SnortConfig *sc) override {
-    std::cout << "++ configure being called" << std::endl;
     // sc->set_run_flags(RUN_FLAG__TRACK_ON_SYN);
 
     //    static void subscribe(const PubKey&, unsigned id, DataHandler*);
@@ -160,13 +149,18 @@ public:
 
 const InspectApi networkmap_api = {
     {
-        PT_INSPECTOR, sizeof(InspectApi), INSAPI_VERSION, 0, API_RESERVED,
-        API_OPTIONS, "network_mapping",
+        PT_INSPECTOR,
+        sizeof(InspectApi),
+        INSAPI_VERSION,
+        0,
+        API_RESERVED,
+        API_OPTIONS,
+        "network_mapping",
         "Help map resources in the network based on their comms",
-        []() -> Module * { return new NetworkMappingModule; }, // Module constructor
-        [](Module *m) { delete m; },                       // Module destructor
+        []() -> Module * { return new NetworkMappingModule; },
+        [](Module *m) { delete m; },
     },
-    IT_PROBE,       // IT_PASSIVE,
+    IT_PROBE,
     PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
     nullptr,        // buffers
     nullptr,        // service
@@ -176,10 +170,10 @@ const InspectApi networkmap_api = {
     nullptr,        // tterm
     [](Module *module) -> Inspector * {
       return new NetworkMappingInspector((NetworkMappingModule *)module);
-    },                              // Inspector constructor
-    [](Inspector *p) { delete p; }, // Inspector destructor
-    nullptr,                        // ssn
-    nullptr                         // reset
+    },
+    [](Inspector *p) { delete p; },
+    nullptr, // ssn
+    nullptr  // reset
 };
 
 SO_PUBLIC const BaseApi *snort_plugins[] = {&networkmap_api.base, nullptr};

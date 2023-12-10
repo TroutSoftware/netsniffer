@@ -11,7 +11,9 @@ wizard = {
     },
 }
 
-network_mapping = { }
+network_mapping = { 
+    cache_size = 12,
+}
 
 binder = {
   { when = { service = 'http' },             use = { type = 'http_inspect' } },
