@@ -44,6 +44,12 @@ include/cxxbridge/%.rs.cc: inspectors/%/src/lib.rs
 target/debug/lib%.a: inspectors/%/src/lib.rs
 	cargo build
 
+fmt:
+	cargo fmt
+	clang-format -i $(wildcard include/cxxbridge/*.cc)
+	clang-format -i $(wildcard include/cxxbridge/*.h)
+	clang-format -i $(addsuffix /src/inspector.cc, $(addprefix inspectors/, $(INSPECTORS)))
+
 install:
 	apt install snort-dev clang-format cxxbridge-cmd
 	cxxbridge --header > include/cxxbridge/rust.h

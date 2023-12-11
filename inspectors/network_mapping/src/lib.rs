@@ -13,19 +13,23 @@ mod ffi {
     }
 }
 
+use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
 use std::ffi::CStr;
-use cxxbridge::ffi::{Packet, Flow, DataEvent, get_service};
 
 pub fn eval_packet(pkt: &Packet) {
     let client_orig = pkt.is_from_client_originally();
     let has_ip = pkt.has_ip();
-    let of_type = unsafe{CStr::from_ptr(pkt.get_type())}.to_str().expect("invalid results from Snort");
+    let of_type = unsafe { CStr::from_ptr(pkt.get_type()) }
+        .to_str()
+        .expect("invalid results from Snort");
     let tcp = pkt.is_tcp();
 
     println!("machinery in place {client_orig}, {has_ip}, {tcp} {of_type}");
 }
 
 pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
-    let nm = unsafe{CStr::from_ptr(get_service(flow))}.to_str().expect("invalid service");
+    let nm = unsafe { CStr::from_ptr(get_service(flow)) }
+        .to_str()
+        .expect("invalid service");
     println!("service name is {nm}");
 }
