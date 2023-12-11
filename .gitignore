@@ -1,6 +1,6 @@
 # We don't check in build folders
-**/rust_lib/target/
-build/
+target/
+p/
 
 # Remove Cargo.lock from gitignore if creating an executable, leave it for libraries
 # More information here https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
