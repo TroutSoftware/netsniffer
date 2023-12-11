@@ -24,7 +24,6 @@ all: $(SOLIBS)
 .PHONY: clean
 clean:
 	cargo clean
-	rm include/cxxbridge/*.rs.*
 	rm $(SOLIBS)
 
 p/%.so: inspectors/%/src/inspector.cc target/debug/lib%.a | include/cxxbridge/common.rs.cc include/cxxbridge/common.rs.h include/cxxbridge/%.rs.h include/cxxbridge/%.rs.cc
