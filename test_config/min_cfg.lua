@@ -13,6 +13,7 @@ wizard = {
 
 network_mapping = { 
     cache_size = 12,
+    log_file = 'default.log'
 }
 
 binder = {

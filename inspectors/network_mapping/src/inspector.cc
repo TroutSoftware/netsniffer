@@ -16,6 +16,8 @@ using namespace snort;
 
 static const Parameter nm_params[] = {
     {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
+    {"log_file", Parameter::PT_STRING, nullptr, "log.txt", "set output file name"},
+    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
 class NetworkMappingModule : public Module {
@@ -26,6 +28,15 @@ public:
                nm_params) {}
 
   Usage get_usage() const override { return GLOBAL; }
+
+  bool set(const char*c, snort::Value& val, snort::SnortConfig*) override
+  {
+    if (val.is("log_file") && val.get_string()) {
+        set_log_file(val.get_string());
+    }
+
+    return true;
+  }
 };
 
 class NetworkMappingInspector : public Inspector {

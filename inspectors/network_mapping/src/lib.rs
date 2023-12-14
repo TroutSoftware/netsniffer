@@ -1,3 +1,8 @@
+
+use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
+use std::ffi::CStr;
+use std::os::raw::c_char;
+
 #[cxx::bridge]
 mod ffi {
     #[namespace = "snort"]
@@ -10,11 +15,10 @@ mod ffi {
     extern "Rust" {
         fn eval_packet(pkt: &Packet);
         fn handle_event(_evt: &DataEvent, flow: &Flow);
+        unsafe fn set_log_file(name: *const c_char);
     }
 }
 
-use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
-use std::ffi::CStr;
 
 pub fn eval_packet(pkt: &Packet) {
     let client_orig = pkt.is_from_client_originally();
@@ -32,4 +36,15 @@ pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
         .to_str()
         .expect("invalid service");
     println!("service name is {nm}");
+
+
+
+}
+
+pub unsafe fn set_log_file(name: *const c_char) {
+    let log_file_name = CStr::from_ptr(name)
+    //o_file_name = CStr::from_ptr(name)
+        .to_str()
+        .expect("invalid results from Snort");
+    println!("Log file name is set in rust to {log_file_name}");
 }
