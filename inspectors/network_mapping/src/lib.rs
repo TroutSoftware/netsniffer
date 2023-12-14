@@ -2,6 +2,9 @@
 use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
 use std::ffi::CStr;
 use std::os::raw::c_char;
+use std::fs::OpenOptions;
+use std::io::Write;
+
 
 #[cxx::bridge]
 mod ffi {
@@ -29,6 +32,9 @@ pub fn eval_packet(pkt: &Packet) {
     let tcp = pkt.is_tcp();
 
     println!("machinery in place {client_orig}, {has_ip}, {tcp} {of_type}");
+
+    let mut file = OpenOptions::new().append(true).create(true).open("mylog.txt").ok().expect("no file");
+    writeln!(file, "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
 }
 
 pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
@@ -36,7 +42,6 @@ pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
         .to_str()
         .expect("invalid service");
     println!("service name is {nm}");
-
 
 
 }
