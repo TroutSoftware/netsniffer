@@ -1,5 +1,5 @@
 
-use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
+use cxxbridge::ffi::{DataEvent, Flow, get_service, Packet};
 use std::ffi::CStr;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -27,6 +27,15 @@ pub struct LogFile {
     file_handle: Option<File>,
 }
 
+impl Default for LogFile {
+    fn default() -> Self {
+        Self {
+            file_name: String::from(""),
+            file_handle: None,
+        }
+    }
+}
+
 impl LogFile {
     pub fn set_file_name(&mut self, name: String) {
         match self.file_handle {
@@ -48,7 +57,7 @@ impl LogFile {
 
 fn log_file() -> &'static Mutex<LogFile> {
     static LOG_FILE: OnceLock<Mutex<LogFile>> = OnceLock::new();
-    LOG_FILE.get_or_init(|| Mutex::new(LogFile{file_name: String::from(""), file_handle: None,}))
+    LOG_FILE.get_or_init(|| Mutex::new(LogFile::default()))
 }
 
 pub fn eval_packet(pkt: &Packet) {
@@ -59,10 +68,7 @@ pub fn eval_packet(pkt: &Packet) {
         .expect("invalid results from Snort");
     let tcp = pkt.is_tcp();
 
-    println!("machinery in place {client_orig}, {has_ip}, {tcp} {of_type}");
-
     writeln!(log_file().lock().unwrap().handle(), "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
-
 }
 
 pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
@@ -74,10 +80,8 @@ pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
 
 pub unsafe fn set_log_file(name: *const c_char) {
     let log_file_name = CStr::from_ptr(name)
-    //o_file_name = CStr::from_ptr(name)
         .to_str()
         .expect("invalid results from Snort");
-    println!("Log file name is set in rust to {log_file_name}");
 
     log_file().lock().unwrap().set_file_name(log_file_name.to_string());
 }
