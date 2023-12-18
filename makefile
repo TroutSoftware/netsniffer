@@ -44,6 +44,15 @@ include/cxxbridge/%.rs.cc: inspectors/%/src/lib.rs
 target/debug/lib%.a: inspectors/%/src/lib.rs
 	cargo build
 
+BRIDGEUNITS := $(patsubst %.rs,%.rs.cc,$(wildcard cxxbridge/src/*.rs))
+target/debug/libcxxbridge.a: $(BRIDGEUNITS)
+	gcc -c -O1 -fPIC -Wall -I include/snort $^
+	ar rcs $@ *.o
+	rm *.o
+
+cxxbridge/src/%.rs.cc: cxxbridge/src/%.rs
+	cxxbridge $< -o $@
+
 fmt:
 	cargo fmt
 	clang-format -i $(wildcard include/cxxbridge/*.cc)

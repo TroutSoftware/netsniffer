@@ -1,10 +1,10 @@
-
 use cxxbridge::ffi::{DataEvent, Flow, get_service, Packet};
 use std::ffi::CStr;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::raw::c_char;
 use std::sync::{Mutex, OnceLock};
+
 
 #[cxx::bridge]
 mod ffi {
@@ -68,10 +68,12 @@ pub fn eval_packet(pkt: &Packet) {
         .expect("invalid results from Snort");
     let tcp = pkt.is_tcp();
 
+
     writeln!(log_file().lock().unwrap().handle(), "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
+
 }
 
-pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
+pub fn handle_event(evt: &DataEvent, flow: &Flow) {
     let nm = unsafe { CStr::from_ptr(get_service(flow)) }
         .to_str()
         .expect("invalid service");

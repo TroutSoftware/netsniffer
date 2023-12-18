@@ -1,17 +1,6 @@
 #[cxx::bridge]
 pub mod ffi {
-    unsafe extern "C++" {
-        include!("protocols/packet.h");
-
-        #[namespace = "snort"]
-        type Packet;
-
-        fn is_from_client_originally(&self) -> bool;
-        fn has_ip(&self) -> bool;
-        fn get_type(&self) -> *const c_char;
-        fn is_tcp(&self) -> bool;
-    }
-
+    /*
     unsafe extern "C++" {
         include!("flow/flow.h");
 
@@ -28,8 +17,21 @@ pub mod ffi {
 
     unsafe extern "C++" {
         include!("framework/data_bus.h");
+        include!("cxxbridge.in.h");
 
         #[namespace = "snort"]
         type DataEvent;
+        // #[namespace = "xsnort"]
+        // fn event_get_ip(e: &DataEvent) -> *const crate::ffi::SfIp;
     }
+    */
 }
+
+pub mod snort {
+    pub struct DataEvent;
+
+    impl DataEvent {}
+}
+
+pub mod packet;
+pub mod sfip;
