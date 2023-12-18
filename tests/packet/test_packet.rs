@@ -17,8 +17,9 @@ use cxxbridge::packet::Packet;
 
 fn eval_packet(pkt: &ffi::Packet) {
     let pkt = Packet::new(pkt);
-    let hip = pkt.has_ip();
-    let tcp = pkt.is_tcp();
-    let proto = pkt.get_type();
-    println!("test is passing {pkt:#?} ({hip} - {tcp}) with {proto}");
+    let pl = pkt.payload();
+
+    if pl.len() == 0 {
+        println!("empty packet");
+    }
 }

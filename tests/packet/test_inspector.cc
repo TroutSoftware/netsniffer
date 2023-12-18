@@ -14,7 +14,11 @@ using namespace snort;
 
 // TODO(rdo) use this to parametrize the tests
 static const Parameter nm_params[] = {
-    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+    {"cap", Parameter::PT_STRING, nullptr, nullptr,
+     "PCAP file to read packets from"},
+    {"other", Parameter::PT_INT, "0:max32", nullptr, ""},
+    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr},
+};
 
 class TestModule : public Module {
 public:
@@ -22,7 +26,22 @@ public:
       : Module("test_packet", "Tests the Rust wrapper around packets",
                nm_params) {}
 
-  Usage get_usage() const override { return GLOBAL; }
+  Usage get_usage() const override { return INSPECT; }
+
+  bool begin(const char *name, int idx, SnortConfig *cfg) override {
+    std::cout << "==> begin against " << name << std::endl;
+    return true;
+  }
+
+  bool end(const char *name, int idx, SnortConfig *cfg) override {
+    std::cout << "==> end against " << name << std::endl;
+    return true;
+  }
+
+  bool set(const char *name, Value &val, SnortConfig *cfg) override {
+    std::cout << "set against " << name << val.get_string() << " " << std::endl;
+    return true;
+  }
 };
 
 class TestInspector : public Inspector {
@@ -50,14 +69,14 @@ const InspectApi test_packetapi = {
         []() -> Module * { return new TestModule; },
         [](Module *m) { delete m; },
     },
-    IT_PROBE,
-    PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
-    nullptr,        // buffers
-    nullptr,        // service
-    nullptr,        // pinit
-    nullptr,        // pterm
-    nullptr,        // tinit
-    nullptr,        // tterm
+    IT_PACKET,
+    PROTO_BIT__ALL,
+    nullptr, // buffers
+    nullptr, // service
+    nullptr, // pinit
+    nullptr, // pterm
+    nullptr, // tinit
+    nullptr, // tterm
     [](Module *module) -> Inspector * {
       return new TestInspector((TestModule *)module);
     },
