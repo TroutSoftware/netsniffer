@@ -1,10 +1,10 @@
 
 use cxxbridge::ffi::{get_service, DataEvent, Flow, Packet};
 use std::ffi::CStr;
-use std::os::raw::c_char;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::io::Write;
-
+use std::os::raw::c_char;
+use std::sync::{Mutex, OnceLock};
 
 #[cxx::bridge]
 mod ffi {
@@ -22,6 +22,34 @@ mod ffi {
     }
 }
 
+pub struct LogFile {
+    file_name: String,
+    file_handle: Option<File>,
+}
+
+impl LogFile {
+    pub fn set_file_name(&mut self, name: String) {
+        match self.file_handle {
+            None => self.file_name = name,
+            Some(_) => panic!("Can't rename logfile after use"),
+        }
+    }
+
+    pub fn handle(&mut self) -> &File {
+        match (&self.file_handle, self.file_name.is_empty()) {
+            (Some(_), _) =>  {},
+            (None, true) => panic!("No log file name given"),
+            (None, false) =>
+                self.file_handle = Some(OpenOptions::new().append(true).create(true).open(&self.file_name).ok().expect("Can't create or open file")),
+        }
+        self.file_handle.as_mut().unwrap()
+    }
+}
+
+fn log_file() -> &'static Mutex<LogFile> {
+    static LOG_FILE: OnceLock<Mutex<LogFile>> = OnceLock::new();
+    LOG_FILE.get_or_init(|| Mutex::new(LogFile{file_name: String::from(""), file_handle: None,}))
+}
 
 pub fn eval_packet(pkt: &Packet) {
     let client_orig = pkt.is_from_client_originally();
@@ -33,8 +61,8 @@ pub fn eval_packet(pkt: &Packet) {
 
     println!("machinery in place {client_orig}, {has_ip}, {tcp} {of_type}");
 
-    let mut file = OpenOptions::new().append(true).create(true).open("mylog.txt").ok().expect("no file");
-    writeln!(file, "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
+    writeln!(log_file().lock().unwrap().handle(), "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
+
 }
 
 pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
@@ -42,8 +70,6 @@ pub fn handle_event(_evt: &DataEvent, flow: &Flow) {
         .to_str()
         .expect("invalid service");
     println!("service name is {nm}");
-
-
 }
 
 pub unsafe fn set_log_file(name: *const c_char) {
@@ -52,4 +78,6 @@ pub unsafe fn set_log_file(name: *const c_char) {
         .to_str()
         .expect("invalid results from Snort");
     println!("Log file name is set in rust to {log_file_name}");
+
+    log_file().lock().unwrap().set_file_name(log_file_name.to_string());
 }
