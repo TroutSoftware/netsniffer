@@ -69,8 +69,8 @@ const InspectApi test_packetapi = {
         []() -> Module * { return new TestModule; },
         [](Module *m) { delete m; },
     },
-    IT_PACKET,
-    PROTO_BIT__ALL,
+    IT_SERVICE,
+    PROTO_BIT__ANY_IP,
     nullptr, // buffers
     nullptr, // service
     nullptr, // pinit
