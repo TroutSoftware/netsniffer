@@ -1,18 +1,18 @@
-use cxxbridge::ffi::{DataEvent, Flow, get_service, Packet};
-use std::ffi::CStr;
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::os::raw::c_char;
-use std::sync::{Mutex, OnceLock};
+
 
 
 #[cxx::bridge]
 mod ffi {
-    #[namespace = "snort"]
+
     extern "C++" {
-        type Packet = cxxbridge::ffi::Packet;
-        type Flow = cxxbridge::ffi::Flow;
-        type DataEvent = cxxbridge::ffi::DataEvent;
+        include!("protocols/packet.h");
+        include!("framework/data_bus.h");
+        #[namespace = "snort"]
+        type Packet = cxxbridge::packet::ffi::Packet;
+        #[namespace = "snort"]
+        type Flow = cxxbridge::flow::ffi::Flow;
+        #[namespace = "snort"]
+        type DataEvent = cxxbridge::data_event::ffi::DataEvent;
     }
 
     extern "Rust" {
@@ -21,6 +21,19 @@ mod ffi {
         unsafe fn set_log_file(name: *const c_char);
     }
 }
+
+use cxxbridge::data_event::DataEvent;
+use cxxbridge::flow::Flow;
+use cxxbridge::packet::Packet;
+
+//use cxxbridge::ffi::get_service;
+use std::ffi::CStr;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::os::raw::c_char;
+use std::sync::{Mutex, OnceLock};
+
+
 
 pub struct LogFile {
     file_name: String,
@@ -60,23 +73,23 @@ fn log_file() -> &'static Mutex<LogFile> {
     LOG_FILE.get_or_init(|| Mutex::new(LogFile::default()))
 }
 
-pub fn eval_packet(pkt: &Packet) {
+pub fn eval_packet(org_pkt: &cxxbridge::packet::ffi::Packet) {
+    let pkt = Packet::new(org_pkt);
     let client_orig = pkt.is_from_client_originally();
     let has_ip = pkt.has_ip();
-    let of_type = unsafe { CStr::from_ptr(pkt.get_type()) }
-        .to_str()
-        .expect("invalid results from Snort");
+    let of_type = pkt.get_type();
     let tcp = pkt.is_tcp();
-
 
     writeln!(log_file().lock().unwrap().handle(), "machinery in place {client_orig}, {has_ip}, {tcp} {of_type}").ok();
 
 }
 
-pub fn handle_event(evt: &DataEvent, flow: &Flow) {
-    let nm = unsafe { CStr::from_ptr(get_service(flow)) }
-        .to_str()
-        .expect("invalid service");
+pub fn handle_event(evt: &cxxbridge::data_event::ffi::DataEvent, org_flow: &cxxbridge::flow::ffi::Flow) {
+    let flow = Flow::new(org_flow);
+    //let nm = unsafe { CStr::from_ptr(get_service(flow)) }
+    //    .to_str()
+    //    .expect("invalid service");
+    let nm = flow.get_service();
     println!("service name is {nm}");
 }
 

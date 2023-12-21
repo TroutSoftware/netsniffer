@@ -13,4 +13,4 @@ clean:
 
 p/test_packet.so: test_inspector.cc test_packet.rs
 	cargo build -r
-	g++ -O1 -fPIC -Wall -shared -I $(ISNORT) -I $(IGEN) $< $(TARGET)/debug/libtest_packet.a -o $@
+	g++ -O1 -fPIC -Wall -shared -I $(ISNORT) -I $(IGEN) $< $(TARGET)/release/libtest_packet.a -o $@

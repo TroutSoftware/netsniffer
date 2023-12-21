@@ -11,6 +11,6 @@ clean:
 	cargo clean
 	rm p/network_mapping.so
 
-p/network_mapping.so: src/inspector.cc src/lib.rs
+p/network_mapping.so: inspector.cc inspector.rs
 	cargo build -r
-	g++ -O1 -fPIC -Wall -shared -I $(ISNORT) -I $(IGEN) $< $(TARGET)/debug/libnetwork_mapping.a -o $@
+	g++ -O1 -fPIC -Wall -shared -I $(ISNORT) -I $(IGEN) $< $(TARGET)/release/libnetwork_mapping.a -o $@

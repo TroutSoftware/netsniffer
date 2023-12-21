@@ -35,3 +35,5 @@ pub mod snort {
 
 pub mod packet;
 pub mod sfip;
+pub mod flow;
+pub mod data_event;

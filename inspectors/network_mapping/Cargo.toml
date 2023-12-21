@@ -3,9 +3,14 @@ name = "network_mapping"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["staticlib"]
-
 [dependencies]
 cxx = "1.0.0"
 cxxbridge = { path = "../../cxxbridge"}
+
+[lib]
+crate-type = ["staticlib"]
+path = "inspector.rs"
+
+[build-dependencies]
+cxx-build = "1.0"
+cc = "1.0"

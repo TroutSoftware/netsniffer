@@ -8,9 +8,9 @@
 #include "pub_sub/intrinsic_event_ids.h"
 #include "sfip/sf_ip.h"
 
-#include "common.rs.h"
-#include "network_mapping.rs.h"
-#include "rust.h"
+
+#include "network_mapping/inspector.rs.h"
+
 
 using namespace snort;
 
@@ -109,10 +109,5 @@ const InspectApi networkmap_api = {
     nullptr, // ssn
     nullptr  // reset
 };
-
-#include "common.rs.cc"
-#include "network_mapping.rs.cc"
-#include "x_event.cc"
-#include "x_flow.cc"
 
 SO_PUBLIC const BaseApi *snort_plugins[] = {&networkmap_api.base, nullptr};
