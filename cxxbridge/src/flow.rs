@@ -1,3 +1,5 @@
+use std::ffi::CStr;
+
 #[cxx::bridge]
 pub mod ffi {
     unsafe extern "C++" {
@@ -9,26 +11,29 @@ pub mod ffi {
 
 //        fn has_ip(&self) -> bool;
 
-//        #[namespace = "xsnort"]
-//        fn packet_databuf(pkt: &Packet) -> *const u8;
+        #[namespace = "xsnort"]
+        fn flow_service(flow: &Flow) -> *const c_char;
+
+
     }
 }
 
 #[derive(Debug)]
 pub struct Flow {
-    _flow: *const ffi::Flow,
+    flow: *const ffi::Flow,
 }
 
 
 impl Flow {
     pub fn new(flow: *const ffi::Flow) -> Flow {
-        Flow { _flow: flow }
+        Flow { flow: flow }
     }
 
     pub fn get_service(&self) -> &str {
-        //let ptr = unsafe { self.flow.as_ref() }.expect("cannot deref");
-        //unsafe { CStr::from_ptr(get_service(flow)) }.to_str().expect("invalid service");
-        "todo"
+        let ptr = unsafe { self.flow.as_ref() }.expect("cannot deref");
+        let sname = unsafe { CStr::from_ptr(ffi::flow_service(ptr))};
+
+        sname.to_str().expect("invalid type")
     }
 
 
