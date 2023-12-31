@@ -1,4 +1,8 @@
+#include <expected>
+#include <fstream>
 #include <iostream>
+#include <mutex>
+#include <string>
 
 #include "framework/inspector.h"
 #include "framework/module.h"
@@ -8,16 +12,15 @@
 #include "pub_sub/intrinsic_event_ids.h"
 #include "sfip/sf_ip.h"
 
-
-#include "network_mapping/inspector.rs.h"
-
-
 using namespace snort;
+
+enum class file_error { uninitialized_file, cannot_write };
 
 static const Parameter nm_params[] = {
     {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
     {"log_file", Parameter::PT_STRING, nullptr, "log.txt",
      "set output file name"},
+
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 class NetworkMappingModule : public Module {
@@ -25,57 +28,64 @@ public:
   NetworkMappingModule()
       : Module("network_mapping",
                "Help map resources in the network based on their comms",
-               nm_params) {}
+               nm_params),
+        logfile(), logfile_mx() {}
+  std::ofstream logfile;
+  std::mutex logfile_mx;
 
   Usage get_usage() const override { return GLOBAL; }
 
-  bool set(const char *c, snort::Value &val, snort::SnortConfig *) override {
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("log_file") && val.get_string()) {
-      set_log_file(val.get_string());
+      logfile.open(val.get_string());
     }
 
     return true;
   }
+
+  std::expected<bool, file_error> logstream(std::string message) noexcept {
+    std::lock_guard<std::mutex> guard(logfile_mx);
+    if (!logfile.is_open()) {
+      return std::unexpected(file_error::uninitialized_file);
+    }
+    logfile << message << std::endl;
+    return true;
+  }
 };
 
-class NetworkMappingInspector : public Inspector {
-  NetworkMappingModule *module;
-
-  void eval(Packet *packet) override {
-    assert(packet);
-    eval_packet(*packet);
-  }
-
+class NetworkMappingInspector : public snort::Inspector {
 public:
-  NetworkMappingInspector(NetworkMappingModule *module) : module(module) {}
+  NetworkMappingInspector(NetworkMappingModule *module) : module(*module) {}
+  NetworkMappingModule &module;
+
+  void eval(snort::Packet *) override {}
 
   class EventHandler : public snort::DataHandler {
-    const char *c;
-
   public:
-    EventHandler(const char *c) : DataHandler("network_mapping"), c(c) {}
+    EventHandler(NetworkMappingModule &module)
+        : DataHandler("network_mapping"), module(module) {}
+    NetworkMappingModule &module;
 
-    void handle(snort::DataEvent &event, snort::Flow *flow) override {
-      std::cout << "++ EventHandler::handle called(" << c << ")" << std::endl;
+    void handle(snort::DataEvent &, snort::Flow *flow) override {
       if (flow) {
-        handle_event(event, *flow);
+        module.logstream(std::string(flow->service));
       }
     }
   };
 
-  bool configure(SnortConfig *sc) override {
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-        new EventHandler("IntrinsicEventIds::FLOW_STATE_SETUP"));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
-        new EventHandler("IntrinsicEventIds::FLOW_STATE_RELOADED"));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::AUXILIARY_IP,
-        new EventHandler("IntrinsicEventIds::AUXILIARY_IP"));
-    DataBus::subscribe_network(
+  bool configure(SnortConfig *) override {
+    DataBus::subscribe_network(intrinsic_pub_key,
+                               IntrinsicEventIds::FLOW_SERVICE_CHANGE,
+                               new EventHandler(module));
+    DataBus::subscribe_network(intrinsic_pub_key,
+                               IntrinsicEventIds::FLOW_STATE_RELOADED,
+                               new EventHandler(module));
+    DataBus::subscribe_network(intrinsic_pub_key,
+                               IntrinsicEventIds::AUXILIARY_IP,
+                               new EventHandler(module));
+    /* DataBus::subscribe_network(
         intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-        new EventHandler("IntrinsicEventIds::PKT_WITHOUT_FLOW"));
+        new EventHandler("IntrinsicEventIds::PKT_WITHOUT_FLOW")); */
 
     return true;
   }
@@ -103,7 +113,8 @@ const InspectApi networkmap_api = {
     nullptr,        // tinit
     nullptr,        // tterm
     [](Module *module) -> Inspector * {
-      return new NetworkMappingInspector((NetworkMappingModule *)module);
+      return new NetworkMappingInspector(
+          dynamic_cast<NetworkMappingModule *>(module));
     },
     [](Inspector *p) { delete p; },
     nullptr, // ssn

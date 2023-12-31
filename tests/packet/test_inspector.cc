@@ -27,30 +27,10 @@ public:
                nm_params) {}
 
   Usage get_usage() const override { return INSPECT; }
-
-  bool begin(const char *name, int idx, SnortConfig *cfg) override {
-    std::cout << "==> begin against " << name << std::endl;
-    return true;
-  }
-
-  bool end(const char *name, int idx, SnortConfig *cfg) override {
-    std::cout << "==> end against " << name << std::endl;
-    return true;
-  }
-
-  bool set(const char *name, Value &val, SnortConfig *cfg) override {
-    std::cout << "set against " << name << val.get_string() << " " << std::endl;
-    return true;
-  }
 };
 
-class TestInspector : public Inspector {
+class TestInspector : public xsnort::RustInspector {
   TestModule *module;
-
-  void eval(Packet *packet) override {
-    assert(packet);
-    eval_packet(*packet);
-  }
 
 public:
   TestInspector(TestModule *module) : module(module) {}

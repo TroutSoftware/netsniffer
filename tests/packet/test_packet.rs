@@ -1,25 +1,34 @@
 #![crate_type = "staticlib"]
 
-#[cxx::bridge]
-mod ffi {
-    extern "C++" {
-        include!("protocols/packet.h");
-        #[namespace = "snort"]
-        type Packet = cxxbridge::packet::ffi::Packet;
+use cxxbridge::inspector::Inspector;
+use cxxbridge::packet::Packet;
+
+pub struct PacketInspector {}
+
+impl Inspector for PacketInspector {
+    fn new<'a>() -> &'a PacketInspector {
+        &PacketInspector {}
     }
 
-    extern "Rust" {
-        fn eval_packet(pkt: &Packet);
+    fn eval(&self, pkt: &Packet) {
+        let pl = pkt.payload();
+
+        if pl.len() == 0 {
+            println!("empty packet");
+        }
     }
 }
 
-use cxxbridge::packet::Packet;
+#[cxx::bridge]
+mod ffi {
+    #[namespace = "snort"]
+    extern "C++" {
+        include!("framework/inspector.h");
 
-fn eval_packet(pkt: &ffi::Packet) {
-    let pkt = Packet::new(pkt);
-    let pl = pkt.payload();
-
-    if pl.len() == 0 {
-        println!("empty packet");
+        type Module;
     }
+}
+
+pub fn create_inspector(module: *const ffi::Module) -> cxxbridge::inspector::ffi::RustInspector {
+    cxxbridge::inspector::create_inspector(module, PacketInspector::new())
 }
