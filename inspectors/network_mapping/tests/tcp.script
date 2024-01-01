@@ -1,0 +1,8 @@
+pcap $moddir/pcaps/tcp_flow.pcap
+grep 'bash' flow.txt
+
+-- cfg.lua --
+stream = { }
+stream_tcp = { }
+wizard = { }
+network_mapping = { }

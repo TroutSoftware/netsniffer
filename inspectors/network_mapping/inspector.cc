@@ -18,7 +18,7 @@ enum class file_error { uninitialized_file, cannot_write };
 
 static const Parameter nm_params[] = {
     {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
-    {"log_file", Parameter::PT_STRING, nullptr, "log.txt",
+    {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
      "set output file name"},
 
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
