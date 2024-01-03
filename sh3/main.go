@@ -60,6 +60,14 @@ func main() {
 		}
 	}
 
+	{
+		out, err := exec.Command("gcc", "-print-file-name=libasan.so").Output()
+		if err != nil {
+			errf("cannot get libasan from gcc: %s", err)
+		}
+		asanlib = strings.TrimSpace(string(out))
+	}
+
 	for _, f := range files {
 		base := filepath.Base(f)
 		base = base[:len(base)-len(".script")]
