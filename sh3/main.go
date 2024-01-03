@@ -73,7 +73,6 @@ func main() {
 		base = base[:len(base)-len(".script")]
 
 		if mtch != nil && !mtch.MatchString(base) {
-			fmt.Println("DEBUG", base, "no match", mtch)
 			continue
 		}
 
