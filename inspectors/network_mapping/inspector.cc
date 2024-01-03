@@ -1,4 +1,4 @@
-#include <expected>
+//#include <expected>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -14,7 +14,7 @@
 
 using namespace snort;
 
-enum class file_error { uninitialized_file, cannot_write };
+enum class file_error { success, uninitialized_file, cannot_write };
 
 static const Parameter nm_params[] = {
     {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
@@ -43,13 +43,13 @@ public:
     return true;
   }
 
-  std::expected<bool, file_error> logstream(std::string message) noexcept {
+  file_error logstream(std::string message) noexcept {
     std::lock_guard<std::mutex> guard(logfile_mx);
     if (!logfile.is_open()) {
-      return std::unexpected(file_error::uninitialized_file);
+      return file_error::uninitialized_file;
     }
     logfile << message << std::endl;
-    return true;
+    return file_error::success;
   }
 };
 
