@@ -33,7 +33,7 @@ public:
   std::ofstream logfile;
   std::mutex logfile_mx;
 
-  Usage get_usage() const override { return GLOBAL; }
+  Usage get_usage() const override { return CONTEXT; }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("log_file") && val.get_string()) {
@@ -138,7 +138,7 @@ const InspectApi networkmap_api = {
         [](Module *m) { delete m; },
     },
 
-    IT_PROBE,
+    IT_FIRST,
     PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
     nullptr,        // buffers
     nullptr,        // service
