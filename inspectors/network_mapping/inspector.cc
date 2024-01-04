@@ -1,7 +1,7 @@
-//#include <expected>
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <string>
 
 #include "framework/inspector.h"
@@ -58,7 +58,38 @@ public:
   NetworkMappingInspector(NetworkMappingModule *module) : module(*module) {}
   NetworkMappingModule &module;
 
-  void eval(snort::Packet *) override {}
+
+  void eval(snort::Packet *packet) override {
+    std::cout << "***MKR*** Eval called "
+              << "Packet is " << (packet?"Valid":"NULL");
+    if (packet) {
+        std::cout << " type: " << (packet->get_type()?:"[Unknown]")
+                  << "\tpseudo_type: " << (packet->get_pseudo_type()?:"[Unknown]");
+
+        if(packet->pkth) {
+            std::cout << " pkt header: [FlowID: " << packet->pkth->flow_id << "]";
+        }
+
+        if(packet->has_ip()) {
+            std::cout << " ip: [";
+
+            char ip_str[INET_ADDRSTRLEN];
+            std::stringstream ss;
+
+            sfip_ntop(packet->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
+            ss << ip_str << ':' << packet->ptrs.sp << " -> ";
+
+            sfip_ntop(packet->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
+            ss << ip_str << ':' << packet->ptrs.dp;
+
+            std::cout << ss.str() << "]";
+
+            module.logstream(ss.str());
+        }
+    }
+
+    std::cout << std::endl;
+  }
 
   class EventHandler : public snort::DataHandler {
   public:
@@ -67,7 +98,9 @@ public:
     NetworkMappingModule &module;
 
     void handle(snort::DataEvent &, snort::Flow *flow) override {
-      if (flow) {
+      std::cout << "***MKR*** Got event" << std::endl;
+      if (flow && flow->service) {
+        std::cout << "***MKR*** ^ Got flow: " << flow->service << std::endl;
         module.logstream(std::string(flow->service));
       }
     }
@@ -104,6 +137,7 @@ const InspectApi networkmap_api = {
         []() -> Module * { return new NetworkMappingModule; },
         [](Module *m) { delete m; },
     },
+
     IT_PROBE,
     PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
     nullptr,        // buffers
@@ -113,6 +147,7 @@ const InspectApi networkmap_api = {
     nullptr,        // tinit
     nullptr,        // tterm
     [](Module *module) -> Inspector * {
+      assert(module);
       return new NetworkMappingInspector(
           dynamic_cast<NetworkMappingModule *>(module));
     },
