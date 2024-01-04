@@ -60,19 +60,8 @@ public:
 
 
   void eval(snort::Packet *packet) override {
-    std::cout << "***MKR*** Eval called "
-              << "Packet is " << (packet?"Valid":"NULL");
     if (packet) {
-        std::cout << " type: " << (packet->get_type()?:"[Unknown]")
-                  << "\tpseudo_type: " << (packet->get_pseudo_type()?:"[Unknown]");
-
-        if(packet->pkth) {
-            std::cout << " pkt header: [FlowID: " << packet->pkth->flow_id << "]";
-        }
-
         if(packet->has_ip()) {
-            std::cout << " ip: [";
-
             char ip_str[INET_ADDRSTRLEN];
             std::stringstream ss;
 
@@ -82,13 +71,9 @@ public:
             sfip_ntop(packet->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
             ss << ip_str << ':' << packet->ptrs.dp;
 
-            std::cout << ss.str() << "]";
-
             module.logstream(ss.str());
         }
     }
-
-    std::cout << std::endl;
   }
 
   class EventHandler : public snort::DataHandler {
@@ -98,9 +83,7 @@ public:
     NetworkMappingModule &module;
 
     void handle(snort::DataEvent &, snort::Flow *flow) override {
-      std::cout << "***MKR*** Got event" << std::endl;
       if (flow && flow->service) {
-        std::cout << "***MKR*** ^ Got flow: " << flow->service << std::endl;
         module.logstream(std::string(flow->service));
       }
     }
