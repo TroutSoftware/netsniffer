@@ -102,7 +102,7 @@ public:
 
       case State::open:
 
-        // TODO(mkr) can this fail in some way?
+        // TODO(mkr) Investigate how failures to write manifest them self and handle them gracefully
         stream << message << std::endl;
 
         log_lines_total++;
@@ -112,8 +112,10 @@ public:
         if (max_lines_pr_file >= log_lines_written)
           state = State::full;
 
-        if (lines_beween_flushes >= lines_since_last_flush)
+        if (lines_beween_flushes >= lines_since_last_flush) {
           stream.flush();
+          lines_since_last_flush = 0;
+        }
     }
   }
 };
