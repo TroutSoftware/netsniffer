@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -14,17 +15,112 @@
 
 using namespace snort;
 
-enum class file_error { success, uninitialized_file, cannot_write };
+
 
 static const Parameter nm_params[] = {
-    {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
-    {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
-     "set output file name"},
+  {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
+  {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
+   "set output file name"},
 
-    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+  {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}
+};
+
+// MKR: This class is untested and WIP, don't use it.
+class LogFile {
+  enum class State {
+    initial,    // Initial state
+    open,       // File is open and ready for use
+    full,       // The current file is full
+    aborted     // We have stopped writing to an actual file
+  } state = State::initial;
+
+  std::mutex      mutex;
+  std::ofstream   stream;                 // Stream logs are written to
+  std::string     base_file_name;         // The base filename, i.e. without the timestamp extension
+  unsigned        log_files_opened = 0;   // Count of logfiles that has been opened
+  unsigned        log_lines_total = 0;    // Total number of log lines written (sum of lines written to all files)
+  unsigned        log_lines_written = 0;  // Number of log lines written in the current file
+  const unsigned  max_lines_pr_file = 1000000;  // When this number of lines has been written a new file will be written
+
+  // Flush parameters
+  const unsigned  lines_beween_flushes = 100; // Number of lines between flushes
+  unsigned        lines_since_last_flush = 0; // Number of lines since last flush
+
+  // TODO(mkr) make a flush based on time too
+
+public:
+  void set_file_name(char *new_name) {
+    std::scoped_lock guard(mutex);
+
+    assert(State::initial == state);    // We can't set the filename after we have started to use the name
+    assert(new_name);                   // Make sure we got some input
+
+    base_file_name = new_name;
+  }
+
+  void logstream(std::string message) noexcept {
+    std::scoped_lock guard(mutex);
+
+    switch (state) {
+      case State::aborted:
+        return;
+
+      case State::full:
+        stream.close();
+        lines_since_last_flush = 0;
+
+        [[fallthrough]]
+
+      case State::initial: {
+          using namespace std::chrono;
+          assert(!base_file_name.empty());  // Logic error if the filename isn't set at this point
+
+          // Choosing the clock is not trivial, using system_clock for now... need to be re-evaluated
+          // Best would be utc_clock, but it isn't supported by our compiler version
+          // steady_clock can repeat the same time between boots, even it is always increasing in the same runb
+          // system_clock is not ideal, as it can be adjusted and hence repeat...
+          const auto cur_time = system_clock::now().time_since_epoch();
+          uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
+
+          std::string file_name(base_file_name);
+          file_name += cur_time_ms;
+
+          // TODO(mkr) make sure the right parameters are used e.g. append/truncate if file exists
+          stream.open(file_name);
+
+          if(!stream.is_open()) {
+            state = State::aborted;
+            return;
+          }
+
+          state = State::open;
+          log_files_opened++;
+          log_lines_written = 0;
+        }
+
+        [[fallthrough]]
+
+      case State::open:
+
+        // TODO(mkr) can this fail in some way?
+        stream << message << std::endl;
+
+        log_lines_total++;
+        log_lines_written++;
+        lines_since_last_flush++;
+
+        if (max_lines_pr_file >= log_lines_written)
+          state = State::full;
+
+        if (lines_beween_flushes >= lines_since_last_flush)
+          stream.flush();
+    }
+  }
+};
 
 class NetworkMappingModule : public Module {
 public:
+enum class file_error { success, uninitialized_file, cannot_write };
   NetworkMappingModule()
       : Module("network_mapping",
                "Help map resources in the network based on their comms",
