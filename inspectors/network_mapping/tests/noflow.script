@@ -6,4 +6,4 @@ grep '^8.8.8.8:53 -> 10.67.21.59:53' flow.txt
 -- cfg.lua --
 stream = { }
 stream_udp = { }
-network_mapping = { }
+network_mapping = { size_rotate = false }

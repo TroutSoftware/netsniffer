@@ -15,11 +15,13 @@
 
 using namespace snort;
 
+bool use_rotate_feature = true;
 
 static const Parameter nm_params[] = {
   {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
   {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
    "set output file name"},
+  {"size_rotate", Parameter::PT_BOOL, nullptr, "false", "If true rotates log file after x lines"},
 
   {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}
 };
@@ -94,7 +96,9 @@ public:
           uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
 
           std::string file_name(base_file_name);
-          file_name += std::to_string(cur_time_ms);
+          if (use_rotate_feature) {
+            file_name += std::to_string(cur_time_ms);
+          }
 
           // TODO(mkr) make sure the right parameters are used e.g. append
           stream.open(file_name);
@@ -121,7 +125,7 @@ public:
         lines_since_last_flush++;
 
         // TODO - validate that a stream with an error, can be closed, and reopened
-        if (!stream || max_lines_pr_file <= log_lines_written) {
+        if (!stream || (use_rotate_feature && max_lines_pr_file <= log_lines_written)) {
           state = State::full;
         }
         else if (lines_beween_flushes <= lines_since_last_flush) {
@@ -148,6 +152,10 @@ public:
     if (val.is("log_file") && val.get_string()) {
       logger.set_file_name(val.get_string());
     }
+    else if (val.is("size_rotate") )  {
+      use_rotate_feature = val.get_bool();
+    }
+
 
     return true;
   }
