@@ -166,7 +166,7 @@ func Module() CompileOpt {
 
 func Modern() CompileOpt {
 	return func(args, env []string) (nargs []string, nenv []string) {
-		return append(args, "-Wall", "-Wextra", "-std=c++2b"), env
+		return append(args, "-Wall", "-Werror", "-Wextra", "-std=c++17"), env
 	}
 }
 

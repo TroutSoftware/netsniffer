@@ -16,7 +16,6 @@
 using namespace snort;
 
 
-
 static const Parameter nm_params[] = {
   {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
   {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
@@ -25,8 +24,36 @@ static const Parameter nm_params[] = {
   {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}
 };
 
-// MKR: This class is untested and WIP, don't use it.
+struct LogFileStats
+{
+    PegCount line_count;
+    PegCount file_count;
+};
+
+static THREAD_LOCAL LogFileStats s_file_stats;
+
+const PegInfo s_pegs[] =
+{
+    { CountType::SUM, "lines", "lines written" },
+    { CountType::SUM, "files", "files opened" },
+
+    { CountType::END, nullptr, nullptr }
+};
+
 class LogFile {
+
+  std::mutex      mutex;
+  std::ofstream   stream;                       // Stream logs are written to
+  std::string     base_file_name;               // The base filename, i.e. without the timestamp extension
+  unsigned        log_files_opened = 0;         // Count of logfiles that has been opened
+  unsigned        log_lines_total = 0;          // Total number of log lines written (sum of lines written to all files)
+  unsigned        log_lines_written = 0;        // Number of log lines written in the current file
+  const unsigned  max_lines_pr_file = 1'000'000;  // When this number of lines has been written a new file will be written
+
+  // Flush parameters
+  const unsigned  lines_beween_flushes = 100; // Number of lines between flushes
+  unsigned        lines_since_last_flush = 0; // Number of lines since last flush
+
   enum class State {
     initial,    // Initial state
     open,       // File is open and ready for use
@@ -34,22 +61,10 @@ class LogFile {
     aborted     // We have stopped writing to an actual file
   } state = State::initial;
 
-  std::mutex      mutex;
-  std::ofstream   stream;                 // Stream logs are written to
-  std::string     base_file_name;         // The base filename, i.e. without the timestamp extension
-  unsigned        log_files_opened = 0;   // Count of logfiles that has been opened
-  unsigned        log_lines_total = 0;    // Total number of log lines written (sum of lines written to all files)
-  unsigned        log_lines_written = 0;  // Number of log lines written in the current file
-  const unsigned  max_lines_pr_file = 1000000;  // When this number of lines has been written a new file will be written
-
-  // Flush parameters
-  const unsigned  lines_beween_flushes = 100; // Number of lines between flushes
-  unsigned        lines_since_last_flush = 0; // Number of lines since last flush
-
   // TODO(mkr) make a flush based on time too
 
 public:
-  void set_file_name(char *new_name) {
+  void set_file_name(const char *new_name) {
     std::scoped_lock guard(mutex);
 
     assert(State::initial == state);    // We can't set the filename after we have started to use the name
@@ -58,7 +73,7 @@ public:
     base_file_name = new_name;
   }
 
-  void logstream(std::string message) noexcept {
+  void log(std::string message) noexcept {
     std::scoped_lock guard(mutex);
 
     switch (state) {
@@ -69,50 +84,47 @@ public:
         stream.close();
         lines_since_last_flush = 0;
 
-        [[fallthrough]]
+        [[fallthrough]];
 
       case State::initial: {
           using namespace std::chrono;
           assert(!base_file_name.empty());  // Logic error if the filename isn't set at this point
 
-          // Choosing the clock is not trivial, using system_clock for now... need to be re-evaluated
-          // Best would be utc_clock, but it isn't supported by our compiler version
-          // steady_clock can repeat the same time between boots, even it is always increasing in the same runb
-          // system_clock is not ideal, as it can be adjusted and hence repeat...
           const auto cur_time = system_clock::now().time_since_epoch();
           uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
 
           std::string file_name(base_file_name);
-          file_name += cur_time_ms;
+          file_name += std::to_string(cur_time_ms);
 
-          // TODO(mkr) make sure the right parameters are used e.g. append/truncate if file exists
+          // TODO(mkr) make sure the right parameters are used e.g. append
           stream.open(file_name);
 
-          if(!stream.is_open()) {
+          if(!stream || !stream.is_open()) {
             state = State::aborted;
             return;
           }
 
           state = State::open;
+          s_file_stats.file_count++;
           log_files_opened++;
           log_lines_written = 0;
         }
 
-        [[fallthrough]]
+        [[fallthrough]];
 
       case State::open:
-
-        // TODO(mkr) Investigate how failures to write manifest them self and handle them gracefully
         stream << message << std::endl;
 
+        s_file_stats.line_count++;
         log_lines_total++;
         log_lines_written++;
         lines_since_last_flush++;
 
-        if (max_lines_pr_file >= log_lines_written)
+        // TODO - validate that a stream with an error, can be closed, and reopened
+        if (!stream || max_lines_pr_file <= log_lines_written) {
           state = State::full;
-
-        if (lines_beween_flushes >= lines_since_last_flush) {
+        }
+        else if (lines_beween_flushes <= lines_since_last_flush) {
           stream.flush();
           lines_since_last_flush = 0;
         }
@@ -121,33 +133,31 @@ public:
 };
 
 class NetworkMappingModule : public Module {
+
 public:
-enum class file_error { success, uninitialized_file, cannot_write };
   NetworkMappingModule()
       : Module("network_mapping",
                "Help map resources in the network based on their comms",
-               nm_params),
-        logfile(), logfile_mx() {}
-  std::ofstream logfile;
-  std::mutex logfile_mx;
+               nm_params) {}
+
+  LogFile logger;
 
   Usage get_usage() const override { return CONTEXT; }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("log_file") && val.get_string()) {
-      logfile.open(val.get_string());
+      logger.set_file_name(val.get_string());
     }
 
     return true;
   }
 
-  file_error logstream(std::string message) noexcept {
-    std::lock_guard<std::mutex> guard(logfile_mx);
-    if (!logfile.is_open()) {
-      return file_error::uninitialized_file;
-    }
-    logfile << message << std::endl;
-    return file_error::success;
+  const PegInfo* get_pegs() const override {
+    return s_pegs;
+  }
+
+  PegCount* get_counts() const override {
+    return (PegCount*)&s_file_stats;
   }
 };
 
@@ -169,7 +179,7 @@ public:
             sfip_ntop(packet->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
             ss << ip_str << ':' << packet->ptrs.dp;
 
-            module.logstream(ss.str());
+            module.logger.log(ss.str());
         }
     }
   }
@@ -182,7 +192,7 @@ public:
 
     void handle(snort::DataEvent &, snort::Flow *flow) override {
       if (flow && flow->service) {
-        module.logstream(std::string(flow->service));
+        module.logger.log(std::string(flow->service));
       }
     }
   };
