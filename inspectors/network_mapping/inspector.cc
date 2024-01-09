@@ -92,16 +92,16 @@ public:
           using namespace std::chrono;
           assert(!base_file_name.empty());  // Logic error if the filename isn't set at this point
 
-          const auto cur_time = system_clock::now().time_since_epoch();
-          uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
-
           std::string file_name(base_file_name);
+
           if (use_rotate_feature) {
+            const auto cur_time = system_clock::now().time_since_epoch();
+            uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
+
             file_name += std::to_string(cur_time_ms);
           }
 
-          // TODO(mkr) make sure the right parameters are used e.g. append
-          stream.open(file_name);
+          stream.open(file_name, std::ios_base::app);
 
           if(!stream || !stream.is_open()) {
             state = State::aborted;
