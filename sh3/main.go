@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ func main() {
 
 	ng := script.NewEngine()
 	ng.Cmds["pcap"] = PCAP()
+	ng.Cmds["skip"] = Skip()
 
 	dst := filepath.Join("p/", *output)
 	err := compile(
@@ -108,7 +110,16 @@ func main() {
 
 		ts := bytes.NewReader(ar.Comment)
 		if err := ng.Execute(st, f, bufio.NewReader(ts), os.Stderr); err != nil {
-			fmt.Fprintf(os.Stderr, "\x1b[1;31mTest Failure: %s\x1b[0m\n", err)
+			var se skipError
+			if skip := errors.As(err, &se); skip {
+				if se.msg != "" {
+					fmt.Fprintf(os.Stdout, "Skipping test\n")
+				} else {
+					fmt.Fprintf(os.Stdout, "Skipping test: %s\n", se.msg)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "\x1b[1;31mTest Failure: %s\x1b[0m\n", err)
+			}
 		}
 
 		os.RemoveAll(dir)

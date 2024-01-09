@@ -199,9 +199,7 @@ public:
     NetworkMappingModule &module;
 
     void handle(snort::DataEvent &, snort::Flow *flow) override {
-      if (flow && flow->service) {
-        module.logger.log(std::string(flow->service));
-      }
+      std::cout<< flow->service << std::endl ;
     }
   };
 
@@ -209,16 +207,6 @@ public:
     DataBus::subscribe_network(intrinsic_pub_key,
                                IntrinsicEventIds::FLOW_SERVICE_CHANGE,
                                new EventHandler(module));
-    DataBus::subscribe_network(intrinsic_pub_key,
-                               IntrinsicEventIds::FLOW_STATE_RELOADED,
-                               new EventHandler(module));
-    DataBus::subscribe_network(intrinsic_pub_key,
-                               IntrinsicEventIds::AUXILIARY_IP,
-                               new EventHandler(module));
-    /* DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-        new EventHandler("IntrinsicEventIds::PKT_WITHOUT_FLOW")); */
-
     return true;
   }
 };

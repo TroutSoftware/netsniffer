@@ -36,7 +36,7 @@ func PCAP() script.Cmd {
 			)
 			cmd.Dir = s.Getwd()
 			// TODO only preload if asan is set
-			cmd.Env = append(s.Environ(), "LD_PRELOAD=" + asanlib)
+			cmd.Env = append(s.Environ(), "LD_PRELOAD="+asanlib)
 			cmd.Stdout = &stdoutBuf
 			cmd.Stderr = &stderrBuf
 			err := cmd.Start()
@@ -52,3 +52,24 @@ func PCAP() script.Cmd {
 		},
 	)
 }
+
+func Skip() script.Cmd {
+	return script.Command(
+		script.CmdUsage{
+			Summary: "skip the current test",
+			Args:    "[msg]",
+		},
+		func(_ *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) > 1 {
+				return nil, script.ErrUsage
+			}
+			if len(args) == 0 {
+				return nil, skipError{""}
+			}
+			return nil, skipError{args[0]}
+		})
+}
+
+type skipError struct{ msg string }
+
+func (err skipError) Error() string { return err.msg }

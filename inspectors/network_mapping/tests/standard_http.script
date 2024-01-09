@@ -1,0 +1,19 @@
+# Inspectors and spells are in place to attribute the correct flow
+skip
+pcap $moddir/pcaps/google_http.pcap
+grep '^8.8.8.8:53 -> 10.67.21.59:53' flow.txt
+
+-- cfg.lua --
+stream = {}
+stream_tcp = {}
+http_inspect = {}
+network_mapping = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
