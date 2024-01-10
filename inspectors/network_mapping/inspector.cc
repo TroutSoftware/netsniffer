@@ -1,6 +1,7 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <list>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -139,6 +140,108 @@ public:
   }
 };
 
+// TODO(mkr) will a service client always equal the source, or can it equal the destination sometimes?
+struct IpPacketCacheElement {
+  std::chrono::time_point<std::chrono::steady_clock> create_time;
+
+  SfIp      src_ip;
+  uint16_t  src_port;
+  SfIp      dst_ip;
+  uint16_t  dst_port;
+};
+
+
+class IpPacketCache {
+public:
+  typedef void (*OrphanFunc)(SfIp src_ip, uint16_t src_port, SfIp dest_ip, uint16_t dst_port);
+private:
+
+  std::mutex  mutex;
+
+  unsigned total_count = 0;
+  unsigned total_orphan = 0;
+  unsigned total_match = 0;
+  unsigned total_failed_match = 0;
+
+  const unsigned cur_max_size = 1;
+
+  // We use a std::list for now, to get the rest of the logic in place
+  // TODO(mkr) optimize - change to not allocate mem for each element
+  std::list<IpPacketCacheElement> cache;
+
+  OrphanFunc orphan;
+
+public:
+  IpPacketCache(OrphanFunc orphan) : orphan(orphan) {}
+
+  ~IpPacketCache() {
+    assert(0 != cache.size());  // Cache wasn't flushed before the end
+  }
+
+  void add(const Packet &p) {
+    std::scoped_lock guard(mutex);
+
+    // We add to the back so we can use the "for (autu itr:cache) {" statement later
+    cache.emplace_back(IpPacketCacheElement{
+      std::chrono::steady_clock::now(),
+      *p.ptrs.ip_api.get_src(),
+      p.ptrs.sp,
+      *p.ptrs.ip_api.get_dst(),
+      p.ptrs.dp}
+    );
+
+    total_count++;
+
+    // If cache is full, remove oldest element
+    if (cur_max_size < cache.size()) {
+      auto const itr = cache.begin();
+      // TODO(mkr): Make this call, without taking the mutex lock
+      orphan(itr->src_ip, itr->src_port, itr->dst_ip, itr->dst_port);
+      cache.pop_front();
+
+      total_orphan++;
+    };
+  }
+
+  void match(const SfIp &src_ip, const uint16_t src_port, const SfIp &dst_ip, const uint16_t dst_port) {
+    std::scoped_lock guard(mutex);
+
+    // TODO: Should we delete all, or just the first (oldest) match we find?
+    for (auto itr = cache.begin(); itr != cache.end(); itr++) {
+        if ( itr->src_ip == src_ip
+          && itr->src_port == src_port
+          && itr->dst_ip == dst_ip
+          && itr->dst_port == dst_port ) {
+        cache.erase(itr);
+
+        total_match++;
+        return;
+      }
+    }
+
+    total_failed_match++;
+  }
+
+  void flush() {
+    std::scoped_lock guard(mutex);
+
+    for (auto itr : cache) {
+      // TODO(mkr) make this call without holding the mutex
+      orphan(itr.src_ip, itr.src_port, itr.dst_ip, itr.dst_port);
+      total_orphan++;
+    }
+
+    cache.clear();
+  }
+
+  unsigned get_total_packet()       { return total_count; }
+  unsigned get_total_orphan()       { return total_orphan; }
+  unsigned get_total_match()        { return total_match; }
+  unsigned get_total_failed_match() { return total_failed_match; }
+};
+
+
+
 class NetworkMappingModule : public Module {
 
 public:
@@ -151,7 +254,7 @@ public:
 
   Usage get_usage() const override { return CONTEXT; }
 
-  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+  bool set(const char *, Value &val, SnortConfig *) override {
     if (val.is("log_file") && val.get_string()) {
       logger.set_file_name(val.get_string());
     }
@@ -172,13 +275,13 @@ public:
   }
 };
 
-class NetworkMappingInspector : public snort::Inspector {
+class NetworkMappingInspector : public Inspector {
 public:
   NetworkMappingInspector(NetworkMappingModule *module) : module(*module) {}
   NetworkMappingModule &module;
 
 
-  void eval(snort::Packet *packet) override {
+  void eval(Packet *packet) override {
     if (packet) {
         if(packet->has_ip()) {
             char ip_str[INET_ADDRSTRLEN];
@@ -195,13 +298,13 @@ public:
     }
   }
 
-  class EventHandler : public snort::DataHandler {
+  class EventHandler : public DataHandler {
   public:
     EventHandler(NetworkMappingModule &module)
         : DataHandler("network_mapping"), module(module) {}
     NetworkMappingModule &module;
 
-    void handle(snort::DataEvent &, snort::Flow *flow) override {
+    void handle(DataEvent &, Flow *flow) override {
       assert(flow);
 
 
