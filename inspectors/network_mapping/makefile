@@ -9,7 +9,7 @@ test:
 	sh3 -o $(MODULE) -i $(CC_SOURCES) $(TEST_LIMIT)
 
 test-data: p/network_mapping.so
-	$(SNORT) -v -c cfg.lua --plugin-path p -A talos --pcap-dir ../../test_data --warn-all
+	$(SNORT) -v -c ../../test_config/cfg.lua --plugin-path p -A talos --pcap-dir ../../test_data --warn-all
 
 clean:
 	rm p/network_mapping.so

@@ -101,6 +101,8 @@ public:
             file_name += std::to_string(cur_time_ms);
           }
 
+          // We use std::ios_base::app vs. std::ios_base::ate to ensure
+          // we don't overwrite data written between our own writes
           stream.open(file_name, std::ios_base::app);
 
           if(!stream || !stream.is_open()) {
@@ -117,6 +119,7 @@ public:
         [[fallthrough]];
 
       case State::open:
+        //std::cout << "****** Logs: " << message << std::endl;
         stream << message << std::endl;
 
         s_file_stats.line_count++;
@@ -199,7 +202,22 @@ public:
     NetworkMappingModule &module;
 
     void handle(snort::DataEvent &, snort::Flow *flow) override {
-      std::cout<< flow->service << std::endl ;
+      assert(flow);
+
+
+      char ip_str[INET_ADDRSTRLEN];
+      std::stringstream ss;
+
+      sfip_ntop(&flow->client_ip, ip_str, sizeof(ip_str));
+      ss << ip_str << ':' << flow->client_port << " -> ";
+
+      sfip_ntop(&flow->server_ip, ip_str, sizeof(ip_str));
+      ss << ip_str << ':' << flow->server_port;
+
+      ss << " - " << flow->service;
+
+      module.logger.log(ss.str());
+
     }
   };
 
