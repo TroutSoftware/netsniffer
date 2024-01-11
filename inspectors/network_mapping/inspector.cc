@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -128,7 +129,7 @@ public:
         log_lines_written++;
         lines_since_last_flush++;
 
-        // TODO - validate that a stream with an error, can be closed, and reopened
+        // TODO(mkr) - validate that a stream with an error, can be closed, and reopened
         if (!stream || (use_rotate_feature && max_lines_pr_file <= log_lines_written)) {
           state = State::full;
         }
@@ -152,10 +153,6 @@ struct IpPacketCacheElement {
 
 
 class IpPacketCache {
-public:
-  typedef void (*OrphanFunc)(SfIp src_ip, uint16_t src_port, SfIp dest_ip, uint16_t dst_port);
-private:
-
   std::mutex  mutex;
 
   unsigned total_count = 0;
@@ -163,19 +160,16 @@ private:
   unsigned total_match = 0;
   unsigned total_failed_match = 0;
 
-  const unsigned cur_max_size = 1;
+  const unsigned cur_max_size = 1000;
 
   // We use a std::list for now, to get the rest of the logic in place
   // TODO(mkr) optimize - change to not allocate mem for each element
   std::list<IpPacketCacheElement> cache;
 
-  OrphanFunc orphan;
-
 public:
-  IpPacketCache(OrphanFunc orphan) : orphan(orphan) {}
 
   ~IpPacketCache() {
-    assert(0 != cache.size());  // Cache wasn't flushed before the end
+    assert(0 == cache.size());  // Cache wasn't flushed before the end
   }
 
   void add(const Packet &p) {
@@ -196,7 +190,7 @@ public:
     if (cur_max_size < cache.size()) {
       auto const itr = cache.begin();
       // TODO(mkr): Make this call, without taking the mutex lock
-      orphan(itr->src_ip, itr->src_port, itr->dst_ip, itr->dst_port);
+      eval_orphan(itr->src_ip, itr->src_port, itr->dst_ip, itr->dst_port);
       cache.pop_front();
 
       total_orphan++;
@@ -227,12 +221,14 @@ public:
 
     for (auto itr : cache) {
       // TODO(mkr) make this call without holding the mutex
-      orphan(itr.src_ip, itr.src_port, itr.dst_ip, itr.dst_port);
+      eval_orphan(itr.src_ip, itr.src_port, itr.dst_ip, itr.dst_port);
       total_orphan++;
     }
 
     cache.clear();
   }
+
+  virtual void eval_orphan(SfIp &src_ip, uint16_t src_port, SfIp &dest_ip, uint16_t dst_port) = 0;
 
   unsigned get_total_packet()       { return total_count; }
   unsigned get_total_orphan()       { return total_orphan; }
@@ -244,24 +240,29 @@ public:
 
 class NetworkMappingModule : public Module {
 
+  std::shared_ptr<LogFile> logger;
+
 public:
   NetworkMappingModule()
       : Module("network_mapping",
                "Help map resources in the network based on their comms",
-               nm_params) {}
+               nm_params), logger(new LogFile) {}
 
-  LogFile logger;
+  ~NetworkMappingModule()  {}
+
+  std::shared_ptr<LogFile> &get_logger() {
+    return logger;
+  }
 
   Usage get_usage() const override { return CONTEXT; }
 
   bool set(const char *, Value &val, SnortConfig *) override {
     if (val.is("log_file") && val.get_string()) {
-      logger.set_file_name(val.get_string());
+      logger->set_file_name(val.get_string());
     }
     else if (val.is("size_rotate") )  {
       use_rotate_feature = val.get_bool();
     }
-
 
     return true;
   }
@@ -275,38 +276,46 @@ public:
   }
 };
 
-class NetworkMappingInspector : public Inspector {
-public:
-  NetworkMappingInspector(NetworkMappingModule *module) : module(*module) {}
-  NetworkMappingModule &module;
+class NetworkMappingInspector : public Inspector, private IpPacketCache {
+  std::shared_ptr<LogFile> logger;
 
+public:
+
+  NetworkMappingInspector(NetworkMappingModule *module) : logger(module->get_logger()) {}
+
+  ~NetworkMappingInspector () {
+    flush();    // Flush of the packet cache
+  }
 
   void eval(Packet *packet) override {
-    if (packet) {
-        if(packet->has_ip()) {
-            char ip_str[INET_ADDRSTRLEN];
-            std::stringstream ss;
-
-            sfip_ntop(packet->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
-            ss << ip_str << ':' << packet->ptrs.sp << " -> ";
-
-            sfip_ntop(packet->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
-            ss << ip_str << ':' << packet->ptrs.dp;
-
-            module.logger.log(ss.str());
-        }
+    if(packet && packet->has_ip()) {
+      add(*packet);
     }
   }
 
+  void eval_orphan (SfIp &src_ip, uint16_t src_port, SfIp &dest_ip, uint16_t dst_port) override {
+    char ip_str[INET_ADDRSTRLEN];
+    std::stringstream ss;
+
+    sfip_ntop(&src_ip, ip_str, sizeof(ip_str));
+    ss << ip_str << ':' << src_port << " -> ";
+
+    sfip_ntop(&dest_ip, ip_str, sizeof(ip_str));
+    ss << ip_str << ':' << dst_port;
+
+    logger->log(ss.str());
+  };
+
+
   class EventHandler : public DataHandler {
+    std::shared_ptr<LogFile> logger;
   public:
-    EventHandler(NetworkMappingModule &module)
-        : DataHandler("network_mapping"), module(module) {}
-    NetworkMappingModule &module;
+    EventHandler(std::shared_ptr<LogFile> &logger)
+        : DataHandler("network_mapping"),
+          logger(logger) {};
 
     void handle(DataEvent &, Flow *flow) override {
       assert(flow);
-
 
       char ip_str[INET_ADDRSTRLEN];
       std::stringstream ss;
@@ -319,15 +328,15 @@ public:
 
       ss << " - " << flow->service;
 
-      module.logger.log(ss.str());
-
+      logger->log(ss.str());
     }
   };
 
   bool configure(SnortConfig *) override {
     DataBus::subscribe_network(intrinsic_pub_key,
                                IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-                               new EventHandler(module));
+                               // TODO(mkr): When/how is this destroyed?
+                               new EventHandler(logger));
     return true;
   }
 };
