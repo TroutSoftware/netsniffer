@@ -15,6 +15,7 @@
 #include "pub_sub/http_event_ids.h"
 #include "pub_sub/intrinsic_event_ids.h"
 #include "sfip/sf_ip.h"
+#include "time/periodic.h"
 
 using namespace snort;
 
@@ -142,6 +143,29 @@ public:
   }
 };
 
+class Timer {
+  static class Ticker {
+  public:
+    Ticker () {
+      Periodic::register_handler([](void*){Timer::tick();}, nullptr, 0, 10'000);
+    }
+  } ticker;
+
+  static void tick() {
+
+  }
+
+public:
+
+  bool stop_timer() {
+
+    return true;
+  }
+
+  virtual void timeout() = 0;
+
+};
+
 
 class NetworkMappingModule : public Module {
   std::shared_ptr<LogFile> logger;
@@ -178,17 +202,27 @@ public:
   }
 };
 
-class NetworkMappingFlowData : public FlowData {
+class NetworkMappingFlowData : public FlowData, public Timer  {
+  std::shared_ptr<LogFile> logger;
+  std::string timeout_string;
 public:
-  NetworkMappingFlowData (Inspector *inspector) : FlowData(get_id(), inspector) {}
+  NetworkMappingFlowData (Inspector *inspector,
+                          std::shared_ptr<LogFile> &logger,
+                          std::string timeout_string) :
+      FlowData(get_id(), inspector),
+      logger(logger),
+      timeout_string(timeout_string) {
+  }
 
   unsigned static get_id() {
     static unsigned flow_data_id = FlowData::create_flow_data_id();
     return flow_data_id;
   }
 
-  // Returns true if time was running, false if it has already expired
-  bool stopTimer() {return true;}
+  virtual void timeout() override {
+    timeout_string += " - [TIME OUT]";
+    logger->log(timeout_string);
+  }
 };
 
 class EventHandler : public DataHandler {
@@ -203,17 +237,8 @@ public:
         logger(logger), event_type(event_type) {};
 
   void handle(DataEvent &de, Flow *flow) override {
+
     NetworkMappingFlowData *flow_data = nullptr;
-
-    if (flow) {
-
-      flow_data = dynamic_cast<NetworkMappingFlowData*>(flow->get_flow_data(NetworkMappingFlowData::get_id()));
-
-      if (!flow_data) {
-        flow_data = new NetworkMappingFlowData(inspector);
-        flow->set_flow_data(flow_data);
-      }
-    }
 
     std::stringstream ss;
     const Packet *p = de.get_packet();
@@ -230,12 +255,23 @@ public:
       ss << "[NO IP]";
     }
 
+    if (flow) {
+
+      flow_data = dynamic_cast<NetworkMappingFlowData*>(flow->get_flow_data(NetworkMappingFlowData::get_id()));
+
+      if (!flow_data) {
+        flow_data = new NetworkMappingFlowData(inspector, logger, ss.str());
+        flow->set_flow_data(flow_data);
+      }
+    }
+
+
     switch (event_type) {
       case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
         if (flow && flow->service) {
           ss << " - " << flow->service;
 
-          if(!flow_data->stopTimer()) {
+          if(!flow_data->stop_timer()) {
               ss << " - Updated ";
           }
         } else {
