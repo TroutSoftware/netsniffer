@@ -6,6 +6,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "framework/inspector.h"
 #include "framework/module.h"
@@ -141,105 +142,8 @@ public:
   }
 };
 
-// TODO(mkr) will a service client always equal the source, or can it equal the destination sometimes?
-struct IpPacketCacheElement {
-  std::chrono::time_point<std::chrono::steady_clock> create_time;
-
-  SfIp      src_ip;
-  uint16_t  src_port;
-  SfIp      dst_ip;
-  uint16_t  dst_port;
-};
-
-
-class IpPacketCache {
-  std::mutex  mutex;
-
-  unsigned total_count = 0;
-  unsigned total_orphan = 0;
-  unsigned total_match = 0;
-  unsigned total_failed_match = 0;
-
-  const unsigned cur_max_size = 1000;
-
-  // We use a std::list for now, to get the rest of the logic in place
-  // TODO(mkr) optimize - change to not allocate mem for each element
-  std::list<IpPacketCacheElement> cache;
-
-public:
-
-  ~IpPacketCache() {
-    assert(0 == cache.size());  // Cache wasn't flushed before the end
-  }
-
-  void add(const Packet &p) {
-    std::scoped_lock guard(mutex);
-
-    // We add to the back so we can use the "for (autu itr:cache) {" statement later
-    cache.emplace_back(IpPacketCacheElement{
-      std::chrono::steady_clock::now(),
-      *p.ptrs.ip_api.get_src(),
-      p.ptrs.sp,
-      *p.ptrs.ip_api.get_dst(),
-      p.ptrs.dp}
-    );
-
-    total_count++;
-
-    // If cache is full, remove oldest element
-    if (cur_max_size < cache.size()) {
-      auto const itr = cache.begin();
-      // TODO(mkr): Make this call, without taking the mutex lock
-      eval_orphan(itr->src_ip, itr->src_port, itr->dst_ip, itr->dst_port);
-      cache.pop_front();
-
-      total_orphan++;
-    };
-  }
-
-  void match(const SfIp &src_ip, const uint16_t src_port, const SfIp &dst_ip, const uint16_t dst_port) {
-    std::scoped_lock guard(mutex);
-
-    // TODO: Should we delete all, or just the first (oldest) match we find?
-    for (auto itr = cache.begin(); itr != cache.end(); itr++) {
-        if ( itr->src_ip == src_ip
-          && itr->src_port == src_port
-          && itr->dst_ip == dst_ip
-          && itr->dst_port == dst_port ) {
-        cache.erase(itr);
-
-        total_match++;
-        return;
-      }
-    }
-
-    total_failed_match++;
-  }
-
-  void flush() {
-    std::scoped_lock guard(mutex);
-
-    for (auto itr : cache) {
-      // TODO(mkr) make this call without holding the mutex
-      eval_orphan(itr.src_ip, itr.src_port, itr.dst_ip, itr.dst_port);
-      total_orphan++;
-    }
-
-    cache.clear();
-  }
-
-  virtual void eval_orphan(SfIp &src_ip, uint16_t src_port, SfIp &dest_ip, uint16_t dst_port) = 0;
-
-  unsigned get_total_packet()       { return total_count; }
-  unsigned get_total_orphan()       { return total_orphan; }
-  unsigned get_total_match()        { return total_match; }
-  unsigned get_total_failed_match() { return total_failed_match; }
-};
-
-
 
 class NetworkMappingModule : public Module {
-
   std::shared_ptr<LogFile> logger;
 
 public:
@@ -247,8 +151,6 @@ public:
       : Module("network_mapping",
                "Help map resources in the network based on their comms",
                nm_params), logger(new LogFile) {}
-
-  ~NetworkMappingModule()  {}
 
   std::shared_ptr<LogFile> &get_logger() {
     return logger;
@@ -276,67 +178,130 @@ public:
   }
 };
 
-class NetworkMappingInspector : public Inspector, private IpPacketCache {
+class NetworkMappingFlowData : public FlowData {
+public:
+  NetworkMappingFlowData (Inspector *inspector) : FlowData(get_id(), inspector) {}
+
+  unsigned static get_id() {
+    static unsigned flow_data_id = FlowData::create_flow_data_id();
+    return flow_data_id;
+  }
+
+  // Returns true if time was running, false if it has already expired
+  bool stopTimer() {return true;}
+};
+
+class EventHandler : public DataHandler {
+  Inspector* inspector;
+  std::shared_ptr<LogFile> logger;
+  unsigned event_type;
+
+public:
+  EventHandler(Inspector* inspector, std::shared_ptr<LogFile> &logger, unsigned event_type)
+      : DataHandler("network_mapping"),
+        inspector(inspector),
+        logger(logger), event_type(event_type) {};
+
+  void handle(DataEvent &de, Flow *flow) override {
+    NetworkMappingFlowData *flow_data = nullptr;
+
+    if (flow) {
+
+      flow_data = dynamic_cast<NetworkMappingFlowData*>(flow->get_flow_data(NetworkMappingFlowData::get_id()));
+
+      if (!flow_data) {
+        flow_data = new NetworkMappingFlowData(inspector);
+        flow->set_flow_data(flow_data);
+      }
+    }
+
+    std::stringstream ss;
+    const Packet *p = de.get_packet();
+
+    if (p->has_ip()) {
+      char ip_str[INET_ADDRSTRLEN];
+
+      sfip_ntop(p->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
+      ss << ip_str << ':' << p->ptrs.sp << " -> ";
+
+      sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
+      ss << ip_str << ':' << p->ptrs.dp;
+    } else {
+      ss << "[NO IP]";
+    }
+
+    switch (event_type) {
+      case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
+        if (flow && flow->service) {
+          ss << " - " << flow->service;
+
+          if(!flow_data->stopTimer()) {
+              ss << " - Updated ";
+          }
+        } else {
+          ss << " - [SNORT ERROR]";
+        }
+        logger->log(ss.str());
+        break;
+
+      case IntrinsicEventIds::FLOW_STATE_SETUP:
+        break;
+
+      case IntrinsicEventIds::FLOW_STATE_RELOADED:
+        break;
+
+      case IntrinsicEventIds::PKT_WITHOUT_FLOW:
+        logger->log(ss.str());
+        break;
+
+      case IntrinsicEventIds::FLOW_NO_SERVICE:
+        ss << " - [NO SERVICE]";
+        logger->log(ss.str());
+        break;
+    }
+
+  }
+private:
+  const char* get_event_name(unsigned event_type) {
+    switch(event_type) {
+      case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
+        return "FLOW_SERVICE_CHANGE";
+
+      case IntrinsicEventIds::FLOW_STATE_SETUP:
+        return "FLOW_STATE_SETUP";
+
+      case IntrinsicEventIds::FLOW_STATE_RELOADED:
+        return "FLOW_STATE_RELOADED";
+
+      case IntrinsicEventIds::PKT_WITHOUT_FLOW:
+        return "PKT_WITHOUT_FLOW";
+
+      case IntrinsicEventIds::FLOW_NO_SERVICE:
+        return "FLOW_NO_SERVICE";
+
+      default:
+        assert(false);
+        return "Update EventHandler::get_event_name() to get name";
+
+    }
+  }
+};
+
+class NetworkMappingInspector : public Inspector {
   std::shared_ptr<LogFile> logger;
 
 public:
-
   NetworkMappingInspector(NetworkMappingModule *module) : logger(module->get_logger()) {}
 
-  ~NetworkMappingInspector () {
-    flush();    // Flush of the packet cache
-  }
-
-  void eval(Packet *packet) override {
-    if(packet && packet->has_ip()) {
-      add(*packet);
-    }
-  }
-
-  void eval_orphan (SfIp &src_ip, uint16_t src_port, SfIp &dest_ip, uint16_t dst_port) override {
-    char ip_str[INET_ADDRSTRLEN];
-    std::stringstream ss;
-
-    sfip_ntop(&src_ip, ip_str, sizeof(ip_str));
-    ss << ip_str << ':' << src_port << " -> ";
-
-    sfip_ntop(&dest_ip, ip_str, sizeof(ip_str));
-    ss << ip_str << ':' << dst_port;
-
-    logger->log(ss.str());
-  };
-
-
-  class EventHandler : public DataHandler {
-    std::shared_ptr<LogFile> logger;
-  public:
-    EventHandler(std::shared_ptr<LogFile> &logger)
-        : DataHandler("network_mapping"),
-          logger(logger) {};
-
-    void handle(DataEvent &, Flow *flow) override {
-      assert(flow);
-
-      char ip_str[INET_ADDRSTRLEN];
-      std::stringstream ss;
-
-      sfip_ntop(&flow->client_ip, ip_str, sizeof(ip_str));
-      ss << ip_str << ':' << flow->client_port << " -> ";
-
-      sfip_ntop(&flow->server_ip, ip_str, sizeof(ip_str));
-      ss << ip_str << ':' << flow->server_port;
-
-      ss << " - " << flow->service;
-
-      logger->log(ss.str());
-    }
-  };
+  void eval(Packet*) override {}
 
   bool configure(SnortConfig *) override {
-    DataBus::subscribe_network(intrinsic_pub_key,
-                               IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-                               // TODO(mkr): When/how is this destroyed?
-                               new EventHandler(logger));
+    DataBus::subscribe_network(intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE, new EventHandler(this, logger, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
+    DataBus::subscribe_network(intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,    new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_SETUP));
+    DataBus::subscribe_network(intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED, new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_RELOADED));
+    DataBus::subscribe_network(intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,    new EventHandler(this, logger, IntrinsicEventIds::PKT_WITHOUT_FLOW));
+    DataBus::subscribe_network(intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,     new EventHandler(this, logger, IntrinsicEventIds::FLOW_NO_SERVICE));
+
     return true;
   }
 };
@@ -355,7 +320,7 @@ const InspectApi networkmap_api = {
         [](Module *m) { delete m; },
     },
 
-    IT_FIRST,
+    IT_PASSIVE,
     PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
     nullptr,        // buffers
     nullptr,        // service
