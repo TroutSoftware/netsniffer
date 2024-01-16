@@ -6,7 +6,6 @@
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <thread>
 
 #include "framework/inspector.h"
 #include "framework/module.h"
@@ -79,7 +78,7 @@ public:
     base_file_name = new_name;
   }
 
-  void log(std::string message) noexcept {
+  void log(char prefix, std::string message) noexcept {
     std::scoped_lock guard(mutex);
 
     switch (state) {
@@ -123,8 +122,8 @@ public:
         [[fallthrough]];
 
       case State::open:
-        //std::cout << "****** Logs: " << message << std::endl;
-        stream << message << std::endl;
+        //std::cout << "****** Logs: " << prefix << ' ' << message << std::endl;
+        stream << prefix << ' ' << message << std::endl;
 
         s_file_stats.line_count++;
         log_lines_total++;
@@ -220,8 +219,7 @@ public:
   }
 
   virtual void timeout() override {
-    timeout_string += " - [TIME OUT]";
-    logger->log(timeout_string);
+    logger->log('N', timeout_string);
   }
 };
 
@@ -244,6 +242,9 @@ public:
     const Packet *p = de.get_packet();
 
     if (p->has_ip()) {
+      // TODO(mkr): Put IPv6 in []:port
+      // TODO(mkr): Look into the empty conversions
+      // TODO(mkr): Maybe write unit test in https://cpputest.github.io/
       char ip_str[INET_ADDRSTRLEN];
 
       sfip_ntop(p->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
@@ -252,7 +253,8 @@ public:
       sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
       ss << ip_str << ':' << p->ptrs.dp;
     } else {
-      ss << "[NO IP]";
+      // TODO(mkr): Add mac address's instead
+      ss << " - ";
     }
 
     if (flow) {
@@ -265,19 +267,14 @@ public:
       }
     }
 
-
+    // TODO(mkr) add counters/pegs
     switch (event_type) {
-      case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
-        if (flow && flow->service) {
-          ss << " - " << flow->service;
+      case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
+          char prefix = flow_data->stop_timer()?'N':'U';
+          ss << ' ' << ((flow && flow->service)?flow->service:"-");
 
-          if(!flow_data->stop_timer()) {
-              ss << " - Updated ";
-          }
-        } else {
-          ss << " - [SNORT ERROR]";
+          logger->log(prefix, ss.str());
         }
-        logger->log(ss.str());
         break;
 
       case IntrinsicEventIds::FLOW_STATE_SETUP:
@@ -287,17 +284,19 @@ public:
         break;
 
       case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-        logger->log(ss.str());
+        ss << " -";
+        logger->log('N', ss.str());
         break;
 
       case IntrinsicEventIds::FLOW_NO_SERVICE:
-        ss << " - [NO SERVICE]";
-        logger->log(ss.str());
+        ss << " -";
+        logger->log('N', ss.str());
         break;
     }
 
   }
 private:
+  // TODO(mkr) Look for snort function for the convertion
   const char* get_event_name(unsigned event_type) {
     switch(event_type) {
       case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
@@ -357,7 +356,7 @@ const InspectApi networkmap_api = {
     },
 
     IT_PASSIVE,
-    PROTO_BIT__ALL, // PROTO_BIT__ANY_IP, // PROTO_BIT__ALL, PROTO_BIT__NONE, //
+    PROTO_BIT__ALL,
     nullptr,        // buffers
     nullptr,        // service
     nullptr,        // pinit
