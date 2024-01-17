@@ -215,6 +215,12 @@ public:
       timeout_string(timeout_string) {
   }
 
+  ~NetworkMappingFlowData() {
+/*    if (stop_timer()) {
+      logger->log('N', timeout_string);
+    }*/
+  }
+
   unsigned static get_id() {
     static unsigned flow_data_id = FlowData::create_flow_data_id();
     return flow_data_id;
@@ -260,19 +266,25 @@ public:
     const eth::EtherHdr* eh = ((p->proto_bits & PROTO_BIT__ETH)?layer::get_eth_layer(p):nullptr);
     const bool has_ip = p->has_ip();
     const bool has_ipv6 = p->is_ip6();
+    const bool has_port = p->is_tcp() || p->is_udp();
 
     // add one of IP, MAC, '-' (in that priority) to ss for the src parameter
     if (has_ip) {
       char ip_str[INET6_ADDRSTRLEN];
       sfip_ntop(p->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
-      if (*ip_str) {
-        if (has_ipv6) {
-          ss << '[' << ip_str << ']';
-        } else {
-          ss << ip_str;
-        }
+
+      if (has_ipv6) {
+        ss << '[' << ip_str << ']';
+      } else {
+        ss << ip_str;
       }
-      ss << ':' << p->ptrs.sp;
+
+      if (has_port) {
+        ss << ':' << p->ptrs.sp;
+      } else {
+        ss << ':' << '-';
+      }
+
     } else if(eh) {
       append_MAC(ss, eh->ether_src, sizeof(eh->ether_src));
     } else {
@@ -284,13 +296,17 @@ public:
     if (has_ip) {
       char ip_str[INET6_ADDRSTRLEN];
       sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
-      if (*ip_str) {
-        if (has_ipv6) {
-          ss << '[' << ip_str << ']';
-        } else {
-          ss << ip_str;
-        }
+
+      if (has_ipv6) {
+        ss << '[' << ip_str << ']';
+      } else {
+        ss << ip_str;
+      }
+
+      if (has_port) {
         ss << ':' << p->ptrs.dp;
+      } else {
+        ss << ':' << '-';
       }
     } else if(eh) {
       append_MAC(ss, eh->ether_dst, sizeof(eh->ether_dst));
@@ -310,6 +326,7 @@ public:
     // TODO(mkr) add counters/pegs
     switch (event_type) {
       case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
+          assert(flow_data);
           char prefix = flow_data->stop_timer()?'N':'U';
           ss << ' ' << ((flow && flow->service)?flow->service:"-");
 
