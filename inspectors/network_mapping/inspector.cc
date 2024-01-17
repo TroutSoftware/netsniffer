@@ -1,5 +1,6 @@
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <list>
 #include <memory>
@@ -9,6 +10,7 @@
 
 #include "framework/inspector.h"
 #include "framework/module.h"
+#include "protocols/eth.h"
 #include "protocols/packet.h"
 #include "pub_sub/appid_event_ids.h"
 #include "pub_sub/http_event_ids.h"
@@ -228,6 +230,18 @@ class EventHandler : public DataHandler {
   std::shared_ptr<LogFile> logger;
   unsigned event_type;
 
+  void append_MAC(std::stringstream &ss, const uint8_t *mac, const size_t mac_size) {
+    assert(mac_size == 6);
+
+    ss << std::hex << std::setfill('0')
+       << std::setw(2) << +(mac[0]) << ':'
+       << std::setw(2) << +(mac[1]) << ':'
+       << std::setw(2) << +(mac[2]) << ':'
+       << std::setw(2) << +(mac[3]) << ':'
+       << std::setw(2) << +(mac[4]) << ':'
+       << std::setw(2) << +(mac[5]);
+  }
+
 public:
   EventHandler(Inspector* inspector, std::shared_ptr<LogFile> &logger, unsigned event_type)
       : DataHandler("network_mapping"),
@@ -241,24 +255,50 @@ public:
     std::stringstream ss;
     const Packet *p = de.get_packet();
 
-    if (p->has_ip()) {
-      // TODO(mkr): Put IPv6 in []:port
-      // TODO(mkr): Look into the empty conversions
-      // TODO(mkr): Maybe write unit test in https://cpputest.github.io/
-      char ip_str[INET_ADDRSTRLEN];
+    assert(p);
 
+    const eth::EtherHdr* eh = ((p->proto_bits & PROTO_BIT__ETH)?layer::get_eth_layer(p):nullptr);
+    const bool has_ip = p->has_ip();
+    const bool has_ipv6 = p->is_ip6();
+
+    // add one of IP, MAC, '-' (in that priority) to ss for the src parameter
+    if (has_ip) {
+      char ip_str[INET6_ADDRSTRLEN];
       sfip_ntop(p->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
-      ss << ip_str << ':' << p->ptrs.sp << " -> ";
-
-      sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
-      ss << ip_str << ':' << p->ptrs.dp;
+      if (*ip_str) {
+        if (has_ipv6) {
+          ss << '[' << ip_str << ']';
+        } else {
+          ss << ip_str;
+        }
+      }
+      ss << ':' << p->ptrs.sp;
+    } else if(eh) {
+      append_MAC(ss, eh->ether_src, sizeof(eh->ether_src));
     } else {
-      // TODO(mkr): Add mac address's instead
-      ss << " - ";
+      ss << '-';
+    }
+
+    ss << " -> ";
+
+    if (has_ip) {
+      char ip_str[INET6_ADDRSTRLEN];
+      sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
+      if (*ip_str) {
+        if (has_ipv6) {
+          ss << '[' << ip_str << ']';
+        } else {
+          ss << ip_str;
+        }
+        ss << ':' << p->ptrs.dp;
+      }
+    } else if(eh) {
+      append_MAC(ss, eh->ether_dst, sizeof(eh->ether_dst));
+    } else {
+      ss << '-';
     }
 
     if (flow) {
-
       flow_data = dynamic_cast<NetworkMappingFlowData*>(flow->get_flow_data(NetworkMappingFlowData::get_id()));
 
       if (!flow_data) {
