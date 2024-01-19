@@ -1,0 +1,61 @@
+##############
+# Timer code #
+##############
+
+!!! DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT !!!
+
+Requirements:
+*************
+
+R10: An instance of an object must be able to register to get a single notification (a timeout) after at least 10s and a best efford must be made to to make the timeout after no more than 30s (unless a special condition happens as defined later in this requirement list)
+
+R20: During shutdown all registered instances must get a timeout, even if the 10s delay has not been reached (but only if they haven't gotten one previously)
+
+UPDATE R30: Each context should have a limit on number of records per inspector context
+
+UPDATE R31: When limit is reached, force rotation, if still issue, log packages without adding timer
+
+R40: An instance should be able to cancle it's timeout, performing this cancelation must return if the timer was running (has not elapesed or been previously cancled)
+
+R50: Handling a timeout must not block registrations from other threads
+
+R60: Registration and cancelation of timeouts must be done in constant O(1) time, except cancelation of a timeout might block until an active timeout on the same object has completed
+
+N100: It is not a requirement that a timeout happens on the same thread as the registration for the timeout did
+
+N110: It is not a requirement that an instance can reset or restart the timer
+
+N120: It is not a requirement that a thread can registrate for a new timeout while the same thread is handling a timeout (i.e. the timeout code directly or indirectly registers for a new timeout)
+
+N130: It is not a requirement that a thread can cancle an existing timeout while the same thread is handling a timeout (i.e. the timeout code directly or indirectly cancles the same or another timeout)
+
+Discussion
+**********
+
+The following is a short description of the ideas that were considered for this design.
+
+Idea A
+------
+
+Three containers are created:
+	- A collecting where new registrations are added
+	- A waiting where registrations wait until we are sure they are at least 10s old
+	- An expiering where registrations we know are older than 10s are kept, while we work on expireting them
+
+The idea is then that every 10s we look at the expiering and if we have finished emptying it, we rotate the containers, so the now empty expiering container becomes the collecting, the old collecting becomes the waiting that the waiting becomes the expiering that we start to empty.  If the expiering wasn't empty, we just continue our process of emptying it, but don't swap the containers.
+
+Main benefit of this solution is that the removal of elements doesn't require locking of the collecting container.
+
+Idea B
+------
+
+A single FIFO queue is used (C++ std::queue based on std::deque) where new elements are added at one end and removed from the other on each 10s timer tick
+
+[elaborate]
+
+Idea C
+------
+
+A circurlar buffer where registrations are added and removed, in princible the same as B except the bufferspace is preallocated, can probably be done with minimal locking if atomics are used in a clever way.
+
+[elaborate]
