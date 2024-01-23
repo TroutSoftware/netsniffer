@@ -232,6 +232,42 @@ class EventHandler : public DataHandler {
        << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
   }
 
+  void append_IP_MAC(std::stringstream &ss, const Packet *p, bool is_src) {
+
+    if (p->has_ip()) {
+      const SfIp *sf_ip =
+          (is_src ? p->ptrs.ip_api.get_src() : p->ptrs.ip_api.get_dst());
+      char ip_str[INET6_ADDRSTRLEN];
+
+      sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
+
+      if (p->is_ip6()) {
+        ss << '[' << ip_str << ']';
+      } else {
+        ss << ip_str;
+      }
+
+      if (p->is_tcp() || p->is_udp()) {
+        ss << ':' << (is_src ? p->ptrs.sp : p->ptrs.dp);
+      } else {
+        ss << ':' << '-';
+      }
+    } else {
+      const eth::EtherHdr *eh =
+          ((p->proto_bits & PROTO_BIT__ETH) ? layer::get_eth_layer(p)
+                                            : nullptr);
+
+      if (eh) {
+        const auto mac = std::to_array<const uint8_t>(is_src ? eh->ether_src
+                                                             : eh->ether_dst);
+        append_MAC(ss, mac);
+
+      } else {
+        ss << '-';
+      }
+    }
+  }
+
 public:
   EventHandler(Inspector *inspector, std::shared_ptr<LogFile> &logger,
                unsigned event_type)
@@ -247,59 +283,9 @@ public:
 
     assert(p);
 
-    const eth::EtherHdr *eh =
-        ((p->proto_bits & PROTO_BIT__ETH) ? layer::get_eth_layer(p) : nullptr);
-    const bool has_ip = p->has_ip();
-    const bool has_ipv6 = p->is_ip6();
-    const bool has_port = p->is_tcp() || p->is_udp();
-
-    // add one of IP, MAC, '-' (in that priority) to ss for the src parameter
-    if (has_ip) {
-      char ip_str[INET6_ADDRSTRLEN];
-      sfip_ntop(p->ptrs.ip_api.get_src(), ip_str, sizeof(ip_str));
-
-      if (has_ipv6) {
-        ss << '[' << ip_str << ']';
-      } else {
-        ss << ip_str;
-      }
-
-      if (has_port) {
-        ss << ':' << p->ptrs.sp;
-      } else {
-        ss << ':' << '-';
-      }
-
-    } else if (eh) {
-      const auto mac = std::to_array<const uint8_t>(eh->ether_src);
-      append_MAC(ss, mac);
-    } else {
-      ss << '-';
-    }
-
+    append_IP_MAC(ss, p, true);
     ss << " -> ";
-
-    if (has_ip) {
-      char ip_str[INET6_ADDRSTRLEN];
-      sfip_ntop(p->ptrs.ip_api.get_dst(), ip_str, sizeof(ip_str));
-
-      if (has_ipv6) {
-        ss << '[' << ip_str << ']';
-      } else {
-        ss << ip_str;
-      }
-
-      if (has_port) {
-        ss << ':' << p->ptrs.dp;
-      } else {
-        ss << ':' << '-';
-      }
-    } else if (eh) {
-      const auto mac = std::to_array<const uint8_t>(eh->ether_dst);
-      append_MAC(ss, mac);
-    } else {
-      ss << '-';
-    }
+    append_IP_MAC(ss, p, false);
 
     if (flow) {
       flow_data = dynamic_cast<NetworkMappingFlowData *>(
