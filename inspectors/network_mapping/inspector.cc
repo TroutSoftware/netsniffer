@@ -224,14 +224,12 @@ class EventHandler : public DataHandler {
   std::shared_ptr<LogFile> logger;
   unsigned event_type;
 
-  void append_MAC(std::stringstream &ss, const uint8_t *mac,
-                  const size_t mac_size) {
-    assert(mac_size == 6);
+  void append_MAC(std::stringstream &ss, const std::array<uint8_t, 6> &mac) {
 
-    ss << std::hex << std::setfill('0') << std::setw(2) << +(mac[0]) << ':'
-       << std::setw(2) << +(mac[1]) << ':' << std::setw(2) << +(mac[2]) << ':'
-       << std::setw(2) << +(mac[3]) << ':' << std::setw(2) << +(mac[4]) << ':'
-       << std::setw(2) << +(mac[5]);
+    ss << std::hex << std::setfill('0') << std::setw(2) << +(mac.at(0)) << ':'
+       << std::setw(2) << +(mac.at(1)) << ':' << std::setw(2) << +(mac.at(2))
+       << ':' << std::setw(2) << +(mac.at(3)) << ':' << std::setw(2)
+       << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
   }
 
 public:
@@ -273,7 +271,8 @@ public:
       }
 
     } else if (eh) {
-      append_MAC(ss, eh->ether_src, sizeof(eh->ether_src));
+      const auto mac = std::to_array<const uint8_t>(eh->ether_src);
+      append_MAC(ss, mac);
     } else {
       ss << '-';
     }
@@ -296,7 +295,8 @@ public:
         ss << ':' << '-';
       }
     } else if (eh) {
-      append_MAC(ss, eh->ether_dst, sizeof(eh->ether_dst));
+      const auto mac = std::to_array<const uint8_t>(eh->ether_dst);
+      append_MAC(ss, mac);
     } else {
       ss << '-';
     }
