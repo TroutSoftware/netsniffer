@@ -370,7 +370,6 @@ Optimization ideas:
 
 * Let the expiery code run past T10 and potentially T0, as long as the entry being looked at is "In use" "Passive" (meaing the entry has been cancled). T10/T0 would then be moved along the way - this would keep the stored number of entries lower.
 
-* Instead of using an pre-allocated array, use 
 	 
 	 
 
