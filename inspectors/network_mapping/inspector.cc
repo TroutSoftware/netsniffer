@@ -278,7 +278,7 @@ public:
   std::shared_ptr<NetworkMappingPendingData> get_next() { return next; }
 
   static void add_service_name(std::weak_ptr<NetworkMappingPendingData> weak,
-                               char *service_name) {
+                               const char *service_name) {
     assert(service_name && *service_name);
 
     auto shared = weak.lock();
@@ -292,6 +292,8 @@ public:
 };
 
 class NetworkMappingFlowData : public FlowData, public Timer {
+  std::weak_ptr<NetworkMappingPendingData>
+      pending; // Using weak_ptr as we are not the owner of the object
   std::shared_ptr<LogFile> logger;
   std::string timeout_string;
 
@@ -305,6 +307,10 @@ public:
     /*    if (stop_timer()) {
           logger->log('N', timeout_string);
         }*/
+  }
+
+  void add_service_name(const char *service_name) {
+    NetworkMappingPendingData::add_service_name(pending, service_name);
   }
 
   unsigned static get_id() {
