@@ -82,7 +82,7 @@ public:
     base_file_name = new_name;
   }
 
-  void log(char prefix, std::string message) noexcept {
+  void log(char prefix, std::string message, bool noRotate = false) noexcept {
     std::scoped_lock guard(mutex);
 
     switch (state) {
@@ -138,8 +138,8 @@ public:
 
       // TODO(mkr) - validate that a stream with an error, can be closed, and
       // reopened
-      if (!stream ||
-          (use_rotate_feature && max_lines_pr_file <= log_lines_written)) {
+      if (!stream || (use_rotate_feature && !noRotate &&
+                      max_lines_pr_file <= log_lines_written)) {
         state = State::full;
       } else if (lines_beween_flushes <= lines_since_last_flush) {
         stream.flush();
@@ -195,36 +195,10 @@ public:
   PegCount *get_counts() const override { return (PegCount *)&s_file_stats; }
 };
 
-class NetworkMappingFlowData : public FlowData, public Timer {
-  std::shared_ptr<LogFile> logger;
-  std::string timeout_string;
+class StringGenerators {
 
-public:
-  NetworkMappingFlowData(Inspector *inspector, std::shared_ptr<LogFile> &logger,
-                         std::string timeout_string)
-      : FlowData(get_id(), inspector), logger(logger),
-        timeout_string(timeout_string) {}
-
-  ~NetworkMappingFlowData() {
-    /*    if (stop_timer()) {
-          logger->log('N', timeout_string);
-        }*/
-  }
-
-  unsigned static get_id() {
-    static unsigned flow_data_id = FlowData::create_flow_data_id();
-    return flow_data_id;
-  }
-
-  virtual void timeout() override { logger->log('N', timeout_string); }
-};
-
-class EventHandler : public DataHandler {
-  Inspector *inspector;
-  std::shared_ptr<LogFile> logger;
-  unsigned event_type;
-
-  void append_MAC(std::stringstream &ss, const std::array<uint8_t, 6> &mac) {
+  static void append_MAC(std::stringstream &ss,
+                         const std::array<uint8_t, 6> &mac) {
 
     ss << std::hex << std::setfill('0') << std::setw(2) << +(mac.at(0)) << ':'
        << std::setw(2) << +(mac.at(1)) << ':' << std::setw(2) << +(mac.at(2))
@@ -232,7 +206,9 @@ class EventHandler : public DataHandler {
        << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
   }
 
-  void append_IP_MAC(std::stringstream &ss, const Packet *p, bool is_src) {
+public:
+  static void append_IP_MAC(std::stringstream &ss, const Packet *p,
+                            bool is_src) {
 
     if (p->has_ip()) {
       const SfIp *sf_ip =
@@ -267,6 +243,82 @@ class EventHandler : public DataHandler {
       }
     }
   }
+};
+
+class NetworkMappingPendingData {
+  // Protected members
+  struct M {
+    std::mutex mutex;
+    std::vector<std::string> services;
+  } m;
+
+  const std::shared_ptr<NetworkMappingPendingData> next;
+  // Note: we store a formated addr string "src[:port] -> dest[:port]" instead
+  // of the raw data from the packet, as the data is full of pointers to things
+  // we don't know the life time of, so we generate the string rather than a
+  // complex/selective copy
+  const std::string addr_str;
+
+  std::string format_string(Packet *p) {
+    assert(p);
+    std::stringstream ss;
+
+    StringGenerators::append_IP_MAC(ss, p, true);
+    ss << " -> ";
+    StringGenerators::append_IP_MAC(ss, p, false);
+
+    return ss.str();
+  }
+
+public:
+  NetworkMappingPendingData(Packet *p,
+                            std::shared_ptr<NetworkMappingPendingData> next)
+      : next(next), addr_str(format_string(p)) {}
+
+  std::shared_ptr<NetworkMappingPendingData> get_next() { return next; }
+
+  static void add_service_name(std::weak_ptr<NetworkMappingPendingData> weak,
+                               char *service_name) {
+    assert(service_name && *service_name);
+
+    auto shared = weak.lock();
+
+    if (shared) {
+      std::scoped_lock guard(shared->m.mutex);
+      // TODO(mkr): Store these in a more efficient way
+      shared->m.services.emplace_back(service_name);
+    }
+  }
+};
+
+class NetworkMappingFlowData : public FlowData, public Timer {
+  std::shared_ptr<LogFile> logger;
+  std::string timeout_string;
+
+public:
+  NetworkMappingFlowData(Inspector *inspector, std::shared_ptr<LogFile> &logger,
+                         std::string timeout_string)
+      : FlowData(get_id(), inspector), logger(logger),
+        timeout_string(timeout_string) {}
+
+  ~NetworkMappingFlowData() {
+    /*    if (stop_timer()) {
+          logger->log('N', timeout_string);
+        }*/
+  }
+
+  unsigned static get_id() {
+    static unsigned flow_data_id = FlowData::create_flow_data_id();
+    return flow_data_id;
+  }
+
+  virtual void timeout() override { logger->log('N', timeout_string); }
+};
+
+class EventHandler : public DataHandler {
+  Inspector *inspector;
+  std::shared_ptr<LogFile> logger;
+  unsigned event_type;
 
 public:
   EventHandler(Inspector *inspector, std::shared_ptr<LogFile> &logger,
@@ -283,9 +335,9 @@ public:
 
     assert(p);
 
-    append_IP_MAC(ss, p, true);
+    StringGenerators::append_IP_MAC(ss, p, true);
     ss << " -> ";
-    append_IP_MAC(ss, p, false);
+    StringGenerators::append_IP_MAC(ss, p, false);
 
     if (flow) {
       flow_data = dynamic_cast<NetworkMappingFlowData *>(
