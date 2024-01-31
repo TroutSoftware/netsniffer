@@ -280,13 +280,13 @@ public:
 };
 
 class NetworkMappingPendingData {
-  // Protected members
   struct {
     std::mutex mutex;
     std::vector<std::string> services;
   } m;
 
   const std::shared_ptr<NetworkMappingPendingData> next;
+
   // Note: we store a formated addr string "src[:port] -> dest[:port]" instead
   // of the raw data from the packet, as the data is full of pointers to things
   // we don't know the life time of, so we generate the string rather than a
@@ -343,26 +343,14 @@ public:
   }
 };
 
-class NetworkMappingFlowData : public FlowData, public Timer {
-  std::weak_ptr<NetworkMappingPendingData>
-      pending; // Using weak_ptr as we are not the owner of the object
-  const std::shared_ptr<LogFile> logger;
-  std::string timeout_string;
+class NetworkMappingFlowData : public FlowData {
+  // Using weak_ptr as we are not the owner of the object
+  std::weak_ptr<NetworkMappingPendingData> pending;
 
 public:
   NetworkMappingFlowData(Inspector *inspector,
-                         const std::shared_ptr<LogFile> &logger,
-                         std::string timeout_string,
                          std::weak_ptr<NetworkMappingPendingData> pending)
-      : FlowData(get_id(), inspector), pending(pending), logger(logger),
-        timeout_string(timeout_string) {}
-
-  ~NetworkMappingFlowData() {
-    stop_timer();
-    /*    if (stop_timer()) {
-          logger->log('N', timeout_string);
-        }*/
-  }
+      : FlowData(get_id(), inspector), pending(pending) {}
 
   void add_service_name(const char *service_name) {
     NetworkMappingPendingData::add_service_name(pending, service_name);
@@ -372,8 +360,6 @@ public:
     static unsigned flow_data_id = FlowData::create_flow_data_id();
     return flow_data_id;
   }
-
-  virtual void timeout() override { /*logger->log('N', timeout_string);*/ }
 };
 
 class NetworkMappingInspector : public Inspector, private Timer {
@@ -433,13 +419,11 @@ public:
 
 class EventHandler : public DataHandler {
   NetworkMappingInspector *inspector;
-  const std::shared_ptr<LogFile> logger;
   unsigned event_type;
 
 public:
-  EventHandler(NetworkMappingInspector *inspector,
-               const std::shared_ptr<LogFile> &logger, unsigned event_type)
-      : DataHandler("network_mapping"), inspector(inspector), logger(logger),
+  EventHandler(NetworkMappingInspector *inspector, unsigned event_type)
+      : DataHandler("network_mapping"), inspector(inspector),
         event_type(event_type){};
 
   void handle(DataEvent &de, Flow *flow) override {
@@ -451,17 +435,13 @@ public:
 
     assert(p);
 
-//    StringGenerators::append_IP_MAC(ss, p, true);
-//    ss << " -> ";
-//    StringGenerators::append_IP_MAC(ss, p, false);
-
     if (flow) {
       flow_data = dynamic_cast<NetworkMappingFlowData *>(
           flow->get_flow_data(NetworkMappingFlowData::get_id()));
 
       if (!flow_data) {
-        flow_data = new NetworkMappingFlowData(inspector, logger, ss.str(),
-                                               inspector->addPendingData(p));
+        flow_data =
+            new NetworkMappingFlowData(inspector, inspector->addPendingData(p));
 
         flow->set_flow_data(flow_data);
       }
@@ -472,13 +452,9 @@ public:
     case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
       assert(flow_data);
 
-      if (flow && flow->service)
+      if (flow && flow->service) {
         flow_data->add_service_name(flow->service);
-
-//      char prefix = flow_data->stop_timer() ? 'N' : 'U';
-//      ss << ' ' << ((flow && flow->service) ? flow->service : "-");
-
-//      logger->log(prefix, ss.str());
+      }
     } break;
 
     case IntrinsicEventIds::FLOW_STATE_SETUP:
@@ -488,9 +464,6 @@ public:
       break;
 
     case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-
-//      ss << " -";
-//      logger->log('N', ss.str());
       if (!flow_data) {
         inspector->addPendingData(p);
       }
@@ -498,8 +471,6 @@ public:
 
     case IntrinsicEventIds::FLOW_NO_SERVICE:
       assert(flow_data);
-//      ss << " -";
-//      logger->log('N', ss.str());
       break;
     }
   }
@@ -508,20 +479,20 @@ public:
 bool NetworkMappingInspector::configure(SnortConfig *) {
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-      new EventHandler(this, logger, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
+      new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
   /*    DataBus::subscribe_network(
           intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-          new EventHandler(this, logger,
+          new EventHandler(this,
      IntrinsicEventIds::FLOW_STATE_SETUP));*/
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
-      new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_RELOADED));
+      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_RELOADED));
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-      new EventHandler(this, logger, IntrinsicEventIds::PKT_WITHOUT_FLOW));
+      new EventHandler(this, IntrinsicEventIds::PKT_WITHOUT_FLOW));
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
-      new EventHandler(this, logger, IntrinsicEventIds::FLOW_NO_SERVICE));
+      new EventHandler(this, IntrinsicEventIds::FLOW_NO_SERVICE));
 
   return true;
 }
