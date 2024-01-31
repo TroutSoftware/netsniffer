@@ -158,10 +158,44 @@ class Timer {
     }
   } ticker;
 
-  static void tick() {}
+  struct M {
+    std::mutex mutex;
+    std::vector<Timer *> timer_list;
+  };
+
+  static M &get_m() {
+    static M m;
+    return m;
+  }
+
+  static void tick() {
+    std::scoped_lock guard(get_m().mutex);
+    for (auto p : get_m().timer_list) {
+      p->timeout();
+    }
+  }
 
 public:
-  bool stop_timer() { return true; }
+  Timer() {
+    std::scoped_lock guard(get_m().mutex);
+    get_m().timer_list.emplace_back(this);
+  }
+
+  ~Timer() {
+    if (stop_timer()) {
+      // If the element is in the list when we are destroyed, we have a
+      // potential racecondition between the destruction and calls to timeout,
+      // as the object inheriting from us would in the process of being
+      // destroyed
+      assert(false);
+    }
+  }
+
+  // Returns true if the timer was previous running, false if not
+  bool stop_timer() {
+    std::scoped_lock guard(get_m().mutex);
+    return (0 != std::erase(get_m().timer_list, this));
+  }
 
   virtual void timeout() = 0;
 };
@@ -247,7 +281,7 @@ public:
 
 class NetworkMappingPendingData {
   // Protected members
-  struct M {
+  struct {
     std::mutex mutex;
     std::vector<std::string> services;
   } m;
@@ -259,7 +293,7 @@ class NetworkMappingPendingData {
   // complex/selective copy
   const std::string addr_str;
 
-  std::string format_string(Packet *p) {
+  std::string format_string(const Packet *p) {
     assert(p);
     std::stringstream ss;
 
@@ -271,7 +305,7 @@ class NetworkMappingPendingData {
   }
 
 public:
-  NetworkMappingPendingData(Packet *p,
+  NetworkMappingPendingData(const Packet *p,
                             std::shared_ptr<NetworkMappingPendingData> next)
       : next(next), addr_str(format_string(p)) {}
 
@@ -289,21 +323,42 @@ public:
       shared->m.services.emplace_back(service_name);
     }
   }
+
+  const std::string &get_addr_str() { return addr_str; }
+
+  void write_to_log(LogFile &logger) {
+    std::scoped_lock guard(m.mutex);
+    if (m.services.empty()) {
+      std::string output = addr_str + " - ";
+      logger.log('N', output);
+    } else {
+      auto remains = m.services.size();
+      bool once = true;
+      for (auto ele : m.services) {
+        std::string output = addr_str + ' ' + ele;
+        logger.log((once ? 'N' : 'U'), output, !--remains);
+        once = false;
+      }
+    }
+  }
 };
 
 class NetworkMappingFlowData : public FlowData, public Timer {
   std::weak_ptr<NetworkMappingPendingData>
       pending; // Using weak_ptr as we are not the owner of the object
-  std::shared_ptr<LogFile> logger;
+  const std::shared_ptr<LogFile> logger;
   std::string timeout_string;
 
 public:
-  NetworkMappingFlowData(Inspector *inspector, std::shared_ptr<LogFile> &logger,
-                         std::string timeout_string)
-      : FlowData(get_id(), inspector), logger(logger),
+  NetworkMappingFlowData(Inspector *inspector,
+                         const std::shared_ptr<LogFile> &logger,
+                         std::string timeout_string,
+                         std::weak_ptr<NetworkMappingPendingData> pending)
+      : FlowData(get_id(), inspector), pending(pending), logger(logger),
         timeout_string(timeout_string) {}
 
   ~NetworkMappingFlowData() {
+    stop_timer();
     /*    if (stop_timer()) {
           logger->log('N', timeout_string);
         }*/
@@ -318,17 +373,72 @@ public:
     return flow_data_id;
   }
 
-  virtual void timeout() override { logger->log('N', timeout_string); }
+  virtual void timeout() override { /*logger->log('N', timeout_string);*/ }
+};
+
+class NetworkMappingInspector : public Inspector, private Timer {
+  const std::shared_ptr<LogFile> logger;
+
+  struct {
+    std::mutex mutex;
+    std::shared_ptr<NetworkMappingPendingData>
+        gathering; // Where we collect entries
+    std::shared_ptr<NetworkMappingPendingData>
+        aging; // Where we let them age for 10s
+  } m;
+
+  virtual void timeout() override {
+    std::shared_ptr<NetworkMappingPendingData> expirering;
+
+    {
+      std::scoped_lock guard(m.mutex);
+      expirering = m.aging;
+      m.aging = m.gathering;
+    }
+
+    while (expirering) {
+      expirering->write_to_log(*logger.get());
+      expirering = expirering->get_next();
+    }
+  }
+
+  void flush_pending() {
+    // Simulate two timeouts to get all queued data out
+    timeout();
+    timeout();
+  }
+
+public:
+  NetworkMappingInspector(NetworkMappingModule *module)
+      : logger(module->get_logger()) {}
+
+  ~NetworkMappingInspector() {
+    // We need to ensure the timer doesn't fire after we are torn down
+    stop_timer();
+
+    flush_pending();
+  }
+
+  std::weak_ptr<NetworkMappingPendingData> addPendingData(const Packet *p) {
+    std::scoped_lock guard(m.mutex);
+    // TODO(mkr) add counter and flush if more than max counter is stored
+    m.gathering = std::make_shared<NetworkMappingPendingData>(p, m.gathering);
+    return m.gathering;
+  }
+
+  void eval(Packet *) override {}
+
+  bool configure(SnortConfig *) override;
 };
 
 class EventHandler : public DataHandler {
-  Inspector *inspector;
-  std::shared_ptr<LogFile> logger;
+  NetworkMappingInspector *inspector;
+  const std::shared_ptr<LogFile> logger;
   unsigned event_type;
 
 public:
-  EventHandler(Inspector *inspector, std::shared_ptr<LogFile> &logger,
-               unsigned event_type)
+  EventHandler(NetworkMappingInspector *inspector,
+               const std::shared_ptr<LogFile> &logger, unsigned event_type)
       : DataHandler("network_mapping"), inspector(inspector), logger(logger),
         event_type(event_type){};
 
@@ -341,16 +451,18 @@ public:
 
     assert(p);
 
-    StringGenerators::append_IP_MAC(ss, p, true);
-    ss << " -> ";
-    StringGenerators::append_IP_MAC(ss, p, false);
+//    StringGenerators::append_IP_MAC(ss, p, true);
+//    ss << " -> ";
+//    StringGenerators::append_IP_MAC(ss, p, false);
 
     if (flow) {
       flow_data = dynamic_cast<NetworkMappingFlowData *>(
           flow->get_flow_data(NetworkMappingFlowData::get_id()));
 
       if (!flow_data) {
-        flow_data = new NetworkMappingFlowData(inspector, logger, ss.str());
+        flow_data = new NetworkMappingFlowData(inspector, logger, ss.str(),
+                                               inspector->addPendingData(p));
+
         flow->set_flow_data(flow_data);
       }
     }
@@ -359,10 +471,14 @@ public:
     switch (event_type) {
     case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
       assert(flow_data);
-      char prefix = flow_data->stop_timer() ? 'N' : 'U';
-      ss << ' ' << ((flow && flow->service) ? flow->service : "-");
 
-      logger->log(prefix, ss.str());
+      if (flow && flow->service)
+        flow_data->add_service_name(flow->service);
+
+//      char prefix = flow_data->stop_timer() ? 'N' : 'U';
+//      ss << ' ' << ((flow && flow->service) ? flow->service : "-");
+
+//      logger->log(prefix, ss.str());
     } break;
 
     case IntrinsicEventIds::FLOW_STATE_SETUP:
@@ -372,72 +488,43 @@ public:
       break;
 
     case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-      ss << " -";
-      logger->log('N', ss.str());
+
+//      ss << " -";
+//      logger->log('N', ss.str());
+      if (!flow_data) {
+        inspector->addPendingData(p);
+      }
       break;
 
     case IntrinsicEventIds::FLOW_NO_SERVICE:
-      ss << " -";
-      logger->log('N', ss.str());
+      assert(flow_data);
+//      ss << " -";
+//      logger->log('N', ss.str());
       break;
-    }
-  }
-
-private:
-  // TODO(mkr) Look for snort function for the convertion
-  const char *get_event_name(unsigned event_type) {
-    switch (event_type) {
-    case IntrinsicEventIds::FLOW_SERVICE_CHANGE:
-      return "FLOW_SERVICE_CHANGE";
-
-    case IntrinsicEventIds::FLOW_STATE_SETUP:
-      return "FLOW_STATE_SETUP";
-
-    case IntrinsicEventIds::FLOW_STATE_RELOADED:
-      return "FLOW_STATE_RELOADED";
-
-    case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-      return "PKT_WITHOUT_FLOW";
-
-    case IntrinsicEventIds::FLOW_NO_SERVICE:
-      return "FLOW_NO_SERVICE";
-
-    default:
-      assert(false);
-      return "Update EventHandler::get_event_name() to get name";
     }
   }
 };
 
-class NetworkMappingInspector : public Inspector {
-  std::shared_ptr<LogFile> logger;
+bool NetworkMappingInspector::configure(SnortConfig *) {
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
+      new EventHandler(this, logger, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
+  /*    DataBus::subscribe_network(
+          intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
+          new EventHandler(this, logger,
+     IntrinsicEventIds::FLOW_STATE_SETUP));*/
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
+      new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_RELOADED));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
+      new EventHandler(this, logger, IntrinsicEventIds::PKT_WITHOUT_FLOW));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
+      new EventHandler(this, logger, IntrinsicEventIds::FLOW_NO_SERVICE));
 
-public:
-  NetworkMappingInspector(NetworkMappingModule *module)
-      : logger(module->get_logger()) {}
-
-  void eval(Packet *) override {}
-
-  bool configure(SnortConfig *) override {
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-        new EventHandler(this, logger, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-        new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_SETUP));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
-        new EventHandler(this, logger, IntrinsicEventIds::FLOW_STATE_RELOADED));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-        new EventHandler(this, logger, IntrinsicEventIds::PKT_WITHOUT_FLOW));
-    DataBus::subscribe_network(
-        intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
-        new EventHandler(this, logger, IntrinsicEventIds::FLOW_NO_SERVICE));
-
-    return true;
-  }
-};
+  return true;
+}
 
 const InspectApi networkmap_api = {
     {
