@@ -22,8 +22,11 @@ using namespace snort;
 
 bool use_rotate_feature = true;
 
+unsigned connection_cache_size = 0;
+
 static const Parameter nm_params[] = {
-    {"cache_size", Parameter::PT_INT, "0:max32", "0", "set cache size"},
+    {"connection_cache_size", Parameter::PT_INT, "0:max32", "100000",
+     "set cache size pr inspector, unit is number of connections"},
     {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
      "set output file name"},
     {"size_rotate", Parameter::PT_BOOL, nullptr, "false",
@@ -34,14 +37,19 @@ static const Parameter nm_params[] = {
 struct LogFileStats {
   PegCount line_count;
   PegCount file_count;
+  PegCount connection_cache_max;
+  PegCount connection_cache_flush;
 };
 
-static THREAD_LOCAL LogFileStats s_file_stats;
+static THREAD_LOCAL LogFileStats s_file_stats = {0, 0, 0, 0};
 
-const PegInfo s_pegs[] = {{CountType::SUM, "lines", "lines written"},
-                          {CountType::SUM, "files", "files opened"},
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "lines", "lines written"},
+    {CountType::SUM, "files", "files opened"},
+    {CountType::MAX, "connections cache max", "max cache usage"},
+    {CountType::SUM, "cache flushes", "number of forced cache flushes"},
 
-                          {CountType::END, nullptr, nullptr}};
+    {CountType::END, nullptr, nullptr}};
 
 class LogFile {
 
@@ -219,6 +227,8 @@ public:
       logger->set_file_name(val.get_string());
     } else if (val.is("size_rotate")) {
       use_rotate_feature = val.get_bool();
+    } else if (val.is("connection_cache_size")) {
+      connection_cache_size = val.get_int32();
     }
 
     return true;
@@ -327,7 +337,9 @@ public:
   const std::string &get_addr_str() { return addr_str; }
 
   void write_to_log(LogFile &logger) {
-    std::scoped_lock guard(m.mutex);
+    // Used to ensure that we don't have logs from multiple writes intermixed
+    static std::mutex log_write_mutex;
+    std::scoped_lock guard(m.mutex, log_write_mutex);
     if (m.services.empty()) {
       std::string output = addr_str + " - ";
       logger.log('N', output);
@@ -369,8 +381,10 @@ class NetworkMappingInspector : public Inspector, private Timer {
     std::mutex mutex;
     std::shared_ptr<NetworkMappingPendingData>
         gathering; // Where we collect entries
+    unsigned gathering_count = 0;
     std::shared_ptr<NetworkMappingPendingData>
         aging; // Where we let them age for 10s
+    unsigned aging_count = 0;
   } m;
 
   virtual void timeout() override {
@@ -380,6 +394,10 @@ class NetworkMappingInspector : public Inspector, private Timer {
       std::scoped_lock guard(m.mutex);
       expirering = m.aging;
       m.aging = m.gathering;
+      m.aging_count = m.gathering_count;
+      m.gathering.reset();
+      m.gathering_count = 0;
+      s_file_stats.connection_cache_flush++;
     }
 
     while (expirering) {
@@ -406,10 +424,29 @@ public:
   }
 
   std::weak_ptr<NetworkMappingPendingData> addPendingData(const Packet *p) {
-    std::scoped_lock guard(m.mutex);
-    // TODO(mkr) add counter and flush if more than max counter is stored
-    m.gathering = std::make_shared<NetworkMappingPendingData>(p, m.gathering);
-    return m.gathering;
+    bool flush = false;
+    std::weak_ptr<NetworkMappingPendingData> weak;
+
+    // TODO(mkr): Should we improve this, we can risk multiple thread are
+    // processing at the same time, making us overshoot the cache limit - this
+    // will also lead to multiple flushes
+
+    {
+      std::scoped_lock guard(m.mutex);
+      m.gathering = std::make_shared<NetworkMappingPendingData>(p, m.gathering);
+      weak = m.gathering;
+      auto sum = m.aging_count + ++m.gathering_count;
+      flush = sum >= connection_cache_size;
+      if (sum > s_file_stats.connection_cache_max) {
+        s_file_stats.connection_cache_max = sum;
+      }
+    }
+
+    if (flush) {
+      timeout();
+    };
+
+    return weak;
   }
 
   void eval(Packet *) override {}
