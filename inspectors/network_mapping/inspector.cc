@@ -259,22 +259,33 @@ class StringGenerators {
        << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
   }
 
-public:
-  static void append_IP_MAC(std::stringstream &ss, const Packet *p,
-                            bool is_src) {
+  static void append_sf_ip(std::stringstream &ss, const SfIp *sf_ip) {
+    char ip_str[INET6_ADDRSTRLEN];
 
-    if (p->has_ip()) {
+    sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
+
+    if (sf_ip->is_ip6()) {
+      ss << '[' << ip_str << ']';
+    } else {
+      ss << ip_str;
+    }
+  }
+
+public:
+  static std::string format_IP_MAC(const Packet *p, const Flow *flow,
+                                   bool is_src) {
+    std::stringstream ss;
+    if (flow) {
+      const SfIp &sf_ip = (is_src ? flow->client_ip : flow->server_ip);
+      const uint16_t port = (is_src ? flow->client_port : flow->server_port);
+
+      append_sf_ip(ss, &sf_ip);
+      ss << ':' << +port;
+    } else if (p->has_ip()) {
       const SfIp *sf_ip =
           (is_src ? p->ptrs.ip_api.get_src() : p->ptrs.ip_api.get_dst());
-      char ip_str[INET6_ADDRSTRLEN];
 
-      sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
-
-      if (p->is_ip6()) {
-        ss << '[' << ip_str << ']';
-      } else {
-        ss << ip_str;
-      }
+      append_sf_ip(ss, sf_ip);
 
       if (p->is_tcp() || p->is_udp()) {
         ss << ':' << (is_src ? p->ptrs.sp : p->ptrs.dp);
@@ -295,6 +306,7 @@ public:
         ss << '-';
       }
     }
+    return ss.str();
   }
 };
 
@@ -302,31 +314,25 @@ class NetworkMappingPendingData {
   struct {
     std::mutex mutex;
     std::vector<std::string> services;
+    std::string src_str;
+    std::string dst_str;
   } m;
 
   const std::shared_ptr<NetworkMappingPendingData> next;
 
-  // Note: we store a formated addr string "src[:port] -> dest[:port]" instead
-  // of the raw data from the packet, as the data is full of pointers to things
-  // we don't know the life time of, so we generate the string rather than a
-  // complex/selective copy
-  const std::string addr_str;
-
-  std::string format_string(const Packet *p) {
-    assert(p);
-    std::stringstream ss;
-
-    StringGenerators::append_IP_MAC(ss, p, true);
-    ss << " -> ";
-    StringGenerators::append_IP_MAC(ss, p, false);
-
-    return ss.str();
-  }
 
 public:
-  NetworkMappingPendingData(const Packet *p,
+  NetworkMappingPendingData(const Packet *p, const Flow *flow,
                             std::shared_ptr<NetworkMappingPendingData> next)
-      : next(next), addr_str(format_string(p)) {}
+      : next(next) {
+    update_src_dst(p, flow);
+  }
+
+  void update_src_dst(const Packet *p, const Flow *flow) {
+    std::scoped_lock guard(m.mutex);
+    m.src_str = StringGenerators::format_IP_MAC(p, flow, true);
+    m.dst_str = StringGenerators::format_IP_MAC(p, flow, false);
+  }
 
   std::shared_ptr<NetworkMappingPendingData> get_next() { return next; }
 
@@ -343,20 +349,31 @@ public:
     }
   }
 
-  const std::string &get_addr_str() { return addr_str; }
+  static void update_src_dst(std::weak_ptr<NetworkMappingPendingData> weak,
+                             const Packet *p, const Flow *flow) {
+    assert(p);
+
+    auto shared = weak.lock();
+
+    if (shared) {
+      shared->update_src_dst(p, flow);
+    }
+  }
 
   void write_to_log(LogFile &logger) {
+    const static char *arrow = " -> ";
     // Used to ensure that we don't have logs from multiple writes intermixed
     static std::mutex log_write_mutex;
+
     std::scoped_lock guard(m.mutex, log_write_mutex);
     if (m.services.empty()) {
-      std::string output = addr_str + " - ";
+      std::string output = m.src_str + arrow + m.dst_str + " - ";
       logger.log('N', output);
     } else {
       auto remains = m.services.size();
       bool once = true;
       for (auto ele : m.services) {
-        std::string output = addr_str + ' ' + ele;
+        std::string output = m.src_str + arrow + m.dst_str + ' ' + ele;
         logger.log((once ? 'N' : 'U'), output, !--remains);
         once = false;
       }
@@ -375,6 +392,10 @@ public:
 
   void add_service_name(const char *service_name) {
     NetworkMappingPendingData::add_service_name(pending, service_name);
+  }
+
+  void update_src_dst(const Packet *p, const Flow *flow) {
+    NetworkMappingPendingData::update_src_dst(pending, p, flow);
   }
 
   unsigned static get_id() {
@@ -432,7 +453,8 @@ public:
     flush_pending();
   }
 
-  std::weak_ptr<NetworkMappingPendingData> addPendingData(const Packet *p) {
+  std::weak_ptr<NetworkMappingPendingData> addPendingData(const Packet *p,
+                                                          Flow *flow) {
     bool flush = false;
     std::weak_ptr<NetworkMappingPendingData> weak;
 
@@ -442,7 +464,8 @@ public:
 
     {
       std::scoped_lock guard(m.mutex);
-      m.gathering = std::make_shared<NetworkMappingPendingData>(p, m.gathering);
+      m.gathering =
+          std::make_shared<NetworkMappingPendingData>(p, flow, m.gathering);
       weak = m.gathering;
       auto sum = m.aging_count + ++m.gathering_count;
       flush = sum >= connection_cache_size;
@@ -485,9 +508,11 @@ public:
       flow_data = dynamic_cast<NetworkMappingFlowData *>(
           flow->get_flow_data(NetworkMappingFlowData::get_id()));
 
-      if (!flow_data) {
-        flow_data =
-            new NetworkMappingFlowData(inspector, inspector->addPendingData(p));
+      if (flow_data) {
+        flow_data->update_src_dst(p, flow);
+      } else {
+        flow_data = new NetworkMappingFlowData(
+            inspector, inspector->addPendingData(p, flow));
 
         flow->set_flow_data(flow_data);
       }
@@ -511,7 +536,7 @@ public:
 
     case IntrinsicEventIds::PKT_WITHOUT_FLOW:
       if (!flow_data && log_noflow_packages) {
-        inspector->addPendingData(p);
+        inspector->addPendingData(p, nullptr);
       }
       break;
 
@@ -526,10 +551,9 @@ bool NetworkMappingInspector::configure(SnortConfig *) {
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
       new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
-  /*    DataBus::subscribe_network(
-          intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-          new EventHandler(this,
-     IntrinsicEventIds::FLOW_STATE_SETUP));*/
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
+      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_SETUP));
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
       new EventHandler(this, IntrinsicEventIds::FLOW_STATE_RELOADED));
