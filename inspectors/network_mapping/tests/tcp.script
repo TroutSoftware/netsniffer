@@ -6,4 +6,4 @@ grep '^N 172.16.161.129:51318 -> 128.6.75.106:80 -' flow.txt
 stream = { }
 stream_tcp = { }
 wizard = { }
-network_mapping = { }
+network_mapping = { connection_cache_size = 0, noflow_log = true }

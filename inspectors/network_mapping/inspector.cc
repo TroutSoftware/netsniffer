@@ -21,6 +21,7 @@
 using namespace snort;
 
 bool use_rotate_feature = true;
+bool log_noflow_packages = false;
 
 unsigned connection_cache_size = 0;
 
@@ -31,21 +32,27 @@ static const Parameter nm_params[] = {
      "set output file name"},
     {"size_rotate", Parameter::PT_BOOL, nullptr, "false",
      "If true rotates log file after x lines"},
+    {"noflow_log", Parameter::PT_BOOL, nullptr, "false",
+     "If true also logs no flow packages"},
 
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 struct LogFileStats {
   PegCount line_count;
   PegCount file_count;
+  //  PegCount flow_count;
+  //  PegCount service_count;
   PegCount connection_cache_max;
   PegCount connection_cache_flush;
 };
 
-static THREAD_LOCAL LogFileStats s_file_stats = {0, 0, 0, 0};
+static THREAD_LOCAL LogFileStats s_file_stats = {0, 0, /*0, 0,*/ 0, 0};
 
 const PegInfo s_pegs[] = {
     {CountType::SUM, "lines", "lines written"},
     {CountType::SUM, "files", "files opened"},
+    //    {CountType::SUM, "flows", "number of flows detected"},
+    //    {CountType::SUM, "services", "number of services detected"},
     {CountType::MAX, "connections cache max", "max cache usage"},
     {CountType::SUM, "cache flushes", "number of forced cache flushes"},
 
@@ -229,6 +236,8 @@ public:
       use_rotate_feature = val.get_bool();
     } else if (val.is("connection_cache_size")) {
       connection_cache_size = val.get_int32();
+    } else if (val.is("noflow_log")) {
+      log_noflow_packages = val.get_bool();
     }
 
     return true;
@@ -501,7 +510,7 @@ public:
       break;
 
     case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-      if (!flow_data) {
+      if (!flow_data && log_noflow_packages) {
         inspector->addPendingData(p);
       }
       break;

@@ -5,4 +5,4 @@ grep '^N \[fe80::a094:d637:c884:fc70\]:- -> \[ff02::2\]:- -' flow.txt
 stream = { }
 stream_tcp = { }
 wizard = { }
-network_mapping = { }
+network_mapping = { noflow_log = true }
