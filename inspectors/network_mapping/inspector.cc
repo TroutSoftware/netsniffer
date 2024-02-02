@@ -313,13 +313,13 @@ public:
 class NetworkMappingPendingData {
   struct {
     std::mutex mutex;
-    std::vector<std::string> services;
+    std::string first_service;
+    std::unique_ptr<std::vector<std::string>> services;
     std::string src_str;
     std::string dst_str;
   } m;
 
   const std::shared_ptr<NetworkMappingPendingData> next;
-
 
 public:
   NetworkMappingPendingData(const Packet *p, const Flow *flow,
@@ -344,8 +344,15 @@ public:
 
     if (shared) {
       std::scoped_lock guard(shared->m.mutex);
-      // TODO(mkr): Store these in a more efficient way
-      shared->m.services.emplace_back(service_name);
+
+      if (shared->m.first_service.empty()) {
+        shared->m.first_service = service_name;
+      } else {
+        if (!shared->m.services) {
+          shared->m.services = std::make_unique<std::vector<std::string>>();
+        }
+        shared->m.services->emplace_back(service_name);
+      }
     }
   }
 
@@ -366,16 +373,21 @@ public:
     static std::mutex log_write_mutex;
 
     std::scoped_lock guard(m.mutex, log_write_mutex);
-    if (m.services.empty()) {
+    if (m.first_service.empty()) {
       std::string output = m.src_str + arrow + m.dst_str + " - ";
       logger.log('N', output);
     } else {
-      auto remains = m.services.size();
-      bool once = true;
-      for (auto ele : m.services) {
-        std::string output = m.src_str + arrow + m.dst_str + ' ' + ele;
-        logger.log((once ? 'N' : 'U'), output, !--remains);
-        once = false;
+      std::string addr_port = m.src_str + arrow + m.dst_str + ' ';
+      std::string output = addr_port + m.first_service;
+      logger.log('N', output, !!m.services);
+
+      if (m.services) {
+        auto remains = m.services->size();
+
+        for (auto ele : *m.services) {
+          output = addr_port + ele;
+          logger.log('U', output, !--remains);
+        }
       }
     }
   }
