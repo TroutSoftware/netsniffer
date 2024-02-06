@@ -3,7 +3,7 @@ stream_ip = { }
 stream_tcp = { }
 ssl = { }
 
-network_mapping = { }
+network_mapping = { noflow_log = true }
 
 wizard = {
     hexes = {

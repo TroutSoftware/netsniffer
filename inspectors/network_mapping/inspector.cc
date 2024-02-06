@@ -84,7 +84,8 @@ class LogFile {
     aborted  // We have stopped writing to an actual file
   } state = State::initial;
 
-  // TODO(mkr) make a flush based on time too
+  // TODO(mkr) make a flush based on time too, or maybe just let the code call a
+  // flush each time an inspector has dumped the work of the last 10s
 
 public:
   void set_file_name(const char *new_name) {
@@ -165,13 +166,18 @@ public:
 };
 
 class Timer {
-  static class Ticker {
+  class Ticker {
   public:
     Ticker() {
       Periodic::register_handler([](void *) { Timer::tick(); }, nullptr, 0,
                                  10'000);
     }
-  } ticker;
+  };
+
+  Ticker &get_ticker() {
+    static Ticker ticker;
+    return ticker;
+  };
 
   struct M {
     std::mutex mutex;
@@ -192,6 +198,7 @@ class Timer {
 
 public:
   Timer() {
+    get_ticker();
     std::scoped_lock guard(get_m().mutex);
     get_m().timer_list.emplace_back(this);
   }
