@@ -1,0 +1,12 @@
+###################################
+# DHCP Snort Inspector #
+###################################
+
+!!! DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT-DRAFT !!!
+
+The purpose of the DHCP monitor is to monitor network addresses in use, and raise alerts if anything uexpected is noticed.
+
+Requirements:
+*************
+
+*TBD*
