@@ -1,0 +1,31 @@
+Open Detector Package (ODP)
+================================================================================
+ODP is a package that contains Cisco provided LUA detectors and some application
+meta data. Specifically, it contains the following artifacts: 
+a. Application and port detectors in Lua language.
+
+b. appMapping.data file containing application metadata. This file should not
+   be modified.  The first column contains application identifier and last column
+   contains application name.  Other columns contain internal information.
+
+c. Lua library file DetectorCommon.lua
+
+INSTALLAITON
+User can install ODP package in any directory of her/his choosing and configure
+this directory in 'app_detector_dir' option in:
+  - appid table in snort 3 lua configuration
+  - appId preprocessor configuration in snort 2.9.x
+Directory location "/usr/local/cisco/apps" is recommended. Before installation,
+it is recommended to delete "odp" subdirectory 
+
+When installed, ODP will create following sub-directories:
+    odp/lua     //Cisco Lua detectors
+    odp/libs    //Cisco Lua modules
+
+Installing ODP will not modify any subdirectory named custom, where
+user-created detectors are located.
+
+Example: 
+    cd /usr/local/cisco/apps
+    rm -rf odp
+    tar -xzvf <ODP package>

@@ -4,6 +4,7 @@ stream_tcp = { }
 ssl = { }
 
 network_mapping = { noflow_log = true }
+dhcp_monitor = {}
 
 wizard = {
     hexes = {

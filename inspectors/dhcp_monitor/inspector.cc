@@ -1,21 +1,10 @@
-#include <chrono>
-#include <fstream>
-#include <iomanip>
+
 #include <iostream>
-#include <list>
-#include <memory>
-#include <mutex>
-#include <sstream>
-#include <string>
 
 #include "framework/inspector.h"
 #include "framework/module.h"
-#include "protocols/eth.h"
 #include "protocols/packet.h"
 #include "pub_sub/appid_event_ids.h"
-#include "pub_sub/http_event_ids.h"
-#include "pub_sub/intrinsic_event_ids.h"
-#include "sfip/sf_ip.h"
 
 using namespace snort;
 
@@ -36,35 +25,27 @@ static const Parameter nm_params[] = {
 
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-struct LogFileStats {
-  PegCount line_count;
-  PegCount file_count;
-  //  PegCount flow_count;
-  //  PegCount service_count;
-  PegCount connection_cache_max;
-  PegCount connection_cache_flush;
+struct DHCPStats {
+  PegCount info_count;
+  PegCount data_count;
 };
 
-static THREAD_LOCAL LogFileStats s_file_stats = {0, 0, /*0, 0,*/ 0, 0};
+static THREAD_LOCAL DHCPStats s_dhcp_stats = {0, 0};
 
-const PegInfo s_pegs[] = {
-    {CountType::SUM, "lines", "lines written"},
-    {CountType::SUM, "files", "files opened"},
-    //    {CountType::SUM, "flows", "number of flows detected"},
-    //    {CountType::SUM, "services", "number of services detected"},
-    {CountType::MAX, "connections cache max", "max cache usage"},
-    {CountType::SUM, "cache flushes", "number of forced cache flushes"},
+const PegInfo s_pegs[] = {{CountType::SUM, "info", "info events received"},
+                          {CountType::SUM, "data", "data events received"},
 
-    {CountType::END, nullptr, nullptr}};
-
+                          {CountType::END, nullptr, nullptr}};
 
 class DHCPMonitorModule : public Module {
 
 public:
   DHCPMonitorModule()
       : Module("dhcp_monitor",
-               "Monitors DHCP comunication looking for unexpected use of network addresss",
+               "Monitors DHCP comunication looking for unexpected use of "
+               "network addresss",
                nm_params) {
+    std::cout << "***MKR DHCP Monitor running" << std::endl;
   }
 
   Usage get_usage() const override { return CONTEXT; }
@@ -77,7 +58,6 @@ public:
     } else if (val.is("connection_cache_size")) {
 
     } else if (val.is("noflow_log")) {
-
     }
 
     return true;
@@ -85,21 +65,17 @@ public:
 
   const PegInfo *get_pegs() const override { return s_pegs; }
 
-  PegCount *get_counts() const override { return (PegCount *)&s_file_stats; }
+  PegCount *get_counts() const override { return (PegCount *)&s_dhcp_stats; }
 };
-
 
 class DHCPMonitorInspector : public Inspector {
 
 public:
-  DHCPMonitorInspector(DHCPMonitorModule *) {
-  }
+  DHCPMonitorInspector(DHCPMonitorModule *) {}
 
-  ~DHCPMonitorInspector() {
-  }
+  ~DHCPMonitorInspector() {}
 
-  void eval(Packet *) override {
-  }
+  void eval(Packet *) override {}
 
   bool configure(SnortConfig *) override;
 };
@@ -111,45 +87,39 @@ class EventHandler : public DataHandler {
 public:
   EventHandler(DHCPMonitorInspector *inspector, unsigned event_type)
       : DataHandler("dhcp_monitor"), inspector(inspector),
-        event_type(event_type){};
+        event_type(event_type) {
+    std::cout << "***MKR TEST DHCP Event handler created" << std::endl;
+  };
 
   void handle(DataEvent &, Flow *) override {
 
     switch (event_type) {
-    case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
+    case AppIdEventIds::DHCP_INFO: {
+      std::cout << "***MKR TEST got DHCP_INFO" << std::endl;
+      s_dhcp_stats.info_count++;
     } break;
 
-    case IntrinsicEventIds::FLOW_STATE_SETUP:
-      break;
+    case AppIdEventIds::DHCP_DATA: {
+      std::cout << "***MKR TEST got DHCP_DATA" << std::endl;
+      s_dhcp_stats.data_count++;
+    } break;
 
-    case IntrinsicEventIds::FLOW_STATE_RELOADED:
-      break;
-
-    case IntrinsicEventIds::PKT_WITHOUT_FLOW:
-      break;
-
-    case IntrinsicEventIds::FLOW_NO_SERVICE:
-      break;
+    default: {
+      std::cout << "***MKR TEST got unspecified event: " << event_type
+                << std::endl;
+    }
     }
   }
 };
 
 bool DHCPMonitorInspector::configure(SnortConfig *) {
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-      new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_SETUP));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
-      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_RELOADED));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-      new EventHandler(this, IntrinsicEventIds::PKT_WITHOUT_FLOW));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
-      new EventHandler(this, IntrinsicEventIds::FLOW_NO_SERVICE));
+
+  std::cout << "***MKR TEST registering for dhcp events" << std::endl;
+
+  DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_INFO,
+                             new EventHandler(this, AppIdEventIds::DHCP_INFO));
+  DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_DATA,
+                             new EventHandler(this, AppIdEventIds::DHCP_DATA));
 
   return true;
 }

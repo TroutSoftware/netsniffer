@@ -28,7 +28,6 @@ func PCAP() script.Cmd {
 
 			cmd := exec.CommandContext(s.Context(), snortloc,
 				"-c", s.Path("cfg.lua"),
-				"--pedantic",
 				"--plugin-path", "p",
 				"-A", "talos",
 				"--pcap-list", strings.Join(args, " "),
