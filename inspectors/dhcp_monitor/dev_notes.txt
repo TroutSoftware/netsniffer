@@ -26,4 +26,8 @@ form documentation appid plugin depends on (not yet sure which, if any, are impo
 
  Lua JIT version 2.0.2 must be installed, never versions are not tested.
 
+Run without make
+****************
 
+$ export LD_PRELOAD="/usr/lib/gcc/x86_64-linux-gnu/11/libasan.so"
+$ ../../../snort3/build/src/snort -c /home/mike/code/snort/snort-extra/inspectors/dhcp_monitor/tests/dhcp.script.cfg.lua --plugin-path p -A talos --pcap-list /home/mike/code/snort/snort-extra/inspectors/dhcp_monitor/pcaps/dhcp_clean.pcap --warn-all

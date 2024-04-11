@@ -44,9 +44,7 @@ public:
       : Module("dhcp_monitor",
                "Monitors DHCP comunication looking for unexpected use of "
                "network addresss",
-               nm_params) {
-    std::cout << "***MKR DHCP Monitor running" << std::endl;
-  }
+               nm_params) {}
 
   Usage get_usage() const override { return CONTEXT; }
 
@@ -87,9 +85,7 @@ class EventHandler : public DataHandler {
 public:
   EventHandler(DHCPMonitorInspector *inspector, unsigned event_type)
       : DataHandler("dhcp_monitor"), inspector(inspector),
-        event_type(event_type) {
-    std::cout << "***MKR TEST DHCP Event handler created" << std::endl;
-  };
+        event_type(event_type){};
 
   void handle(DataEvent &, Flow *) override {
 
@@ -113,9 +109,6 @@ public:
 };
 
 bool DHCPMonitorInspector::configure(SnortConfig *) {
-
-  std::cout << "***MKR TEST registering for dhcp events" << std::endl;
-
   DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_INFO,
                              new EventHandler(this, AppIdEventIds::DHCP_INFO));
   DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_DATA,
