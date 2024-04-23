@@ -31,19 +31,26 @@ static const Parameter nm_params[] = {
 struct DHCPStats {
   PegCount info_count;
   PegCount check_count;
+  PegCount check_count_fail;
   PegCount update_count;
   PegCount network_count;
   PegCount unknown_count;
   PegCount no_ip_count;
   PegCount src_dst_ip_err_count;
   PegCount ip_pass_count;
+  PegCount ip_dual_pass_count;
+  PegCount dhcp_flagged;
+  PegCount ip_flagged;
+  PegCount dual_ip_flagged;
 };
 
-static THREAD_LOCAL DHCPStats s_dhcp_stats = {0, 0, 0, 0, 0, 0, 0, 0};
+static THREAD_LOCAL DHCPStats s_dhcp_stats = {0, 0, 0, 0, 0, 0, 0,
+                                              0, 0, 0, 0, 0, 0};
 
 const PegInfo s_pegs[] = {
     {CountType::SUM, "info_event", "info events received"},
-    {CountType::SUM, "checks_done", "number of checks done"},
+    {CountType::SUM, "check_count", "number of checks done"},
+    {CountType::SUM, "check_count_fail", "number of checks done that failed"},
     {CountType::SUM, "network_update", "network address updates"},
     {CountType::SUM, "network_set", "network address's"},
     {CountType::SUM, "unknown_network", "unknown network used"},
@@ -51,6 +58,12 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "src_dst_ipv4_err",
      "either not ipV4 or src or dst ip missing"},
     {CountType::SUM, "ip_pass", "ip's seen within range"},
+    {CountType::SUM, "dual_ip_pass", "at least one of pair has passed"},
+    {CountType::SUM, "dhcp_flagged", "DHCP network addr changed"},
+    {CountType::SUM, "ip_flagged",
+     "single ip seen and not being in known range"},
+    {CountType::SUM, "dual_ip_flagged",
+     "src and dst of package had unknown ip's"},
 
     {CountType::END, nullptr, nullptr}};
 
@@ -85,7 +98,11 @@ class DHCPMonitorInspector : public Inspector {
 
     bool validate(uint32_t ip_address) {
       s_dhcp_stats.check_count++;
-      return network_address == (ip_address & network_mask);
+      if (network_address == (ip_address & network_mask)) {
+        return true;
+      }
+      s_dhcp_stats.check_count_fail++;
+      return false;
     }
 
     uint32_t get_network_address() { return network_address; }
@@ -113,6 +130,14 @@ class DHCPMonitorInspector : public Inspector {
     }
   }
 
+  void validate(uint32_t ip1, uint32_t ip2, DHCPRecord &record) {
+    if (!record.validate(ip1) && !record.validate(ip2)) {
+      flag_ip_conflict(ip1, ip2, record);
+    } else {
+      s_dhcp_stats.ip_dual_pass_count++;
+    }
+  }
+
 public:
   DHCPMonitorInspector(DHCPMonitorModule *) {}
 
@@ -128,20 +153,45 @@ public:
               << inet_ntoa((in_addr)record.get_network_address())
               << " networkmask: "
               << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+    s_dhcp_stats.ip_flagged++;
   }
 
-  void flag_dhcp_conflict(uint32_t ip, DHCPRecord &record) {
-    std::cout << "*** MKR test - DHCP Conflict flagged for"
-              << "          ip: " << inet_ntoa((in_addr)ip) << " networkaddr: "
+  void flag_ip_conflict(uint32_t ip1, uint32_t ip2, DHCPRecord &record) {
+    std::cout << "*** MKR test - dual IP Conflict flagged for"
+              << "         ip1: " << inet_ntoa((in_addr)ip1) << " networkaddr: "
+              << "         ip2: " << inet_ntoa((in_addr)ip2) << " networkaddr: "
               << inet_ntoa((in_addr)record.get_network_address())
               << " networkmask: "
               << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+    s_dhcp_stats.dual_ip_flagged++;
+  }
+
+  void flag_dhcp_conflict(uint32_t ip, uint32_t new_mask, DHCPRecord &record) {
+    std::cout << "*** MKR test - DHCP Conflict flagged for"
+              << "      new ip: " << inet_ntoa((in_addr)ip)
+              << "    new mask: " << inet_ntoa((in_addr)new_mask)
+              << " networkaddr: "
+              << inet_ntoa((in_addr)record.get_network_address())
+              << " networkmask: "
+              << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+    s_dhcp_stats.dhcp_flagged++;
   }
 
   void flag_unknown_network(uint32_t ip, uint32_t network) {
-    std::cout << "*** MKR test - Missing configuration info for network"
-              << "          ID: " << network
-              << "          ip: " << inet_ntoa((in_addr)ip) << std::endl;
+    std::cout
+        << "*** MKR test - Missing configuration info for network flagged for"
+        << "          ID: " << network
+        << "          ip: " << inet_ntoa((in_addr)ip) << std::endl;
+
+    s_dhcp_stats.unknown_count++;
+  }
+
+  void flag_unknown_network(uint32_t ip1, uint32_t ip2, uint32_t network) {
+    std::cout
+        << "*** MKR test - Missing configuration info for network flagged for"
+        << "          ID: " << network
+        << "         ip1: " << inet_ntoa((in_addr)ip1)
+        << "         ip2: " << inet_ntoa((in_addr)ip2) << std::endl;
 
     s_dhcp_stats.unknown_count++;
   }
@@ -155,6 +205,18 @@ public:
       flag_unknown_network(ip, 1);
     } else {
       validate(ip, record->second);
+    }
+  }
+
+  void validate(uint32_t ip1, uint32_t ip2) {
+    std::shared_lock lock(network.mutex);
+
+    auto record = network.map.find(1);
+
+    if (record == network.map.end()) {
+      flag_unknown_network(ip1, ip2, 1);
+    } else {
+      validate(ip1, ip2, record->second);
     }
   }
 
@@ -172,7 +234,7 @@ public:
     } else {
       if (record->second.get_network_mask() != network_mask ||
           !record->second.validate(ip)) {
-        flag_dhcp_conflict(ip, record->second);
+        flag_dhcp_conflict(ip, network_mask, record->second);
         record->second.update(ip & network_mask, network_mask);
       }
     }
@@ -267,8 +329,7 @@ public:
     //    std::cout << "*** MKR TEST src: " << ip_src << " dst: " << ip_dst
     //              << std::endl;
 
-    inspector->validate(src->get_ip4_value());
-    inspector->validate(dst->get_ip4_value());
+    inspector->validate(src->get_ip4_value(), dst->get_ip4_value());
 
     //    bool has_ip() const
     //{ return ptrs.ip_api.is_ip(); }
