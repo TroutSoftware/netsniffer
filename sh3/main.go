@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/romaindoumenc/script"
+	"rsc.io/script"
 	"golang.org/x/tools/txtar"
 )
 

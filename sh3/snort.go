@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/romaindoumenc/script"
+	"rsc.io/script"
 )
 
 var snortloc = "/opt/snort/bin/snort"

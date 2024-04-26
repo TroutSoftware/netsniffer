@@ -2,3 +2,5 @@ github.com/romaindoumenc/script v0.0.2 h1:cc5STa0IrWwcVgsnbYFvgDD85eHhmbBnCWN+dZ
 github.com/romaindoumenc/script v0.0.2/go.mod h1:ve8gJjIXzzjDs6+jyFdnd03xX0HcUF0cH3yS2A8zYgo=
 golang.org/x/tools v0.14.0 h1:jvNa2pY0M4r62jkRQ6RwEZZyPcymeL9XZMLBbV7U2nc=
 golang.org/x/tools v0.14.0/go.mod h1:uYBEerGOWcJyEORxN+Ek8+TT266gXkNlHdJBwexUsBg=
+rsc.io/script v0.0.2 h1:eYoG7A3GFC3z1pRx3A2+s/vZ9LA8cxojHyCvslnj4RI=
+rsc.io/script v0.0.2/go.mod h1:cKBjCtFBBeZ0cbYFRXkRoxP+xGqhArPa9t3VWhtXfzU=
