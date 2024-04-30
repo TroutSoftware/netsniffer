@@ -14,8 +14,8 @@ import (
 	"regexp"
 	"strings"
 
-	"rsc.io/script"
 	"golang.org/x/tools/txtar"
+	"rsc.io/script"
 )
 
 // TODO rewrite with a bit more manners
@@ -23,10 +23,11 @@ func main() {
 	output := flag.String("o", "", "Output module name")
 	inputs := flag.String("i", "", "Inputs cc and .a files, space-separated")
 	only := flag.String("run", "", "Only run script matching this regular expression")
+	sanitize := flag.String("sanitize", "address", "Run with sanitizers: address, none, thread")
 	flag.Parse()
 
 	ng := script.NewEngine()
-	ng.Cmds["pcap"] = PCAP()
+	ng.Cmds["pcap"] = PCAP(LoadSanitize(*sanitize))
 	ng.Cmds["skip"] = Skip()
 
 	dst := filepath.Join("p/", *output)
@@ -36,7 +37,7 @@ func main() {
 		OptLevel(1),
 		Debug(),
 		Modern(),
-		Sanitize("address"),
+		Sanitize(*sanitize),
 		Input(strings.Split(*inputs, " ")...),
 		Output(dst),
 	)
@@ -62,7 +63,7 @@ func main() {
 		}
 	}
 
-	{
+	if *sanitize != "none" {
 		out, err := exec.Command("gcc", "-print-file-name=libasan.so").Output()
 		if err != nil {
 			errf("cannot get libasan from gcc: %s", err)
@@ -188,8 +189,36 @@ func Debug() CompileOpt {
 }
 
 func Sanitize(stz string) CompileOpt {
-	return func(args, env []string) (nargs []string, nenv []string) {
-		return append(args, fmt.Sprintf("-fsanitize=%s", stz)), env
+	switch stz {
+	case "none":
+		return func(args, env []string) (nargs []string, nenv []string) {
+			return args, env
+		}
+
+	case "address":
+		return func(args, env []string) (nargs []string, nenv []string) {
+			return append(args, fmt.Sprintf("-fsanitize=%s", stz)), env
+		}
+
+	default:
+		panic("Not implemented")
+	}
+}
+
+func LoadSanitize(stz string) CompileOpt {
+	switch stz {
+	case "none":
+		return func(args, env []string) (nargs []string, nenv []string) {
+			return args, env
+		}
+
+	case "address":
+		return func(args, env []string) (nargs []string, nenv []string) {
+			return args, append(env, "LD_PRELOAD="+asanlib)
+		}
+
+	default:
+		panic("Not implemented")
 	}
 }
 

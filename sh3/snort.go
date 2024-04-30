@@ -13,7 +13,7 @@ var asanlib string
 
 // PCAP runs snort against PCAP files, without any rule.
 // $(SNORT) -v -c cfg.lua --plugin-path p -A talos --pcap-dir ../../test_data --warn-all
-func PCAP() script.Cmd {
+func PCAP(opts ...CompileOpt) script.Cmd {
 	return script.Command(
 		script.CmdUsage{
 			Summary: "run snort against pcap files",
@@ -35,7 +35,11 @@ func PCAP() script.Cmd {
 			)
 			cmd.Dir = s.Getwd()
 			// TODO only preload if asan is set
-			cmd.Env = append(s.Environ(), "LD_PRELOAD="+asanlib)
+			cmd.Env = s.Environ()
+			for _, o := range opts {
+				cmd.Args, cmd.Env = o(cmd.Args, cmd.Env)
+			}
+
 			cmd.Stdout = &stdoutBuf
 			cmd.Stderr = &stderrBuf
 			err := cmd.Start()
