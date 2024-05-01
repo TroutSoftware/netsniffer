@@ -6,7 +6,7 @@ CC_SOURCES = inspector.cc
 
 .PHONY: test test-data clean format
 test:
-	sh3 -o $(MODULE) -i $(CC_SOURCES) $(TEST_LIMIT)
+	sh3 -sanitize none -o $(MODULE) -i $(CC_SOURCES) $(TEST_LIMIT)
 
 test-data: p/dhcp_monitor.so
 	$(SNORT) -v -c ../../test_config/cfg.lua --plugin-path p -A talos --pcap-dir ../../test_data --warn-all

@@ -1,13 +1,17 @@
-
-#include <iostream>
 #include <shared_mutex>
 
+#include "detection/detection_engine.h"
 #include "framework/inspector.h"
 #include "framework/module.h"
 #include "protocols/packet.h"
 #include "pub_sub/appid_event_ids.h"
 #include "pub_sub/dhcp_events.h"
 #include "pub_sub/intrinsic_event_ids.h"
+
+const static unsigned dhcp_monitor_gid = 8000;
+const static unsigned dhcp_monitor_ip_conflict_sid = 1001;
+const static unsigned dhcp_monitor_dhcp_conflict_sid = 1002;
+const static unsigned dhcp_monitor_unknown_network_sid = 1003;
 
 using namespace snort;
 
@@ -16,17 +20,14 @@ bool log_noflow_packages = false;
 
 unsigned connection_cache_size = 0;
 
-static const Parameter nm_params[] = {
-    {"connection_cache_size", Parameter::PT_INT, "0:max32", "100000",
-     "set cache size pr inspector, unit is number of connections"},
-    {"log_file", Parameter::PT_STRING, nullptr, "flow.txt",
-     "set output file name"},
-    {"size_rotate", Parameter::PT_BOOL, nullptr, "false",
-     "If true rotates log file after x lines"},
-    {"noflow_log", Parameter::PT_BOOL, nullptr, "false",
-     "If true also logs no flow packages"},
-
+static const Parameter dhcp_monitor_params[] = {
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+static const RuleMap s_rules[] = {
+    {dhcp_monitor_ip_conflict_sid, "ip conflict"},
+    {dhcp_monitor_dhcp_conflict_sid, "dhcp conflict"},
+    {dhcp_monitor_unknown_network_sid, "unknown network"},
+    {0, nullptr}};
 
 struct DHCPStats {
   PegCount info_count;
@@ -74,7 +75,7 @@ public:
       : Module("dhcp_monitor",
                "Monitors DHCP comunication looking for unexpected use of "
                "network addresss",
-               nm_params) {}
+               dhcp_monitor_params) {}
 
   Usage get_usage() const override { return CONTEXT; }
 
@@ -83,6 +84,10 @@ public:
   const PegInfo *get_pegs() const override { return s_pegs; }
 
   PegCount *get_counts() const override { return (PegCount *)&s_dhcp_stats; }
+
+  unsigned get_gid() const override { return dhcp_monitor_gid; }
+
+  const RuleMap *get_rules() const override { return s_rules; }
 };
 
 class DHCPMonitorInspector : public Inspector {
@@ -130,6 +135,8 @@ class DHCPMonitorInspector : public Inspector {
     }
   }
 
+  // Must be called with the network.mutex taken if the record is from the
+  // network member
   void validate(uint32_t ip1, uint32_t ip2, DHCPRecord &record) {
     if (!record.validate(ip1) && !record.validate(ip2)) {
       flag_ip_conflict(ip1, ip2, record);
@@ -147,90 +154,72 @@ public:
 
   bool configure(SnortConfig *) override;
 
-  void flag_ip_conflict(uint32_t ip, DHCPRecord &record) {
-    std::cout << "*** MKR test - IP Conflict flagged for"
-              << "          ip: " << inet_ntoa((in_addr)ip) << " networkaddr: "
-              << inet_ntoa((in_addr)record.get_network_address())
-              << " networkmask: "
-              << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+  void flag_ip_conflict(uint32_t /*ip*/, DHCPRecord & /*record*/) {
     s_dhcp_stats.ip_flagged++;
+    DetectionEngine::queue_event(dhcp_monitor_gid,
+                                 dhcp_monitor_ip_conflict_sid);
   }
 
-  void flag_ip_conflict(uint32_t ip1, uint32_t ip2, DHCPRecord &record) {
-    std::cout << "*** MKR test - dual IP Conflict flagged for"
-              << "         ip1: " << inet_ntoa((in_addr)ip1) << " networkaddr: "
-              << "         ip2: " << inet_ntoa((in_addr)ip2) << " networkaddr: "
-              << inet_ntoa((in_addr)record.get_network_address())
-              << " networkmask: "
-              << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+  void flag_ip_conflict(uint32_t /*ip1*/, uint32_t /*ip2*/,
+                        DHCPRecord & /*record*/) {
     s_dhcp_stats.dual_ip_flagged++;
+    DetectionEngine::queue_event(dhcp_monitor_gid,
+                                 dhcp_monitor_ip_conflict_sid);
   }
 
-  void flag_dhcp_conflict(uint32_t ip, uint32_t new_mask, DHCPRecord &record) {
-    std::cout << "*** MKR test - DHCP Conflict flagged for"
-              << "      new ip: " << inet_ntoa((in_addr)ip)
-              << "    new mask: " << inet_ntoa((in_addr)new_mask)
-              << " networkaddr: "
-              << inet_ntoa((in_addr)record.get_network_address())
-              << " networkmask: "
-              << inet_ntoa((in_addr)record.get_network_mask()) << std::endl;
+  void flag_dhcp_conflict(uint32_t /*ip*/, uint32_t /*new_mask*/,
+                          DHCPRecord & /*record*/) {
     s_dhcp_stats.dhcp_flagged++;
+    DetectionEngine::queue_event(dhcp_monitor_gid,
+                                 dhcp_monitor_dhcp_conflict_sid);
   }
 
-  void flag_unknown_network(uint32_t ip, uint32_t network) {
-    std::cout
-        << "*** MKR test - Missing configuration info for network flagged for"
-        << "          ID: " << network
-        << "          ip: " << inet_ntoa((in_addr)ip) << std::endl;
-
+  void flag_unknown_network(uint32_t /*ip*/, uint32_t /*network*/) {
     s_dhcp_stats.unknown_count++;
+    DetectionEngine::queue_event(dhcp_monitor_gid,
+                                 dhcp_monitor_unknown_network_sid);
   }
 
-  void flag_unknown_network(uint32_t ip1, uint32_t ip2, uint32_t network) {
-    std::cout
-        << "*** MKR test - Missing configuration info for network flagged for"
-        << "          ID: " << network
-        << "         ip1: " << inet_ntoa((in_addr)ip1)
-        << "         ip2: " << inet_ntoa((in_addr)ip2) << std::endl;
-
+  void flag_unknown_network(uint32_t /*ip1*/, uint32_t /*ip2*/,
+                            uint32_t /*network*/) {
     s_dhcp_stats.unknown_count++;
+    DetectionEngine::queue_event(dhcp_monitor_gid,
+                                 dhcp_monitor_unknown_network_sid);
   }
 
-  void validate(uint32_t ip) {
+  void validate(uint16_t vlan_id, uint32_t ip) {
     std::shared_lock lock(network.mutex);
 
-    auto record = network.map.find(1);
+    auto record = network.map.find(vlan_id);
 
     if (record == network.map.end()) {
-      flag_unknown_network(ip, 1);
+      flag_unknown_network(ip, vlan_id);
     } else {
       validate(ip, record->second);
     }
   }
 
-  void validate(uint32_t ip1, uint32_t ip2) {
+  void validate(uint16_t vlan_id, uint32_t ip1, uint32_t ip2) {
     std::shared_lock lock(network.mutex);
 
-    auto record = network.map.find(1);
+    auto record = network.map.find(vlan_id);
 
     if (record == network.map.end()) {
-      flag_unknown_network(ip1, ip2, 1);
+      flag_unknown_network(ip1, ip2, vlan_id);
     } else {
       validate(ip1, ip2, record->second);
     }
   }
 
-  void add_ip_mask(uint32_t ip, uint32_t network_mask) {
+  void add_ip_mask(uint16_t vlan_id, uint32_t ip, uint32_t network_mask) {
     std::unique_lock lock(network.mutex);
 
-    // For now we hardcode our map key to 1
-
     // Check if record exists
-    auto record = network.map.find(1);
+    auto record = network.map.find(vlan_id);
 
     if (record == network.map.end()) {
       network.map.emplace(
-          std::make_pair(1, DHCPRecord(ip & network_mask, network_mask)));
+          std::make_pair(vlan_id, DHCPRecord(ip & network_mask, network_mask)));
     } else {
       if (record->second.get_network_mask() != network_mask ||
           !record->second.validate(ip)) {
@@ -255,36 +244,14 @@ public:
 
     DHCPInfoEvent &dhcp_info_event = dynamic_cast<DHCPInfoEvent &>(
         event); // NOTE: Will throw bad_cast exception if failing
-#if 1
-    std::cout << "***MKR TEST got DHCP_INFO" << std::endl;
 
-    std::cout << "***  ip: "
-              << inet_ntoa((in_addr)dhcp_info_event.get_ip_address())
-              << std::endl;
-    // std::cout << "***  eth addr: " << dhcp_info_event.get_eth_addr() <<
-    // std::endl; //const uint8_t* get_eth_addr() const
-    /*
-    std::cout << "***  eth addr: " << std::hex <<
-    dhcp_info_event.get_eth_addr()[0] << ":"
-                                   << dhcp_info_event.get_eth_addr()[1] << ":"
-                                   << dhcp_info_event.get_eth_addr()[2] << ":"
-                                   << dhcp_info_event.get_eth_addr()[3] << ":"
-                                   << dhcp_info_event.get_eth_addr()[4] << ":"
-                                   << dhcp_info_event.get_eth_addr()[5] <<
-    std::endl;
-*/
-    std::cout << "***  subnet: "
-              << inet_ntoa(
-                     (in_addr)htonl(dhcp_info_event.get_subnet_mask())) // ntohl
-              << std::endl;
-    std::cout << "***  lease: " << dhcp_info_event.get_lease_secs()
-              << " seconds" << std::endl;
-    std::cout << "***  router: "
-              << inet_ntoa((in_addr)dhcp_info_event.get_router()) << std::endl;
-#endif
-    inspector->add_ip_mask(dhcp_info_event.get_ip_address(),
+    assert(event.get_packet());
+
+    uint16_t vlan_id = event.get_packet()->get_flow_vlan_id();
+
+    inspector->add_ip_mask(vlan_id, dhcp_info_event.get_ip_address(),
                            htonl(dhcp_info_event.get_subnet_mask()));
-    inspector->validate(dhcp_info_event.get_router());
+    inspector->validate(vlan_id, dhcp_info_event.get_router());
   }
 };
 
@@ -300,7 +267,6 @@ public:
   };
 
   void handle(DataEvent &event, Flow *) override {
-
     const Packet *p = event.get_packet();
 
     // Bail if no packet, or packet don't have ip
@@ -309,38 +275,23 @@ public:
       return;
     }
 
-    // std::cout << "*** MKR TEST Packet have ip" << std::endl;
-
     const SfIp *src = p->ptrs.ip_api.get_src();
     const SfIp *dst = p->ptrs.ip_api.get_dst();
 
+    // Bail if src and dst aren't both IPv4
     if (!src || !src->is_ip4() || !dst || !dst->is_ip4()) {
       s_dhcp_stats.src_dst_ip_err_count++;
       return;
     }
 
-    char ip_src[INET6_ADDRSTRLEN];
-    char ip_dst[INET6_ADDRSTRLEN];
-    sfip_ntop(src, ip_src, sizeof(ip_src));
-    sfip_ntop(dst, ip_dst, sizeof(ip_dst));
-
-    //    if (sf_ip->is_ip6()) {
-
-    //    std::cout << "*** MKR TEST src: " << ip_src << " dst: " << ip_dst
-    //              << std::endl;
-
-    inspector->validate(src->get_ip4_value(), dst->get_ip4_value());
-
-    //    bool has_ip() const
-    //{ return ptrs.ip_api.is_ip(); }
+    inspector->validate(p->get_flow_vlan_id(), src->get_ip4_value(),
+                        dst->get_ip4_value());
   }
 };
 
 bool DHCPMonitorInspector::configure(SnortConfig *) {
   DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_INFO,
                              new DHCPInfoEventHandler(this));
-  // DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_DATA, new
-  // EventHandler(this, AppIdEventIds::DHCP_DATA));
   DataBus::subscribe_network(
       intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
       new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
