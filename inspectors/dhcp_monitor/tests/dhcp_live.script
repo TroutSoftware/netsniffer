@@ -1,0 +1,46 @@
+pcap $moddir/pcaps/capture.pcap
+stdout '8000\:1001\:0.*(alerts: 1)'
+stdout '8000\:1003\:0.*(alerts: 4)'
+stdout 'info_event\: 1'
+stdout 'check_count\: 5'
+stdout 'check_count_fail\: 1'
+stdout 'network_set\: 1'
+stdout 'unknown_network\: 4'
+stdout 'no_ip\: 7'
+stdout 'src_dst_ipv4_err\: 10'
+stdout 'dual_ip_pass\: 4'
+stdout 'ip_flagged\: 1'
+
+
+
+-- cfg.lua --
+stream = { }
+stream_udp = { }
+appid = { }
+dhcp_monitor = { }
+
+
+ips = {
+  include = 'dhcp.rules'
+}
+
+
+-- dhcp.rules --
+
+alert ip any any -> any any (
+  msg:"IP address doesn't belong on vlan";
+  gid:8000;
+  sid:1001;
+)
+
+alert ip any any -> any any (
+  msg:"DHCP network address changed";
+  gid:8000;
+  sid:1002;
+)
+
+alert ip any any -> any any (
+  msg:"Unknown vlan seen";
+  gid:8000;
+  sid:1003;
+)

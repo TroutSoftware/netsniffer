@@ -1,0 +1,43 @@
+pcap $moddir/pcaps/dhcp_clean.pcap
+stdout '8000\:1003\:0.*(alerts: 5)'
+stdout 'info_event\: 1'
+stdout 'check_count\: 1'
+stdout 'network_set\: 1'
+stdout 'unknown_network\: 5'
+stdout 'ip_pass\: 1'
+
+
+-- cfg.lua --
+stream = { }
+stream_udp = { }
+appid = { }
+dhcp_monitor = { }
+
+ips = {
+  include = 'dhcp.rules'
+}
+
+
+-- dhcp.rules --
+
+alert ip any any -> any any (
+  msg:"IP address doesn't belong on vlan";
+  gid:8000;
+  sid:1001;
+)
+
+alert ip any any -> any any (
+  msg:"DHCP network address changed";
+  gid:8000;
+  sid:1002;
+)
+
+alert ip any any -> any any (
+  msg:"Unknown vlan seen";
+  gid:8000;
+  sid:1003;
+)
+
+
+
+
