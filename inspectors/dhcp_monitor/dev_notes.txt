@@ -12,19 +12,36 @@ Requirements:
 *TBD*
 
 
+
+
 Random notes:
 *************
+
+In order for the dhcp_monitor to work, it needs the functionallity of the appid inspector, which in turn needs the stream and stream_udp services
+
+stream = { }
+stream_udp = { }
+appid = { }
+dhcp_monitor = { }
+
+-----
 
 rna is a user, not a provider of dhcp events
 
 appid plugin, is the one semingly detecting dhcp and making the events
 
-form documentation appid plugin depends on (not yet sure which, if any, are important for the dhcp):
+form documentation appid plugin depends on (only stream with udp seem to be important for dhcp detection):
  - stream5 (with tcp and udp enabled)
  - frag3 (enabled and configured)
  - http preprocessor (enabled and configured)
 
  Lua JIT version 2.0.2 must be installed, never versions are not tested.
+
+Questions
+*********
+
+*TBD*
+
 
 Run without make
 ****************

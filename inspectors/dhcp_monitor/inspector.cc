@@ -15,11 +15,6 @@ const static unsigned dhcp_monitor_unknown_network_sid = 1003;
 
 using namespace snort;
 
-bool use_rotate_feature = true;
-bool log_noflow_packages = false;
-
-unsigned connection_cache_size = 0;
-
 static const Parameter dhcp_monitor_params[] = {
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -70,24 +65,17 @@ const PegInfo s_pegs[] = {
 
 class DHCPMonitorModule : public Module {
 
+  const PegInfo *get_pegs() const override { return s_pegs; }
+  PegCount *get_counts() const override { return (PegCount *)&s_dhcp_stats; }
+  unsigned get_gid() const override { return dhcp_monitor_gid; }
+  const RuleMap *get_rules() const override { return s_rules; }
+
 public:
   DHCPMonitorModule()
       : Module("dhcp_monitor",
                "Monitors DHCP comunication looking for unexpected use of "
                "network addresss",
                dhcp_monitor_params) {}
-
-  Usage get_usage() const override { return CONTEXT; }
-
-  bool set(const char *, Value &, SnortConfig *) override { return true; }
-
-  const PegInfo *get_pegs() const override { return s_pegs; }
-
-  PegCount *get_counts() const override { return (PegCount *)&s_dhcp_stats; }
-
-  unsigned get_gid() const override { return dhcp_monitor_gid; }
-
-  const RuleMap *get_rules() const override { return s_rules; }
 };
 
 class DHCPMonitorInspector : public Inspector {
