@@ -48,3 +48,122 @@ Run without make
 
 $ export LD_PRELOAD="/usr/lib/gcc/x86_64-linux-gnu/11/libasan.so"
 $ ../../../snort3/build/src/snort -c /home/mike/code/snort/snort-extra/inspectors/dhcp_monitor/tests/dhcp.script.cfg.lua --plugin-path p -A talos --pcap-list /home/mike/code/snort/snort-extra/inspectors/dhcp_monitor/pcaps/dhcp_clean.pcap --warn-all
+
+Modify sh3 to use home build snort
+**********************************
+
+In snort.go change:
+var snortloc = "/opt/snort/bin/snort"
+
+To point at the snort version you want to run with e.g.:
+var snortloc = "/home/mike/code/snort/snort3/build/src/snort"
+
+Then do a: $ go install
+
+Scapy
+*****
+
+Read from pcap:
+>>> a=rdpcap("/spare/captures/isakmp.cap")
+
+Write to pcap:
+>>> wrpcap("temp.cap",a)
+
+Show content of something:
+>>> something.show()
+
+Create DHCP package:
+>>> cmdoffer = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr="1.2.2.3")/DHCP(options=[("message-type", "discover"),"end"])
+
+Load and show pcap:
+>>> b=rdpcap("test_dhcp_org.pcap")
+>>> b.show()
+0000 Ether / IP / UDP 172.31.3.200:bootpc > 172.31.0.1:bootps / BOOTP / DHCP
+0001 Ether / IP / ICMP 172.31.0.1 > 172.31.3.200 dest-unreach port-unreachable / IPerror / UDPerror / BOOTP / DHCP
+0002 Ether / IP / UDP 0.0.0.0:bootpc > 255.255.255.255:bootps / BOOTP / DHCP
+0003 Ether / IP / UDP 172.31.0.1:bootps > 172.31.3.200:bootpc / BOOTP / DHCP
+0004 Ether / IP / UDP 0.0.0.0:bootpc > 255.255.255.255:bootps / BOOTP / DHCP
+0005 Ether / IP / UDP 172.31.0.1:bootps > 172.31.3.200:bootpc / BOOTP / DHCP
+
+>>> b[1].show()
+###[ Ethernet ]###
+  dst= 52:54:00:39:78:98
+  src= 52:54:00:0b:6a:77
+  type= IPv4
+###[ IP ]###
+     version= 4
+     ihl= 5
+     tos= 0xc0
+...
+
+Change value:
+>>> b[1]['Ethernet'].src="52:54:00:0b:6a:88"
+
+>>> b[1].show()
+###[ Ethernet ]###
+  dst= 52:54:00:39:78:90
+  src= 52:54:00:0b:6a:88
+...
+
+Randomize:
+TARGET_NET = '10.181.6.0/24'
+psrc = RandIP(TARGET_NET)
+hwsrc = RandMAC()
+
+also see: https://scapy.readthedocs.io/en/latest/usage.html#fuzzing
+
+------
+>>> pcap=rdpcap("dhcp_clean.pcap")
+>>> pcap.append(pcap[0].copy())
+>>> pcap.append(pcap[1].copy())
+>>> pcap.append(pcap[2].copy())
+>>> pcap.append(pcap[3].copy())
+>>> pcap.append(pcap[4].copy())
+>>> pcap.append(pcap[5].copy())
+>>> pcap[6].time += 3
+>>> pcap[7].time += 3
+>>> pcap[8].time += 3
+>>> pcap[9].time += 3
+>>> pcap[10].time += 3
+>>> pcap[11].time += 3
+>>> pcap[6][BOOTP].xid=2354335092
+>>> del pcap[6][UDP].chksum
+>>> pcap[7][BOOTP].xid=2354335092
+>>> del pcap[7][ICMP].chksum
+>>> del pcap[7]["UDP in ICMP"].chksum
+>>> pcap[8][BOOTP].xid=2354335093
+>>> del pcap[8][UDP].chksum
+>>> pcap[9][IP].src="172.16.0.1"
+>>> pcap[9][IP].dst="172.16.3.200"
+>>> pcap[9][BOOTP].xid=2354335093
+>>> pcap[9][BOOTP].yiaddr="172.16.3.200"
+>>> pcap[9][BOOTP].siaddr="172.16.0.1"
+>>> pcap[9]['DHCP options'].options[2]=('router', '172.16.0.1')
+>>> pcap[9]['DHCP options'].options[3]=('name_server', '172.16.0.1')
+>>> pcap[9]['DHCP options'].options[6]=('server_id', '172.16.0.1')
+>>> del pcap[9][UDP].chksum
+>>> del pcap[9][IP].chksum
+>>> pcap[10][BOOTP].xid=2354335093
+>>> pcap[10]['DHCP options'].options[1]=('server_id', '172.16.0.1')
+>>> del pcap[10][UDP].chksum
+>>> pcap[11][BOOTP].xid=2354335093
+>>> pcap[11][IP].src="172.16.0.1"
+>>> pcap[11][IP].dst="172.16.3.200"
+>>> pcap[11][BOOTP].yiaddr="172.16.3.200"
+>>> pcap[11][BOOTP].siaddr="172.16.0.1"
+>>> pcap[11]['DHCP options'].options[2]=('router', '172.16.0.1')
+>>> pcap[11]['DHCP options'].options[3]=('name_server', '172.16.0.1')
+>>> pcap[11]['DHCP options'].options[6]=('server_id', '172.16.0.1')
+>>> del pcap[11][UDP].chksum
+>>> del pcap[11][IP].chksum
+>>> wrpcap("dhcp_new_range.pcap", pcap)
+
+Note: wrpcap generates the correct checksums
+
+
+
+
+
+
+
+

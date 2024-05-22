@@ -1,0 +1,33 @@
+pcap $moddir/pcaps/dhcp_new_range.pcap
+stdout '8000\:1002\:0.*(alerts: 1)'
+
+-- cfg.lua --
+stream = { }
+stream_udp = { }
+appid = { }
+dhcp_monitor = { }
+
+ips = {
+  include = 'dhcp.rules'
+}
+
+
+-- dhcp.rules --
+
+alert ip any any -> any any (
+  msg:"IP address doesn't belong on vlan";
+  gid:8000;
+  sid:1001;
+)
+
+alert ip any any -> any any (
+  msg:"DHCP network address changed";
+  gid:8000;
+  sid:1002;
+)
+
+alert ip any any -> any any (
+  msg:"Unknown vlan seen";
+  gid:8000;
+  sid:1003;
+)
