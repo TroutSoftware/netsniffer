@@ -69,11 +69,19 @@ Read from pcap:
 Write to pcap:
 >>> wrpcap("temp.cap",a)
 
+Filter pcap:
+>>> a[DHCP]
+(Will return list of all packets containing DHCP)
+
 Show content of something:
 >>> something.show()
 
 Create DHCP package:
 >>> cmdoffer = Ether(dst="ff:ff:ff:ff:ff:ff")/IP(src="0.0.0.0",dst="255.255.255.255")/UDP(sport=68,dport=67)/BOOTP(chaddr="1.2.2.3")/DHCP(options=[("message-type", "discover"),"end"])
+
+Show command to create a package:
+>>> cmdoffer.command()
+"Ether(dst='ff:ff:ff:ff:ff:ff')/IP(src='0.0.0.0', dst='255.255.255.255')/UDP(sport=68, dport=67)/BOOTP(chaddr='1.2.2.3')/DHCP(options=[('message-type', 'discover'), 'end'])"
 
 Load and show pcap:
 >>> b=rdpcap("test_dhcp_org.pcap")
@@ -113,6 +121,8 @@ hwsrc = RandMAC()
 also see: https://scapy.readthedocs.io/en/latest/usage.html#fuzzing
 
 ------
+
+How dhcp_new_range.pcap was build from dhcp_clean.pcap:
 >>> pcap=rdpcap("dhcp_clean.pcap")
 >>> pcap.append(pcap[0].copy())
 >>> pcap.append(pcap[1].copy())
@@ -161,9 +171,34 @@ also see: https://scapy.readthedocs.io/en/latest/usage.html#fuzzing
 Note: wrpcap generates the correct checksums
 
 
+>>> def clrchksum(pcap):
+...:     for p in pcap[UDP]:
+...:         del p[UDP].chksum
+...:     for p in pcap[IP]:
+...:         del p[IP].chksum
+...:
 
+>>> def printchksum(pcap):
+...:     for p in pcap[UDP]:
+...:         print("-------")
+...:         print(p[UDP].chksum)
+...:     for p in ippcap=pcap[IP]:
+...:         print("+++++++")
+...:         print(p[IP].chksum)
+...:
 
+>>> def printtime(pcap):
+...:     for p in pcap:
+...:         print("--- ", p.time)
+...:
 
-
-
+>>> def fixtime(pcap):
+...:     base = pcap[0].time
+...:     delta = 0
+...:     for p in pcap:
+...:         if (p.time+delta) < base:
+...:             delta = 0.1 + base - p.time
+...:         p.time += delta
+...:         base = p.time
+...:
 
