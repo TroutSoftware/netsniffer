@@ -1,0 +1,24 @@
+pcap $moddir/pcaps/dhcp_clean.pcap
+stdout '\[1\:0\:0\] DHCP option C\+\+ match \(alerts\: .\)'
+
+
+-- cfg.lua --
+stream = { }
+stream_udp = { }
+appid = { }
+dhcp_monitor = { }
+
+binder =
+{
+    { when = { proto = 'tcp', ports = '502' }, use = { type = 'dhcp_monitor' }, },
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+alert ip any 67 -> any 68 (
+  msg:"DHCP option C++ match";
+  dhcp_option;
+)
