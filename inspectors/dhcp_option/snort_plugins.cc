@@ -7,6 +7,5 @@
 #include "inspector.h"
 #include "ips_option.h"
 
-SO_PUBLIC const BaseApi *snort_plugins[] = {&dhcp_option::inspector,
-                                            &dhcp_option::ips_option,
-                                            nullptr};
+SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
+    &dhcp_option::inspector.base, &dhcp_option::ips_option.base, nullptr};

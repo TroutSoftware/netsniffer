@@ -10,7 +10,7 @@
 namespace dhcp_option {
 namespace {
 
-static const char *s_name = "dhcp_option";
+static const char *s_name = "dhcp_ips_option";
 static const char *s_help = "Filters on values of DHCP options";
 
 class Module : public snort::Module {

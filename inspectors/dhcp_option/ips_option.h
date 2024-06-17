@@ -2,6 +2,7 @@
 #define ips_option_acf0c0b8
 
 #include <framework/base_api.h>
+#include <framework/ips_option.h>
 
 namespace dhcp_option {
 

@@ -6,12 +6,12 @@ stdout '\[1\:0\:0\] DHCP option C\+\+ match \(alerts\: .\)'
 stream = { }
 stream_udp = { }
 appid = { }
-dhcp_monitor = { }
+dhcp_option = { }
 
-binder =
-{
-    { when = { proto = 'tcp', ports = '502' }, use = { type = 'dhcp_monitor' }, },
-}
+--binder =
+--{
+--    { when = { proto = 'tcp', ports = '502' }, use = { type = 'dhcp_option' }, },
+--}
 
 ips = {
   include = 'lua.rules'
@@ -20,5 +20,5 @@ ips = {
 -- lua.rules --
 alert ip any 67 -> any 68 (
   msg:"DHCP option C++ match";
-  dhcp_option;
+  dhcp_ips_option;
 )
