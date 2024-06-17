@@ -33,7 +33,7 @@ class IpsOption : public snort::IpsOption {
   IpsOption() : snort::IpsOption(s_name) {}
 
   uint32_t hash() const override {
-    uint32_t a = IpsOption::hash(), b = 0, c = 0;
+    uint32_t a = snort::IpsOption::hash(), b = 0, c = 0;
 
     mix(a, b, c);
     finalize(a, b, c);
@@ -46,6 +46,7 @@ class IpsOption : public snort::IpsOption {
   }
 
   EvalStatus eval(Cursor &, snort::Packet *) override {
+
     /*
         RuleProfile profile(modbus_data_prof);
 
