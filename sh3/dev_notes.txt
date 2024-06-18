@@ -1,0 +1,12 @@
+
+***************************
+* Notes on the sh3 module *
+***************************
+
+Ideas for improvement:
+----------------------
+
+* Allow multiple source files without needing to put them in quotes '"'
+  | Currently we need something like this in makes files in order to process multiple source files:
+  | sh3 -sanitize none -o $(MODULE) -i "$(CC_SOURCES)" $(TEST_LIMIT)
+
