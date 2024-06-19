@@ -5,13 +5,23 @@ stdout '\[1\:0\:0\] DHCP option C\+\+ match \(alerts\: .\)'
 -- cfg.lua --
 stream = { }
 stream_udp = { }
-appid = { }
-dhcp_option = { }
+--appid = { }
+dhcp = {
+header_parsing=true
+}
+--modbus = {}
+
+binder =
+{
+    { when = { proto = 'udp' }, use = { type = 'dhcp' }},
+}
+
 
 --binder =
 --{
---    { when = { proto = 'tcp', ports = '502' }, use = { type = 'dhcp_option' }, },
+--    { when = { proto = 'tcp', ports = '502' }, use = { type = 'modbus' }, },
 --}
+
 
 ips = {
   include = 'lua.rules'
@@ -20,5 +30,17 @@ ips = {
 -- lua.rules --
 alert ip any 67 -> any 68 (
   msg:"DHCP option C++ match";
-  dhcp_ips_option;
+  dhcp_option;
+)
+
+alert ip any any -> any any (
+  msg:"Invalid dhcp packet";
+  gid:8000;
+  sid:1011;
+)
+
+alert ip any any -> any any (
+  msg:"Valid dhcp packet";
+  gid:8000;
+  sid:1010;
 )
