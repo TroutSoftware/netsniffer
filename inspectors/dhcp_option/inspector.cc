@@ -69,8 +69,10 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "unknown_htype",
      "Packages that contained htype fields, that wasn't (1) 10mb ethernet"},
     {CountType::SUM, "invalid_hlen", "Packages with hlen != 6"},
-    {CountType::SUM, "sname_not_terminated", "Packages with an sname field that isn't zero terminated"},
-    {CountType::SUM, "file_not_terminated", "Packages with a file filed that isn't zero terminated"},
+    {CountType::SUM, "sname_not_terminated",
+     "Packages with an sname field that isn't zero terminated"},
+    {CountType::SUM, "file_not_terminated",
+     "Packages with a file filed that isn't zero terminated"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -223,7 +225,7 @@ class Inspector : public snort::Inspector {
         return;
       }
 
-      if (nullptr == std::memchr(header->sname, 0, sizeof(header->sname))) {
+      if (nullptr == std::memchr(header->file, 0, sizeof(header->file))) {
         queue(SID::file_not_terminated);
         queue(SID::invalid);
         s_peg_counts.file_not_terminated++;
@@ -231,7 +233,8 @@ class Inspector : public snort::Inspector {
         return;
       }
 
-      s_peg_counts.header_parsed++;   // We only count a header as parsed if we check all fields
+      s_peg_counts.header_parsed++; // We only count a header as parsed if we
+                                    // check all fields
     } else {
       s_peg_counts.header_skipped++;
     } // Header parsing condition
@@ -278,12 +281,12 @@ const snort::InspectApi inspector = {
     },
     snort::IT_SERVICE,
     PROTO_BIT__UDP,
-    dhcp_bufs,      // nullptr, // buffers
-    s_name,         // nullptr, // service
-    nullptr,        // pinit
-    nullptr,        // pterm
-    nullptr,        // tinit
-    nullptr,        // tterm
+    dhcp_bufs, // nullptr, // buffers
+    s_name,    // nullptr, // service
+    nullptr,   // pinit
+    nullptr,   // pterm
+    nullptr,   // tinit
+    nullptr,   // tterm
     Inspector::ctor,
     Inspector::dtor,
     nullptr, // ssn
@@ -291,4 +294,3 @@ const snort::InspectApi inspector = {
 };
 
 } // namespace dhcp_option
-
