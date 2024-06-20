@@ -28,6 +28,8 @@ enum class SID {
   invalid_op_code = 1013,
   sname_not_terminated = 1014,
   file_not_terminated = 1015,
+  magic_cookie_fail = 1016,
+  options_corrupted = 1017,
 };
 
 unsigned U(SID sid) { return static_cast<unsigned>(sid); }
@@ -39,6 +41,8 @@ static const snort::RuleMap s_rules[] = {
     {U(SID::invalid_op_code), "Invalide op code"},
     {U(SID::sname_not_terminated), "sname is not zero terminated"},
     {U(SID::file_not_terminated), "file field is not zero terminated"},
+    {U(SID::magic_cookie_fail), "magic cookie doesn't match"},
+    {U(SID::options_corrupted), "options list is corrupted"},
     {0, nullptr}};
 
 static const snort::Parameter module_params[] = {
@@ -73,6 +77,11 @@ const PegInfo s_pegs[] = {
      "Packages with an sname field that isn't zero terminated"},
     {CountType::SUM, "file_not_terminated",
      "Packages with a file filed that isn't zero terminated"},
+    {CountType::SUM, "magic_cookie_fail",
+     "Packages with an invalid magic cookie for options field"},
+    {CountType::SUM, "options_corrupted",
+     "Packages with an invalid formatted options field"},
+    {CountType::SUM, "options_valid", "Packages with valid options list"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -91,6 +100,9 @@ static THREAD_LOCAL struct PegCounts {
   PegCount invalid_hlen = 0;
   PegCount sname_not_terminated = 0;
   PegCount file_not_terminated = 0;
+  PegCount magic_cookie_fail = 0;
+  PegCount options_corrupted = 0;
+  PegCount options_valid = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -239,17 +251,85 @@ class Inspector : public snort::Inspector {
       s_peg_counts.header_skipped++;
     } // Header parsing condition
 
-    ////////// TODO: Options parsing
-
+    // Bail if we don't have any options
     if (p->dsize == sizeof(RFC2131DHCPMsgHeader)) {
       queue(SID::no_options);
       queue(SID::valid);
       s_peg_counts.no_options++;
       s_peg_counts.valid++;
+      return;
     }
 
-    queue(SID::valid);
-    s_peg_counts.valid++;
+    ////////// Options parsing //////////
+    class Index {
+      size_t remainder;
+      size_t index;
+
+    public:
+      Index(size_t size, size_t start) : remainder(size - start), index(start) {
+        assert(size >= start);
+      }
+
+      size_t operator++(int) {
+        assert(remainder > 0);
+        remainder--;
+        return index++;
+      }
+
+      Index &operator+=(const uint8_t rhs) {
+        if (remainder <= rhs) {
+          remainder = 0;
+        } else {
+          remainder -= rhs;
+          index += rhs;
+        }
+        return *this;
+      }
+
+      size_t bytesLeft() { return remainder; }
+
+      bool hasMore() { return remainder > 0; }
+
+      operator size_t() const {
+        assert(remainder > 0);
+        return index;
+      }
+
+    } index(p->dsize, sizeof(RFC2131DHCPMsgHeader));
+
+    // See RFC2132 for how to parse option field, finding magic numbers etc
+    if (index.bytesLeft() < 4 /* Magic cookie length */
+        || p->data[index++] != 0x63 || p->data[index++] != 0x82 ||
+        p->data[index++] != 0x53 || p->data[index++] != 0x63) {
+      queue(SID::magic_cookie_fail);
+      queue(SID::invalid);
+      s_peg_counts.magic_cookie_fail++;
+      s_peg_counts.invalid++;
+      return;
+    }
+
+    while (index.hasMore()) {
+      switch (p->data[index++]) {
+      case 0: // Pad option
+        break;
+      case 255: // End option
+        // If we come here all is good
+        queue(SID::valid);
+        s_peg_counts.options_valid++;
+        s_peg_counts.valid++;
+        return;
+      default:
+        index += p->data[index++]; // The data byte is not part of the length,
+                                   // and if index is advanced past the end,
+                                   // hasMore will return false in the while
+                                   // loop and result in an invalid event
+      }
+    }
+
+    queue(SID::options_corrupted);
+    queue(SID::invalid);
+    s_peg_counts.options_corrupted++;
+    s_peg_counts.invalid++;
   }
 
   // bool configure(SnortConfig *) override;

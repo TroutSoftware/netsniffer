@@ -33,18 +33,44 @@ Lack of an options field is unexpected formatting of a DHCP message
 Package didn't contain the opcode for BOOTREQUEST (1) or BOOTREPLY (2) as specfied by RFC2131
 #### Why
 If anything other than a valid opcode is used something is wrong
+#### NOTE
+This will also generate 1011 parsing error
 
 ### 1014
 #### What
 sname field in the header was not zero terminated
 #### Why
 A string which should be zero terminated but isn't could result in buffer overruns
+#### NOTE
+This will also generate 1011 parsing error
+
 
 ### 1015
 #### What
 file field in the header was not zero terminated
 #### Why
 A string which should be zero terminated but isn't could result in buffer overruns
+#### NOTE
+This will also generate 1011 parsing error
+
+
+### 1016
+#### What
+There should be a magic number at the beginning of the DHCP options fields, if that number isn't found this even will be raised
+#### Why
+A package with a wrong magic number is either not a DHCP package or a corrupted one, in either case it shouldn't be interpreted as a valid one
+#### NOTE
+This will also generate 1011 parsing error
+
+
+### 1017
+#### What
+Options part of DHCP packet was corrupted in some way
+#### Why
+A corrupted DHCP packet should never appear on the netwrok
+#### NOTE
+This will also generate 1011 parsing error
+
 
 ### 1016-1019
 
