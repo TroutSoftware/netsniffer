@@ -10,6 +10,7 @@
 
 #include <iostream>
 
+#include "flow_data.h"
 #include "inspector.h"
 
 namespace dhcp_option {
@@ -153,10 +154,22 @@ class Inspector : public snort::Inspector {
                snort::InspectionBuffer &) override {
     std::cout << "MKRTEST Asked to get_buf" << std::endl;
 
-    return true;
+    return false;
   }
 
   void queue(SID sid) { snort::DetectionEngine::queue_event(gid, U(sid)); }
+
+  void addFlowToPacket(snort::Packet *p) {
+
+    if (p->flow) {
+      FlowData *flow_data =
+          dynamic_cast<FlowData *>(p->flow->get_flow_data(FlowData::get_id()));
+
+      if (!flow_data) {
+        p->flow->set_flow_data(new FlowData(this));
+      }
+    }
+  }
 
   void eval(snort::Packet *p) override {
 
@@ -261,6 +274,7 @@ class Inspector : public snort::Inspector {
     }
 
     ////////// Options parsing //////////
+    // TODO: Find C++ std container that does the job
     class Index {
       size_t remainder;
       size_t index;
@@ -314,6 +328,7 @@ class Inspector : public snort::Inspector {
         break;
       case 255: // End option
         // If we come here all is good
+        addFlowToPacket(p);
         queue(SID::valid);
         s_peg_counts.options_valid++;
         s_peg_counts.valid++;
@@ -344,7 +359,9 @@ public:
 
 } // namespace
 
-static const char *dhcp_bufs[] = {"dhcp_data", nullptr};
+static const char *dhcp_bufs[] = {"dhcp_option", nullptr};
+
+static void dhcp_init() {}
 
 const snort::InspectApi inspector = {
     {
@@ -363,7 +380,7 @@ const snort::InspectApi inspector = {
     PROTO_BIT__UDP,
     dhcp_bufs, // nullptr, // buffers
     s_name,    // nullptr, // service
-    nullptr,   // pinit
+    dhcp_init, // nullptr,   // pinit
     nullptr,   // pterm
     nullptr,   // tinit
     nullptr,   // tterm

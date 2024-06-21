@@ -1,10 +1,14 @@
 
+
+#include <iostream>
+
 #include <framework/base_api.h>
 #include <framework/ips_option.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
 #include <protocols/packet.h>
 
+#include "flow_data.h"
 #include "ips_option.h"
 
 namespace dhcp_option {
@@ -33,6 +37,8 @@ class IpsOption : public snort::IpsOption {
   IpsOption() : snort::IpsOption(s_name) {}
 
   uint32_t hash() const override {
+
+    std::cout << "MKRTEST IpsOpton::hash() called" << std::endl;
     uint32_t a = snort::IpsOption::hash(), b = 0, c = 0;
 
     mix(a, b, c);
@@ -42,10 +48,21 @@ class IpsOption : public snort::IpsOption {
   }
 
   bool operator==(const snort::IpsOption &ips) const override {
+    std::cout << "MKRTEST IpsOpton::operator== called" << std::endl;
     return snort::IpsOption::operator==(ips);
   }
 
-  EvalStatus eval(Cursor &, snort::Packet *) override {
+  EvalStatus eval(Cursor &, snort::Packet *p) override {
+
+    if (!p->flow)
+      return NO_MATCH;
+
+    FlowData *flow_data =
+        dynamic_cast<FlowData *>(p->flow->get_flow_data(FlowData::get_id()));
+
+    if (!flow_data) {
+      return NO_MATCH;
+    }
 
     /*
         RuleProfile profile(modbus_data_prof);
@@ -65,8 +82,15 @@ class IpsOption : public snort::IpsOption {
   }
 
   snort::CursorActionType get_cursor_type() const override {
-    return snort::CAT_SET_FAST_PATTERN;
+    std::cout << "MKRTEST IpsOpton::get_cursor_type called" << std::endl;
+    // return snort::CAT_SET_FAST_PATTERN;
+    return snort::CAT_READ;
   }
+
+  //    const char* get_name() const { return name; }
+
+  //    const char* get_buffer()
+  //    { return buffer; }
 
 public:
   static snort::IpsOption *ctor(snort::Module *, OptTreeNode *) {

@@ -2,7 +2,8 @@ ISNORT := /opt/snort/include/snort
 SNORT := /opt/snort/bin/snort
 
 MODULE = dhcp_option.so
-CC_SOURCES = inspector.cc ips_option.cc snort_plugins.cc
+CC_SOURCES = flow_data.cc inspector.cc ips_option.cc snort_plugins.cc
+CC_HEADERS = flow_data.h  inspector.h  ips_option.h
 
 .PHONY: test test-data clean format
 test:
@@ -15,7 +16,7 @@ clean:
 	rm p/$(MODULE)
 
 format:
-	clang-format -i $(CC_SOURCES)
+	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
 
 p/$(MODULE): $(CC_SOURCES)
 	g++ -O1 -std=c++2b -fPIC -Wall -Wextra -g -fsanitize=undefined -shared -I $(ISNORT)  $< -o $@

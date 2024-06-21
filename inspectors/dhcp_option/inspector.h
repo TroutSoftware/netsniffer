@@ -7,8 +7,6 @@ namespace dhcp_option {
 
 extern const snort::InspectApi inspector;
 
-} //namespace dhcp_option
+} // namespace dhcp_option
 
-
-
-#endif  // #ifndef inspector_020eb942
+#endif // #ifndef inspector_020eb942
