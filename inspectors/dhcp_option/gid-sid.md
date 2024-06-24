@@ -6,7 +6,7 @@
 
 Default Trout GID
 
-## SID 1010-1019
+## SID 1010-1030
 
 ### 1010
 #### What
@@ -71,7 +71,14 @@ A corrupted DHCP packet should never appear on the netwrok
 #### NOTE
 This will also generate 1011 parsing error
 
+### 1018
+#### What
+We have a DHCP packet that is not detected as a flow by snort, something spooky is going on
+#### Why
+If this happens, something we don't understand is happening, and we can't evaluate on the content of the package in rules, as this is depending on the flow data
+#### NOTE
+This will also generate 1011 parsing error
 
-### 1016-1019
+### 1019-1030
 
 Reserved

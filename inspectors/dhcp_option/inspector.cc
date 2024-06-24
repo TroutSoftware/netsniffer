@@ -1,5 +1,6 @@
 
 #include <cstring>
+#include <memory>
 
 #include <detection/detection_engine.h>
 #include <framework/base_api.h>
@@ -31,6 +32,7 @@ enum class SID {
   file_not_terminated = 1015,
   magic_cookie_fail = 1016,
   options_corrupted = 1017,
+  no_flow = 1018,
 };
 
 unsigned U(SID sid) { return static_cast<unsigned>(sid); }
@@ -82,7 +84,10 @@ const PegInfo s_pegs[] = {
      "Packages with an invalid magic cookie for options field"},
     {CountType::SUM, "options_corrupted",
      "Packages with an invalid formatted options field"},
+    {CountType::SUM, "duplicate_option", "Packages with duplicate options"},
     {CountType::SUM, "options_valid", "Packages with valid options list"},
+    {CountType::SUM, "no_flow",
+     "Packages that apear to be DHCP but doesn't have a flow"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -103,7 +108,9 @@ static THREAD_LOCAL struct PegCounts {
   PegCount file_not_terminated = 0;
   PegCount magic_cookie_fail = 0;
   PegCount options_corrupted = 0;
+  PegCount duplicate_option = 0;
   PegCount options_valid = 0;
+  PegCount no_flow_data = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -150,26 +157,7 @@ class Inspector : public snort::Inspector {
 
   ~Inspector() {}
 
-  bool get_buf(snort::InspectionBuffer::Type, snort::Packet *,
-               snort::InspectionBuffer &) override {
-    std::cout << "MKRTEST Asked to get_buf" << std::endl;
-
-    return false;
-  }
-
   void queue(SID sid) { snort::DetectionEngine::queue_event(gid, U(sid)); }
-
-  void addFlowToPacket(snort::Packet *p) {
-
-    if (p->flow) {
-      FlowData *flow_data =
-          dynamic_cast<FlowData *>(p->flow->get_flow_data(FlowData::get_id()));
-
-      if (!flow_data) {
-        p->flow->set_flow_data(new FlowData(this));
-      }
-    }
-  }
 
   void eval(snort::Packet *p) override {
 
@@ -275,6 +263,9 @@ class Inspector : public snort::Inspector {
 
     ////////// Options parsing //////////
     // TODO: Find C++ std container that does the job
+
+    // This class is specialized for the way we parse the DHCP options
+    // structure, it is NOT a generic index class
     class Index {
       size_t remainder;
       size_t index;
@@ -291,6 +282,8 @@ class Inspector : public snort::Inspector {
       }
 
       Index &operator+=(const uint8_t rhs) {
+        // If we try to increment past the end, mark index as empty - this only
+        // works because we know we are parsing a DHCP options structure
         if (remainder <= rhs) {
           remainder = 0;
         } else {
@@ -322,24 +315,62 @@ class Inspector : public snort::Inspector {
       return;
     }
 
+    // Check that we have a flow
+    if (!p->flow) {
+      queue(SID::no_flow);
+      queue(SID::invalid);
+      s_peg_counts.no_flow_data++;
+      s_peg_counts.invalid++;
+      return;
+    }
+
+    // TODO: Why do we get something back from get_flow_data ?
+    // assert(nullptr == p->flow->get_flow_data(FlowData::get_id()));   // If
+    // our own unique flow data already exists, something is very wrong
+
+    auto flowData = std::make_unique<FlowData>(
+        this); // Store flow data in unique ptr so clean up will be automatic if
+               // not used
+
     while (index.hasMore()) {
-      switch (p->data[index++]) {
+      auto type = p->data[index++];
+      switch (type) {
       case 0: // Pad option
         break;
       case 255: // End option
-        // If we come here all is good
-        addFlowToPacket(p);
+        // If we come here all is good, and we can add flow data to the packet
+        p->flow->set_flow_data(flowData.release());
+
         queue(SID::valid);
         s_peg_counts.options_valid++;
         s_peg_counts.valid++;
         return;
-      default:
-        index += p->data[index++]; // The data byte is not part of the length,
-                                   // and if index is advanced past the end,
-                                   // hasMore will return false in the while
-                                   // loop and result in an invalid event
+      default: // Every option except pad an length has a byte size
+
+        size_t length =
+            p->data[index++]; // The data byte is not part of the length,
+                              // and if index is advanced past the end,
+                              // hasMore will return false in the while
+                              // loop and result in an invalid event
+        size_t offset = index;
+        index += length;
+
+        std::cout << "MKRTEST found option " << (int)type << " at pos "
+                  << offset << " with length " << length << std::endl;
+
+        // If data is invalid (e.g. wrong length), flow data won't be added to
+        // the package as it is only added on sucesfull parsing
+        if (!flowData->set(type, offset, length)) {
+          // If we get a false in return from the flowData.set, it means
+          // duplicate entry
+          s_peg_counts.duplicate_option++;
+          goto failed_options_parsing; // Using goto, as we can't do a double
+                                       // break
+        }
       }
     }
+
+  failed_options_parsing:
 
     queue(SID::options_corrupted);
     queue(SID::invalid);
@@ -359,9 +390,6 @@ public:
 
 } // namespace
 
-static const char *dhcp_bufs[] = {"dhcp_option", nullptr};
-
-static void dhcp_init() {}
 
 const snort::InspectApi inspector = {
     {
@@ -378,12 +406,12 @@ const snort::InspectApi inspector = {
     },
     snort::IT_SERVICE,
     PROTO_BIT__UDP,
-    dhcp_bufs, // nullptr, // buffers
-    s_name,    // nullptr, // service
-    dhcp_init, // nullptr,   // pinit
-    nullptr,   // pterm
-    nullptr,   // tinit
-    nullptr,   // tterm
+    nullptr, // buffers
+    s_name,  // service
+    nullptr, // pinit
+    nullptr, // pterm
+    nullptr, // tinit
+    nullptr, // tterm
     Inspector::ctor,
     Inspector::dtor,
     nullptr, // ssn

@@ -26,13 +26,13 @@ binder =
 ips = {
   include = 'lua.rules'
 }
+--content:"admin.acme.example.com"
 
 -- lua.rules --
 
 alert ip any 67 -> any 68 (
   msg:"DHCP option C++ match";
-  dhcp_option;
-
+  dhcp_option:15;
 )
 
 alert ip any any -> any any (
