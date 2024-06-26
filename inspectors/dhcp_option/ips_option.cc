@@ -1,6 +1,5 @@
 
 #include <cstdint>
-#include <iostream>
 
 #include <framework/base_api.h>
 #include <framework/cursor.h>
@@ -34,17 +33,11 @@ class Module : public snort::Module {
     if (val.is("~")) {
       // Got value
       value = val.get_uint8();
-      std::cout << "MKRTEST " << this << " got value: " << (int)value
-                << std::endl;
       return true;
-    } else {
-      std::cout << "MKRTEST didn't get value" << std::endl;
     }
+
     return false;
   }
-
-  //    ProfileStats* get_profile() const override
-  //    { return &modbus_data_prof; }
 
   Usage get_usage() const override { return DETECT; }
 
@@ -92,30 +85,21 @@ class IpsOption : public snort::IpsOption {
     }
 
     size_t offset, size;
-    std::cout << "MKRTEST eval called on value: " << value << std::endl;
+
     if (value == 0 || !flow_data->get(value, offset, size)) {
       // If we don't have the option or it is unset, then there isn't a match
       return NO_MATCH;
     }
 
     // Set cursor to point to the option of this data
-    std::cout << "MKRTEST set cursor to (" << offset << ", " << size << ")"
-              << " first byte is " << (int)(p->data[offset]) << std::endl;
-
     c.set(s_name, p->data + offset, size);
 
     return MATCH;
   }
 
   snort::CursorActionType get_cursor_type() const override {
-    return snort::CAT_SET_FAST_PATTERN;
-    // return snort::CAT_READ;
+    return snort::CAT_ADJUST;
   }
-
-  //    const char* get_name() const { return name; }
-
-  //    const char* get_buffer()
-  //    { return buffer; }
 
 public:
   static snort::IpsOption *ctor(snort::Module *module, OptTreeNode *) {

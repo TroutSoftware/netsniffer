@@ -1,38 +1,48 @@
 pcap $moddir/pcaps/dhcp_clean.pcap
-stdout '\[1\:0\:0\] DHCP option C\+\+ match \(alerts\: .\)'
+stdout '\[1\:100001\:0\] .* \(alerts\: 1\)'
+stdout '\[1:100003:0] .* \(alerts\: 2\)'
+stdout '\[1:100004:0] .* \(alerts\: 1\)'
+stdout '\[8000:1010:0] .* \(alerts\: 5\)'
 
 
 -- cfg.lua --
 stream = { }
 stream_udp = { }
---appid = { }
 dhcp = {
 header_parsing=true
 }
---modbus = {}
 
 binder =
 {
     { when = { proto = 'udp' }, use = { type = 'dhcp' }},
 }
 
-
---binder =
---{
---    { when = { proto = 'tcp', ports = '502' }, use = { type = 'modbus' }, },
---}
-
-
 ips = {
   include = 'lua.rules'
 }
---content:"admin.acme.example.com"
 
 -- lua.rules --
 
 alert ip any 67 -> any 68 (
-  msg:"DHCP option C++ match";
+  msg:"DHCP domain name match";
   dhcp_option:15;
+  content:"admin.acme.example.com";
+  sid:100003;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"DHCP domain name match in offer";
+  dhcp_option:15;
+  content:"admin.acme.example.com";
+  dhcp_option:53;
+  byte_test:1, =, 2;
+  sid:100004;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"DHCP option 3 spotted";
+  dhcp_option:3;
+  sid:100001;
 )
 
 alert ip any any -> any any (

@@ -9,8 +9,6 @@
 #include <framework/module.h>
 #include <protocols/packet.h>
 
-#include <iostream>
-
 #include "flow_data.h"
 #include "inspector.h"
 
@@ -247,7 +245,7 @@ class Inspector : public snort::Inspector {
       }
 
       s_peg_counts.header_parsed++; // We only count a header as parsed if we
-                                    // check all fields
+                                    // checked all fields
     } else {
       s_peg_counts.header_skipped++;
     } // Header parsing condition
@@ -324,9 +322,10 @@ class Inspector : public snort::Inspector {
       return;
     }
 
-    // TODO: Why do we get something back from get_flow_data ?
-    // assert(nullptr == p->flow->get_flow_data(FlowData::get_id()));   // If
-    // our own unique flow data already exists, something is very wrong
+    // Delete any existing flow data, from previous packets
+    if (nullptr != p->flow->get_flow_data(FlowData::get_id())) {
+      p->flow->free_flow_data(FlowData::get_id());
+    }
 
     auto flowData = std::make_unique<FlowData>(
         this); // Store flow data in unique ptr so clean up will be automatic if
@@ -355,9 +354,6 @@ class Inspector : public snort::Inspector {
         size_t offset = index;
         index += length;
 
-        std::cout << "MKRTEST found option " << (int)type << " at pos "
-                  << offset << " with length " << length << std::endl;
-
         // If data is invalid (e.g. wrong length), flow data won't be added to
         // the package as it is only added on sucesfull parsing
         if (!flowData->set(type, offset, length)) {
@@ -378,8 +374,6 @@ class Inspector : public snort::Inspector {
     s_peg_counts.invalid++;
   }
 
-  // bool configure(SnortConfig *) override;
-
 public:
   static snort::Inspector *ctor(snort::Module *module) {
     return new Inspector(*dynamic_cast<Module *>(module));
@@ -389,7 +383,6 @@ public:
 };
 
 } // namespace
-
 
 const snort::InspectApi inspector = {
     {
