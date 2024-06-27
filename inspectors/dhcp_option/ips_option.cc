@@ -1,5 +1,8 @@
 
 #include <cstdint>
+#include <cstdlib>
+#include <map>
+#include <string>
 
 #include <framework/base_api.h>
 #include <framework/cursor.h>
@@ -18,9 +21,15 @@ static const char *s_name = "dhcp_option";
 static const char *s_help = "Filters on values of DHCP options";
 
 static const snort::Parameter module_params[] = {
-    {"~", snort::Parameter::PT_INT, "1:254", "0",
-     "Identifies specific DHCP option (1 to 254)"},
+    {"~", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Identifies specific DHCP option (1 to 254) or symbolic name for option"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+// We store the actuall table in a seperate file, as it is big and noisy to have
+// here
+static const std::map<std::string, uint8_t> symbol_table{
+#include "ips_option_symbol_table.txt"
+};
 
 class Module : public snort::Module {
 
@@ -31,11 +40,31 @@ class Module : public snort::Module {
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
 
     if (val.is("~")) {
-      // Got value
-      value = val.get_uint8();
-      return true;
+      val.lower(); // Convert string to lower case
+      std::string type = val.get_as_string();
+
+      // Check if we got a numeric value in the allowed range
+      long number;
+      if (val.strtol(number)) {
+        value = number;
+      } else {
+        // If it wasn't a number, see if it is a known symbolic name
+        auto symbolic = symbol_table.find(type);
+
+        if (symbolic == symbol_table.end()) {
+          return false;
+        }
+
+        value = symbolic->second;
+      }
+
+      // Valdate value is safe
+      if (value > 0 && value < 255) {
+        return true;
+      }
     }
 
+    // fail if we didn't get something valid
     return false;
   }
 

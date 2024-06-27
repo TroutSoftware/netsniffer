@@ -24,8 +24,25 @@ ips = {
 -- lua.rules --
 
 alert ip any 67 -> any 68 (
+  msg:"DHCP option 3 spotted";
+  dhcp_option:3;
+  sid:100001;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"DHCP symbolic name test matches";
+  dhcp_option:log_server;
+  dhcp_option:netbios_over_TCP/IP_name_server;
+  dhcp_option:5;
+  dhcp_option:network_information_service+_domain;
+  dhcp_option:simple_mail_transport_protocol_smtp_server;
+  sid:100002;
+)
+
+
+alert ip any 67 -> any 68 (
   msg:"DHCP domain name match";
-  dhcp_option:15;
+  dhcp_option:domain_name;
   content:"admin.acme.example.com";
   sid:100003;
 )
@@ -39,11 +56,6 @@ alert ip any 67 -> any 68 (
   sid:100004;
 )
 
-alert ip any 67 -> any 68 (
-  msg:"DHCP option 3 spotted";
-  dhcp_option:3;
-  sid:100001;
-)
 
 alert ip any any -> any any (
   msg:"Invalid dhcp packet";
