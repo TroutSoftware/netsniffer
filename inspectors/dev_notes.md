@@ -1,6 +1,6 @@
-# Snort Inspectors, overview and howto's
+# Snort Plugins, overview and howto's
 
-Notes on what we have found about writing snort inspectors.
+Notes on what we have found about writing snort plugins.
 
 ## Basic structure
 
@@ -334,4 +334,199 @@ For each packet snort is parsing there is a limited number of events that can be
     DetectionEngine::queue_event(my_module_gid,   // The GID of the module
                                  my_first_sid);   // The SID identifying this specific event
 ```
+
+### Setting cursor position in IPS options
+
+When snort is processing an IPS rule it keeps track of a parsing cursor that points to data in the network package that is being parsed.
+
+An Ips option (the commands inside an IPS rule) can manipulate this cursor, and hence tell the next option where it should look for data (note: depending on what the option does it might choose to ignore the cursor)
+
+To move the cursor position in an IPS option, so we can write a rule like:
+
+```
+alert ip any 67 -> any 68 (
+  msg:"DHCP domain name match";
+  dhcp_option:domain_name;
+  content:"admin.acme.example.com";
+  sid:100003;
+)
+```
+
+where dhcp_option moves the parsing cursor to the domain_name DHCP option, we need to create an IPSOption plugin, this follows the standard structure for snort plugins, i.e. it consists of a Module, a worker (IPSOption here), and a struct (ips_option) that ties it all together:
+
+```
+#include <framework/base_api.h>
+#include <framework/cursor.h>
+#include <framework/module.h>
+#include <protocols/packet.h>
+
+namespace dhcp_option {
+namespace {
+
+static const char *s_name = "dhcp_option";
+static const char *s_help = "Filters on values of DHCP options";
+
+class Module : public snort::Module {
+  ...
+public:
+  static snort::Module  *ctor();
+  static void            dtor(snort::Module *);
+};
+
+class IpsOption : public snort::IpsOption {
+  uint32_t   hash() const override;
+  bool       operator==(const snort::IpsOption &) const override;
+  EvalStatus eval(Cursor &, snort::Packet *) override;
+  snort::CursorActionType 
+             get_cursor_type() const override;
+  ...
+public:
+  static snort::IpsOption *ctor(snort::Module *, OptTreeNode *);
+  static void dtor(snort::IpsOption *);
+};
+
+} // namespace
+
+const snort::IpsApi ips_option = {{
+                                      PT_IPS_OPTION,
+                                      sizeof(snort::IpsApi),
+                                      IPSAPI_VERSION,
+                                      0,
+                                      API_RESERVED,
+                                      API_OPTIONS,
+                                      s_name,
+                                      s_help,
+                                      Module::ctor,
+                                      Module::dtor,
+                                  },
+                                  snort::OPT_TYPE_DETECTION,
+                                  0,
+                                  PROTO_BIT__TCP,
+                                  nullptr,
+                                  nullptr,
+                                  nullptr,
+                                  nullptr,
+                                  IpsOption::ctor,
+                                  IpsOption::dtor,
+                                  nullptr};
+
+} // namespace dhcp_option
+
+SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
+    &dhcp_option::ips_option.base, nullptr};
+
+```
+
+As can be seen, the eval function in IPSOption gets the cursor as argument, it is then a question of setting the position an length of the data that should be passed on:
+
+```
+  EvalStatus eval(Cursor &c, snort::Packet *p) override {
+    ...
+    // Set cursor to point to the data, and set the size of this data
+    c.set(s_name, pointer, size);
+
+    return MATCH;
+  }
+
+```
+
+Ips options can then use this cursor position, the name that is set, can be used when retrieving the cursor to check that it has been set by the expected Ips option.
+
+One way of ensuring the ips option is being processed in the right way by the rule is to set the cursor type to CAT_ADJUST and the usage to DETECT:
+
+```
+class IpsOption : public snort::IpsOption {
+  ...
+  snort::CursorActionType get_cursor_type() const override {
+    return snort::CAT_ADJUST;
+  }
+  ...
+};
+
+
+class Module : public snort::Module {
+  ...
+  Usage get_usage() const override { return DETECT; }
+  ...
+};
+```
+
+### Using hash and equal operator == in IPS options
+
+The hash and equal operator in IPS options, are used by snort to detect if two instances are equal, by first calling the hash function, and if that has the same value the equal operator that must compare all relevant memebers.
+
+To create a hash value the mix and finalize funcitons can be used
+
+```
+#include <framework/ips_option.h>
+#include <hash/hash_key_operations.h>
+
+class IpsOption : public snort::IpsOption {
+  uint32_t member_1, member_2;
+
+  // Hash compare is used as a fast way two compare two instances of IpsOption
+  uint32_t hash() const override {
+    uint32_t a = snort::IpsOption::hash(), b = member_1, c = member_2;
+
+    mix(a, b, c);
+    finalize(a, b, c);
+
+    return c;
+  }
+
+  // If hashes match a real comparison check is made
+  bool operator==(const snort::IpsOption &ips) const override {
+    IpsOption &ips_option = dynamic_cast<const IpsOption &>(ips);
+    return snort::IpsOption::operator==(ips) 
+        && ips_option.member_1 == member_1
+        && ips_option.member_2 == member_2
+  }
+```
+
+The mix function can be called multiple times if multiple aguments needs to included in the hash e.g.:
+
+```
+uint32_t hash() const override {
+  uint32_t a = snort::IpsOption::hash(), b = member_1, c = member_2;
+
+  mix(a, b, c);
+
+  a += member_3;
+  b += member_4;
+  c += member_5;
+
+  mix(a, b, c);
+
+  finalize(a, b, c);
+
+  return c;
+}
+```
+
+### Parsing parameters for IPS options
+
+Like for inspectors the IPS options parameter parsing is done by the module code.  An IPS options parameter is what is after the colon in the rule, i.e. for :
+
+```
+alert ip any 67 -> any 68 (
+  msg:"DHCP domain name match";
+  dhcp_option:domain_name;
+  content:"admin.acme.example.com";
+  sid:100003;
+)
+
+```
+
+The domain_name is a parameter to the dhcp_option, as with inspectors the parameters are passed to the module with the set function:  
+
+```
+bool set(const char *, snort::Value &, snort::SnortConfig *) override; 
+
+``` 
+
+What is important to notice is that if the same IPS option is used multiple times in a rule, and/or is used in multiple rules, the set option will be called on the same module code, after the options are parsed the IPS option object will be instantiated. 
+
+So the sets for a given option will be called on the module, the option will be instantiated, then sets are called for the next option on the same module and that option is instantiated.  
+
+The consequence for this is that the parameters needs to be persisted in the option, the option can't simply store a pointer to the module.
 
