@@ -1,8 +1,8 @@
 pcap $moddir/pcaps/dhcp_clean.pcap
-stdout '\[1\:100001\:0\] .* \(alerts\: 1\)'
-stdout '\[1:100003:0] .* \(alerts\: 2\)'
-stdout '\[1:100004:0] .* \(alerts\: 1\)'
-stdout '\[8000:1010:0] .* \(alerts\: 5\)'
+stdout '\[1:100001:0] .* \(alerts: 1\)'
+stdout '\[1:100003:0] .* \(alerts: 2\)'
+stdout '\[1:100004:0] .* \(alerts: 1\)'
+stdout '\[8000:1010:0] .* \(alerts: 5\)'
 
 
 -- cfg.lua --
@@ -39,7 +39,6 @@ alert ip any 67 -> any 68 (
   sid:100002;
 )
 
-
 alert ip any 67 -> any 68 (
   msg:"DHCP domain name match";
   dhcp_option:domain_name;
@@ -55,7 +54,6 @@ alert ip any 67 -> any 68 (
   byte_test:1, =, 2;
   sid:100004;
 )
-
 
 alert ip any any -> any any (
   msg:"Invalid dhcp packet";

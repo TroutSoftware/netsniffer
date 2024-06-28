@@ -58,7 +58,7 @@ class Module : public snort::Module {
         value = symbolic->second;
       }
 
-      // Valdate value is safe
+      // Validate value is safe
       if (value > 0 && value < 255) {
         return true;
       }
