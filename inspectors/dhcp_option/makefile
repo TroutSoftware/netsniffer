@@ -2,8 +2,8 @@ ISNORT := /opt/snort/include/snort
 SNORT := /opt/snort/bin/snort
 
 MODULE = dhcp_option.so
-CC_SOURCES = flow_data.cc inspector.cc ips_option.cc snort_plugins.cc
-CC_HEADERS = flow_data.h  inspector.h  ips_option.h
+CC_SOURCES = flow_data.cc inspector.cc ips_option.cc ips_option_ip_filter.cc snort_plugins.cc
+CC_HEADERS = flow_data.h  inspector.h  ips_option.h  ips_option_ip_filter.h
 
 .PHONY: test test-data clean format
 test:

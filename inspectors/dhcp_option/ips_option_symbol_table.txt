@@ -3,11 +3,14 @@
 // needs to be unique the values don't, so it is possible to have
 // aliases in the list.
 //
+// See RFC2132 for mapping between keys and values
+//
 // Keep the list sorted by value - not sorted by key.
 //
 // Strings must be lower case, as the input is converted to lower case
 // before comparison, strings MUST NOT contain spaces but may contain:
 // -+_/
+//
 
 
 { "subnet_mask",              1   },

@@ -1,12 +1,5 @@
 
-#include <cstdint>
-#include <cstdlib>
-#include <map>
-#include <string>
-
-#include <framework/base_api.h>
 #include <framework/cursor.h>
-#include <framework/ips_option.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
 #include <protocols/packet.h>
@@ -25,7 +18,7 @@ static const snort::Parameter module_params[] = {
      "Identifies specific DHCP option (1 to 254) or symbolic name for option"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-// We store the actuall table in a seperate file, as it is big and noisy to have
+// We store the actual table in a seperate file, as it is big and noisy to have
 // here
 static const std::map<std::string, uint8_t> symbol_table{
 #include "ips_option_symbol_table.txt"
@@ -85,7 +78,7 @@ class IpsOption : public snort::IpsOption {
   IpsOption(Module &module)
       : snort::IpsOption(s_name), value(module.getValue()) {}
 
-  // Hash compare is used as a fast way two compare two instances of IpsOption
+  // Hash compare is used as a fast way to compare two instances of IpsOption
   uint32_t hash() const override {
     uint32_t a = snort::IpsOption::hash(), b = value, c = 0;
 

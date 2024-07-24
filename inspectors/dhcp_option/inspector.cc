@@ -31,6 +31,7 @@ enum class SID {
   magic_cookie_fail = 1016,
   options_corrupted = 1017,
   no_flow = 1018,
+  misplaced_subnet = 1019,
 };
 
 unsigned U(SID sid) { return static_cast<unsigned>(sid); }
@@ -44,6 +45,7 @@ static const snort::RuleMap s_rules[] = {
     {U(SID::file_not_terminated), "file field is not zero terminated"},
     {U(SID::magic_cookie_fail), "magic cookie doesn't match"},
     {U(SID::options_corrupted), "options list is corrupted"},
+    {U(SID::misplaced_subnet), "misplaced subnet"},
     {0, nullptr}};
 
 static const snort::Parameter module_params[] = {
@@ -86,6 +88,7 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "options_valid", "Packages with valid options list"},
     {CountType::SUM, "no_flow",
      "Packages that apear to be DHCP but doesn't have a flow"},
+    {CountType::SUM, "misplaced_subnet", "Router option preceeded subnet mask"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -109,6 +112,7 @@ static THREAD_LOCAL struct PegCounts {
   PegCount duplicate_option = 0;
   PegCount options_valid = 0;
   PegCount no_flow_data = 0;
+  PegCount misplaced_subnet = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -334,9 +338,9 @@ class Inspector : public snort::Inspector {
     while (index.hasMore()) {
       auto type = p->data[index++];
       switch (type) {
-      case 0: // Pad option
-        break;
-      case 255: // End option
+      case 0:     // Pad option
+        continue; // Goto next option
+      case 255:   // End option
         // If we come here all is good, and we can add flow data to the packet
         p->flow->set_flow_data(flowData.release());
 
@@ -344,25 +348,37 @@ class Inspector : public snort::Inspector {
         s_peg_counts.options_valid++;
         s_peg_counts.valid++;
         return;
-      default: // Every option except pad an length has a byte size
 
-        size_t length =
-            p->data[index++]; // The data byte is not part of the length,
-                              // and if index is advanced past the end,
-                              // hasMore will return false in the while
-                              // loop and result in an invalid event
-        size_t offset = index;
-        index += length;
-
-        // If data is invalid (e.g. wrong length), flow data won't be added to
-        // the package as it is only added on sucesfull parsing
-        if (!flowData->set(type, offset, length)) {
-          // If we get a false in return from the flowData.set, it means
-          // duplicate entry
-          s_peg_counts.duplicate_option++;
-          goto failed_options_parsing; // Using goto, as we can't do a double
-                                       // break
+      case 1: // Subnet mask is not allowed to follow router option in a reply
+              // RFC2132 §3.3
+        if (flowData->has(3 /* Router Option */)) {
+          queue(SID::misplaced_subnet);
+          s_peg_counts.misplaced_subnet++;
+          goto failed_options_parsing; // Use goto as we can't double break
         }
+        // TODO: Check length of this and many other options with rules for
+        // their length
+        break;
+
+      default:
+        break;
+      }
+
+      size_t length =
+          p->data[index++]; // The data byte is not part of the length,
+                            // and if index is advanced past the end,
+                            // hasMore will return false in the while
+                            // loop and result in an invalid event
+      size_t offset = index;
+      index += length;
+
+      // If data is invalid (e.g. wrong length), flow data won't be added to
+      // the package as it is only added on sucesfull parsing
+      if (!flowData->set(type, offset, length)) {
+        // If we get a false in return from the flowData.set, it means
+        // duplicate entry
+        s_peg_counts.duplicate_option++;
+        break;
       }
     }
 

@@ -1,0 +1,51 @@
+pcap $moddir/pcaps/dhcp_clean.pcap
+stdout '\[1:100005:0] .* \(alerts: 2\)'
+stdout '\[1:100007:0] .* \(alerts: 2\)'
+stdout '\[1:100008:0] .* \(alerts: 2\)'
+
+-- cfg.lua --
+stream = { }
+stream_udp = { }
+dhcp = {
+header_parsing=true
+}
+
+binder =
+{
+    { when = { proto = 'udp' }, use = { type = 'dhcp' }},
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+alert ip any 67 -> any 68 (
+  msg:"Found specific subnet mask";
+  dhcp_option:subnet_mask;
+  ip_filter:255.255.252.0;
+  sid:100005;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Didn't find specific subnet mask";
+  dhcp_option:subnet_mask;
+  ip_filter:!255.255.252.0;
+  sid:100006;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Unexpected request addr";
+  dhcp_option:requested_ip_address;
+  ip_filter:!192.168.1.0/24;
+  sid:100007;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Found match in high 16 bit on ip address";
+  dhcp_option:domain_name_server;
+  ip_filter:172.31.0.0/16;
+  sid:100008;
+)
+

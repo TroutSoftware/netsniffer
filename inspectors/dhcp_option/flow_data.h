@@ -20,7 +20,8 @@ public:
   FlowData(snort::Inspector *);
   unsigned static get_id();
   bool set(uint8_t type, size_t offset,
-           size_t size); // Will return false if entry already set
+           size_t size);  // Will return false if entry already set
+  bool has(uint8_t type); // Will return true if option "type" is stored
   bool get(uint8_t type, size_t &offset, size_t &size);
 };
 

@@ -79,6 +79,14 @@ If this happens, something we don't understand is happening, and we can't evalua
 #### NOTE
 This will also generate 1011 parsing error
 
-### 1019-1030
+### 1019
+#### What
+We found a subnet mask following a router option, which is illegal according to RFC 2132 §3.3
+#### Why
+The presence of illegal formated options could lead to undefined behaviour on the network
+#### NOTE
+This will also generate 1011 parsing error and 1017 corrupted header error
+
+### 1020-1030
 
 Reserved

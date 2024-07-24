@@ -16,6 +16,8 @@ bool FlowData::set(uint8_t type, size_t offset, size_t size) {
       .second; // Second will only be true if a new element was inserted
 }
 
+bool FlowData::has(uint8_t type) { return (map.find(type) != map.end()); }
+
 bool FlowData::get(uint8_t type, size_t &offset, size_t &size) {
   const auto entry = map.find(type);
 
