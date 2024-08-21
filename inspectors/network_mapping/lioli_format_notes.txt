@@ -1,0 +1,35 @@
+Little endian
+
+Magic byte in beginning of each file/stream: ['B', 'I', 'L', 'L', 0, 1]
+
+1-10 bytes (0xxx xxxx or 1xxx xxxx 0xxx xxxx or 1xxx xxxx 1xxx xxxx 0xxx xxxx etc...) length or "raw data string"
+
+0-(2⁶⁴-1) string
+
+1-10 bytes "LioLi block"
+
+0-(2⁶⁴-1) LioLi
+
+End of data is indicated by sending a length byte of (2⁶⁴-1) instead of a valid string length
+
+----
+LioLi parsing:
+
+if 0b1xxx xxxx // length of child tree 2 bytes
+ 2 byte (15-bit)  len of child tree and the root of the subtree (excl the two bytes) 
+ x-byte tree (restart algorithm for subtree)
+if 0b00xx xxxx // name length (6 bits) (becomes dictonary)
+ 1 byte (6-bit) length of name (x) 0b00xx xxxx
+if 0b01xx xxxx // name length (14 bits)
+ 2 byte (14-bit) length of name (x) 0b01xx xxxx xxxx xxxx
+ x-byte name
+----
+ 
+if 0b0xxx xxxx // startpos <= 0b0111 length <= 0b1111
+ 1 byte (3-bit start delta (x), 4 bit length (y) 0b0xxx yyyy
+if 0b10xx xxxx // startpos <= 0b0011 1111 len <= 0b1111 1111
+ 2 byte (6-bit start delta (x), 8 bit length (y) 0b10xx xxxx yyyy yyyy
+if 0b11xx xxxx // startpos <= 0x3FFF length <= 0xFFFF
+ 4 byte (14-bit start delta (x), 16 bit length (y) 0b11xx xxxx xxxx xxxx yyyy yyyy yyyy yyyy
+ 
+

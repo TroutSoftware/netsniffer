@@ -7,3 +7,9 @@ stream = { }
 stream_tcp = { }
 wizard = { }
 network_mapping = { connection_cache_size = 0, noflow_log = true }
+
+
+binder =
+{
+    { when = { proto = 'tcp', ports = '502' }, use = { type = 'network_mapping' }, },
+}

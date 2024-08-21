@@ -1,4 +1,10 @@
+
+// Debug includes
+#include <unistd.h>
+
+// System includes
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -8,6 +14,7 @@
 #include <sstream>
 #include <string>
 
+// Snort includes
 #include "framework/inspector.h"
 #include "framework/module.h"
 #include "protocols/eth.h"
@@ -17,6 +24,9 @@
 #include "pub_sub/intrinsic_event_ids.h"
 #include "sfip/sf_ip.h"
 #include "time/periodic.h"
+
+// Local includes
+#include "lioli.h"
 
 using namespace snort;
 
@@ -34,6 +44,8 @@ static const Parameter nm_params[] = {
      "If true rotates log file after x lines"},
     {"noflow_log", Parameter::PT_BOOL, nullptr, "false",
      "If true also logs no flow packages"},
+    {"pipe_env", Parameter::PT_STRING, nullptr, nullptr,
+     "Set environment variable containing BILL pipe name"},
 
     {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -62,8 +74,12 @@ class LogFile {
 
   std::mutex mutex;
   std::ofstream stream; // Stream logs are written to
+
+  LioLi::LioLi lioli;
+
   std::string
       base_file_name; // The base filename, i.e. without the timestamp extension
+  std::string pipe_name;
   unsigned log_files_opened = 0; // Count of logfiles that has been opened
   unsigned log_lines_total = 0;  // Total number of log lines written (sum of
                                  // lines written to all files)
@@ -88,6 +104,10 @@ class LogFile {
   // flush each time an inspector has dumped the work of the last 10s
 
 public:
+  ~LogFile() {
+    lioli.insert_terminator();
+    stream << lioli;
+  }
   void set_file_name(const char *new_name) {
     std::scoped_lock guard(mutex);
 
@@ -98,7 +118,17 @@ public:
     base_file_name = new_name;
   }
 
-  void log(char prefix, std::string message, bool noRotate = false) noexcept {
+  void set_pipe_name(const char *pipe_name) {
+    std::scoped_lock guard(mutex);
+
+    assert(State::initial == state); // We can't set the filename after we have
+                                     // started to use the name
+    assert(pipe_name);               // Make sure we got some input
+
+    this->pipe_name = pipe_name;
+  }
+
+  void operator<<(const LioLi::Tree &tree) {
     std::scoped_lock guard(mutex);
 
     switch (state) {
@@ -112,23 +142,31 @@ public:
       [[fallthrough]];
 
     case State::initial: {
-      using namespace std::chrono;
-      assert(
-          !base_file_name
-               .empty()); // Logic error if the filename isn't set at this point
+      if (pipe_name.empty()) {
+        using namespace std::chrono;
+        assert(!base_file_name.empty()); // Logic error if the filename isn't
+                                         // set at this point
 
-      std::string file_name(base_file_name);
+        std::string file_name(base_file_name);
 
-      if (use_rotate_feature) {
-        const auto cur_time = system_clock::now().time_since_epoch();
-        uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
+        if (use_rotate_feature) {
+          const auto cur_time = system_clock::now().time_since_epoch();
+          uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
 
-        file_name += std::to_string(cur_time_ms);
+          file_name += std::to_string(cur_time_ms);
+        }
+
+        // We use std::ios_base::app vs. std::ios_base::ate to ensure
+        // we don't overwrite data written between our own writes
+        stream.open(file_name, std::ios_base::app);
+      } else {
+        assert(!pipe_name.empty());
+        // std::cout << "MKRTEST: Opening pipe" << std::endl;
+        stream.open(pipe_name, std::fstream::binary | std::fstream::out);
       }
-
-      // We use std::ios_base::app vs. std::ios_base::ate to ensure
-      // we don't overwrite data written between our own writes
-      stream.open(file_name, std::ios_base::app);
+      // Clear the dictionary of the Lioli, so it is resent
+      lioli.reset_dict();
+      lioli.insert_header();
 
       if (!stream || !stream.is_open()) {
         state = State::aborted;
@@ -145,7 +183,8 @@ public:
 
     case State::open:
       // std::cout << "****** Logs: " << prefix << ' ' << message << std::endl;
-      stream << prefix << ' ' << message << std::endl;
+      lioli << tree;
+      stream << lioli;
 
       s_file_stats.line_count++;
       log_lines_total++;
@@ -154,8 +193,8 @@ public:
 
       // TODO(mkr) - validate that a stream with an error, can be closed, and
       // reopened
-      if (!stream || (use_rotate_feature && !noRotate &&
-                      max_lines_pr_file <= log_lines_written)) {
+      if (!stream ||
+          (use_rotate_feature && max_lines_pr_file <= log_lines_written)) {
         state = State::full;
       } else if (lines_beween_flushes <= lines_since_last_flush) {
         stream.flush();
@@ -163,6 +202,74 @@ public:
       }
     }
   }
+  /*
+    void log(char prefix, std::string message, bool noRotate = false) noexcept {
+      std::scoped_lock guard(mutex);
+
+      switch (state) {
+      case State::aborted:
+        return;
+
+      case State::full:
+        stream.close();
+        lines_since_last_flush = 0;
+
+        [[fallthrough]];
+
+      case State::initial: {
+        using namespace std::chrono;
+        assert(
+            !base_file_name
+                 .empty()); // Logic error if the filename isn't set at this
+    point
+
+        std::string file_name(base_file_name);
+
+        if (use_rotate_feature) {
+          const auto cur_time = system_clock::now().time_since_epoch();
+          uint64_t cur_time_ms = duration_cast<milliseconds>(cur_time).count();
+
+          file_name += std::to_string(cur_time_ms);
+        }
+
+        // We use std::ios_base::app vs. std::ios_base::ate to ensure
+        // we don't overwrite data written between our own writes
+        stream.open(file_name, std::ios_base::app);
+
+        if (!stream || !stream.is_open()) {
+          state = State::aborted;
+          return;
+        }
+
+        state = State::open;
+        s_file_stats.file_count++;
+        log_files_opened++;
+        log_lines_written = 0;
+      }
+
+        [[fallthrough]];
+
+      case State::open:
+        // std::cout << "****** Logs: " << prefix << ' ' << message <<
+    std::endl; stream << prefix << ' ' << message << std::endl;
+
+        s_file_stats.line_count++;
+        log_lines_total++;
+        log_lines_written++;
+        lines_since_last_flush++;
+
+        // TODO(mkr) - validate that a stream with an error, can be closed, and
+        // reopened
+        if (!stream || (use_rotate_feature && !noRotate &&
+                        max_lines_pr_file <= log_lines_written)) {
+          state = State::full;
+        } else if (lines_beween_flushes <= lines_since_last_flush) {
+          stream.flush();
+          lines_since_last_flush = 0;
+        }
+      }
+    }
+  */
 };
 
 class Timer {
@@ -245,6 +352,25 @@ public:
       connection_cache_size = val.get_int32();
     } else if (val.is("noflow_log")) {
       log_noflow_packages = val.get_bool();
+    } else if (val.is("pipe_env")) {
+      std::string env_name = val.get_as_string();
+      std::cout << "MKRLOG: pipe environment is: " << env_name << std::endl;
+      char *pipe_name = std::getenv(env_name.c_str());
+      if (pipe_name) {
+        std::cout << "MKRLOG: pipename set to: " << pipe_name << std::endl;
+        logger->set_pipe_name(pipe_name);
+      } else {
+        std::cout << "MKRLOG: pipename not set - envion:\n";
+
+        for (int i = 0; environ[i]; i++) {
+          char *next = environ[i];
+          if (!next)
+            break;
+          std::cout << "MKRLOG: " << environ[i] << std::endl;
+        }
+
+        return false;
+      }
     }
 
     return true;
@@ -253,6 +379,8 @@ public:
   const PegInfo *get_pegs() const override { return s_pegs; }
 
   PegCount *get_counts() const override { return (PegCount *)&s_file_stats; }
+
+  bool is_bindable() const override { return true; }
 };
 
 class StringGenerators {
@@ -317,13 +445,88 @@ public:
   }
 };
 
+class TreeGenerators {
+
+  static void append_MAC(std::stringstream &ss,
+                         const std::array<uint8_t, 6> &mac) {
+
+    ss << std::hex << std::setfill('0') << std::setw(2) << +(mac.at(0)) << ':'
+       << std::setw(2) << +(mac.at(1)) << ':' << std::setw(2) << +(mac.at(2))
+       << ':' << std::setw(2) << +(mac.at(3)) << ':' << std::setw(2)
+       << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
+  }
+
+  static void append_sf_ip(std::stringstream &ss, const SfIp *sf_ip) {
+    char ip_str[INET6_ADDRSTRLEN];
+
+    sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
+
+    if (sf_ip->is_ip6()) {
+      ss << '[' << ip_str << ']';
+    } else {
+      ss << ip_str;
+    }
+  }
+
+public:
+  static LioLi::Tree format_IP_MAC(const Packet *p, const Flow *flow,
+                                   bool is_src) {
+    LioLi::Tree addr("addr");
+    std::stringstream ss;
+    if (flow) {
+      const SfIp &sf_ip = (is_src ? flow->client_ip : flow->server_ip);
+      const uint16_t port = (is_src ? flow->client_port : flow->server_port);
+
+      append_sf_ip(ss, &sf_ip);
+
+      //      ss << ':' << +port;
+
+      addr << (LioLi::Tree("ip") << ss.str()) << (LioLi::Tree("port") << port);
+      return addr;
+    } else if (p->has_ip()) {
+      const SfIp *sf_ip =
+          (is_src ? p->ptrs.ip_api.get_src() : p->ptrs.ip_api.get_dst());
+
+      append_sf_ip(ss, sf_ip);
+
+      addr << (LioLi::Tree("ip") << ss.str());
+
+      if (p->is_tcp() || p->is_udp()) {
+        addr << (LioLi::Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
+        //        ss << ':' << (is_src ? p->ptrs.sp : p->ptrs.dp);
+      } else {
+        ss << ':' << '-';
+      }
+
+    } else {
+      const eth::EtherHdr *eh =
+          ((p->proto_bits & PROTO_BIT__ETH) ? layer::get_eth_layer(p)
+                                            : nullptr);
+
+      if (eh) {
+        const auto mac = std::to_array<const uint8_t>(is_src ? eh->ether_src
+                                                             : eh->ether_dst);
+        append_MAC(ss, mac);
+
+        addr << (LioLi::Tree("mac") << ss.str());
+
+      } else {
+        //        ss << '-';
+      }
+    }
+    return ss.str();
+  }
+};
+
 class NetworkMappingPendingData {
   struct {
     std::mutex mutex;
     std::string first_service;
     std::unique_ptr<std::vector<std::string>> services;
     std::string src_str;
+    // LioLi::Tree src;
     std::string dst_str;
+    // LioLi::Tree dst;
   } m;
 
   const std::shared_ptr<NetworkMappingPendingData> next;
@@ -338,7 +541,9 @@ public:
   void update_src_dst(const Packet *p, const Flow *flow) {
     std::scoped_lock guard(m.mutex);
     m.src_str = StringGenerators::format_IP_MAC(p, flow, true);
+    // m.src = TreeGenerators::format_IP_MAC(p, flow, true);
     m.dst_str = StringGenerators::format_IP_MAC(p, flow, false);
+    // m.dst = TreeGenerators::format_IP_MAC(p, flow, false);
   }
 
   std::shared_ptr<NetworkMappingPendingData> get_next() { return next; }
@@ -375,28 +580,38 @@ public:
   }
 
   void write_to_log(LogFile &logger) {
-    const static char *arrow = " -> ";
-    // Used to ensure that we don't have logs from multiple writes intermixed
+    // const static char *arrow = " -> ";
+    //  Used to ensure that we don't have logs from multiple writes intermixed
     static std::mutex log_write_mutex;
 
     std::scoped_lock guard(m.mutex, log_write_mutex);
-    if (m.first_service.empty()) {
-      std::string output = m.src_str + arrow + m.dst_str + " - ";
-      logger.log('N', output);
+    LioLi::Tree tree("Root");
+
+    tree << (LioLi::Tree("src") << m.src_str)
+         << (LioLi::Tree("dst") << m.dst_str);
+
+    if (!m.first_service.empty()) {
+      tree << (LioLi::Tree("service") << m.first_service);
+      // TODO: How to add list of services?
+      /*
+            std::string addr_port = m.src_str + arrow + m.dst_str + ' ';
+            std::string output = addr_port + m.first_service;
+            logger.log('N', output, !!m.services);
+
+            if (m.services) {
+              auto remains = m.services->size();
+
+              for (auto ele : *m.services) {
+                output = addr_port + ele;
+                logger.log('U', output, !--remains);
+              }
+            }
+      */
     } else {
-      std::string addr_port = m.src_str + arrow + m.dst_str + ' ';
-      std::string output = addr_port + m.first_service;
-      logger.log('N', output, !!m.services);
-
-      if (m.services) {
-        auto remains = m.services->size();
-
-        for (auto ele : *m.services) {
-          output = addr_port + ele;
-          logger.log('U', output, !--remains);
-        }
-      }
+      tree << (LioLi::Tree("no-service") << "-");
     }
+    std::cout << "MKRTEST-Writing tree: \n" << tree.as_string() << std::endl;
+    logger << tree;
   }
 };
 
