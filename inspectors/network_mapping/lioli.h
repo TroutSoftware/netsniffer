@@ -52,30 +52,21 @@ class Tree {
 
     void adjust(size_t delta);
 
+    void recalc_last_child() {
+      auto next_child = children.before_begin();
+
+      while (next_child != children.end()) {
+        last_child_added = next_child;
+        next_child++;
+      }
+    }
+
   public:
     Node();
     Node(std::string name);
-    /*
-        Node(Node& src) {
-          this = src;
-        }
-
-        Node& operator=(Node&& src) {
-          my_name = src.my_name;
-          start = src.start;
-          end = src.end;
-          children = src.children;
-
-          auto next_child = children.before_begin();
-
-          while (next_child != children.end()) {
-            last_child_added = next_child;
-            next_child++;
-          }
-
-          return *this;
-        }
-    */
+    Node(const Node &) = default;
+    Node(Node &&src) = default;
+    Node &operator=(Node &&other) = default;
 
     void set_end(size_t new_end);
     void append_child(const Node &node, size_t delta);
@@ -89,12 +80,10 @@ class Tree {
 public:
   Tree();
   Tree(const std::string name);
-  /*
-    Tree(Tree&& src) {
-      me = src.me;
-      raw = src.raw;
-    }
-  */
+  Tree(const Tree &) = default;
+  Tree(Tree &&src) = default;
+  Tree &operator=(Tree &&other) = default;
+
   Tree &operator<<(const std::string &text);
   Tree &operator<<(const int number);
   Tree &operator<<(const Tree &tree);
