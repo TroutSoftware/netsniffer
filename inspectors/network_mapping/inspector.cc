@@ -365,22 +365,24 @@ public:
     static std::mutex log_write_mutex;
 
     std::scoped_lock guard(m.mutex, log_write_mutex);
-    LioLi::Tree tree("Root");
+    LioLi::Tree tree("$");
 
-    tree << (LioLi::Tree("src") << m.src) << (LioLi::Tree("dst") << m.dst);
+    tree << (LioLi::Tree("principal") << m.src) << " " << (LioLi::Tree("endpoint") << m.dst);
 
     if (!m.first_service.empty()) {
-      tree << (LioLi::Tree("service") << m.first_service);
+      tree << "-" << (LioLi::Tree("protocol") << m.first_service);
 
       if (m.services) {
         for (auto ele : *m.services) {
-          tree << (LioLi::Tree("service") << ele);
+          tree << (LioLi::Tree("protocol") << ele);
         }
       }
 
     } else {
-      tree << (LioLi::Tree("no-service") << "-");
+      tree << (LioLi::Tree("protocol") << "unknown");
     }
+
+    // TODO - add timestamp ISO 8601  (current time is fine)
     std::cout << "MKRTEST-Writing tree: \n" << tree.as_string() << std::endl;
     logger << tree;
   }
