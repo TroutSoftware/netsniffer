@@ -8,6 +8,10 @@ stdout 'ip_pass\: 1'
 
 
 -- cfg.lua --
+
+-- Use the talos alert module for this test
+alert_talos = { }
+
 stream = { }
 stream_udp = { }
 appid = { }

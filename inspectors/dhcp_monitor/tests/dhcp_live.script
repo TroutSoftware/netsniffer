@@ -12,8 +12,11 @@ stdout 'dual_ip_pass\: 4'
 stdout 'ip_flagged\: 1'
 
 
-
 -- cfg.lua --
+
+-- Use the talos alert module for this test
+alert_talos = { }
+
 stream = { }
 stream_udp = { }
 appid = { }

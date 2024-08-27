@@ -9,6 +9,9 @@ import (
 
 var snortloc = "/opt/snort/bin/snort"
 
+// var snortloc = "/home/mike/code/snort/snort3/build/src/snort"
+var luascript = "/opt/snort/include/snort/lua/?.lua;;"
+
 var asanlib string
 
 // PCAP runs snort against PCAP files, without any rule.
@@ -28,14 +31,14 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 
 			cmd := exec.CommandContext(s.Context(), snortloc,
 				"-c", s.Path("cfg.lua"),
+				"--script-path", ".",
 				"--plugin-path", "p",
-				"-A", "talos",
 				"--pcap-list", strings.Join(args, " "),
 				"--warn-all",
 			)
 			cmd.Dir = s.Getwd()
 			// TODO only preload if asan is set
-			cmd.Env = s.Environ()
+			cmd.Env = append(s.Environ(), "LUA_PATH="+luascript)
 			for _, o := range opts {
 				cmd.Args, cmd.Env = o(cmd.Args, cmd.Env)
 			}

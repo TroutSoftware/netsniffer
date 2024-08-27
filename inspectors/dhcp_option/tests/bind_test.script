@@ -6,15 +6,20 @@ stdout '\[8000:1010:0] .* \(alerts: 5\)'
 
 
 -- cfg.lua --
+
+-- Use the talos alert module for this test
+alert_talos = { }
+
 stream = { }
 stream_udp = { }
+
 dhcp = {
-header_parsing=true
+  header_parsing=true
 }
 
 binder =
 {
-    { when = { proto = 'udp' }, use = { type = 'dhcp' }},
+  { when = { proto = 'udp' }, use = { type = 'dhcp' }},
 }
 
 ips = {
