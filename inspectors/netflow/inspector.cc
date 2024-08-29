@@ -1,0 +1,613 @@
+
+// Debug includes
+#include <unistd.h>
+
+// System includes
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
+
+// Snort includes
+#include "framework/inspector.h"
+#include "framework/module.h"
+#include "protocols/eth.h"
+#include "protocols/packet.h"
+#include "pub_sub/appid_event_ids.h"
+#include "pub_sub/http_event_ids.h"
+#include "pub_sub/intrinsic_event_ids.h"
+#include "sfip/sf_ip.h"
+#include "time/periodic.h"
+
+// Local includes
+#include "lioli.h"
+#include "lioli_tree_generator.h"
+
+using namespace snort;
+
+bool use_rotate_feature = true;
+bool log_noflow_packages = false;
+
+unsigned connection_cache_size = 0;
+
+static const Parameter nm_params[] = {
+    {"connection_cache_size", Parameter::PT_INT, "0:max32", "100000",
+     "set cache size pr inspector, unit is number of connections"},
+    {"noflow_log", Parameter::PT_BOOL, nullptr, "false",
+     "If true also logs no flow packages"},
+    {"pipe_env", Parameter::PT_STRING, nullptr, nullptr,
+     "Set environment variable containing BILL pipe name"},
+
+    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+static THREAD_LOCAL struct PegCounts {
+  PegCount line_count = 0;
+  PegCount connection_cache_max = 0;
+  PegCount connection_cache_flush = 0;
+} s_peg_counts;
+
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "lines", "lines written"},
+    {CountType::MAX, "connections cache max", "max cache usage"},
+    {CountType::SUM, "cache flushes", "number of forced cache flushes"},
+    {CountType::END, nullptr, nullptr}};
+
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
+class LogPipe {
+
+  std::mutex mutex;
+  std::ofstream stream; // Stream logs are written to
+  std::string pipe_name;
+
+  LioLi::LioLi lioli;
+
+  unsigned log_lines_written = 0;
+
+  enum class State {
+    not_initialized,
+    initialized,
+    aborted
+  } state = State::not_initialized;
+
+public:
+  ~LogPipe() {
+    lioli.insert_terminator();
+    stream << lioli;
+  }
+
+  // Returns true if a file/pipe could be opened with the givne name
+  bool set_pipe_name(const char *pipe_name) {
+    std::scoped_lock guard(mutex);
+
+    assert(State::not_initialized == state);
+
+    if (!pipe_name || pipe_name[0] == 0) {
+      // if no pipename, or empty pipename
+      return false;
+    }
+
+    this->pipe_name = pipe_name;
+
+    stream.open(pipe_name, std::fstream::binary | std::fstream::out);
+
+    if (!stream.good()) {
+      state = State::aborted;
+      return false;
+    }
+
+    state = State::initialized;
+    lioli.insert_header();
+    return true;
+  }
+
+  void operator<<(const LioLi::Tree &tree) {
+    std::scoped_lock guard(mutex);
+
+    switch (state) {
+    case State::aborted:
+      return;
+    case State::not_initialized:
+      return;
+
+    case State::initialized:
+
+      if (!stream || !stream.good()) {
+        state = State::aborted;
+        return;
+      }
+
+      lioli << tree;
+      stream << lioli;
+
+      s_peg_counts.line_count++;
+
+      log_lines_written++;
+    }
+  }
+};
+
+class Timer {
+  class Ticker {
+  public:
+    Ticker() {
+      Periodic::register_handler([](void *) { Timer::tick(); }, nullptr, 0,
+                                 10'000);
+    }
+  };
+
+  Ticker &get_ticker() {
+    static Ticker ticker;
+    return ticker;
+  };
+
+  struct M {
+    std::mutex mutex;
+    std::vector<Timer *> timer_list;
+  };
+
+  static M &get_m() {
+    static M m;
+    return m;
+  }
+
+  static void tick() {
+    std::scoped_lock guard(get_m().mutex);
+    for (auto p : get_m().timer_list) {
+      p->timeout();
+    }
+  }
+
+public:
+  Timer() {
+    get_ticker();
+    std::scoped_lock guard(get_m().mutex);
+    get_m().timer_list.emplace_back(this);
+  }
+
+  ~Timer() {
+    if (stop_timer()) {
+      // If the element is in the list when we are destroyed, we have a
+      // potential racecondition between the destruction and calls to timeout,
+      // as the object inheriting from us would in the process of being
+      // destroyed
+      assert(false);
+    }
+  }
+
+  // Returns true if the timer was previous running, false if not
+  bool stop_timer() {
+    std::scoped_lock guard(get_m().mutex);
+    return (0 != std::erase(get_m().timer_list, this));
+  }
+
+  virtual void timeout() = 0;
+};
+
+class NetworkMappingModule : public Module {
+  std::shared_ptr<LogPipe> logger;
+
+public:
+  NetworkMappingModule()
+      : Module("network_mapping",
+               "Help map resources in the network based on their comms",
+               nm_params),
+        logger(new LogPipe) {}
+
+  std::shared_ptr<LogPipe> &get_logger() { return logger; }
+
+  Usage get_usage() const override { return CONTEXT; }
+
+  bool set(const char *, Value &val, SnortConfig *) override {
+    if (val.is("connection_cache_size")) {
+      connection_cache_size = val.get_int32();
+    } else if (val.is("noflow_log")) {
+      log_noflow_packages = val.get_bool();
+    } else if (val.is("pipe_env")) {
+      std::string env_name = val.get_as_string();
+      std::cout << "MKRLOG: pipe environment is: " << env_name << std::endl;
+      char *pipe_name = std::getenv(env_name.c_str());
+      if (pipe_name) {
+        std::cout << "MKRLOG: pipename set to: " << pipe_name << std::endl;
+        return logger->set_pipe_name(pipe_name);
+      }
+    }
+
+    return true;
+  }
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override { return (PegCount *)&s_peg_counts; }
+
+  bool is_bindable() const override { return true; }
+};
+
+#if 0
+class TreeGenerators {
+
+  static void append_MAC(std::stringstream &ss,
+                         const std::array<uint8_t, 6> &mac) {
+
+    ss << std::hex << std::setfill('0') << std::setw(2) << +(mac.at(0)) << ':'
+       << std::setw(2) << +(mac.at(1)) << ':' << std::setw(2) << +(mac.at(2))
+       << ':' << std::setw(2) << +(mac.at(3)) << ':' << std::setw(2)
+       << +(mac.at(4)) << ':' << std::setw(2) << +(mac.at(5));
+  }
+
+  static void append_sf_ip(std::stringstream &ss, const SfIp *sf_ip) {
+    char ip_str[INET6_ADDRSTRLEN];
+
+    sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
+
+    if (sf_ip->is_ip6()) {
+      ss << '[' << ip_str << ']';
+    } else {
+      ss << ip_str;
+    }
+  }
+
+public:
+  static LioLi::Tree format_IP_MAC(const Packet *p, const Flow *flow,
+                                   bool is_src) {
+    LioLi::Tree addr("addr");
+    std::stringstream ss;
+    if (flow) {
+      const SfIp &sf_ip = (is_src ? flow->client_ip : flow->server_ip);
+      const uint16_t port = (is_src ? flow->client_port : flow->server_port);
+
+      append_sf_ip(ss, &sf_ip);
+
+      addr << (LioLi::Tree("ip") << ss.str()) << ":"
+           << (LioLi::Tree("port") << port);
+      return addr;
+    } else if (p->has_ip()) {
+      const SfIp *sf_ip =
+          (is_src ? p->ptrs.ip_api.get_src() : p->ptrs.ip_api.get_dst());
+
+      append_sf_ip(ss, sf_ip);
+
+      addr << (LioLi::Tree("ip") << ss.str());
+
+      if (p->is_tcp() || p->is_udp()) {
+        addr << ":"
+             << (LioLi::Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
+      } else {
+        ss << ':' << '-';
+      }
+    } else {
+      const eth::EtherHdr *eh =
+          ((p->proto_bits & PROTO_BIT__ETH) ? layer::get_eth_layer(p)
+                                            : nullptr);
+
+      if (eh) {
+        const auto mac = std::to_array<const uint8_t>(is_src ? eh->ether_src
+                                                             : eh->ether_dst);
+        append_MAC(ss, mac);
+
+        addr << (LioLi::Tree("mac") << ss.str());
+
+      } else {
+        // Nothing to add
+      }
+    }
+    return ss.str();
+  }
+};
+#endif
+
+class NetworkMappingPendingData {
+  struct {
+    std::mutex mutex;
+    std::string first_service;
+    std::unique_ptr<std::vector<std::string>> services;
+
+    LioLi::Tree src;
+    LioLi::Tree dst;
+  } m;
+
+  const std::shared_ptr<NetworkMappingPendingData> next;
+
+public:
+  NetworkMappingPendingData(const Packet *p, const Flow *flow,
+                            std::shared_ptr<NetworkMappingPendingData> next)
+      : next(next) {
+    update_src_dst(p, flow);
+  }
+
+  void update_src_dst(const Packet *p, const Flow *flow) {
+    std::scoped_lock guard(m.mutex);
+    m.src = LioLi::TreeGenerators::format_IP_MAC(p, flow, true);
+    m.dst = LioLi::TreeGenerators::format_IP_MAC(p, flow, false);
+  }
+
+  std::shared_ptr<NetworkMappingPendingData> get_next() { return next; }
+
+  static void add_service_name(std::weak_ptr<NetworkMappingPendingData> weak,
+                               const char *service_name) {
+    assert(service_name && *service_name);
+
+    auto shared = weak.lock();
+
+    if (shared) {
+      std::scoped_lock guard(shared->m.mutex);
+
+      if (shared->m.first_service.empty()) {
+        shared->m.first_service = service_name;
+      } else {
+        if (!shared->m.services) {
+          shared->m.services = std::make_unique<std::vector<std::string>>();
+        }
+        shared->m.services->emplace_back(service_name);
+      }
+    }
+  }
+
+  static void update_src_dst(std::weak_ptr<NetworkMappingPendingData> weak,
+                             const Packet *p, const Flow *flow) {
+    assert(p);
+
+    auto shared = weak.lock();
+
+    if (shared) {
+      shared->update_src_dst(p, flow);
+    }
+  }
+
+  void write_to_log(LogPipe &logger) {
+    //  Used to ensure that we don't have logs from multiple writes intermixed
+    static std::mutex log_write_mutex;
+
+    std::scoped_lock guard(m.mutex, log_write_mutex);
+    LioLi::Tree tree("$");
+
+    tree << (LioLi::Tree("principal") << m.src) << " "
+         << (LioLi::Tree("endpoint") << m.dst);
+
+    if (!m.first_service.empty()) {
+      tree << "-" << (LioLi::Tree("protocol") << m.first_service);
+
+      if (m.services) {
+        for (auto ele : *m.services) {
+          tree << (LioLi::Tree("protocol") << ele);
+        }
+      }
+
+    } else {
+      tree << (LioLi::Tree("protocol") << "unknown");
+    }
+
+    // TODO - add timestamp ISO 8601  (current time is fine)
+    std::cout << "MKRTEST-Writing tree: \n" << tree.as_string() << std::endl;
+    logger << tree;
+  }
+};
+
+class NetworkMappingFlowData : public FlowData {
+  // Using weak_ptr as we are not the owner of the object
+  std::weak_ptr<NetworkMappingPendingData> pending;
+
+public:
+  NetworkMappingFlowData(Inspector *inspector,
+                         std::weak_ptr<NetworkMappingPendingData> pending)
+      : FlowData(get_id(), inspector), pending(pending) {}
+
+  void add_service_name(const char *service_name) {
+    NetworkMappingPendingData::add_service_name(pending, service_name);
+  }
+
+  void update_src_dst(const Packet *p, const Flow *flow) {
+    NetworkMappingPendingData::update_src_dst(pending, p, flow);
+  }
+
+  unsigned static get_id() {
+    static unsigned flow_data_id = FlowData::create_flow_data_id();
+    return flow_data_id;
+  }
+};
+
+class NetworkMappingInspector : public Inspector, private Timer {
+  const std::shared_ptr<LogPipe> logger;
+
+  struct {
+    std::mutex mutex;
+    std::shared_ptr<NetworkMappingPendingData>
+        gathering; // Where we collect entries
+    unsigned gathering_count = 0;
+    std::shared_ptr<NetworkMappingPendingData>
+        aging; // Where we let them age for 10s
+    unsigned aging_count = 0;
+  } m;
+
+  virtual void timeout() override {
+    std::shared_ptr<NetworkMappingPendingData> expirering;
+
+    {
+      std::scoped_lock guard(m.mutex);
+      expirering = m.aging;
+      m.aging = m.gathering;
+      m.aging_count = m.gathering_count;
+      m.gathering.reset();
+      m.gathering_count = 0;
+      s_peg_counts.connection_cache_flush++;
+    }
+
+    while (expirering) {
+      expirering->write_to_log(*logger.get());
+      expirering = expirering->get_next();
+    }
+  }
+
+  void flush_pending() {
+    // Simulate two timeouts to get all queued data out
+    timeout();
+    timeout();
+  }
+
+public:
+  NetworkMappingInspector(NetworkMappingModule *module)
+      : logger(module->get_logger()) {}
+
+  ~NetworkMappingInspector() {
+    // We need to ensure the timer doesn't fire after we are torn down
+    stop_timer();
+
+    flush_pending();
+  }
+
+  std::weak_ptr<NetworkMappingPendingData> addPendingData(const Packet *p,
+                                                          Flow *flow) {
+    bool flush = false;
+    std::weak_ptr<NetworkMappingPendingData> weak;
+
+    // TODO(mkr): Should we improve this, we can risk multiple thread are
+    // processing at the same time, making us overshoot the cache limit - this
+    // will also lead to multiple flushes
+
+    {
+      std::scoped_lock guard(m.mutex);
+      m.gathering =
+          std::make_shared<NetworkMappingPendingData>(p, flow, m.gathering);
+      weak = m.gathering;
+      auto sum = m.aging_count + ++m.gathering_count;
+      flush = sum >= connection_cache_size;
+      if (sum > s_peg_counts.connection_cache_max) {
+        s_peg_counts.connection_cache_max = sum;
+      }
+    }
+
+    if (flush) {
+      timeout();
+    };
+
+    return weak;
+  }
+
+  void eval(Packet *) override {}
+
+  bool configure(SnortConfig *) override;
+};
+
+class EventHandler : public DataHandler {
+  NetworkMappingInspector *inspector;
+  unsigned event_type;
+
+public:
+  EventHandler(NetworkMappingInspector *inspector, unsigned event_type)
+      : DataHandler("network_mapping"), inspector(inspector),
+        event_type(event_type){};
+
+  void handle(DataEvent &de, Flow *flow) override {
+
+    NetworkMappingFlowData *flow_data = nullptr;
+
+    std::stringstream ss;
+    const Packet *p = de.get_packet();
+
+    assert(p);
+
+    if (flow) {
+      flow_data = dynamic_cast<NetworkMappingFlowData *>(
+          flow->get_flow_data(NetworkMappingFlowData::get_id()));
+
+      if (flow_data) {
+        flow_data->update_src_dst(p, flow);
+      } else {
+        flow_data = new NetworkMappingFlowData(
+            inspector, inspector->addPendingData(p, flow));
+
+        flow->set_flow_data(flow_data);
+      }
+    }
+
+    // TODO(mkr) add counters/pegs
+    switch (event_type) {
+    case IntrinsicEventIds::FLOW_SERVICE_CHANGE: {
+      assert(flow_data);
+
+      if (flow && flow->service) {
+        flow_data->add_service_name(flow->service);
+      }
+    } break;
+
+    case IntrinsicEventIds::FLOW_STATE_SETUP:
+      break;
+
+    case IntrinsicEventIds::FLOW_STATE_RELOADED:
+      break;
+
+    case IntrinsicEventIds::PKT_WITHOUT_FLOW:
+      if (!flow_data && log_noflow_packages) {
+        inspector->addPendingData(p, nullptr);
+      }
+      break;
+
+    case IntrinsicEventIds::FLOW_NO_SERVICE:
+      assert(flow_data);
+      break;
+    }
+  }
+};
+
+bool NetworkMappingInspector::configure(SnortConfig *) {
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
+      new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
+      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_SETUP));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
+      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_RELOADED));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
+      new EventHandler(this, IntrinsicEventIds::PKT_WITHOUT_FLOW));
+  DataBus::subscribe_network(
+      intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
+      new EventHandler(this, IntrinsicEventIds::FLOW_NO_SERVICE));
+
+  return true;
+}
+
+const InspectApi networkmap_api = {
+    {
+        PT_INSPECTOR,
+        sizeof(InspectApi),
+        INSAPI_VERSION,
+        0,
+        API_RESERVED,
+        API_OPTIONS,
+        "network_mapping",
+        "Help map resources in the network based on their comms",
+        []() -> Module * { return new NetworkMappingModule; },
+        [](Module *m) { delete m; },
+    },
+
+    IT_PASSIVE,
+    PROTO_BIT__ALL,
+    nullptr, // buffers
+    nullptr, // service
+    nullptr, // pinit
+    nullptr, // pterm
+    nullptr, // tinit
+    nullptr, // tterm
+    [](Module *module) -> Inspector * {
+      assert(module);
+      return new NetworkMappingInspector(
+          dynamic_cast<NetworkMappingModule *>(module));
+    },
+    [](Inspector *p) { delete p; },
+    nullptr, // ssn
+    nullptr  // reset
+};
+
+// SO_PUBLIC const BaseApi *snort_plugins[] = {&networkmap_api.base, nullptr};

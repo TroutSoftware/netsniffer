@@ -1,0 +1,36 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap $moddir/pcaps/google_http.pcap
+
+-- cfg.lua --
+log_txt = {}
+alert_lioli = { logger = 'log_txt' }
+stream = {}
+stream_tcp = {}
+http_inspect = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+log ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  http_header:field host;
+  lioli_bind:host;
+  content:"google";
+
+  http_method;
+  lioli_bind:method;
+
+)
