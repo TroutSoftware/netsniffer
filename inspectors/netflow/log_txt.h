@@ -10,4 +10,4 @@ extern const snort::InspectApi inspect_api;
 
 } // namespace log_txt
 
-#endif // #ifndef ips_lioli_ea366a69
+#endif // #ifndef log_text_be408e56

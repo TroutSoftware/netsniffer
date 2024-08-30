@@ -2,23 +2,26 @@ ISNORT := /opt/snort/include/snort
 SNORT := /opt/snort/bin/snort
 
 MODULE = netflow.so
-CC_SOURCES =					\
-	alert_lioli.cc			\
-	flow_data.cc				\
-	inspector.cc				\
-	ips_lioli_bind.cc		\
-	lioli.cpp						\
-	log_txt.cc					\
+CC_SOURCES = \
+	alert_lioli.cc \
+	flow_data.cc \
+	inspector.cc \
+	ips_lioli_bind.cc \
+	lioli.cpp \
+	log_lorth.cc \
+	log_txt.cc \
 	snort_plugins.cc
 
-CC_HEADERS =								\
-	alert_lioli.h							\
-	flow_data.h								\
-	ips_lioli_bind.h					\
-	lioli.h										\
-	lioli_tree_generator.h		\
-	log_txt.h									\
-	log_lioli_tree.h					\
+CC_HEADERS = \
+	alert_lioli.h \
+	flow_data.h \
+	ips_lioli_bind.h \
+	lioli.h \
+	lioli_tree_generator.h \
+	log_lorth.h \
+	log_txt.h \
+	log_lioli_tree.h
+
 
 .PHONY: test test-data clean format
 test:

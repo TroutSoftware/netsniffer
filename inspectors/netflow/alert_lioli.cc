@@ -13,9 +13,9 @@
 
 // Local includes
 #include "alert_lioli.h"
+#include "flow_data.h"
 #include "lioli_tree_generator.h"
 #include "log_lioli_tree.h"
-
 
 namespace alert_lioli {
 namespace {
@@ -106,11 +106,18 @@ private:
     root << (LioLi::Tree(type) << msg);
 
     // format_IP_MAC handles a null flow
-    root << (LioLi::Tree("principal") << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
-    root << (LioLi::Tree("endpoint") << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, false));
+    root << (LioLi::Tree("principal")
+             << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
+
+    root << (LioLi::Tree("endpoint")
+             << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, false));
 
     if (pkt->flow && pkt->flow->service) {
-      root << (LioLi::Tree("protocol") <<  pkt->flow->service);
+      root << (LioLi::Tree("protocol") << pkt->flow->service);
+    }
+
+    if (pkt->flow) {
+      root << *NetFlow::FlowData::get_from_flow(pkt->flow);
     }
 
     return root;

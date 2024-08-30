@@ -81,29 +81,14 @@ class IpsOption : public snort::IpsOption {
       return NO_MATCH;
     }
 
-    NetFlow::FlowData *flow_data = dynamic_cast<NetFlow::FlowData *>(
-        p->flow->get_flow_data(NetFlow::FlowData::get_id()));
+    NetFlow::FlowData *flow_data = NetFlow::FlowData::get_from_flow(p->flow);
 
-    if (!flow_data) {
-      std::cout << "exp-ips: No flow-data" << std::endl;
-      flow_data = new NetFlow::FlowData();
-      p->flow->set_flow_data(flow_data);
-    }
-    /*
-        const uint8_t* start() const
-        { return buf + current_pos; }
-
-        unsigned length() const
-        { return buf_size - current_pos; }
-    */
     const uint8_t *startpos = c.start();
     unsigned length = c.length();
 
     std::string content((char *)startpos, length);
 
-    flow_data->lioli += node_name + ":" + content + ";";
-
-    std::cout << "exp-ips: lioli is now: " << flow_data->lioli << std::endl;
+    flow_data->add(std::move(LioLi::Tree(node_name) << content));
 
     return MATCH;
   }

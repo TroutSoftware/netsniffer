@@ -3,7 +3,8 @@ pcap $moddir/pcaps/google_http.pcap
 
 -- cfg.lua --
 log_txt = {}
-alert_lioli = { logger = 'log_txt' }
+log_lorth = {}
+alert_lioli = { logger = 'log_lorth' }
 stream = {}
 stream_tcp = {}
 http_inspect = {}

@@ -12,14 +12,9 @@ public:
 
   virtual void log(Tree &&) = 0;
 
-  bool operator==(LogLioLiTree &rhs) {
-    return (this == &rhs);
-  }
+  bool operator==(LogLioLiTree &rhs) { return (this == &rhs); }
 
-  operator bool() const {
-    std::cout << "Exp: Evaluating LogLioLiTree for being valid" << std::endl;
-    return (this == &get_null_tree());
-  }
+  operator bool() const { return (this == &get_null_tree()); }
 
   static LogLioLiTree &get_null_tree() {
     static class NullLogTree : public LogLioLiTree {

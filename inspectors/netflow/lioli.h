@@ -71,7 +71,8 @@ class Tree {
     void set_end(size_t new_end);
     void append_child(const Node &node, size_t delta);
 
-    std::string dump_tree(const std::string &raw, unsigned level = 0) const;
+    std::string dump_string(const std::string &raw, unsigned level = 0) const;
+    std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
     std::string dump_binary(Dictionary &dict, size_t delta) const;
   } me;
 
@@ -88,6 +89,7 @@ public:
   Tree &operator<<(const int number);
   Tree &operator<<(const Tree &tree);
   std::string as_string();
+  std::string as_lorth();
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, const Tree &bf);

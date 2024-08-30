@@ -40,7 +40,7 @@ class TreeGenerators {
 
 public:
   static Tree format_IP_MAC(const snort::Packet *p, const snort::Flow *flow,
-                                   bool is_src) {
+                            bool is_src) {
     Tree addr("addr");
     std::stringstream ss;
     if (flow) {
@@ -49,8 +49,7 @@ public:
 
       append_sf_ip(ss, &sf_ip);
 
-      addr << (Tree("ip") << ss.str()) << ":"
-           << (Tree("port") << port);
+      addr << (Tree("ip") << ss.str()) << ":" << (Tree("port") << port);
       return addr;
     } else if (p->has_ip()) {
       const snort::SfIp *sf_ip =
@@ -61,8 +60,7 @@ public:
       addr << (Tree("ip") << ss.str());
 
       if (p->is_tcp() || p->is_udp()) {
-        addr << ":"
-             << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
+        addr << ":" << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
       } else {
         ss << ':' << '-';
       }
@@ -85,7 +83,6 @@ public:
     return ss.str();
   }
 };
-
 
 } // namespace LioLi
 

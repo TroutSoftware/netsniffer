@@ -5,9 +5,10 @@
 #include <cassert>
 
 #include <iostream>
+#include <string>
 
 namespace LioLi {
-
+namespace {
 // Helper functions for serializing
 class Binary {
 public:
@@ -26,6 +27,57 @@ public:
   }
 };
 
+class LorthHelpers {
+public:
+  static std::string escape(std::string &&in) {
+    // Chars that should be escaped
+    const static std::string esc("\"\n\t\r");
+
+    std::string::size_type spos = 0;
+    std::string::size_type sfind = in.find_first_of(esc);
+
+    // Bail if nothing to do
+    if (in.npos == sfind)
+      return in;
+
+    std::string outstring;
+
+    do {
+      char replacer;
+      switch (in[sfind]) {
+      case '\"':
+        replacer = '"';
+        break;
+      case '\n':
+        replacer = 'n';
+        break;
+      case '\t':
+        replacer = 't';
+        break;
+      case '\r':
+        replacer = 'r';
+        break;
+      default:
+        assert(false); // We don't know how to replace
+      }
+
+      outstring +=
+          in.substr(spos, sfind - spos); // note, we don't add 1, as the pos we
+                                         // found shouldn't be copied
+      outstring += '\\';
+      outstring += replacer;
+      spos = sfind + 1;
+      sfind = in.find_first_of(esc, spos);
+    } while (in.npos != sfind);
+
+    // Copy reminder of string
+    outstring += in.substr(spos);
+
+    return outstring;
+  }
+};
+
+} // namespace
 Dictionary::Dictionary(uint16_t max_entries) : max_entries(max_entries) {}
 
 void Dictionary::reset() { map.clear(); }
@@ -69,12 +121,11 @@ void Tree::Node::adjust(size_t delta) {
   }
 }
 
-std::string Tree::Node::dump_tree(const std::string &raw,
-                                  unsigned level) const {
+std::string Tree::Node::dump_string(const std::string &raw,
+                                    unsigned level) const {
   std::string output;
-  for (unsigned i = level; i > 0; i--) {
-    output += "-";
-  }
+  output.insert(0, level, '-');
+
   output += my_name + ": ";
 
   output += raw.substr(start, end - start);
@@ -82,8 +133,41 @@ std::string Tree::Node::dump_tree(const std::string &raw,
   output += "\n";
 
   for (auto &child : children) {
-    output += child.dump_tree(raw, level + 1);
+    output += child.dump_string(raw, level + 1);
   }
+  return output;
+}
+
+std::string Tree::Node::dump_lorth(const std::string &raw,
+                                   unsigned level) const {
+  std::string output;
+  std::string spacer;
+  spacer.insert(0, level, ' ');
+
+  output += spacer;
+  output += my_name + " ";
+
+  if (!children.empty()) {
+    output += "{\n";
+
+    size_t ep = start;
+    for (auto &child : children) {
+      if (ep != child.start) {
+        output += spacer + " \"" + raw.substr(ep, child.start - ep) + "\" .\n";
+      }
+      output += child.dump_lorth(raw, level + 1);
+      ep = child.end;
+    }
+    if (ep != end) {
+      output += spacer + " \"" + raw.substr(ep, end - ep) + "\" .\n";
+    }
+    output += spacer + "}\n";
+  } else {
+
+    output +=
+        "\"" + LorthHelpers::escape(raw.substr(start, end - start)) + "\" .\n";
+  }
+
   return output;
 }
 
@@ -200,23 +284,14 @@ Tree &Tree::operator<<(const Tree &tree) {
   return *this;
 }
 
-std::string Tree::as_string() { return me.dump_tree(raw); }
-/*
-std::ostream &operator<<(std::ostream &os, const Tree &bf) {
-  std::cout << "MKRTEST Dumping raw: " << bf.raw.size() << " bytes >" << bf.raw
-<< ">" << std::endl; Binary::as_varint(os, bf.raw.size()); os << bf.raw;
+std::string Tree::as_string() { return me.dump_string(raw); }
 
-  Dictionary dict(64);
-
-  std::string tree = bf.me.dump_binary(dict, 0);
-
-  std::cout << "MKRTEST Dumping tree: " << tree.size() << std::endl;
-  Binary::as_varint(os, tree.size());
-  os << tree;
-
-  return os;
+std::string Tree::as_lorth() {
+  std::string output = me.dump_lorth(raw);
+  output = output.substr(0, output.length() - 1) + ";\n";
+  return output;
 }
-*/
+
 LioLi::LioLi() {}
 
 void LioLi::reset_dict() { dict.reset(); }
