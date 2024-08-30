@@ -85,7 +85,7 @@ public:
     stream << lioli;
   }
 
-  // Returns true if a file/pipe could be opened with the givne name
+  // Returns true if a file/pipe could be opened with the given name
   bool set_pipe_name(const char *pipe_name) {
     std::scoped_lock guard(mutex);
 

@@ -14,7 +14,7 @@ public:
 
   bool operator==(LogLioLiTree &rhs) { return (this == &rhs); }
 
-  operator bool() const { return (this == &get_null_tree()); }
+  operator bool() const { return (this != &get_null_tree()); }
 
   static LogLioLiTree &get_null_tree() {
     static class NullLogTree : public LogLioLiTree {

@@ -25,7 +25,6 @@ static const char *s_help =
     "lioli logger, will output through a log module compatible with lioli";
 
 static const snort::Parameter module_params[] = {
-    //{"~", snort::Parameter::PT_STRING, nullptr, nullptr, "unnamed option"},
     {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};

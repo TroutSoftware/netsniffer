@@ -9,6 +9,7 @@ CC_SOURCES = \
 	ips_lioli_bind.cc \
 	lioli.cpp \
 	log_lorth.cc \
+	log_to_stdout.cc \
 	log_txt.cc \
 	snort_plugins.cc
 
@@ -19,6 +20,7 @@ CC_HEADERS = \
 	lioli.h \
 	lioli_tree_generator.h \
 	log_lorth.h \
+	log_to_stdout.h \
 	log_txt.h \
 	log_lioli_tree.h
 
