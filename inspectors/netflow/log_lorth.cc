@@ -61,7 +61,7 @@ class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
 
   Inspector(Module *module) : module(*module) { assert(module); }
 
-  void eval(snort::Packet *) override{};
+  void eval(snort::Packet *) override {};
 
   LioLi::LogStream &get_log_stream() {
     if (!log_stream) {

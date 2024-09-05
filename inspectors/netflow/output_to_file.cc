@@ -4,10 +4,9 @@
 #include <framework/inspector.h>
 #include <framework/module.h>
 #include <log/messages.h>
-#include <managers/inspector_manager.h>
 
 // System includes
-#include <cassert>
+#include <fstream>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -15,79 +14,84 @@
 // Local includes
 #include "lioli.h"
 #include "log_lioli_stream.h"
-#include "log_lioli_tree.h"
-#include "log_txt.h"
+#include "output_to_file.h"
 
-namespace log_txt {
+namespace output_to_file {
 namespace {
 
-static const char *s_name = "log_txt";
-static const char *s_help =
-    "LioLi tree logger, will output in clear text to stdout";
+static const char *s_name = "output_to_file";
+static const char *s_help = "Maps treelogger output to file";
 
 static const snort::Parameter module_params[] = {
-    {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "Set logger output should be sent to"},
+    {"file_name", snort::Parameter::PT_STRING, nullptr, nullptr,
+   "File name logs should be written to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 class Module : public snort::Module {
-  std::string output_name;
-
   Module() : snort::Module(s_name, s_help, module_params) {}
+
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
 
+  std::string file_name;
+
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
-    if (val.is("output") && val.get_as_string().size() > 0) {
-      std::cout << "Exp(log_txt): Using Output: " << val.get_as_string()
-                << std::endl;
-      output_name = val.get_string();
+    if (val.is("file_name") && val.get_as_string().size() > 0) {
+      file_name = val.get_string();
       return true;
     }
 
+    // fail if we didn't get something valid
     return false;
   }
 
+
 public:
-  std::string &get_output_name() { return output_name; }
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
+
+  std::string& get_file_name() {return file_name;}
 };
 
-class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
+class Inspector : public snort::Inspector, public LioLi::LogStream {
   Module &module;
-  LioLi::LogStream *log_stream = nullptr;
 
-  Inspector(Module *module) : module(*module) { assert(module); }
+  std::ofstream output_file;
+
+  Inspector(Module &module) : module(module) {
+    output_file.open(module.get_file_name());
+
+    if(!output_file.good()) {
+      snort::ErrorMessage("ERROR: Could not open output file\n");
+    }
+  }
+
+  ~Inspector() {
+    if (output_file.is_open()) {
+      output_file.close();
+    }
+  }
 
   void eval(snort::Packet *) override {};
 
-  LioLi::LogStream &get_log_stream() {
-    if (!log_stream) {
-      auto mp = snort::InspectorManager::get_inspector(
-          module.get_output_name().c_str(), snort::Module::GLOBAL,
-          snort::IT_PASSIVE);
-      log_stream = dynamic_cast<LioLi::LogStream *>(mp);
-
-      if (!log_stream) {
-        snort::ErrorMessage("ERROR: Alert log_txt doesn't have a valid "
-                            "configured output stream\n");
-
-        return LioLi::LogStream::get_null_log_stream();
-      }
+  void operator<<(const std::string &tree) override {
+    if(!output_file.good()) {
+      snort::ErrorMessage("ERROR: Could not write log to file\n");
+      return;
     }
 
-    return *log_stream;
-  }
+    static std::mutex mutex;
+    std::scoped_lock lock(mutex);
 
-  void log(LioLi::Tree &&tree) override {
-    get_log_stream() << tree.as_string();
+    // Output under mutex protection
+    output_file << tree;
   }
 
 public:
   static snort::Inspector *ctor(snort::Module *module) {
-    return new Inspector(dynamic_cast<Module *>(module));
+    assert(module);
+    return new Inspector(*dynamic_cast<Module*>(module));
   }
   static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
 };
@@ -122,4 +126,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_txt
+} // namespace log_to_file

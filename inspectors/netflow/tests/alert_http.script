@@ -2,9 +2,11 @@
 pcap $moddir/pcaps/google_http.pcap
 
 -- cfg.lua --
-log_to_stdout = {}
-log_txt = { output = 'log_to_stdout' }
-log_lorth = { output = 'log_to_stdout' }
+output_to_stdout = {}
+
+log_txt = { output = 'output_to_stdout' }
+log_lorth = { output = 'output_to_stdout' }
+
 alert_lioli = { logger = 'log_lorth' }
 stream = {}
 stream_tcp = {}

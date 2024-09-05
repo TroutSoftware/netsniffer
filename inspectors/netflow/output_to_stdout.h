@@ -4,7 +4,7 @@
 #include "framework/inspector.h"
 #include <framework/base_api.h>
 
-namespace log_to_stdout {
+namespace output_to_stdout {
 
 extern const snort::InspectApi inspect_api;
 

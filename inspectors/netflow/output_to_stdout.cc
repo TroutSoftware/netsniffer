@@ -11,12 +11,12 @@
 // Local includes
 #include "lioli.h"
 #include "log_lioli_stream.h"
-#include "log_to_stdout.h"
+#include "output_to_stdout.h"
 
-namespace log_to_stdout {
+namespace output_to_stdout {
 namespace {
 
-static const char *s_name = "log_to_stdout";
+static const char *s_name = "output_to_stdout";
 static const char *s_help = "Maps treelogger output to stdout";
 
 static const snort::Parameter module_params[] = {
@@ -34,8 +34,7 @@ public:
 };
 
 class Inspector : public snort::Inspector, public LioLi::LogStream {
-private:
-  void eval(snort::Packet *) override{};
+  void eval(snort::Packet *) override {};
 
   void operator<<(const std::string &tree) override {
     static std::mutex mutex;
