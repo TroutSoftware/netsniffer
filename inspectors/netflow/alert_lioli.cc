@@ -1,5 +1,4 @@
 
-
 // Snort includes
 #include <events/event.h>
 #include <framework/module.h>

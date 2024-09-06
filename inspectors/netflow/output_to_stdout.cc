@@ -36,6 +36,10 @@ public:
 class Inspector : public snort::Inspector, public LioLi::LogStream {
   void eval(snort::Packet *) override {};
 
+  void set_binary_mode() override {
+    // stdout doesn't handle binary output
+  }
+
   void operator<<(const std::string &tree) override {
     static std::mutex mutex;
     std::scoped_lock lock(mutex);

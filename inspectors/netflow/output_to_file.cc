@@ -75,6 +75,10 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
 
   void eval(snort::Packet *) override {};
 
+  void set_binary_mode() override {
+    // TODO: Make file output in binary mode
+  }
+
   void operator<<(const std::string &tree) override {
     if(!output_file.good()) {
       snort::ErrorMessage("ERROR: Could not write log to file\n");
