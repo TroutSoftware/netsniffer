@@ -83,4 +83,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_to_stdout
+} // namespace output_to_stdout

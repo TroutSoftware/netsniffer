@@ -24,7 +24,7 @@ static const char *s_help = "Maps treelogger output to file";
 
 static const snort::Parameter module_params[] = {
     {"file_name", snort::Parameter::PT_STRING, nullptr, nullptr,
-   "File name logs should be written to"},
+     "File name logs should be written to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 class Module : public snort::Module {
@@ -36,7 +36,6 @@ class Module : public snort::Module {
 
   std::string file_name;
 
-
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("file_name") && val.get_as_string().size() > 0) {
       file_name = val.get_string();
@@ -47,12 +46,11 @@ class Module : public snort::Module {
     return false;
   }
 
-
 public:
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 
-  std::string& get_file_name() {return file_name;}
+  std::string &get_file_name() { return file_name; }
 };
 
 class Inspector : public snort::Inspector, public LioLi::LogStream {
@@ -61,9 +59,7 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
   std::ofstream output_file;
   std::ios_base::openmode open_mode = std::ios_base::out;
 
-  Inspector(Module &module) : module(module) {
-
-  }
+  Inspector(Module &module) : module(module) {}
 
   ~Inspector() {
     if (output_file.is_open()) {
@@ -92,31 +88,26 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
 
   void eval(snort::Packet *) override {};
 
-  void set_binary_mode() override {
-    open_mode |= std::ios_base::binary;
-  }
+  void set_binary_mode() override { open_mode |= std::ios_base::binary; }
 
   void operator<<(const std::string &tree) override {
     static std::mutex mutex;
     std::scoped_lock lock(mutex);
 
     // Output under mutex protection
-    if(ensure_stream_is_good()) {
+    if (ensure_stream_is_good()) {
       output_file << tree;
 
       if (!output_file.good()) {
         snort::ErrorMessage("ERROR: Unable to write to output file\n");
-        return false;
       }
-    }
-
     }
   }
 
 public:
   static snort::Inspector *ctor(snort::Module *module) {
     assert(module);
-    return new Inspector(*dynamic_cast<Module*>(module));
+    return new Inspector(*dynamic_cast<Module *>(module));
   }
   static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
 };
@@ -151,4 +142,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_to_file
+} // namespace output_to_file

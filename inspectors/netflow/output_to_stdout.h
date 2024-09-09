@@ -8,6 +8,6 @@ namespace output_to_stdout {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace log_to_stdout
+} // namespace output_to_stdout
 
 #endif // #ifndef log_to_stdout_d08a18f7

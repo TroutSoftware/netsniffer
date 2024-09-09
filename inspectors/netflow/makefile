@@ -14,6 +14,7 @@ CC_SOURCES = \
 	log_lorth.cc \
 	log_txt.cc \
 	output_to_file.cc \
+	output_to_pipe.cc \
 	output_to_stdout.cc \
 	snort_plugins.cc
 
@@ -27,12 +28,13 @@ CC_HEADERS = \
 	log_txt.h \
 	log_lioli_tree.h \
 	output_to_file.h \
+	output_to_pipe.h \
 	output_to_stdout.h
 
 OBJS=$(addprefix $(MAKEDIR)/, $(subst .cc,.o,$(CC_SOURCES)))
 DEPS=$(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES)))
 
-.PHONY: test test-data clean format build
+.PHONY: test test-data clean format build oldstyle
 test:
 	sh3 -sanitize none -o $(MODULE) -i "$(CC_SOURCES)" $(TEST_LIMIT)
 
@@ -57,6 +59,9 @@ format:
 
 build: $(OUTPUTDIR)/$(MODULE)
 	@echo "Build done"
+
+oldstyle: $(CC_SOURCES) $(CC_HEADERS)
+	g++ -O1 -std=c++2b -fPIC -Wall -Wextra -g -fsanitize=undefined -shared -I $(ISNORT) $(CC_SOURCES) -o $@
 
 -include ${DEPS}
 

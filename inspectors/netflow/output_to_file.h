@@ -8,6 +8,6 @@ namespace output_to_file {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace log_to_file
+} // namespace output_to_file
 
 #endif // #ifndef log_to_file_b3c4b984
