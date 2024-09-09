@@ -36,6 +36,7 @@ class Module : public snort::Module {
 
   std::string file_name;
 
+
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("file_name") && val.get_as_string().size() > 0) {
       file_name = val.get_string();
@@ -58,13 +59,10 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
   Module &module;
 
   std::ofstream output_file;
+  std::ios_base::openmode open_mode = std::ios_base::out;
 
   Inspector(Module &module) : module(module) {
-    output_file.open(module.get_file_name());
 
-    if(!output_file.good()) {
-      snort::ErrorMessage("ERROR: Could not open output file\n");
-    }
   }
 
   ~Inspector() {
@@ -73,23 +71,46 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
     }
   }
 
+  bool ensure_stream_is_good() {
+    if (!output_file.good()) {
+      return false;
+    }
+
+    if (output_file.is_open()) {
+      return true;
+    }
+
+    output_file.open(module.get_file_name(), open_mode);
+
+    if (!output_file.good()) {
+      snort::ErrorMessage("ERROR: Could not open output file\n");
+      return false;
+    }
+
+    return true;
+  }
+
   void eval(snort::Packet *) override {};
 
   void set_binary_mode() override {
-    // TODO: Make file output in binary mode
+    open_mode |= std::ios_base::binary;
   }
 
   void operator<<(const std::string &tree) override {
-    if(!output_file.good()) {
-      snort::ErrorMessage("ERROR: Could not write log to file\n");
-      return;
-    }
-
     static std::mutex mutex;
     std::scoped_lock lock(mutex);
 
     // Output under mutex protection
-    output_file << tree;
+    if(ensure_stream_is_good()) {
+      output_file << tree;
+
+      if (!output_file.good()) {
+        snort::ErrorMessage("ERROR: Unable to write to output file\n");
+        return false;
+      }
+    }
+
+    }
   }
 
 public:
