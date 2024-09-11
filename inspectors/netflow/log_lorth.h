@@ -1,8 +1,13 @@
 #ifndef log_lorth_930258e5
 #define log_lorth_930258e5
 
-#include "framework/inspector.h"
+// Snort includes
 #include <framework/base_api.h>
+#include <framework/inspector.h>
+
+// System includes
+
+// Local includes
 
 namespace log_lorth {
 

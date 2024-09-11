@@ -8,22 +8,21 @@
 
 // System includes
 #include <cassert>
-#include <iostream>
-#include <mutex>
+#include <memory>
 #include <string>
 
 // Local includes
 #include "lioli.h"
-#include "log_lioli_stream.h"
 #include "log_lioli_tree.h"
 #include "log_lorth.h"
+#include "output_to.h"
 
 namespace log_lorth {
 namespace {
 
 static const char *s_name = "log_lorth";
 static const char *s_help =
-    "LioLi tree logger, will output in lorth format to stdout";
+    "LioLi tree logger, will output in lorth format to specified logger";
 
 static const snort::Parameter module_params[] = {
     {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
@@ -40,8 +39,6 @@ class Module : public snort::Module {
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("output") && val.get_as_string().size() > 0) {
-      std::cout << "Exp(log_txt): Using Output: " << val.get_as_string()
-                << std::endl;
       output_name = val.get_string();
       return true;
     }
@@ -57,31 +54,16 @@ public:
 
 class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
   Module &module;
-  LioLi::LogStream *log_stream = nullptr;
+  LioLi::LogStreamHelper log_stream;
 
-  Inspector(Module *module) : module(*module) { assert(module); }
+  Inspector(Module *module) : module(*module) {
+    assert(module);
+    log_stream.set_name(module->get_output_name());
+  }
 
   void eval(snort::Packet *) override {};
 
-  LioLi::LogStream &get_log_stream() {
-    if (!log_stream) {
-      auto mp = snort::InspectorManager::get_inspector(
-          module.get_output_name().c_str(), snort::Module::GLOBAL,
-          snort::IT_PASSIVE);
-      log_stream = dynamic_cast<LioLi::LogStream *>(mp);
-
-      if (!log_stream) {
-        snort::ErrorMessage("ERROR: Alert log_txt doesn't have a valid "
-                            "configured output stream\n");
-
-        return LioLi::LogStream::get_null_log_stream();
-      }
-    }
-
-    return *log_stream;
-  }
-
-  void log(LioLi::Tree &&tree) override { get_log_stream() << tree.as_lorth(); }
+  void log(LioLi::Tree &&tree) override { log_stream.get() << tree.as_lorth(); }
 
 public:
   static snort::Inspector *ctor(snort::Module *module) {

@@ -1,12 +1,17 @@
 #ifndef lioli_h_693d75d2
 #define lioli_h_693d75d2
 
+// Snort includes
+
+// System includes
 #include <cstdint>
 #include <forward_list>
 #include <map>
 #include <sstream>
 #include <string>
 #include <variant>
+
+// Local includes
 
 namespace LioLi {
 
@@ -105,6 +110,7 @@ public:
   void reset_dict();
   void insert_header();
   void insert_terminator();
+  std::string as_string();
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, LioLi &out);

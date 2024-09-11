@@ -8,20 +8,21 @@
 
 // System includes
 #include <cassert>
+#include <mutex>
 #include <string>
 
 // Local includes
 #include "lioli.h"
+#include "log_bill.h"
 #include "log_lioli_tree.h"
-#include "log_txt.h"
 #include "output_to.h"
 
-namespace log_txt {
+namespace log_bill {
 namespace {
 
-static const char *s_name = "log_txt";
+static const char *s_name = "log_bill";
 static const char *s_help =
-    "LioLi tree logger, will output in clear text to specified logger";
+    "LioLi tree logger, will output in binary lioli (BILL) to specified logger";
 
 static const snort::Parameter module_params[] = {
     {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
@@ -54,17 +55,30 @@ public:
 class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
   Module &module;
 
+  std::mutex mutex;
+  LioLi::LioLi lioli;
   LioLi::LogStreamHelper log_stream;
 
   Inspector(Module *module) : module(*module) {
     assert(module);
+
+    // Set name of stream logger we should write to
     log_stream.set_name(module->get_output_name());
+
+    lioli.insert_header();
+  }
+
+  ~Inspector() {
+    lioli.insert_terminator();
+    log_stream.get() << lioli.as_string();
   }
 
   void eval(snort::Packet *) override {};
 
   void log(LioLi::Tree &&tree) override {
-    log_stream.get() << tree.as_string();
+    std::scoped_lock lock(mutex);
+    lioli << tree;
+    log_stream.get() << lioli.as_string();
   }
 
 public:
@@ -104,4 +118,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_txt
+} // namespace log_bill

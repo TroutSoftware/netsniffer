@@ -1,11 +1,13 @@
 
+// Snort includes
 
-#include "lioli.h"
-
+// System includes
 #include <cassert>
-
 #include <iostream>
 #include <string>
+
+// Local includes
+#include "lioli.h"
 
 namespace LioLi {
 namespace {
@@ -302,24 +304,21 @@ void LioLi::insert_terminator() {
   Binary::as_varint(ss, 0xFFFF'FFFF'FFFF'FFFF);
 }
 
+std::string LioLi::as_string() {
+  return std::move(ss).str(); // we clear ss by the move
+}
+
 std::ostream &operator<<(std::ostream &os, LioLi &out) {
-  // std::cout << "MKRTEST: Dumping lioli (" << out.ss.str().size() << "
-  // bytes)"<< std::endl;
-  os << std::move(out.ss).str(); // Empty ss by moving its contents out
-  // os << out.ss.str();
-  // std::cout << "MKRTEST: After length is " << out.ss.str().size() << " bytes"
-  // << std::endl;
+  os << out.as_string();
   return os;
 }
 
 LioLi &operator<<(LioLi &ll, const Tree &bf) {
-  // std::cout << "MKRTEST Dumping raw: " << bf.raw.size() << " bytes >" <<
-  // bf.raw << ">" << std::endl;
   Binary::as_varint(ll.ss, bf.raw.size());
   ll.ss << bf.raw;
 
   std::string tree = bf.me.dump_binary(ll.dict, 0);
-  // std::cout << "MKRTEST Dumping tree: " << tree.size() << std::endl;
+
   Binary::as_varint(ll.ss, tree.size());
   ll.ss << tree;
 

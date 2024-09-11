@@ -13,7 +13,7 @@
 
 // Local includes
 #include "lioli.h"
-#include "log_lioli_stream.h"
+#include "output_to.h"
 #include "output_to_pipe.h"
 
 namespace output_to_pipe {
@@ -70,29 +70,31 @@ public:
 };
 
 class Inspector : public snort::Inspector, public LioLi::LogStream {
-  Module &module;
-
+  std::string output_name;
   std::ofstream output_pipe;
   std::ios_base::openmode open_mode = std::ios_base::out;
 
-  Inspector(Module &module) : module(module) {}
+  Inspector(Module *module) {
+    assert(module);
+    output_name = module->get_pipe_name();
+  }
 
+public: // shared_ptr needs access to the destructor
   ~Inspector() {
     if (output_pipe.is_open()) {
       output_pipe.close();
     }
   }
 
+private:
   bool ensure_stream_is_good() {
-    if (!output_pipe.good()) {
-      return false;
-    }
-
-    if (output_pipe.is_open()) {
+    if (output_pipe.good() && output_pipe.is_open()) {
       return true;
     }
 
-    output_pipe.open(module.get_pipe_name(), open_mode);
+    if (!output_pipe.is_open()) {
+      output_pipe.open(output_name, open_mode);
+    }
 
     if (!output_pipe.good()) {
       snort::ErrorMessage("ERROR: Could not open output pipe\n");
@@ -106,7 +108,7 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
 
   void set_binary_mode() override { open_mode |= std::ios_base::binary; }
 
-  void operator<<(const std::string &tree) override {
+  void operator<<(const std::string &&tree) override {
     static std::mutex mutex;
     std::scoped_lock lock(mutex);
 
@@ -120,12 +122,29 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
     }
   }
 
+  std::shared_ptr<Inspector>
+      snort_ptr; // Used to keep object alive while snort uses it
+  friend std::shared_ptr<Inspector>;
+
 public:
   static snort::Inspector *ctor(snort::Module *module) {
     assert(module);
-    return new Inspector(*dynamic_cast<Module *>(module));
+    // We use std::shared_ptr<>(new...) instead of make_shared to keep the
+    // constructor private
+    Inspector *tmp = new Inspector(dynamic_cast<Module *>(module));
+    std::shared_ptr<Inspector> new_inspector = std::shared_ptr<Inspector>(tmp);
+    tmp->snort_ptr.swap(new_inspector);
+    return tmp;
   }
-  static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
+  static void dtor(snort::Inspector *p) {
+    Inspector *forget = dynamic_cast<Inspector *>(p);
+    assert(forget->snort_ptr); // The pointer snort gave us was not of the
+                               // correct type
+
+    // We don't want to call reset on a member while we destroy it
+    [[maybe_unused]] std::shared_ptr<Inspector> tmp(
+        std::move(forget->snort_ptr));
+  }
 };
 
 } // namespace

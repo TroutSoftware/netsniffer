@@ -1,12 +1,16 @@
+
+// Snort includes
 #include <framework/cursor.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
 #include <protocols/packet.h>
 
+// System includes
+#include <string>
+
+// Local includes
 #include "flow_data.h"
 #include "ips_lioli_bind.h"
-
-#include <iostream>
 
 namespace ips_lioli_bind {
 namespace {
@@ -30,8 +34,6 @@ class Module : public snort::Module {
 
     if (val.is("~")) {
       node_name = val.get_as_string();
-
-      std::cout << "Exp-ips: Got node_name:" << node_name << std::endl;
 
       return true;
     }
@@ -75,9 +77,7 @@ class IpsOption : public snort::IpsOption {
   }
 
   EvalStatus eval(Cursor &c, snort::Packet *p) override {
-    std::cout << "exp-ips: Eval called" << std::endl;
     if (!p->flow) {
-      std::cout << "exp-ips: No flow" << std::endl;
       return NO_MATCH;
     }
 

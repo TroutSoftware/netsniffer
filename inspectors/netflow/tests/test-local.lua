@@ -4,8 +4,9 @@ output_to_stdout = {}
 
 log_txt = { output = 'output_to_file' }
 log_lorth = { output = 'output_to_file' }
+log_bill = { output = 'output_to_file' }
 
-alert_lioli = { logger = 'log_txt' }
+alert_lioli = { logger = 'log_lorth' }
 
 stream = {}
 stream_tcp = {}

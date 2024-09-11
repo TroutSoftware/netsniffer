@@ -10,7 +10,7 @@
 
 // Local includes
 #include "lioli.h"
-#include "log_lioli_stream.h"
+#include "output_to.h"
 #include "output_to_stdout.h"
 
 namespace output_to_stdout {
@@ -40,7 +40,7 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
     // stdout doesn't handle binary output
   }
 
-  void operator<<(const std::string &tree) override {
+  void operator<<(const std::string &&tree) override {
     static std::mutex mutex;
     std::scoped_lock lock(mutex);
 
@@ -48,9 +48,24 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
     std::cout << tree;
   }
 
+  std::shared_ptr<Inspector>
+      snort_ptr; // Used to keep object alive while snort uses it
 public:
-  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
-  static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
+  static snort::Inspector *ctor(snort::Module *) {
+    auto new_inspector = std::make_shared<Inspector>();
+    Inspector *tmp = new_inspector.get();
+    tmp->snort_ptr.swap(new_inspector);
+    return tmp;
+  }
+  static void dtor(snort::Inspector *p) {
+    Inspector *forget = dynamic_cast<Inspector *>(p);
+    assert(forget->snort_ptr); // The pointer snort gave us was not of the
+                               // correct type
+
+    // We don't want to call reset on a member while we destroy it
+    [[maybe_unused]] std::shared_ptr<Inspector> tmp(
+        std::move(forget->snort_ptr));
+  }
 };
 
 } // namespace

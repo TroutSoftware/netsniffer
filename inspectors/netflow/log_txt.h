@@ -1,8 +1,13 @@
 #ifndef log_text_be408e56
 #define log_text_be408e56
 
-#include "framework/inspector.h"
+// Snort includes
 #include <framework/base_api.h>
+#include <framework/inspector.h>
+
+// System includes
+
+// Local includes
 
 namespace log_txt {
 

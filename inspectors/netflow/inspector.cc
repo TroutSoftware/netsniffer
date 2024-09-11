@@ -1,13 +1,9 @@
 
-// Debug includes
-#include <unistd.h>
-
 // System includes
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -214,10 +210,8 @@ public:
       log_noflow_packages = val.get_bool();
     } else if (val.is("pipe_env")) {
       std::string env_name = val.get_as_string();
-      std::cout << "MKRLOG: pipe environment is: " << env_name << std::endl;
       char *pipe_name = std::getenv(env_name.c_str());
       if (pipe_name) {
-        std::cout << "MKRLOG: pipename set to: " << pipe_name << std::endl;
         return logger->set_pipe_name(pipe_name);
       }
     }
@@ -314,7 +308,6 @@ public:
     }
 
     // TODO - add timestamp ISO 8601  (current time is fine)
-    std::cout << "MKRTEST-Writing tree: \n" << tree.as_string() << std::endl;
     logger << tree;
   }
 };

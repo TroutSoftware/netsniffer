@@ -34,11 +34,8 @@ class Module : public snort::Module {
 
   std::string logger_name;
 
-  bool set(const char *s, snort::Value &val, snort::SnortConfig *) override {
-    if (s)
-      std::cout << "Exp: s is " << s << std::endl;
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("logger") && val.get_as_string().size() > 0) {
-      std::cout << "Exp: Using logger: " << val.get_as_string() << std::endl;
       logger_name = val.get_string();
       return true;
     }
@@ -79,14 +76,7 @@ class Logger : public snort::Logger {
   }
 
 private:
-  Logger(Module *module) : module(*module) {
-    assert(module);
-    std::cout << "Exp: Logger::Logger() called" << std::endl;
-  }
-  void open() override { std::cout << "Exp: open() called" << std::endl; }
-  void close() override { std::cout << "Exp: close() called" << std::endl; }
-  void reset() override { std::cout << "Exp: reset() called" << std::endl; }
-  void reload() override { std::cout << "Exp: reload() called" << std::endl; }
+  Logger(Module *module) : module(*module) { assert(module); }
 
   void alert(snort::Packet *pkt, const char *msg, const Event &) override {
     get_logger().log(std::move(gen_tree("ALERT", pkt, msg)));

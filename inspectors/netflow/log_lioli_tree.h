@@ -2,6 +2,12 @@
 #define log_lioli_tree_9956cf27
 
 // Std logger interface for logging lioli::tree objects
+
+// Snort includes
+
+// System includes
+
+// Local inlcudes
 #include "lioli.h"
 
 namespace LioLi {
