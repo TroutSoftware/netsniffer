@@ -14,8 +14,10 @@
 namespace LioLi {
 
 class LogStream : public std::enable_shared_from_this<LogStream> {
+  const char *my_name;
 public:
   // Virtual functions
+  LogStream(const char *my_name) : my_name(my_name) {}
 
   virtual ~LogStream() = default;
 
@@ -35,12 +37,14 @@ public:
 };
 
 class LogStreamHelper {
+  const char *my_name;
   std::mutex mutex;
   std::string stream_name;
   std::atomic<std::shared_ptr<LogStream>> log_stream;
 
 public:
-  void set_name(std::string &name);
+  LogStreamHelper(const char*my_name):my_name(my_name)  {}
+  void set_stream_name(std::string &name);
 
   LogStream &get();
 };

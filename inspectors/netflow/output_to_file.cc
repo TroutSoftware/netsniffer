@@ -57,7 +57,7 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
   std::ofstream output_file;
   std::ios_base::openmode open_mode = std::ios_base::out;
 
-  Inspector(Module *module) {
+  Inspector(Module *module) : LogStream(s_name) {
     assert(module);
     output_file.open(module->get_file_name(), open_mode);
 

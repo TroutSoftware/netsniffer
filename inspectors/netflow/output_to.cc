@@ -14,6 +14,8 @@ std::shared_ptr<LogStream> LogStream::get_null_log_stream() {
   class NullLogStream : public LogStream {
     void set_binary_mode() override {};
     void operator<<(const std::string &&) override {};
+    public:
+    NullLogStream() : LogStream("NullLogStream") {}
   };
 
   static std::shared_ptr<LogStream> null_log =
@@ -22,7 +24,7 @@ std::shared_ptr<LogStream> LogStream::get_null_log_stream() {
   return null_log;
 }
 
-void LogStreamHelper::set_name(std::string &name) {
+void LogStreamHelper::set_stream_name(std::string &name) {
   std::scoped_lock lock(mutex);
 
   assert(!name.empty()); // We need a name
@@ -40,7 +42,7 @@ LogStream &LogStreamHelper::get() {
     if (!log_stream.load()) {
 
       if (stream_name.empty()) {
-        snort::ErrorMessage("ERROR: No stream name set to logger\n");
+        snort::ErrorMessage("ERROR: (%s) No stream name set to logger\n", my_name);
 
         return *LioLi::LogStream::get_null_log_stream();
       }
@@ -49,8 +51,12 @@ LogStream &LogStreamHelper::get() {
           stream_name.c_str(), snort::Module::GLOBAL, snort::IT_PASSIVE);
       auto dyn_stream = dynamic_cast<LioLi::LogStream *>(mp);
 
+      if (!mp) {
+        snort::ErrorMessage("ERROR: (%s) No inspector found: %s\n", my_name, stream_name.c_str());
+      }
+
       if (!dyn_stream) {
-        snort::ErrorMessage("ERROR: No valid stream name set to logger\n");
+        snort::ErrorMessage("ERROR: (%s) No valid stream name set to logger, searching for %s\n", my_name, stream_name.c_str());
 
         return *LioLi::LogStream::get_null_log_stream();
       }

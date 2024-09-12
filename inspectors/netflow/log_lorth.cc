@@ -54,11 +54,11 @@ public:
 
 class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
   Module &module;
-  LioLi::LogStreamHelper log_stream;
+  LioLi::LogStreamHelper log_stream = s_name;
 
   Inspector(Module *module) : module(*module) {
     assert(module);
-    log_stream.set_name(module->get_output_name());
+    log_stream.set_stream_name(module->get_output_name());
   }
 
   void eval(snort::Packet *) override {};

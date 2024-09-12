@@ -34,6 +34,9 @@ public:
 };
 
 class Inspector : public snort::Inspector, public LioLi::LogStream {
+
+  Inspector() : LogStream(s_name) {}
+
   void eval(snort::Packet *) override {};
 
   void set_binary_mode() override {
@@ -50,10 +53,13 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
 
   std::shared_ptr<Inspector>
       snort_ptr; // Used to keep object alive while snort uses it
+
 public:
   static snort::Inspector *ctor(snort::Module *) {
-    auto new_inspector = std::make_shared<Inspector>();
-    Inspector *tmp = new_inspector.get();
+    // We use std::shared_ptr<>(new...) instead of make_shared to keep the
+    // constructor private
+    Inspector *tmp = new Inspector();
+    std::shared_ptr<Inspector> new_inspector = std::shared_ptr<Inspector>(tmp);
     tmp->snort_ptr.swap(new_inspector);
     return tmp;
   }

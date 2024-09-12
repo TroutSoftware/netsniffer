@@ -57,26 +57,30 @@ class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
 
   std::mutex mutex;
   LioLi::LioLi lioli;
-  LioLi::LogStreamHelper log_stream;
+  LioLi::LogStreamHelper log_stream = s_name;
+  bool dirty = false;
 
   Inspector(Module *module) : module(*module) {
     assert(module);
 
     // Set name of stream logger we should write to
-    log_stream.set_name(module->get_output_name());
+    log_stream.set_stream_name(module->get_output_name());
 
     lioli.insert_header();
   }
 
   ~Inspector() {
-    lioli.insert_terminator();
-    log_stream.get() << lioli.as_string();
+    if(dirty) {
+      lioli.insert_terminator();
+      log_stream.get() << lioli.as_string();
+    }
   }
 
   void eval(snort::Packet *) override {};
 
   void log(LioLi::Tree &&tree) override {
     std::scoped_lock lock(mutex);
+    dirty = true;
     lioli << tree;
     log_stream.get() << lioli.as_string();
   }
