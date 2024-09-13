@@ -8,67 +8,69 @@
 
 // System includes
 #include <cassert>
-#include <memory>
-#include <string>
 
 // Local includes
-#include "lioli.h"
 #include "log_framework.h"
-#include "log_lorth.h"
-// #include "output_to.h"
+#include "trout_netflow.h"
 
-namespace log_lorth {
+namespace trout_netflow {
 namespace {
 
-static const char *s_name = "log_lorth";
-static const char *s_help =
-    "LioLi tree logger, will output in lorth format to specified logger";
+static const char *s_name = "trout_netflow";
+static const char *s_help = "generates netflow data to a lioli logger";
 
 static const snort::Parameter module_params[] = {
-    {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
+    {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-// MAIN object of this file
-class LorthTreeLogger : public LioLi::LogLioLiTree {
-  void log(LioLi::Tree &&tree) override { get_stream() << tree.as_lorth(); }
-
-public:
-  LorthTreeLogger() : LogLioLiTree(s_name) {}
-};
-
 class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {
-    // Registers LorthTreeLogger instance
-    LioLi::LogDB::register_type<LorthTreeLogger>();
-  }
+  Module() : snort::Module(s_name, s_help, module_params) {}
+  Usage get_usage() const override { return GLOBAL; }
 
-  Usage get_usage() const override {
-    return GLOBAL;
-  } // TODO(mkr): Figure out what the usage type means
+  std::string logger_name;
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
-    if (val.is("output") && val.get_as_string().size() > 0) {
-      // Configures the LorthTreeLogger instance
-      LioLi::LogDB::get<LorthTreeLogger>(s_name)->set_log_stream_name(
-          val.get_string());
+    if (val.is("logger") && val.get_as_string().size() > 0) {
+      logger_name = val.get_string();
       return true;
     }
 
+    // fail if we didn't get something valid
     return false;
   }
 
 public:
+  std::string &get_logger_name() { return logger_name; }
+
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };
 
 class Inspector : public snort::Inspector {
+  std::string logger_name;
+  std::shared_ptr<LioLi::LogLioLiTree> logger;
+
+  Inspector(Module *module) {
+    assert(module);
+
+    logger_name = module->get_logger_name();
+  }
+
+  LioLi::LogLioLiTree &get_logger() {
+    if (!logger) {
+      logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(logger_name.c_str());
+    }
+    return *logger.get();
+  }
   void eval(snort::Packet *) override {};
 
 public:
-  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
-  static void dtor(snort::Inspector *p) { delete p; }
+  static snort::Inspector *ctor(snort::Module *module) {
+    return new Inspector(dynamic_cast<Module *>(module));
+  }
+
+  static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
 };
 
 } // namespace
@@ -101,4 +103,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_lorth
+} // namespace trout_netflow

@@ -10,7 +10,7 @@
 
 // Local includes
 #include "lioli.h"
-#include "output_to.h"
+#include "log_framework.h"
 #include "output_to_stdout.h"
 
 namespace output_to_stdout {
@@ -22,26 +22,9 @@ static const char *s_help = "Maps treelogger output to stdout";
 static const snort::Parameter module_params[] = {
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {}
-  Usage get_usage() const override {
-    return GLOBAL;
-  } // TODO(mkr): Figure out what the usage type means
-
-public:
-  static snort::Module *ctor() { return new Module(); }
-  static void dtor(snort::Module *p) { delete p; }
-};
-
-class Inspector : public snort::Inspector, public LioLi::LogStream {
-
-  Inspector() : LogStream(s_name) {}
-
-  void eval(snort::Packet *) override {};
-
-  void set_binary_mode() override {
-    // stdout doesn't handle binary output
-  }
+// MAIN object of this file
+class StdoutLogStream : public LioLi::LogStream {
+  void set_binary_mode() override {}
 
   void operator<<(const std::string &&tree) override {
     static std::mutex mutex;
@@ -51,27 +34,30 @@ class Inspector : public snort::Inspector, public LioLi::LogStream {
     std::cout << tree;
   }
 
-  std::shared_ptr<Inspector>
-      snort_ptr; // Used to keep object alive while snort uses it
+public:
+  StdoutLogStream() : LogStream(s_name) {}
+};
+
+class Module : public snort::Module {
+  Module() : snort::Module(s_name, s_help, module_params) {
+    LioLi::LogDB::register_type<StdoutLogStream>();
+  }
+
+  Usage get_usage() const override {
+    return GLOBAL;
+  } // TODO(mkr): Figure out what the usage type means
 
 public:
-  static snort::Inspector *ctor(snort::Module *) {
-    // We use std::shared_ptr<>(new...) instead of make_shared to keep the
-    // constructor private
-    Inspector *tmp = new Inspector();
-    std::shared_ptr<Inspector> new_inspector = std::shared_ptr<Inspector>(tmp);
-    tmp->snort_ptr.swap(new_inspector);
-    return tmp;
-  }
-  static void dtor(snort::Inspector *p) {
-    Inspector *forget = dynamic_cast<Inspector *>(p);
-    assert(forget->snort_ptr); // The pointer snort gave us was not of the
-                               // correct type
+  static snort::Module *ctor() { return new Module(); }
+  static void dtor(snort::Module *p) { delete p; }
+};
 
-    // We don't want to call reset on a member while we destroy it
-    [[maybe_unused]] std::shared_ptr<Inspector> tmp(
-        std::move(forget->snort_ptr));
-  }
+class Inspector : public snort::Inspector {
+  void eval(snort::Packet *) override {};
+
+public:
+  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
+  static void dtor(snort::Inspector *p) { delete p; }
 };
 
 } // namespace

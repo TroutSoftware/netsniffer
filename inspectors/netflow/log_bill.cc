@@ -14,8 +14,7 @@
 // Local includes
 #include "lioli.h"
 #include "log_bill.h"
-#include "log_lioli_tree.h"
-#include "output_to.h"
+#include "log_framework.h"
 
 namespace log_bill {
 namespace {
@@ -29,17 +28,55 @@ static const snort::Parameter module_params[] = {
      "Set logger output should be sent to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-class Module : public snort::Module {
-  std::string output_name;
+// MAIN object of this file
+class BillTreeLogger : public LioLi::LogLioLiTree {
+  LioLi::LioLi lioli;
+  bool first_write = true;
+  std::mutex mutex;
 
-  Module() : snort::Module(s_name, s_help, module_params) {}
+  void log(LioLi::Tree &&tree) override {
+    std::scoped_lock lock(mutex);
+    if (first_write) {
+      get_stream().set_binary_mode();
+      first_write = false;
+    }
+    lioli << tree;
+    get_stream() << lioli.as_string();
+  }
+
+public:
+  BillTreeLogger() : LogLioLiTree(s_name) {
+    // A binary lioli has a fixed header
+    lioli.insert_header();
+  }
+
+  ~BillTreeLogger() {
+    // If anything was written
+    if (!first_write) {
+      // A binary lioli must end with a terminator
+      lioli.insert_terminator();
+      get_stream() << lioli.as_string();
+    }
+  }
+};
+
+class Module : public snort::Module {
+
+  Module() : snort::Module(s_name, s_help, module_params) {
+    // Registers BillTreeLogger instance
+    LioLi::LogDB::register_type<BillTreeLogger>();
+  }
+
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("output") && val.get_as_string().size() > 0) {
-      output_name = val.get_string();
+      // Configures the BillTreeLogger instance
+      LioLi::LogDB::get<BillTreeLogger>(s_name)->set_log_stream_name(
+          val.get_string());
+
       return true;
     }
 
@@ -47,49 +84,16 @@ class Module : public snort::Module {
   }
 
 public:
-  std::string &get_output_name() { return output_name; }
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };
 
-class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
-  Module &module;
-
-  std::mutex mutex;
-  LioLi::LioLi lioli;
-  LioLi::LogStreamHelper log_stream = s_name;
-  bool dirty = false;
-
-  Inspector(Module *module) : module(*module) {
-    assert(module);
-
-    // Set name of stream logger we should write to
-    log_stream.set_stream_name(module->get_output_name());
-
-    lioli.insert_header();
-  }
-
-  ~Inspector() {
-    if(dirty) {
-      lioli.insert_terminator();
-      log_stream.get() << lioli.as_string();
-    }
-  }
-
+class Inspector : public snort::Inspector {
   void eval(snort::Packet *) override {};
 
-  void log(LioLi::Tree &&tree) override {
-    std::scoped_lock lock(mutex);
-    dirty = true;
-    lioli << tree;
-    log_stream.get() << lioli.as_string();
-  }
-
 public:
-  static snort::Inspector *ctor(snort::Module *module) {
-    return new Inspector(dynamic_cast<Module *>(module));
-  }
-  static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
+  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
+  static void dtor(snort::Inspector *p) { delete p; }
 };
 
 } // namespace

@@ -16,6 +16,7 @@
 #include "output_to_file.h"
 #include "output_to_pipe.h"
 #include "output_to_stdout.h"
+#include "trout_netflow.h"
 
 // clang-format off
 SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
@@ -27,6 +28,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &output_to_file::inspect_api.base,
   &output_to_pipe::inspect_api.base,
   &output_to_stdout::inspect_api.base,
+  &trout_netflow::inspect_api.base,
 
   nullptr
 };

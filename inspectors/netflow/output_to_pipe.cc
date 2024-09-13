@@ -13,7 +13,7 @@
 
 // Local includes
 #include "lioli.h"
-#include "output_to.h"
+#include "log_framework.h"
 #include "output_to_pipe.h"
 
 namespace output_to_pipe {
@@ -30,70 +30,19 @@ static const snort::Parameter module_params[] = {
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {}
-
-  Usage get_usage() const override {
-    return GLOBAL;
-  } // TODO(mkr): Figure out what the usage type means
-
+// MAIN object of this file
+class PipeLogStream : public LioLi::LogStream {
   std::string pipe_name;
-
-  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
-    if (val.is("pipe_name") && val.get_as_string().size() > 0) {
-      pipe_name = val.get_string();
-
-      return true;
-    } else if (val.is("pipe_env")) {
-      std::string env_name = val.get_as_string();
-      const char *name = std::getenv(env_name.c_str());
-
-      if (name && *name) {
-        pipe_name = name;
-
-        return true;
-      }
-
-      snort::ErrorMessage(
-          "ERROR: Could not read log pipe name from environment\n");
-    }
-
-    // fail if we didn't get something valid
-    return false;
-  }
-
-public:
-  static snort::Module *ctor() { return new Module(); }
-  static void dtor(snort::Module *p) { delete p; }
-
-  std::string &get_pipe_name() { return pipe_name; }
-};
-
-class Inspector : public snort::Inspector, public LioLi::LogStream {
-  std::string output_name;
   std::ofstream output_pipe;
   std::ios_base::openmode open_mode = std::ios_base::out;
 
-  Inspector(Module *module) : LogStream(s_name) {
-    assert(module);
-    output_name = module->get_pipe_name();
-  }
-
-public: // shared_ptr needs access to the destructor
-  ~Inspector() {
-    if (output_pipe.is_open()) {
-      output_pipe.close();
-    }
-  }
-
-private:
   bool ensure_stream_is_good() {
     if (output_pipe.good() && output_pipe.is_open()) {
       return true;
     }
 
     if (!output_pipe.is_open()) {
-      output_pipe.open(output_name, open_mode);
+      output_pipe.open(pipe_name, open_mode);
     }
 
     if (!output_pipe.good()) {
@@ -103,8 +52,6 @@ private:
 
     return true;
   }
-
-  void eval(snort::Packet *) override {};
 
   void set_binary_mode() override { open_mode |= std::ios_base::binary; }
 
@@ -122,29 +69,62 @@ private:
     }
   }
 
-  std::shared_ptr<Inspector>
-      snort_ptr; // Used to keep object alive while snort uses it
-  friend std::shared_ptr<Inspector>;
+public:
+  PipeLogStream() : LogStream(s_name) {}
+
+  ~PipeLogStream() {
+    if (output_pipe.is_open()) {
+      output_pipe.close();
+    }
+  }
+
+  void set_pipe_name(std::string name) { pipe_name = name; }
+};
+
+class Module : public snort::Module {
+  Module() : snort::Module(s_name, s_help, module_params) {
+    LioLi::LogDB::register_type<PipeLogStream>();
+  }
+
+  Usage get_usage() const override {
+    return GLOBAL;
+  } // TODO(mkr): Figure out what the usage type means
+
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+    if (val.is("pipe_name") && val.get_as_string().size() > 0) {
+
+      LioLi::LogDB::get<PipeLogStream>(s_name)->set_pipe_name(val.get_string());
+
+      return true;
+    } else if (val.is("pipe_env")) {
+      std::string env_name = val.get_as_string();
+      const char *name = std::getenv(env_name.c_str());
+
+      if (name && *name) {
+        LioLi::LogDB::get<PipeLogStream>(s_name)->set_pipe_name(name);
+
+        return true;
+      }
+
+      snort::ErrorMessage(
+          "ERROR: Could not read log pipe name from environment\n");
+    }
+
+    // fail if we didn't get something valid
+    return false;
+  }
 
 public:
-  static snort::Inspector *ctor(snort::Module *module) {
-    assert(module);
-    // We use std::shared_ptr<>(new...) instead of make_shared to keep the
-    // constructor private
-    Inspector *tmp = new Inspector(dynamic_cast<Module *>(module));
-    std::shared_ptr<Inspector> new_inspector = std::shared_ptr<Inspector>(tmp);
-    tmp->snort_ptr.swap(new_inspector);
-    return tmp;
-  }
-  static void dtor(snort::Inspector *p) {
-    Inspector *forget = dynamic_cast<Inspector *>(p);
-    assert(forget->snort_ptr); // The pointer snort gave us was not of the
-                               // correct type
+  static snort::Module *ctor() { return new Module(); }
+  static void dtor(snort::Module *p) { delete p; }
+};
 
-    // We don't want to call reset on a member while we destroy it
-    [[maybe_unused]] std::shared_ptr<Inspector> tmp(
-        std::move(forget->snort_ptr));
-  }
+class Inspector : public snort::Inspector {
+  void eval(snort::Packet *) override {};
+
+public:
+  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
+  static void dtor(snort::Inspector *p) { delete p; }
 };
 
 } // namespace

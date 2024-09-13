@@ -2,11 +2,13 @@
 output_to_file = { file_name = 'my_output_file.txt' }
 output_to_stdout = {}
 
-log_txt = { output = 'output_to_file' }
-log_lorth = { output = 'output_to_file' }
+log_txt = { output = 'output_to_stdout' }
+log_lorth = { output = 'output_to_stdout' }
 log_bill = { output = 'output_to_file' }
 
 alert_lioli = { logger = 'log_lorth' }
+
+trout_netflow = { logger = 'log_lorth' }
 
 stream = {}
 stream_tcp = {}

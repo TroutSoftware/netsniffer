@@ -12,9 +12,8 @@
 
 // Local includes
 #include "lioli.h"
-#include "log_lioli_tree.h"
+#include "log_framework.h"
 #include "log_txt.h"
-#include "output_to.h"
 
 namespace log_txt {
 namespace {
@@ -28,17 +27,34 @@ static const snort::Parameter module_params[] = {
      "Set logger output should be sent to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-class Module : public snort::Module {
-  std::string output_name;
+// MAIN object of this file
+class TxtTreeLogger : public LioLi::LogLioLiTree {
+  void log(LioLi::Tree &&tree) override {
+    auto &logger = get_stream();
+    logger << "vvvvvvvvvvvvvvvvvvvvvvvv\n";
+    logger << tree.as_string();
+    logger << "^^^^^^^^^^^^^^^^^^^^^^^^\n";
+  }
 
-  Module() : snort::Module(s_name, s_help, module_params) {}
+public:
+  TxtTreeLogger() : LogLioLiTree(s_name) {}
+};
+
+class Module : public snort::Module {
+  Module() : snort::Module(s_name, s_help, module_params) {
+    // Registers TxtTreeLogger instance
+    LioLi::LogDB::register_type<TxtTreeLogger>();
+  }
+
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("output") && val.get_as_string().size() > 0) {
-      output_name = val.get_string();
+      // Configures the TxtTreeLogger instance
+      LioLi::LogDB::get<TxtTreeLogger>(s_name)->set_log_stream_name(
+          val.get_string());
       return true;
     }
 
@@ -46,32 +62,16 @@ class Module : public snort::Module {
   }
 
 public:
-  std::string &get_output_name() { return output_name; }
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };
 
-class Inspector : public snort::Inspector, public LioLi::LogLioLiTree {
-  Module &module;
-
-  LioLi::LogStreamHelper log_stream=s_name;
-
-  Inspector(Module *module) : module(*module) {
-    assert(module);
-    log_stream.set_stream_name(module->get_output_name());
-  }
-
+class Inspector : public snort::Inspector {
   void eval(snort::Packet *) override {};
 
-  void log(LioLi::Tree &&tree) override {
-    log_stream.get() << tree.as_string();
-  }
-
 public:
-  static snort::Inspector *ctor(snort::Module *module) {
-    return new Inspector(dynamic_cast<Module *>(module));
-  }
-  static void dtor(snort::Inspector *p) { delete dynamic_cast<Inspector *>(p); }
+  static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
+  static void dtor(snort::Inspector *p) { delete p; }
 };
 
 } // namespace

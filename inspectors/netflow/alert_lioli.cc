@@ -14,7 +14,7 @@
 #include "alert_lioli.h"
 #include "flow_data.h"
 #include "lioli_tree_generator.h"
-#include "log_lioli_tree.h"
+#include "log_framework.h"
 
 namespace alert_lioli {
 namespace {
@@ -54,25 +54,16 @@ public:
 };
 
 class Logger : public snort::Logger {
-  LioLi::LogLioLiTree *logger = nullptr;
+  std::shared_ptr<LioLi::LogLioLiTree> logger;
   Module &module;
 
   LioLi::LogLioLiTree &get_logger() {
     if (!logger) {
-      auto mp = snort::InspectorManager::get_inspector(
-          module.get_logger_name().c_str(), snort::Module::GLOBAL,
-          snort::IT_PASSIVE);
-      logger = dynamic_cast<LioLi::LogLioLiTree *>(mp);
-
-      if (!logger) {
-        snort::ErrorMessage(
-            "ERROR: Alert lioli doesn't have a valid configured logger\n");
-
-        return LioLi::LogLioLiTree::get_null_tree();
-      }
+      logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(
+          module.get_logger_name().c_str());
     }
 
-    return *logger;
+    return *logger.get();
   }
 
 private:
