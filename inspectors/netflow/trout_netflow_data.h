@@ -8,6 +8,7 @@
 
 // System includes
 #include <memory>
+#include <string>
 
 // Local includes
 #include "lioli.h"
@@ -22,6 +23,7 @@ class FlowData : public snort::FlowData {
 
   bool first_pkt = true;
 
+  // Todo: Check if this should be atomic
   uint64_t pkt_sum = 0;
   uint64_t payload_sum = 0;
 
@@ -34,6 +36,8 @@ public:
                                  std::shared_ptr<LioLi::LogLioLiTree> logger);
 
   void process(snort::Packet *);
+
+  void set_service_name(const char *);
 };
 
 } // namespace trout_netflow

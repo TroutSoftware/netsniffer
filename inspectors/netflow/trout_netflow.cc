@@ -1,10 +1,12 @@
 
 // Snort includes
+#include <framework/data_bus.h>
 #include <framework/decode_data.h>
 #include <framework/inspector.h>
 #include <framework/module.h>
 #include <log/messages.h>
 #include <managers/inspector_manager.h>
+#include <pub_sub/intrinsic_event_ids.h>
 
 // System includes
 #include <cassert>
@@ -51,6 +53,24 @@ public:
   static void dtor(snort::Module *p) { delete p; }
 };
 
+class ServiceEventHandler : public snort::DataHandler {
+  std::shared_ptr<LioLi::LogLioLiTree> logger;
+
+public:
+  ServiceEventHandler(std::shared_ptr<LioLi::LogLioLiTree> logger)
+      : DataHandler(s_name), logger(logger){};
+
+  void handle(snort::DataEvent &, snort::Flow *flow) override {
+
+    if (flow) {
+      FlowData *data = FlowData::get_from_flow(flow, logger);
+      assert(data);
+
+      data->set_service_name(flow->service);
+    }
+  }
+};
+
 class Inspector : public snort::Inspector {
   std::string logger_name;
   std::shared_ptr<LioLi::LogLioLiTree> logger;
@@ -75,6 +95,13 @@ class Inspector : public snort::Inspector {
       // TODO: log pkt without flow
     }
   };
+
+  bool configure(snort::SnortConfig *) {
+    snort::DataBus::subscribe_network(
+        snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_SERVICE_CHANGE,
+        new ServiceEventHandler(get_logger()));
+    return true;
+  }
 
 public:
   static snort::Inspector *ctor(snort::Module *module) {

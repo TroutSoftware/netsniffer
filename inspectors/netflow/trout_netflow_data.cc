@@ -54,7 +54,6 @@ void FlowData::process(snort::Packet *pkt) {
   payload_sum += pkt->dsize;
 
   if (first_pkt) {
-
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
@@ -64,12 +63,10 @@ void FlowData::process(snort::Packet *pkt) {
 
     first_pkt = false;
   }
+}
 
-  /*
-      if (pkt->flow && pkt->flow->service) {
-        root << (LioLi::Tree("protocol") << pkt->flow->service);
-      }
-  */
+void FlowData::set_service_name(const char *name) {
+  root << (LioLi::Tree("service") << std::string(name));
 }
 
 } // namespace trout_netflow
