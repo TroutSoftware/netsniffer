@@ -12,6 +12,9 @@
 // Local includes
 #include "log_framework.h"
 #include "trout_netflow.h"
+#include "trout_netflow_data.h"
+
+// Debug includes
 
 namespace trout_netflow {
 namespace {
@@ -26,6 +29,7 @@ static const snort::Parameter module_params[] = {
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {}
+
   Usage get_usage() const override { return GLOBAL; }
 
   std::string logger_name;
@@ -57,13 +61,20 @@ class Inspector : public snort::Inspector {
     logger_name = module->get_logger_name();
   }
 
-  LioLi::LogLioLiTree &get_logger() {
+  std::shared_ptr<LioLi::LogLioLiTree> get_logger() {
     if (!logger) {
       logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(logger_name.c_str());
     }
-    return *logger.get();
+    return logger;
   }
-  void eval(snort::Packet *) override {};
+  void eval(snort::Packet *pkt) override {
+    if (pkt && pkt->flow) {
+      FlowData *data = FlowData::get_from_flow(pkt->flow, get_logger());
+      data->process(pkt);
+    } else {
+      // TODO: log pkt without flow
+    }
+  };
 
 public:
   static snort::Inspector *ctor(snort::Module *module) {
@@ -89,8 +100,8 @@ const snort::InspectApi inspect_api = {
         Module::dtor,
     },
 
-    snort::IT_PASSIVE,
-    PROTO_BIT__NONE,
+    snort::IT_PROBE,
+    PROTO_BIT__ALL,
     nullptr, // buffers
     nullptr, // service
     nullptr, // pinit

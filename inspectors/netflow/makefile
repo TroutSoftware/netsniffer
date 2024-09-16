@@ -20,7 +20,8 @@ CC_SOURCES = \
 	output_to_pipe.cc \
 	output_to_stdout.cc \
 	snort_plugins.cc \
-	trout_netflow.cc
+	trout_netflow.cc \
+	trout_netflow_data.cc
 
 CC_HEADERS = \
 	alert_lioli.h \
@@ -35,7 +36,8 @@ CC_HEADERS = \
 	output_to_file.h \
 	output_to_pipe.h \
 	output_to_stdout.h \
-	trout_netflow.h
+	trout_netflow.h \
+	trout_netflow_data.h
 
 OBJS=$(addprefix $(MAKEDIR)/, $(subst .cc,.o,$(CC_SOURCES)))
 DEPS=$(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES)))

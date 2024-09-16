@@ -7,6 +7,7 @@
 #include <sfip/sf_ip.h>
 
 // System includes
+#include <array>
 #include <iomanip>
 #include <sstream>
 
