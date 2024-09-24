@@ -3,7 +3,6 @@
 #include <events/event.h>
 #include <framework/module.h>
 #include <log/messages.h>
-#include <managers/inspector_manager.h>
 #include <protocols/packet.h>
 
 // System includes

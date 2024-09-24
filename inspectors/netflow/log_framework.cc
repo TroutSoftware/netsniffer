@@ -1,7 +1,6 @@
 
 // Snort includes
 #include <log/messages.h>
-#include <managers/inspector_manager.h>
 
 // System includes
 
@@ -12,8 +11,8 @@ namespace LioLi {
 
 std::shared_ptr<LogStream> &LogStream::get_null_obj() {
   class NullLogStream : public LogStream {
-    void set_binary_mode() override {};
-    void operator<<(const std::string &&) override {};
+    void set_binary_mode() override{};
+    void operator<<(const std::string &&) override{};
 
   public:
     NullLogStream() : LogStream("NullLogStream") {}

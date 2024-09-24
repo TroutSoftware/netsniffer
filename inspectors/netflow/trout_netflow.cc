@@ -5,7 +5,6 @@
 #include <framework/inspector.h>
 #include <framework/module.h>
 #include <log/messages.h>
-#include <managers/inspector_manager.h>
 #include <pub_sub/intrinsic_event_ids.h>
 
 // System includes

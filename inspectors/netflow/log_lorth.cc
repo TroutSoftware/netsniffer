@@ -4,7 +4,6 @@
 #include <framework/inspector.h>
 #include <framework/module.h>
 #include <log/messages.h>
-#include <managers/inspector_manager.h>
 
 // System includes
 #include <cassert>
@@ -15,7 +14,6 @@
 #include "lioli.h"
 #include "log_framework.h"
 #include "log_lorth.h"
-// #include "output_to.h"
 
 namespace log_lorth {
 namespace {
@@ -64,7 +62,7 @@ public:
 };
 
 class Inspector : public snort::Inspector {
-  void eval(snort::Packet *) override {};
+  void eval(snort::Packet *) override{};
 
 public:
   static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }
