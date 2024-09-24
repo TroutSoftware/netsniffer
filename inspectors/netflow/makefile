@@ -43,8 +43,8 @@ OBJS=$(addprefix $(MAKEDIR)/, $(subst .cc,.o,$(CC_SOURCES)))
 DEPS=$(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES)))
 
 .PHONY: test test-data clean format build oldstyle gdb
-test:
-	sh3 -sanitize none -o $(MODULE) -i "$(CC_SOURCES)" $(TEST_LIMIT)
+test: $(OUTPUTDIR)/$(MODULE)
+	sh3 -sanitize none -t $(OUTPUTDIR)/$(MODULE) $(TEST_LIMIT)
 
 test-data: $(OUTPUTDIR)/$(MODULE)
 	$(SNORT) -v -c ../../test_config/cfg.lua --plugin-path $(OUTPUTDIR) --pcap-dir ../../test_data --warn-all
