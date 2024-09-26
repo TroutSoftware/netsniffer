@@ -1,11 +1,5 @@
-pcap $moddir/pcaps/dhcp_clean.pcap
-stdout '8000\:1003\:0.*(alerts: 5)'
-stdout 'info_event\: 1'
-stdout 'check_count\: 1'
-stdout 'network_set\: 1'
-stdout 'unknown_network\: 5'
-stdout 'ip_pass\: 1'
-
+pcap $moddir/tests/pcaps/dhcp_new_range.pcap
+stdout '8000\:1002\:0.*(alerts: 1)'
 
 -- cfg.lua --
 
@@ -20,7 +14,6 @@ dhcp_monitor = { }
 ips = {
   include = 'dhcp.rules'
 }
-
 
 -- dhcp.rules --
 
@@ -41,7 +34,3 @@ alert ip any any -> any any (
   gid:8000;
   sid:1003;
 )
-
-
-
-

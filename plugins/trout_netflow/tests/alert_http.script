@@ -1,5 +1,5 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $moddir/pcaps/google_http.pcap
+pcap $moddir/tests/pcaps/google_http.pcap
 
 -- cfg.lua --
 output_to_stdout = {}
