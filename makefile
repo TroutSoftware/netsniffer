@@ -1,6 +1,11 @@
 
 
-.PHONY: format
+.PHONY: format mkrtest
+
+SUBMAKES = $(wildcard **/makefile)
+
+mkrtest: 
+	echo $(SUBMAKES)
 
 format:
 	$(MAKE) -C ./inspectors/dhcp_monitor format

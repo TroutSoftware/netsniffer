@@ -189,7 +189,7 @@ class IpsOption : public snort::IpsOption {
   }
 
 public:
-  static snort::IpsOption *ctor(snort::Module *module, OptTreeNode *) {
+  static snort::IpsOption *ctor(snort::Module *module, IpsInfo &) {
     assert(module);
     return new IpsOption(*dynamic_cast<Module *>(module));
   }

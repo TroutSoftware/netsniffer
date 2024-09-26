@@ -367,7 +367,8 @@ public:
     std::scoped_lock guard(m.mutex, log_write_mutex);
     LioLi::Tree tree("$");
 
-    tree << (LioLi::Tree("principal") << m.src) << " " << (LioLi::Tree("endpoint") << m.dst);
+    tree << (LioLi::Tree("principal") << m.src) << " "
+         << (LioLi::Tree("endpoint") << m.dst);
 
     if (!m.first_service.empty()) {
       tree << "-" << (LioLi::Tree("protocol") << m.first_service);

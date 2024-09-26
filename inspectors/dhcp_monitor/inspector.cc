@@ -1,12 +1,18 @@
-#include <shared_mutex>
 
-#include "detection/detection_engine.h"
+// Snort includes
 #include "framework/inspector.h"
+#include "detection/detection_engine.h"
 #include "framework/module.h"
 #include "protocols/packet.h"
 #include "pub_sub/appid_event_ids.h"
 #include "pub_sub/dhcp_events.h"
 #include "pub_sub/intrinsic_event_ids.h"
+
+// System includes
+#include <mutex>
+#include <shared_mutex>
+
+// Local includes
 
 const static unsigned dhcp_monitor_gid = 8000;
 const static unsigned dhcp_monitor_ip_conflict_sid = 1001;
