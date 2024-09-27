@@ -10,9 +10,7 @@
 // Local includes
 
 namespace alert_lioli {
-
 extern const snort::LogApi log_api;
-
 } // namespace alert_lioli
 
 #endif

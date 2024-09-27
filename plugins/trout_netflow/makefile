@@ -19,7 +19,6 @@ CC_SOURCES = \
 	output_to_file.cc \
 	output_to_pipe.cc \
 	output_to_stdout.cc \
-	snort_plugins.cc \
 	trout_netflow.cc \
 	trout_netflow_data.cc
 

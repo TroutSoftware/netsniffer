@@ -10,8 +10,7 @@ CC_SOURCES = \
 	flow_data.cc \
 	inspector.cc \
 	ips_option.cc \
-	ips_option_ip_filter.cc \
-	snort_plugins.cc
+	ips_option_ip_filter.cc 
 
 CC_HEADERS = \
 	flow_data.h \

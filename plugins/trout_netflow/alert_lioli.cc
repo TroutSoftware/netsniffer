@@ -114,7 +114,7 @@ public:
 typedef Logger *(*LogNewFunc)(class Module *);
 typedef void (*LogDelFunc)(Logger *);
 
-const snort::LogApi log_api{
+const snort::LogApi log_api = {
     {
         PT_LOGGER,
         sizeof(snort::LogApi),

@@ -13,18 +13,20 @@
 #include <shared_mutex>
 
 // Local includes
+#include "inspector.h"
+
+namespace dhcp_monitor {
+namespace {
 
 const static unsigned dhcp_monitor_gid = 8000;
 const static unsigned dhcp_monitor_ip_conflict_sid = 1001;
 const static unsigned dhcp_monitor_dhcp_conflict_sid = 1002;
 const static unsigned dhcp_monitor_unknown_network_sid = 1003;
 
-using namespace snort;
+static const snort::Parameter dhcp_monitor_params[] = {
+    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
-static const Parameter dhcp_monitor_params[] = {
-    {nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr}};
-
-static const RuleMap s_rules[] = {
+static const snort::RuleMap s_rules[] = {
     {dhcp_monitor_ip_conflict_sid, "ip conflict"},
     {dhcp_monitor_dhcp_conflict_sid, "dhcp conflict"},
     {dhcp_monitor_unknown_network_sid, "unknown network"},
@@ -69,12 +71,12 @@ const PegInfo s_pegs[] = {
 
     {CountType::END, nullptr, nullptr}};
 
-class DHCPMonitorModule : public Module {
+class DHCPMonitorModule : public snort::Module {
 
   const PegInfo *get_pegs() const override { return s_pegs; }
   PegCount *get_counts() const override { return (PegCount *)&s_dhcp_stats; }
   unsigned get_gid() const override { return dhcp_monitor_gid; }
-  const RuleMap *get_rules() const override { return s_rules; }
+  const snort::RuleMap *get_rules() const override { return s_rules; }
 
 public:
   DHCPMonitorModule()
@@ -84,7 +86,7 @@ public:
                dhcp_monitor_params) {}
 };
 
-class DHCPMonitorInspector : public Inspector {
+class DHCPMonitorInspector : public snort::Inspector {
   class DHCPRecord {
     uint32_t network_address;
     uint32_t network_mask;
@@ -144,41 +146,41 @@ public:
 
   ~DHCPMonitorInspector() {}
 
-  void eval(Packet *) override {}
+  void eval(snort::Packet *) override {}
 
-  bool configure(SnortConfig *) override;
+  bool configure(snort::SnortConfig *) override;
 
   void flag_ip_conflict(uint32_t /*ip*/, DHCPRecord & /*record*/) {
     s_dhcp_stats.ip_flagged++;
-    DetectionEngine::queue_event(dhcp_monitor_gid,
-                                 dhcp_monitor_ip_conflict_sid);
+    snort::DetectionEngine::queue_event(dhcp_monitor_gid,
+                                        dhcp_monitor_ip_conflict_sid);
   }
 
   void flag_ip_conflict(uint32_t /*ip1*/, uint32_t /*ip2*/,
                         DHCPRecord & /*record*/) {
     s_dhcp_stats.dual_ip_flagged++;
-    DetectionEngine::queue_event(dhcp_monitor_gid,
-                                 dhcp_monitor_ip_conflict_sid);
+    snort::DetectionEngine::queue_event(dhcp_monitor_gid,
+                                        dhcp_monitor_ip_conflict_sid);
   }
 
   void flag_dhcp_conflict(uint32_t /*ip*/, uint32_t /*new_mask*/,
                           DHCPRecord & /*record*/) {
     s_dhcp_stats.dhcp_flagged++;
-    DetectionEngine::queue_event(dhcp_monitor_gid,
-                                 dhcp_monitor_dhcp_conflict_sid);
+    snort::DetectionEngine::queue_event(dhcp_monitor_gid,
+                                        dhcp_monitor_dhcp_conflict_sid);
   }
 
   void flag_unknown_network(uint32_t /*ip*/, uint32_t /*network*/) {
     s_dhcp_stats.unknown_count++;
-    DetectionEngine::queue_event(dhcp_monitor_gid,
-                                 dhcp_monitor_unknown_network_sid);
+    snort::DetectionEngine::queue_event(dhcp_monitor_gid,
+                                        dhcp_monitor_unknown_network_sid);
   }
 
   void flag_unknown_network(uint32_t /*ip1*/, uint32_t /*ip2*/,
                             uint32_t /*network*/) {
     s_dhcp_stats.unknown_count++;
-    DetectionEngine::queue_event(dhcp_monitor_gid,
-                                 dhcp_monitor_unknown_network_sid);
+    snort::DetectionEngine::queue_event(dhcp_monitor_gid,
+                                        dhcp_monitor_unknown_network_sid);
   }
 
   void validate(uint16_t vlan_id, uint32_t ip) {
@@ -224,7 +226,7 @@ public:
   }
 };
 
-class DHCPInfoEventHandler : public DataHandler {
+class DHCPInfoEventHandler : public snort::DataHandler {
   DHCPMonitorInspector *inspector;
 
 public:
@@ -233,11 +235,12 @@ public:
     assert(inspector);
   };
 
-  void handle(DataEvent &event, Flow *) override {
+  void handle(snort::DataEvent &event, snort::Flow *) override {
     s_dhcp_stats.info_count++;
 
-    DHCPInfoEvent &dhcp_info_event = dynamic_cast<DHCPInfoEvent &>(
-        event); // NOTE: Will throw bad_cast exception if failing
+    snort::DHCPInfoEvent &dhcp_info_event =
+        dynamic_cast<snort::DHCPInfoEvent &>(
+            event); // NOTE: Will throw bad_cast exception if failing
 
     assert(event.get_packet());
 
@@ -249,7 +252,7 @@ public:
   }
 };
 
-class EventHandler : public DataHandler {
+class EventHandler : public snort::DataHandler {
   DHCPMonitorInspector *inspector;
   unsigned event_type;
 
@@ -260,8 +263,8 @@ public:
     assert(inspector);
   };
 
-  void handle(DataEvent &event, Flow *) override {
-    const Packet *p = event.get_packet();
+  void handle(snort::DataEvent &event, snort::Flow *) override {
+    const snort::Packet *p = event.get_packet();
 
     // Bail if no packet, or packet don't have ip
     if (!p || !p->has_ip()) {
@@ -269,8 +272,8 @@ public:
       return;
     }
 
-    const SfIp *src = p->ptrs.ip_api.get_src();
-    const SfIp *dst = p->ptrs.ip_api.get_dst();
+    const snort::SfIp *src = p->ptrs.ip_api.get_src();
+    const snort::SfIp *dst = p->ptrs.ip_api.get_dst();
 
     // Bail if src and dst aren't both IPv4
     if (!src || !src->is_ip4() || !dst || !dst->is_ip4()) {
@@ -283,43 +286,46 @@ public:
   }
 };
 
-bool DHCPMonitorInspector::configure(SnortConfig *) {
-  DataBus::subscribe_network(appid_pub_key, AppIdEventIds::DHCP_INFO,
-                             new DHCPInfoEventHandler(this));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-      new EventHandler(this, IntrinsicEventIds::FLOW_SERVICE_CHANGE));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_SETUP,
-      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_SETUP));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_STATE_RELOADED,
-      new EventHandler(this, IntrinsicEventIds::FLOW_STATE_RELOADED));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::PKT_WITHOUT_FLOW,
-      new EventHandler(this, IntrinsicEventIds::PKT_WITHOUT_FLOW));
-  DataBus::subscribe_network(
-      intrinsic_pub_key, IntrinsicEventIds::FLOW_NO_SERVICE,
-      new EventHandler(this, IntrinsicEventIds::FLOW_NO_SERVICE));
+bool DHCPMonitorInspector::configure(snort::SnortConfig *) {
+  snort::DataBus::subscribe_network(snort::appid_pub_key,
+                                    snort::AppIdEventIds::DHCP_INFO,
+                                    new DHCPInfoEventHandler(this));
+  snort::DataBus::subscribe_network(
+      snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_SERVICE_CHANGE,
+      new EventHandler(this, snort::IntrinsicEventIds::FLOW_SERVICE_CHANGE));
+  snort::DataBus::subscribe_network(
+      snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_STATE_SETUP,
+      new EventHandler(this, snort::IntrinsicEventIds::FLOW_STATE_SETUP));
+  snort::DataBus::subscribe_network(
+      snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_STATE_RELOADED,
+      new EventHandler(this, snort::IntrinsicEventIds::FLOW_STATE_RELOADED));
+  snort::DataBus::subscribe_network(
+      snort::intrinsic_pub_key, snort::IntrinsicEventIds::PKT_WITHOUT_FLOW,
+      new EventHandler(this, snort::IntrinsicEventIds::PKT_WITHOUT_FLOW));
+  snort::DataBus::subscribe_network(
+      snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_NO_SERVICE,
+      new EventHandler(this, snort::IntrinsicEventIds::FLOW_NO_SERVICE));
 
   return true;
 }
 
-const InspectApi dhcpmonitor_api = {
+} // namespace
+
+const snort::InspectApi dhcpmonitor_api = {
     {
         PT_INSPECTOR,
-        sizeof(InspectApi),
+        sizeof(snort::InspectApi),
         INSAPI_VERSION,
         0,
         API_RESERVED,
         API_OPTIONS,
         "dhcp_monitor",
         "Monitors use of network addresses and DHCP requests",
-        []() -> Module * { return new DHCPMonitorModule; },
-        [](Module *m) { delete m; },
+        []() -> snort::Module * { return new DHCPMonitorModule; },
+        [](snort::Module *m) { delete m; },
     },
 
-    IT_PASSIVE,
+    snort::IT_PASSIVE,
     PROTO_BIT__ALL,
     nullptr, // buffers
     nullptr, // service
@@ -327,14 +333,14 @@ const InspectApi dhcpmonitor_api = {
     nullptr, // pterm
     nullptr, // tinit
     nullptr, // tterm
-    [](Module *module) -> Inspector * {
+    [](snort::Module *module) -> snort::Inspector * {
       assert(module);
       return new DHCPMonitorInspector(
           dynamic_cast<DHCPMonitorModule *>(module));
     },
-    [](Inspector *p) { delete p; },
+    [](snort::Inspector *p) { delete p; },
     nullptr, // ssn
     nullptr  // reset
 };
 
-SO_PUBLIC const BaseApi *snort_plugins[] = {&dhcpmonitor_api.base, nullptr};
+} // namespace dhcp_monitor

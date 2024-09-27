@@ -1,7 +1,8 @@
 #ifndef flow_data_8d10f3be
 #define flow_data_8d10f3be
 
-// This flow_data builds the LioLi that will be output by the alert plugin (alert_lioli)
+// This flow_data builds the LioLi that will be output by the alert plugin
+// (alert_lioli)
 
 // Snort includes
 #include <flow/flow.h>
