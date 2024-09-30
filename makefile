@@ -33,6 +33,12 @@ test: $(OUTPUTDIR)/$(DEBUG_MODULE)
 	cd sh3;go install
 	sh3 -sanitize none -t $(OUTPUTDIR)/$(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
+release-test: $(OUTPUTDIR)/$(RELEASE_MODULE)
+	@echo Testing "$(TEST_DIRS)"
+	cd sh3;go install
+	sh3 -sanitize none -t $(OUTPUTDIR)/$(RELEASE_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
+
+
 format:
 	$(MAKE) -C ./plugins/dhcp_monitor format
 	$(MAKE) -C ./plugins/dhcp_option format
