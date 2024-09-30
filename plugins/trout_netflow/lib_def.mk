@@ -7,7 +7,7 @@ TEST_FOLDER := tests
 
 # List source (.cc) files that should be included in the build
 
-FILES := \
+CC_FILES := \
 	alert_lioli.cc \
 	flow_data.cc \
 	inspector.cc \
@@ -23,4 +23,19 @@ FILES := \
 	trout_netflow.cc \
 	trout_netflow_data.cc
 
+H_FILES = \
+	alert_lioli.h \
+	flow_data.h \
+	ips_lioli_bind.h \
+	lioli.h \
+	lioli_tree_generator.h \
+	log_bill.h \
+	log_framework.h \
+	log_lorth.h \
+	log_txt.h \
+	output_to_file.h \
+	output_to_pipe.h \
+	output_to_stdout.h \
+	trout_netflow.h \
+	trout_netflow_data.h
 

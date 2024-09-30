@@ -2,14 +2,15 @@
 
 ISNORT := /opt/snort/include/snort
 SNORT := /opt/snort/bin/snort
-OUTPUTDIR := $(abspath p)
+RELEASEDIR := $(abspath p/release)
+DEBUGDIR := $(abspath p/debug)
 MAKEDIR := $(abspath .m)
 
 
 MODULE_NAME = trout_snort
 
-DEBUG_MODULE := $(MODULE_NAME)_debug.so
-RELEASE_MODULE := $(MODULE_NAME).so
+DEBUG_MODULE := $(DEBUGDIR)/$(MODULE_NAME).so
+RELEASE_MODULE := $(RELEASEDIR)/$(MODULE_NAME).so
 
 .PHONY: format mkrtest premake postmake usage
 
@@ -28,21 +29,15 @@ mkrtest:
 	@echo deps: $(DEPS)
 	@echo objs: $(OBJS)
 
-test: $(OUTPUTDIR)/$(DEBUG_MODULE)
+test: $(DEBUG_MODULE)
 	@echo Testing "$(TEST_DIRS)"
 	cd sh3;go install
-	sh3 -sanitize none -t $(OUTPUTDIR)/$(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
+	sh3 -sanitize none -t $(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
-release-test: $(OUTPUTDIR)/$(RELEASE_MODULE)
+release-test: $(RELEASE_MODULE)
 	@echo Testing "$(TEST_DIRS)"
 	cd sh3;go install
-	sh3 -sanitize none -t $(OUTPUTDIR)/$(RELEASE_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
-
-
-format:
-	$(MAKE) -C ./plugins/dhcp_monitor format
-	$(MAKE) -C ./plugins/dhcp_option format
-	$(MAKE) -C ./plugins/trout_netflow format
+	sh3 -sanitize none -t $(RELEASE_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
 #############################################
 
@@ -56,18 +51,31 @@ endef
 MAKE_README_FILENAME := $(MAKEDIR)/README.TXT
 
 clean:
-	if [ -f $(OUTPUTDIR)/$(DEBUG_MODULE) ]; then rm $(OUTPUTDIR)/$(DEBUG_MODULE); fi
-	if [ -f $(OUTPUTDIR)/$(RELEASE_MODULE) ]; then rm $(OUTPUTDIR)/$(RELEASE_MODULE); fi
+	if [ -f $(DEBUG_MODULE) ]; then rm $(DEBUG_MODULE); fi
+	if [ -f $(RELEASE_MODULE) ]; then rm $(RELEASE_MODULE); fi
 	if [ -d $(MAKEDIR) ]; then rm -r $(MAKEDIR); fi
 	@echo "\e[3;32mClean done\e[0m"
 
-release: $(OUTPUTDIR)/$(RELEASE_MODULE) | $(OUTPUTDIR)
-	@echo Result output to:  $(OUTPUTDIR)/$(RELEASE_MODULE)
+release: $(RELEASE_MODULE) | $(RELEASEDIR)
+	@echo Result output to:  $(RELEASE_MODULE)
 	@echo Release build done!
 
-build: $(OUTPUTDIR)/$(DEBUG_MODULE) | $(OUTPUTDIR)
-	@echo Result output to:  $(OUTPUTDIR)/$(DEBUG_MODULE)
+build: $(DEBUG_MODULE) | $(DEBUGDIR)
+	@echo Result output to:  $(DEBUG_MODULE)
 	@echo Debug build done!
+
+gdb: $(DEBUG_MODULE)
+	@echo "\e[3;37mStarting debugger...\e[0m"
+	gdb --args $(SNORT) -v -c tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir pcaps --warn-all
+
+format:
+	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
+
+test-data: $(OUTPUTDIR)/$(MODULE)
+	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) --pcap-dir test_data --warn-all
+
+test-local: $(DEBUG_MODULE)
+	$(SNORT) -v -c tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir pcaps --warn-all
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))
@@ -75,10 +83,15 @@ $(MAKE_README_FILENAME): | $(MAKEDIR)
 $(MAKEDIR):
 	mkdir -p $(MAKEDIR)
 
-$(OUTPUTDIR):
-	mkdir -p $(OUTPUTDIR)
+
+$(RELEASEDIR):
+	mkdir -p $(RELEASEDIR)
+
+$(DEBUGDIR):
+	mkdir -p $(DEBUGDIR)
 
 CC_SOURCES :=
+CC_HEADERS :=
 OBJS :=
 DEPS :=
 TEST_DIRS :=
@@ -89,15 +102,21 @@ TEST_DIRS :=
 define EXPAND_SOURCEFILES
  $(eval $(file <$(1)))
  SRC_DIR := $(dir $(1))
- ifdef FILES
-   CC_SOURCES += $(addprefix $$(SRC_DIR),$(FILES))
+ ifdef CC_FILES
+   CC_SOURCES += $(addprefix $$(SRC_DIR),$(CC_FILES))
+   undefine CC_FILES
  endif
+  
+ ifdef H_FILES
+   CC_HEADERS += $(addprefix $$(SRC_DIR),$(H_FILES))
+   undefine H_FILES
+ endif
+ 
  ifdef TEST_FOLDER
    TEST_DIRS := $(TEST_DIRS)$(addprefix $$(SRC_DIR),$(TEST_FOLDER));
+   undefine TEST_FOLDER
  endif
- undefine FILES
- undefine TEST_FOLDER
- 
+  
 endef
 
 LIBDEFS = $(shell find $(SOURCEDIR) -name 'lib_def.mk')
@@ -116,12 +135,12 @@ $(MAKEDIR)/%.o : %.cc | $(MAKE_README_FILENAME)
 	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -Wall -fPIC -Wextra -g -I $(ISNORT) -c $< -o $@
 
 # Rule for linking debug build (how to generate $(OUTPUTDIR)/$(DEBUG_MODULE) )
-$(OUTPUTDIR)/$(DEBUG_MODULE): $(OBJS) | $(OUTPUTDIR)
+$(DEBUG_MODULE): $(OBJS) | $(DEBUGDIR)
 	@echo "\e[3;37mLinking...\e[0m"
-	g++ $(OBJS) -shared -O0 -Wall -g -Wextra -o $@
+	g++ $(OBJS) -shared -O0 -Wall -g -Wextra -o $(DEBUG_MODULE)
 
 # Rule for linking release build (how to generate $(OUTPUTDIR)/$(RELEASE_MODULE) )
-$(OUTPUTDIR)/$(RELEASE_MODULE): $(CC_SOURCES) | $(OUTPUTDIR)
+$(RELEASE_MODULE): $(CC_SOURCES) | $(RELEASEDIR)
 	@echo "\e[3;37mLinking...\e[0m"
-	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(CC_SOURCES) -o $(OUTPUTDIR)/$(RELEASE_MODULE)	
+	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(CC_SOURCES) -o $(RELEASE_MODULE)	
 
