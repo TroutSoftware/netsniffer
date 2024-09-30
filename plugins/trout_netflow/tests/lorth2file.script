@@ -1,11 +1,13 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $moddir/tests/pcaps/google_http.pcap
+pcap $testdir/pcaps/google_http.pcap
+cmp output.lorth $testdir/expected_result.lorth
 
 -- cfg.lua --
+output_to_file = { file_name = 'output.lorth' }
 output_to_stdout = {}
 
 log_txt = { output = 'output_to_stdout' }
-log_lorth = { output = 'output_to_stdout' }
+log_lorth = { output = 'output_to_file' }
 
 alert_lioli = { logger = 'log_lorth' }
 stream = {}

@@ -23,7 +23,7 @@ DEPS=$(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES)))
 
 .PHONY: test test-data clean format build oldstyle gdb
 test: $(OUTPUTDIR)/$(MODULE)
-	sh3 -sanitize none -t $(OUTPUTDIR)/$(MODULE) $(TEST_LIMIT)
+	sh3 -sanitize none -t $(OUTPUTDIR)/$(MODULE) -tpath tests\;testcases $(TEST_LIMIT)
 
 test-data: $(OUTPUTDIR)/$(MODULE)
 	$(SNORT) -v -c ../../test_config/cfg.lua --plugin-path $(OUTPUTDIR) --pcap-dir ../../test_data --warn-all

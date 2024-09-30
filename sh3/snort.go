@@ -45,6 +45,7 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 
 			cmd.Stdout = &stdoutBuf
 			cmd.Stderr = &stderrBuf
+
 			err := cmd.Start()
 			if err != nil {
 				return nil, err

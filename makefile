@@ -8,11 +8,18 @@ MAKEDIR := $(abspath .m)
 
 MODULE_NAME = trout_snort
 
-DEBUG_MODULE = $(MODULE_NAME)_debug.so
-RELEASE_MODULE = $(MODULE_NAME).so
+DEBUG_MODULE := $(MODULE_NAME)_debug.so
+RELEASE_MODULE := $(MODULE_NAME).so
 
-.PHONY: format mkrtest premake postmake
+.PHONY: format mkrtest premake postmake usage
 
+usage:
+	@echo Trout Snort plugins makefile instructions
+	@echo 
+	@echo To build a release build: make release
+	@echo To build a debug build: make build
+	@echo To clean all build folders: make clean
+	@echo To run clang-format on all source files: make format
 
 mkrtest: 
 	@echo -------
@@ -21,7 +28,10 @@ mkrtest:
 	@echo deps: $(DEPS)
 	@echo objs: $(OBJS)
 
-	
+test: $(OUTPUTDIR)/$(DEBUG_MODULE)
+	@echo Testing "$(TEST_DIRS)"
+	cd sh3;go install
+	sh3 -sanitize none -t $(OUTPUTDIR)/$(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
 format:
 	$(MAKE) -C ./plugins/dhcp_monitor format
@@ -45,14 +55,13 @@ clean:
 	if [ -d $(MAKEDIR) ]; then rm -r $(MAKEDIR); fi
 	@echo "\e[3;32mClean done\e[0m"
 
+release: $(OUTPUTDIR)/$(RELEASE_MODULE) | $(OUTPUTDIR)
+	@echo Result output to:  $(OUTPUTDIR)/$(RELEASE_MODULE)
+	@echo Release build done!
+
 build: $(OUTPUTDIR)/$(DEBUG_MODULE) | $(OUTPUTDIR)
-	@echo Building done!
-
-premake:| $(MAKEDIR)
-	@echo Premake
-
-$(MAKEDIR)/makefile: $(LIBDEFS) premake | $(MAKEDIR)
-	@echo Making makefile
+	@echo Result output to:  $(OUTPUTDIR)/$(DEBUG_MODULE)
+	@echo Debug build done!
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))
@@ -65,7 +74,8 @@ $(OUTPUTDIR):
 
 CC_SOURCES :=
 OBJS :=
-DEPS := 
+DEPS :=
+TEST_DIRS :=
 
 ########################################################################
 # Reads FILES from all lib_def.mk files from all subfolders and adds 
@@ -73,7 +83,15 @@ DEPS :=
 define EXPAND_SOURCEFILES
  $(eval $(file <$(1)))
  SRC_DIR := $(dir $(1))
- CC_SOURCES += $(addprefix $$(SRC_DIR),$(FILES))
+ ifdef FILES
+   CC_SOURCES += $(addprefix $$(SRC_DIR),$(FILES))
+ endif
+ ifdef TEST_FOLDER
+   TEST_DIRS := $(TEST_DIRS)$(addprefix $$(SRC_DIR),$(TEST_FOLDER));
+ endif
+ undefine FILES
+ undefine TEST_FOLDER
+ 
 endef
 
 LIBDEFS = $(shell find $(SOURCEDIR) -name 'lib_def.mk')
@@ -89,9 +107,15 @@ DEPS=$(abspath $(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES))))
 # Rule for how to compile .cc files to .o files
 $(MAKEDIR)/%.o : %.cc | $(MAKE_README_FILENAME)
 	@mkdir -p $(dir $@)
-	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -fPIC -Wall -Wextra -g -I $(ISNORT) -c $< -o $@
+	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -Wall -fPIC -Wextra -g -I $(ISNORT) -c $< -o $@
 
-# Rule for linking (how to generate $(OUTPUTDIR)/$(MODULE) )
+# Rule for linking debug build (how to generate $(OUTPUTDIR)/$(DEBUG_MODULE) )
 $(OUTPUTDIR)/$(DEBUG_MODULE): $(OBJS) | $(OUTPUTDIR)
 	@echo "\e[3;37mLinking...\e[0m"
-	g++ $(OBJS) -fPIC -shared -O0 -Wall -g -Wextra -o $@
+	g++ $(OBJS) -shared -O0 -Wall -g -Wextra -o $@
+
+# Rule for linking release build (how to generate $(OUTPUTDIR)/$(RELEASE_MODULE) )
+$(OUTPUTDIR)/$(RELEASE_MODULE): $(CC_SOURCES) | $(OUTPUTDIR)
+	@echo "\e[3;37mLinking...\e[0m"
+	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(CC_SOURCES) -o $(OUTPUTDIR)/$(RELEASE_MODULE)	
+
