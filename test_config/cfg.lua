@@ -2,9 +2,14 @@ stream = { }
 stream_ip = { }
 stream_tcp = { }
 ssl = { }
+http_inspect = {}
 
-network_mapping = { noflow_log = true }
 dhcp_monitor = {}
+
+output_to_stdout = {}
+log_lorth = { output = 'output_to_stdout' }
+alert_lioli = { logger = 'log_lorth' }
+trout_netflow = { logger = 'log_lorth' }
 
 wizard = {
     hexes = {
@@ -22,8 +27,20 @@ binder = {
     { use = { type = 'wizard' } }
 }
 
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+
 trace.modules = {
     wizard = {
         all = 2,
     },
 }
+
+ips = {
+  include = 'test-local.rules'
+}
+
+

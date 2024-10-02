@@ -15,12 +15,29 @@ RELEASE_MODULE := $(RELEASEDIR)/$(MODULE_NAME).so
 .PHONY: format mkrtest premake postmake usage
 
 usage:
-	@echo Trout Snort plugins makefile instructions
-	@echo 
-	@echo To build a release build: make release
-	@echo To build a debug build: make build
-	@echo To clean all build folders: make clean
-	@echo To run clang-format on all source files: make format
+	@echo "Trout Snort plugins makefile instructions"
+	@echo ""
+	@echo "make build        - To build a debug build"
+	@echo "make clean        - To clean all build folders"
+	@echo "make format       - To run clang-format on all source files"
+	@echo "make gdb          - WIP"
+	@echo "make release      - To build a release build"
+	@echo "make release-test - Run the test suite on release build"
+	@echo "make test         - Run the test suite"
+	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
+	@echo "                    in test_data"
+	@echo "make test-local   - WIP"
+	@echo ""
+	@echo "Debug builds will be written to:"
+	@echo $(DEBUG_MODULE)
+	@echo ""
+	@echo "Release builds will be written to:"
+	@echo $(RELEASE_MODULE)
+	@echo ""
+	@echo "It is recommended to add -jX to the make command, where X denotes"
+	@echo "the number of threads that should be used for building, e.g."
+	@echo "'make -j8 build' means use up to 8 threads when building."
+
 
 mkrtest: 
 	@echo -------
@@ -71,8 +88,12 @@ gdb: $(DEBUG_MODULE)
 format:
 	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
 
-test-data: $(OUTPUTDIR)/$(MODULE)
+test-data: $(DEBUG_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) --pcap-dir test_data --warn-all
+
+release-test-data: $(RELEASE_MODULE)
+	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) --pcap-dir test_data --warn-all
+
 
 test-local: $(DEBUG_MODULE)
 	$(SNORT) -v -c tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir pcaps --warn-all
@@ -95,12 +116,14 @@ CC_HEADERS :=
 OBJS :=
 DEPS :=
 TEST_DIRS :=
+LINK_DEPS :=
 
 ########################################################################
 # Reads FILES from all lib_def.mk files from all subfolders and adds 
 # them with correct path to CC_SOURCES
 define EXPAND_SOURCEFILES
  $(eval $(file <$(1)))
+ LINK_DEPS += $(1)
  SRC_DIR := $(dir $(1))
  ifdef CC_FILES
    CC_SOURCES += $(addprefix $$(SRC_DIR),$(CC_FILES))
@@ -135,12 +158,12 @@ $(MAKEDIR)/%.o : %.cc | $(MAKE_README_FILENAME)
 	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -Wall -fPIC -Wextra -g -I $(ISNORT) -c $< -o $@
 
 # Rule for linking debug build (how to generate $(OUTPUTDIR)/$(DEBUG_MODULE) )
-$(DEBUG_MODULE): $(OBJS) | $(DEBUGDIR)
+$(DEBUG_MODULE): $(OBJS) $(LINK_DEPS) | $(DEBUGDIR)
 	@echo "\e[3;37mLinking...\e[0m"
 	g++ $(OBJS) -shared -O0 -Wall -g -Wextra -o $(DEBUG_MODULE)
 
 # Rule for linking release build (how to generate $(OUTPUTDIR)/$(RELEASE_MODULE) )
-$(RELEASE_MODULE): $(CC_SOURCES) | $(RELEASEDIR)
+$(RELEASE_MODULE): $(CC_SOURCES) $(LINK_DEPS) | $(RELEASEDIR)
 	@echo "\e[3;37mLinking...\e[0m"
 	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(CC_SOURCES) -o $(RELEASE_MODULE)	
 

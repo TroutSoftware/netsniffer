@@ -7,5 +7,5 @@ TEST_FOLDER := tests
 
 # List source (.cc) files that should be included in the build
 
-FILES := \
+CC_FILES := \
 	inspector.cc
