@@ -9,7 +9,8 @@ output_to_stdout = {}
 log_txt = { output = 'output_to_stdout' }
 log_lorth = { output = 'output_to_file' }
 
-alert_lioli = { logger = 'log_lorth' }
+alert_lioli = { logger = 'log_lorth',
+                timestamp = false }
 stream = {}
 stream_tcp = {}
 http_inspect = {}

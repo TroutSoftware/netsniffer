@@ -25,6 +25,8 @@ static const char *s_help =
 static const snort::Parameter module_params[] = {
     {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
+    {"timestamp", snort::Parameter::PT_BOOL, nullptr, "true",
+     "Set to false if timestamps should not be generated"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 class Module : public snort::Module {
@@ -32,27 +34,34 @@ class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {}
 
   std::string logger_name;
+  bool log_timestamp;
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("logger") && val.get_as_string().size() > 0) {
       logger_name = val.get_string();
       return true;
+    } else if (val.is("timestamp")) {
+      log_timestamp = val.get_bool();
+    } else {
+      // fail if we didn't get something valid
+      return false;
     }
 
-    // fail if we didn't get something valid
-    return false;
+    return true;
   }
 
   Usage get_usage() const override { return GLOBAL; }
 
 public:
   std::string &get_logger_name() { return logger_name; }
+  bool get_log_timestamp() { return log_timestamp; }
 
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };
 
 class Logger : public snort::Logger {
+  bool log_timestamp = true;
   std::shared_ptr<LioLi::LogLioLiTree> logger;
   Module &module;
 
@@ -66,7 +75,10 @@ class Logger : public snort::Logger {
   }
 
 private:
-  Logger(Module *module) : module(*module) { assert(module); }
+  Logger(Module *module)
+      : module(*module), log_timestamp(module->get_log_timestamp()) {
+    assert(module);
+  }
 
   void alert(snort::Packet *pkt, const char *msg, const Event &) override {
     get_logger().log(std::move(gen_tree("ALERT", pkt, msg)));
@@ -80,6 +92,10 @@ private:
     assert(type && pkt && msg);
 
     LioLi::Tree root("$");
+
+    if (log_timestamp) {
+      root << LioLi::TreeGenerators::timestamp();
+    }
 
     root << (LioLi::Tree(type) << msg);
 

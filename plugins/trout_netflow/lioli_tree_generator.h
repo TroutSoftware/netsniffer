@@ -8,6 +8,8 @@
 
 // System includes
 #include <array>
+#include <chrono>
+#include <format>
 #include <iomanip>
 #include <sstream>
 
@@ -40,6 +42,13 @@ class TreeGenerators {
   }
 
 public:
+  static Tree timestamp() {
+    Tree time("timestamp");
+    time << (Tree("ISO8601")
+             << std::format("{:%FT%TZ}", std::chrono::system_clock::now()));
+    return time;
+  }
+
   static Tree format_IP_MAC(const snort::Packet *p, const snort::Flow *flow,
                             bool is_src) {
     Tree addr("addr");

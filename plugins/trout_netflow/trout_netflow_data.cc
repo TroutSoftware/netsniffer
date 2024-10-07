@@ -54,6 +54,7 @@ void FlowData::process(snort::Packet *pkt) {
   payload_sum += pkt->dsize;
 
   if (first_pkt) {
+    root << LioLi::TreeGenerators::timestamp();
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));

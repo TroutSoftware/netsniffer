@@ -83,7 +83,7 @@ build: $(DEBUG_MODULE) | $(DEBUGDIR)
 
 gdb: $(DEBUG_MODULE)
 	@echo "\e[3;37mStarting debugger...\e[0m"
-	gdb --args $(SNORT) -v -c tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir pcaps --warn-all
+	gdb --args $(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
 format:
 	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
@@ -94,9 +94,9 @@ test-data: $(DEBUG_MODULE)
 release-test-data: $(RELEASE_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) --pcap-dir test_data --warn-all
 
-
+# Look into using % in target (e.g. %/test-local)
 test-local: $(DEBUG_MODULE)
-	$(SNORT) -v -c tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir pcaps --warn-all
+	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))
