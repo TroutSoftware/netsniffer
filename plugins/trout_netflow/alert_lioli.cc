@@ -61,9 +61,10 @@ public:
 };
 
 class Logger : public snort::Logger {
+  Module &module;
   bool log_timestamp = true;
   std::shared_ptr<LioLi::LogLioLiTree> logger;
-  Module &module;
+
 
   LioLi::LogLioLiTree &get_logger() {
     if (!logger) {
