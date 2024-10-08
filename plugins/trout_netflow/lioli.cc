@@ -112,6 +112,17 @@ void Tree::Node::append_child(const Node &node, size_t delta) {
 
 Tree::Node::Node(){};
 
+Tree::Node::Node(const Node &p)
+    : my_name(p.my_name), start(p.start), end(p.end), children(p.children) {
+  last_child_added = children.before_begin();
+
+  auto tmp = last_child_added;
+
+  while (++tmp != children.end()) {
+    last_child_added = tmp;
+  }
+}
+
 Tree::Node::Node(std::string name) : my_name(name) {}
 
 void Tree::Node::adjust(size_t delta) {

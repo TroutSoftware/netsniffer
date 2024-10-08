@@ -26,7 +26,7 @@ usage:
 	@echo "make test         - Run the test suite"
 	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
 	@echo "                    in test_data"
-	@echo "make test-local   - WIP"
+	@echo "make local-test   - (WIP) Set env TEST_MODULE to name of module"
 	@echo ""
 	@echo "Debug builds will be written to:"
 	@echo $(DEBUG_MODULE)
@@ -95,7 +95,7 @@ release-test-data: $(RELEASE_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) --pcap-dir test_data --warn-all
 
 # Look into using % in target (e.g. %/test-local)
-test-local: $(DEBUG_MODULE)
+local-test: $(DEBUG_MODULE)
 	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)

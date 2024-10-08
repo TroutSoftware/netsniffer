@@ -69,7 +69,7 @@ class Tree {
   public:
     Node();
     Node(std::string name);
-    Node(const Node &) = default;
+    Node(const Node &);
     Node(Node &&src) = default;
     Node &operator=(Node &&other) = default;
 
