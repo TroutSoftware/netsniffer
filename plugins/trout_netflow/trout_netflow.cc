@@ -91,7 +91,8 @@ class Inspector : public snort::Inspector {
       FlowData *data = FlowData::get_from_flow(pkt->flow, get_logger());
       data->process(pkt);
     } else {
-      // TODO: log pkt without flow
+      FlowData tmp(get_logger());
+      tmp.process(pkt);      
     }
   };
 
