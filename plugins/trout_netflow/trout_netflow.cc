@@ -92,7 +92,7 @@ class Inspector : public snort::Inspector {
       data->process(pkt);
     } else {
       FlowData tmp(get_logger());
-      tmp.process(pkt);      
+      tmp.process(pkt);
     }
   };
 
