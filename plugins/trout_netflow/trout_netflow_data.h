@@ -7,6 +7,7 @@
 #include <protocols/packet.h>
 
 // System includes
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -22,10 +23,17 @@ class FlowData : public snort::FlowData {
   LioLi::Tree root = {"$"};
 
   bool first_pkt = true;
+  std::chrono::steady_clock::time_point first_pkt_time;
 
   // Todo: Check if this should be atomic
   uint64_t pkt_sum = 0;
   uint64_t payload_sum = 0;
+
+  std::chrono::steady_clock::time_point delta_pkt_time;
+  uint64_t pkt_delta = 0;
+  uint64_t payload_delta = 0;
+
+  void dump_delta();
 
 public:
   FlowData(std::shared_ptr<LioLi::LogLioLiTree>);

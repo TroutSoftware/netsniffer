@@ -18,6 +18,9 @@
 // Debug includes
 
 namespace trout_netflow {
+
+THREAD_LOCAL struct PegCounts s_peg_counts;
+
 namespace {
 
 static const char *s_name = "trout_netflow";
@@ -28,10 +31,16 @@ static const snort::Parameter module_params[] = {
      "Set logger output should be sent to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {}
 
-  Usage get_usage() const override { return GLOBAL; }
+  Usage get_usage() const override { return INSPECT; }
 
   std::string logger_name;
 
@@ -43,6 +52,12 @@ class Module : public snort::Module {
 
     // fail if we didn't get something valid
     return false;
+  }
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    return reinterpret_cast<PegCount *>(&s_peg_counts);
   }
 
 public:
@@ -60,6 +75,7 @@ public:
       : DataHandler(s_name), logger(logger){};
 
   void handle(snort::DataEvent &, snort::Flow *flow) override {
+    s_peg_counts.srv_detected++;
 
     if (flow) {
       FlowData *data = FlowData::get_from_flow(flow, logger);
@@ -87,6 +103,8 @@ class Inspector : public snort::Inspector {
     return logger;
   }
   void eval(snort::Packet *pkt) override {
+    s_peg_counts.pkg_processed++;
+
     if (pkt && pkt->flow) {
       FlowData *data = FlowData::get_from_flow(pkt->flow, get_logger());
       data->process(pkt);
@@ -127,7 +145,7 @@ const snort::InspectApi inspect_api = {
         Module::dtor,
     },
 
-    snort::IT_PROBE,
+    snort::IT_PACKET,
     PROTO_BIT__ALL,
     nullptr, // buffers
     nullptr, // service

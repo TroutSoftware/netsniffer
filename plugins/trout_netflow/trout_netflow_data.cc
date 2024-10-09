@@ -6,7 +6,10 @@
 
 // Local includes
 #include "lioli_tree_generator.h"
+#include "trout_netflow.h"
 #include "trout_netflow_data.h"
+
+// Debug includes
 
 namespace trout_netflow {
 
@@ -34,27 +37,26 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow,
 }
 
 FlowData::~FlowData() {
-  root << (LioLi::Tree("PacketSum") << pkt_sum)
+  root << LioLi::TreeGenerators::timestamp("EndTime")
+       << (LioLi::Tree("PacketDelta") << pkt_delta)
+       << (LioLi::Tree("PayloadDelta") << payload_delta)
+       << (LioLi::Tree("PacketAcc") << pkt_sum)
+       << (LioLi::Tree("PayloadAcc") << payload_sum)
+       << (LioLi::Tree("PacketSum") << pkt_sum)
        << (LioLi::Tree("PayloadSum") << payload_sum);
 
   logger->log(std::move(root));
-  /*
-    root << (LioLi::Tree(type) << msg);
-
-    // format_IP_MAC handles a null flow
-    root << (LioLi::Tree("principal")
-             << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
-  */
 }
 
 void FlowData::process(snort::Packet *pkt) {
   assert(pkt);
 
-  pkt_sum += pkt->pktlen;
-  payload_sum += pkt->dsize;
+  auto now = std::chrono::steady_clock::now();
 
   if (first_pkt) {
-    root << LioLi::TreeGenerators::timestamp();
+    first_pkt_time = now;
+    delta_pkt_time = now;
+    root << LioLi::TreeGenerators::timestamp("Timestamp");
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
@@ -64,10 +66,44 @@ void FlowData::process(snort::Packet *pkt) {
 
     first_pkt = false;
   }
+
+  pkt_sum += pkt->pktlen;
+  payload_sum += pkt->dsize;
+
+  pkt_delta += pkt->pktlen;
+  payload_delta += pkt->dsize;
+
+  s_peg_counts.pkt_size += pkt->pktlen;
+  s_peg_counts.payload_size += pkt->dsize;
+
+  if (pkt_delta > (pkt_sum >> 3) ||
+      (pkt_delta > 0 &&
+       std::chrono::duration_cast<std::chrono::minutes>(now - delta_pkt_time)
+               .count() > 10)) {
+    dump_delta();
+  }
+}
+
+void FlowData::dump_delta() {
+  auto now = std::chrono::steady_clock::now();
+  delta_pkt_time = now;
+
+  auto tmp = root;
+  tmp << LioLi::TreeGenerators::timestamp("DeltaTime")
+      << (LioLi::Tree("PacketDelta") << pkt_delta)
+      << (LioLi::Tree("PayloadDelta") << payload_delta)
+      << (LioLi::Tree("PacketAcc") << pkt_sum)
+      << (LioLi::Tree("PayloadAcc") << payload_sum);
+
+  pkt_delta = 0;
+  payload_delta = 0;
+
+  logger->log(std::move(tmp));
 }
 
 void FlowData::set_service_name(const char *name) {
   root << (LioLi::Tree("service") << std::string(name));
+  dump_delta();
 }
 
 } // namespace trout_netflow

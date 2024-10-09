@@ -13,6 +13,7 @@ alert_lioli = { logger = 'log_lorth',
                 timestamp = false }
 stream = {}
 stream_tcp = {}
+stream_udp = {}
 http_inspect = {}
 
 wizard = {

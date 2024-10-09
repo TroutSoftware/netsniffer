@@ -42,8 +42,8 @@ class TreeGenerators {
   }
 
 public:
-  static Tree timestamp() {
-    Tree time("timestamp");
+  static Tree timestamp(const char *txt) {
+    Tree time(txt);
     time << (Tree("ISO8601")
              << std::format("{:%FT%TZ}", std::chrono::system_clock::now()));
     return time;

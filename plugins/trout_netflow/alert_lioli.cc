@@ -65,7 +65,6 @@ class Logger : public snort::Logger {
   bool log_timestamp = true;
   std::shared_ptr<LioLi::LogLioLiTree> logger;
 
-
   LioLi::LogLioLiTree &get_logger() {
     if (!logger) {
       logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(
@@ -95,7 +94,7 @@ private:
     LioLi::Tree root("$");
 
     if (log_timestamp) {
-      root << LioLi::TreeGenerators::timestamp();
+      root << LioLi::TreeGenerators::timestamp("AlertTime");
     }
 
     root << (LioLi::Tree(type) << msg);
