@@ -14,36 +14,66 @@
 // Local includes
 #include "lioli.h"
 #include "log_framework.h"
+#include "trout_netflow.private.h"
 
 namespace trout_netflow {
 
 class FlowData : public snort::FlowData {
-  std::shared_ptr<LioLi::LogLioLiTree> logger;
-  bool testmode = false;
+  Settings settings;
 
   LioLi::Tree root = {"$"};
 
   bool first_pkt = true;
   std::chrono::steady_clock::time_point first_pkt_time;
 
+  struct PP {
+    const char *name = "undefined";
+    uint64_t packet = 0;
+    uint64_t payload = 0;
+
+    PP(const char *name) : name(name) {}
+    PP(uint64_t packet, uint64_t payload) : packet(packet), payload(payload) {}
+
+    void operator+=(PP &pp) {
+      packet += pp.packet;
+      payload += pp.payload;
+    }
+
+    LioLi::Tree gen_tree() {
+      LioLi::Tree tree(name);
+      tree << (LioLi::Tree("packet") << packet)
+           << (LioLi::Tree("payload") << payload);
+      return tree;
+    }
+
+    void clear() {
+      packet = 0;
+      payload = 0;
+    }
+
+    bool is_significant_of(PP &other) const {
+      return (packet > other.packet >> 3);
+    }
+
+    operator bool() const { return packet > 0 || payload > 0; }
+  };
+
   // Todo: Check if this should be atomic
-  uint64_t pkt_sum = 0;
-  uint64_t payload_sum = 0;
+  PP acc = {"acc"};
 
   std::chrono::steady_clock::time_point delta_pkt_time;
-  uint64_t pkt_delta = 0;
-  uint64_t payload_delta = 0;
+  PP delta = {"delta"};
+
+  LioLi::Tree gen_delta();
 
   void dump_delta();
 
 public:
-  FlowData(std::shared_ptr<LioLi::LogLioLiTree>, bool);
+  FlowData(Settings &);
   ~FlowData();
   unsigned static get_id();
 
-  static FlowData *get_from_flow(snort::Flow *flow,
-                                 std::shared_ptr<LioLi::LogLioLiTree> logger,
-                                 bool testmode);
+  static FlowData *get_from_flow(snort::Flow *flow, Settings &);
 
   void process(snort::Packet *);
 

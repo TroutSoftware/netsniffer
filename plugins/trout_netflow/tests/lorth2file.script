@@ -13,7 +13,8 @@ alert_lioli = { logger = 'log_lorth',
                 testmode = true }
 
 trout_netflow = { logger = 'log_lorth',
-                  testmode = true }
+                  testmode = true,
+                  option_grouped_output = false }
 
 stream = {}
 stream_tcp = {}

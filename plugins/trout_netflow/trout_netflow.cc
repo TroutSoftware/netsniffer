@@ -13,6 +13,7 @@
 // Local includes
 #include "log_framework.h"
 #include "trout_netflow.h"
+#include "trout_netflow.private.h"
 #include "trout_netflow_data.h"
 
 // Debug includes
@@ -32,6 +33,8 @@ static const snort::Parameter module_params[] = {
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
      "if set to true it will give consistent output, like using fixed "
      "timestamps"},
+    {"option_grouped_output", snort::Parameter::PT_BOOL, nullptr, "false",
+     "if set will generate the sizes in separate sub trees"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -45,14 +48,15 @@ class Module : public snort::Module {
 
   Usage get_usage() const override { return INSPECT; }
 
-  std::string logger_name;
-  bool testmode = false;
+  Settings settings;
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("logger") && val.get_as_string().size() > 0) {
-      logger_name = val.get_string();
+      settings.logger_name = val.get_string();
     } else if (val.is("testmode")) {
-      testmode = val.get_bool();
+      settings.testmode = val.get_bool();
+    } else if (val.is("option_grouped_output")) {
+      settings.option_grouped_output = val.get_bool();
     } else {
       // fail if we didn't get something valid
       return false;
@@ -68,27 +72,24 @@ class Module : public snort::Module {
   }
 
 public:
-  std::string &get_logger_name() { return logger_name; }
-  bool get_test_mode() { return testmode; }
+  Settings &get_settings() { return settings; }
 
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };
 
 class ServiceEventHandler : public snort::DataHandler {
-  std::shared_ptr<LioLi::LogLioLiTree> logger;
-  bool testmode;
+  Settings settings;
 
 public:
-  ServiceEventHandler(std::shared_ptr<LioLi::LogLioLiTree> logger,
-                      bool testmode)
-      : DataHandler(s_name), logger(logger), testmode(testmode){};
+  ServiceEventHandler(Settings &settings)
+      : DataHandler(s_name), settings(settings) {}
 
   void handle(snort::DataEvent &, snort::Flow *flow) override {
     s_peg_counts.srv_detected++;
 
     if (flow) {
-      FlowData *data = FlowData::get_from_flow(flow, logger, testmode);
+      FlowData *data = FlowData::get_from_flow(flow, settings);
       assert(data);
 
       data->set_service_name(flow->service);
@@ -97,33 +98,22 @@ public:
 };
 
 class Inspector : public snort::Inspector {
-  std::string logger_name;
-  std::shared_ptr<LioLi::LogLioLiTree> logger;
-  bool testmode = false;
+  Settings settings;
 
   Inspector(Module *module) {
     assert(module);
 
-    logger_name = module->get_logger_name();
-    testmode = module->get_test_mode();
-  }
-
-  std::shared_ptr<LioLi::LogLioLiTree> get_logger() {
-    if (!logger) {
-      logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(logger_name.c_str());
-    }
-    return logger;
+    settings = module->get_settings();
   }
 
   void eval(snort::Packet *pkt) override {
     s_peg_counts.pkg_processed++;
 
     if (pkt && pkt->flow) {
-      FlowData *data =
-          FlowData::get_from_flow(pkt->flow, get_logger(), testmode);
+      FlowData *data = FlowData::get_from_flow(pkt->flow, settings);
       data->process(pkt);
     } else {
-      FlowData tmp(get_logger(), testmode);
+      FlowData tmp(settings);
       tmp.process(pkt);
     }
   };
@@ -131,7 +121,7 @@ class Inspector : public snort::Inspector {
   bool configure(snort::SnortConfig *) {
     snort::DataBus::subscribe_network(
         snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_SERVICE_CHANGE,
-        new ServiceEventHandler(get_logger(), testmode));
+        new ServiceEventHandler(settings));
     return true;
   }
 

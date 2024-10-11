@@ -6,7 +6,7 @@
 
 // Local includes
 #include "lioli_tree_generator.h"
-#include "trout_netflow.h"
+#include "trout_netflow.private.h"
 #include "trout_netflow_data.h"
 
 // Global includes
@@ -16,24 +16,23 @@
 
 namespace trout_netflow {
 
-FlowData::FlowData(std::shared_ptr<LioLi::LogLioLiTree> logger, bool testmode)
-    : snort::FlowData(get_id()), logger(logger), testmode(testmode) {}
+FlowData::FlowData(Settings &settings)
+    : snort::FlowData(get_id()), settings(settings) {}
 
 unsigned FlowData::get_id() {
   static unsigned flow_data_id = snort::FlowData::create_flow_data_id();
   return flow_data_id;
 }
 
-FlowData *FlowData::get_from_flow(snort::Flow *flow,
-                                  std::shared_ptr<LioLi::LogLioLiTree> logger,
-                                  bool testmode) {
+FlowData *FlowData::get_from_flow(snort::Flow *flow, Settings &settings) {
   assert(flow);
 
   FlowData *flow_data =
       dynamic_cast<FlowData *>(flow->get_flow_data(FlowData::get_id()));
 
   if (!flow_data) {
-    flow_data = new FlowData(logger, testmode);
+
+    flow_data = new FlowData(settings);
     flow->set_flow_data(flow_data);
   }
 
@@ -41,15 +40,20 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow,
 }
 
 FlowData::~FlowData() {
-  root << LioLi::TreeGenerators::timestamp("EndTime", testmode)
-       << (LioLi::Tree("PacketDelta") << pkt_delta)
-       << (LioLi::Tree("PayloadDelta") << payload_delta)
-       << (LioLi::Tree("PacketAcc") << pkt_sum)
-       << (LioLi::Tree("PayloadAcc") << payload_sum)
-       << (LioLi::Tree("PacketSum") << pkt_sum)
-       << (LioLi::Tree("PayloadSum") << payload_sum);
-
-  logger->log(std::move(root));
+  if (settings.option_grouped_output) {
+    auto tmp = gen_delta();
+    tmp << LioLi::TreeGenerators::timestamp("end time");
+    settings.get_logger()->log(std::move(tmp));
+  } else {
+    root << LioLi::TreeGenerators::timestamp("EndTime", settings.testmode)
+         << (LioLi::Tree("PacketDelta") << delta.packet)
+         << (LioLi::Tree("PayloadDelta") << delta.payload)
+         << (LioLi::Tree("PacketAcc") << acc.packet)
+         << (LioLi::Tree("PayloadAcc") << acc.payload)
+         << (LioLi::Tree("PacketSum") << acc.packet)
+         << (LioLi::Tree("PayloadSum") << acc.payload);
+    settings.get_logger()->log(std::move(root));
+  }
 }
 
 void FlowData::process(snort::Packet *pkt) {
@@ -57,12 +61,16 @@ void FlowData::process(snort::Packet *pkt) {
 
   // Note, this uses steady_clock instead of system_clock to ensure delta times
   // are correct
-  auto now = TestableTime::now<std::chrono::steady_clock>(testmode);
+  auto now = TestableTime::now<std::chrono::steady_clock>(settings.testmode);
 
   if (first_pkt) {
     first_pkt_time = now;
     delta_pkt_time = now;
-    root << LioLi::TreeGenerators::timestamp("Timestamp", testmode);
+    if (settings.option_grouped_output) {
+      root << LioLi::TreeGenerators::timestamp("start time", settings.testmode);
+    } else {
+      root << LioLi::TreeGenerators::timestamp("Timestamp", settings.testmode);
+    }
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
@@ -73,38 +81,54 @@ void FlowData::process(snort::Packet *pkt) {
     first_pkt = false;
   }
 
-  pkt_sum += pkt->pktlen;
-  payload_sum += pkt->dsize;
+  PP pp(pkt->pktlen, pkt->dsize);
 
-  pkt_delta += pkt->pktlen;
-  payload_delta += pkt->dsize;
+  acc += pp;
+  delta += pp;
 
   s_peg_counts.pkt_size += pkt->pktlen;
   s_peg_counts.payload_size += pkt->dsize;
 
-  if (pkt_delta > (pkt_sum >> 3) ||
-      (pkt_delta > 0 &&
+  if (delta.is_significant_of(acc) ||
+      (delta &&
        std::chrono::duration_cast<std::chrono::minutes>(now - delta_pkt_time)
                .count() > 10)) {
     dump_delta();
   }
 }
 
-void FlowData::dump_delta() {
-  auto now = TestableTime::now<std::chrono::steady_clock>(testmode);
+LioLi::Tree FlowData::gen_delta() {
+  auto now = std::chrono::steady_clock::now();
   delta_pkt_time = now;
 
   auto tmp = root;
-  tmp << LioLi::TreeGenerators::timestamp("DeltaTime", testmode)
-      << (LioLi::Tree("PacketDelta") << pkt_delta)
-      << (LioLi::Tree("PayloadDelta") << payload_delta)
-      << (LioLi::Tree("PacketAcc") << pkt_sum)
-      << (LioLi::Tree("PayloadAcc") << payload_sum);
+  auto delta_root = delta.gen_tree();
+  delta_root << LioLi::TreeGenerators::timestamp("time");
+  tmp << delta_root << acc.gen_tree();
 
-  pkt_delta = 0;
-  payload_delta = 0;
+  delta.clear();
 
-  logger->log(std::move(tmp));
+  return tmp;
+}
+
+void FlowData::dump_delta() {
+  if (settings.option_grouped_output) {
+    settings.get_logger()->log(gen_delta());
+  } else {
+    auto now = TestableTime::now<std::chrono::steady_clock>(settings.testmode);
+    delta_pkt_time = now;
+
+    auto tmp = root;
+    tmp << LioLi::TreeGenerators::timestamp("DeltaTime", settings.testmode)
+        << (LioLi::Tree("PacketDelta") << delta.packet)
+        << (LioLi::Tree("PayloadDelta") << delta.payload)
+        << (LioLi::Tree("PacketAcc") << acc.packet)
+        << (LioLi::Tree("PayloadAcc") << acc.payload);
+
+    delta.clear();
+
+    settings.get_logger()->log(std::move(tmp));
+  }
 }
 
 void FlowData::set_service_name(const char *name) {

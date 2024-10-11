@@ -37,5 +37,6 @@ H_FILES = \
 	output_to_pipe.h \
 	output_to_stdout.h \
 	trout_netflow.h \
+	trout_netflow.private.h \
 	trout_netflow_data.h
 
