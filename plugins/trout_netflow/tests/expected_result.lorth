@@ -1,4 +1,268 @@
 $ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48841" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "81" .
+ PayloadDelta "39" .
+ PacketAcc "81" .
+ PayloadAcc "39" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "47361" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "81" .
+ PayloadDelta "39" .
+ PacketAcc "81" .
+ PayloadAcc "39" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48841" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "177" .
+ PayloadDelta "135" .
+ PacketAcc "258" .
+ PayloadAcc "174" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "47361" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "193" .
+ PayloadDelta "151" .
+ PacketAcc "274" .
+ PayloadAcc "190" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "74" .
+ PayloadDelta "0" .
+ PacketAcc "74" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "74" .
+ PayloadDelta "0" .
+ PacketAcc "148" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "214" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "191" .
+ PayloadDelta "125" .
+ PacketAcc "405" .
+ PayloadAcc "125" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "471" .
+ PayloadAcc "125" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "471" .
+ PayloadAcc "125" .
+};
+$ {
+ AlertTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
  log "\"This is a log of an http header\"" .
  principal {
   addr {
@@ -19,6 +283,297 @@ $ {
  method "GET" .
 };
 $ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "839" .
+ PayloadDelta "773" .
+ PacketAcc "1310" .
+ PayloadAcc "898" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "59152" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "85" .
+ PayloadDelta "43" .
+ PacketAcc "85" .
+ PayloadAcc "43" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "46739" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "85" .
+ PayloadDelta "43" .
+ PacketAcc "85" .
+ PayloadAcc "43" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "59152" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "181" .
+ PayloadDelta "139" .
+ PacketAcc "266" .
+ PayloadAcc "182" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "46739" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "197" .
+ PayloadDelta "155" .
+ PacketAcc "282" .
+ PayloadAcc "198" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "74" .
+ PayloadDelta "0" .
+ PacketAcc "74" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "74" .
+ PayloadDelta "0" .
+ PacketAcc "148" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "214" .
+ PayloadAcc "0" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "195" .
+ PayloadDelta "129" .
+ PacketAcc "409" .
+ PayloadAcc "129" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "475" .
+ PayloadAcc "129" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "475" .
+ PayloadAcc "129" .
+};
+$ {
+ AlertTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
  log "\"This is a log of an http header\"" .
  principal {
   addr {
@@ -37,4 +592,255 @@ $ {
  protocol "http" .
  host "www.google.com" .
  method "GET" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "1466" .
+ PayloadDelta "1400" .
+ PacketAcc "1941" .
+ PayloadAcc "1529" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "1532" .
+ PayloadDelta "1400" .
+ PacketAcc "3473" .
+ PayloadAcc "2929" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ DeltaTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "1532" .
+ PayloadDelta "1400" .
+ PacketAcc "5005" .
+ PayloadAcc "4329" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "209.85.202.100" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "1376" .
+ PayloadAcc "898" .
+ PacketSum "1376" .
+ PayloadSum "898" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "66" .
+ PayloadDelta "0" .
+ PacketAcc "5071" .
+ PayloadAcc "4329" .
+ PacketSum "5071" .
+ PayloadSum "4329" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48841" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "258" .
+ PayloadAcc "174" .
+ PacketSum "258" .
+ PayloadSum "174" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "47361" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "274" .
+ PayloadAcc "190" .
+ PacketSum "274" .
+ PayloadSum "190" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "59152" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "266" .
+ PayloadAcc "182" .
+ PacketSum "266" .
+ PayloadSum "182" .
+};
+$ {
+ Timestamp {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "46739" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "10.67.21.1" .
+   ":" .
+   port "53" .
+  }
+ }
+ EndTime {
+  ISO8601 "1970-01-01T00:00:00.000000000Z" .
+ }
+ PacketDelta "0" .
+ PayloadDelta "0" .
+ PacketAcc "282" .
+ PayloadAcc "198" .
+ PacketSum "282" .
+ PayloadSum "198" .
 };
