@@ -117,28 +117,41 @@ OBJS :=
 DEPS :=
 TEST_DIRS :=
 LINK_DEPS :=
+INC_DIRS :=
+MODULE_LIST := 
 
 ########################################################################
 # Reads FILES from all lib_def.mk files from all subfolders and adds 
 # them with correct path to CC_SOURCES
 define EXPAND_SOURCEFILES
- $(eval $(file <$(1)))
- LINK_DEPS += $(1)
- SRC_DIR := $(dir $(1))
- ifdef CC_FILES
-   CC_SOURCES += $(addprefix $$(SRC_DIR),$(CC_FILES))
-   undefine CC_FILES
- endif
+  $(eval $(file <$(1)))
+  LINK_DEPS += $(1)
+  SRC_DIR := $(dir $(1))
+
+  ifdef MODULE_NAME
+    MODULE_LIST := $(MODULE_LIST) $(MODULE_NAME)
+    undefine MODULE_NAME
+  endif
   
- ifdef H_FILES
-   CC_HEADERS += $(addprefix $$(SRC_DIR),$(H_FILES))
-   undefine H_FILES
- endif
+  ifdef CC_FILES
+    CC_SOURCES += $(addprefix $$(SRC_DIR),$(CC_FILES))
+    undefine CC_FILES
+  endif
+  
+  ifdef H_FILES
+    CC_HEADERS += $(addprefix $$(SRC_DIR),$(H_FILES))
+    undefine H_FILES
+  endif
  
- ifdef TEST_FOLDER
-   TEST_DIRS := $(TEST_DIRS)$(addprefix $$(SRC_DIR),$(TEST_FOLDER));
-   undefine TEST_FOLDER
- endif
+  ifdef TEST_FOLDER
+    TEST_DIRS := $(TEST_DIRS)$(addprefix $$(SRC_DIR),$(TEST_FOLDER));
+    undefine TEST_FOLDER
+  endif
+
+  ifdef PUBLIC_INC
+    INC_DIRS := $(INC_DIRS) -I $(addprefix $$(SRC_DIR),$(PUBLIC_INC))
+    undefine PUBLIC_INC
+  endif
   
 endef
 
@@ -155,7 +168,7 @@ DEPS=$(abspath $(addprefix $(MAKEDIR)/, $(subst .cc,.d,$(CC_SOURCES))))
 # Rule for how to compile .cc files to .o files
 $(MAKEDIR)/%.o : %.cc | $(MAKE_README_FILENAME)
 	@mkdir -p $(dir $@)
-	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -Wall -fPIC -Wextra -g -I $(ISNORT) -c $< -o $@
+	g++ -MMD -MT '$(patsubst %.cc,$(MAKEDIR)/%.o,$<)' -pipe -O0 -std=c++2b -Wall -fPIC -Wextra -g -I $(ISNORT) $(INC_DIRS) -c $< -o $@
 
 # Rule for linking debug build (how to generate $(OUTPUTDIR)/$(DEBUG_MODULE) )
 $(DEBUG_MODULE): $(OBJS) $(LINK_DEPS) | $(DEBUGDIR)
@@ -165,5 +178,5 @@ $(DEBUG_MODULE): $(OBJS) $(LINK_DEPS) | $(DEBUGDIR)
 # Rule for linking release build (how to generate $(OUTPUTDIR)/$(RELEASE_MODULE) )
 $(RELEASE_MODULE): $(CC_SOURCES) $(LINK_DEPS) | $(RELEASEDIR)
 	@echo "\e[3;37mLinking...\e[0m"
-	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(CC_SOURCES) -o $(RELEASE_MODULE)	
+	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(INC_DIRS) $(CC_SOURCES) -o $(RELEASE_MODULE)	
 

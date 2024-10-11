@@ -9,12 +9,15 @@
 #include "trout_netflow.h"
 #include "trout_netflow_data.h"
 
+// Global includes
+#include <testable_time.h>
+
 // Debug includes
 
 namespace trout_netflow {
 
-FlowData::FlowData(std::shared_ptr<LioLi::LogLioLiTree> logger)
-    : snort::FlowData(get_id()), logger(logger) {}
+FlowData::FlowData(std::shared_ptr<LioLi::LogLioLiTree> logger, bool testmode)
+    : snort::FlowData(get_id()), logger(logger), testmode(testmode) {}
 
 unsigned FlowData::get_id() {
   static unsigned flow_data_id = snort::FlowData::create_flow_data_id();
@@ -22,14 +25,15 @@ unsigned FlowData::get_id() {
 }
 
 FlowData *FlowData::get_from_flow(snort::Flow *flow,
-                                  std::shared_ptr<LioLi::LogLioLiTree> logger) {
+                                  std::shared_ptr<LioLi::LogLioLiTree> logger,
+                                  bool testmode) {
   assert(flow);
 
   FlowData *flow_data =
       dynamic_cast<FlowData *>(flow->get_flow_data(FlowData::get_id()));
 
   if (!flow_data) {
-    flow_data = new FlowData(logger);
+    flow_data = new FlowData(logger, testmode);
     flow->set_flow_data(flow_data);
   }
 
@@ -37,7 +41,7 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow,
 }
 
 FlowData::~FlowData() {
-  root << LioLi::TreeGenerators::timestamp("EndTime")
+  root << LioLi::TreeGenerators::timestamp("EndTime", testmode)
        << (LioLi::Tree("PacketDelta") << pkt_delta)
        << (LioLi::Tree("PayloadDelta") << payload_delta)
        << (LioLi::Tree("PacketAcc") << pkt_sum)
@@ -51,12 +55,14 @@ FlowData::~FlowData() {
 void FlowData::process(snort::Packet *pkt) {
   assert(pkt);
 
-  auto now = std::chrono::steady_clock::now();
+  // Note, this uses steady_clock instead of system_clock to ensure delta times
+  // are correct
+  auto now = TestableTime::now<std::chrono::steady_clock>(testmode);
 
   if (first_pkt) {
     first_pkt_time = now;
     delta_pkt_time = now;
-    root << LioLi::TreeGenerators::timestamp("Timestamp");
+    root << LioLi::TreeGenerators::timestamp("Timestamp", testmode);
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
@@ -85,11 +91,11 @@ void FlowData::process(snort::Packet *pkt) {
 }
 
 void FlowData::dump_delta() {
-  auto now = std::chrono::steady_clock::now();
+  auto now = TestableTime::now<std::chrono::steady_clock>(testmode);
   delta_pkt_time = now;
 
   auto tmp = root;
-  tmp << LioLi::TreeGenerators::timestamp("DeltaTime")
+  tmp << LioLi::TreeGenerators::timestamp("DeltaTime", testmode)
       << (LioLi::Tree("PacketDelta") << pkt_delta)
       << (LioLi::Tree("PayloadDelta") << payload_delta)
       << (LioLi::Tree("PacketAcc") << pkt_sum)

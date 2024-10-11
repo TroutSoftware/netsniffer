@@ -16,6 +16,9 @@
 // Local includes
 #include "lioli.h"
 
+// Global includes
+#include <testable_time.h>
+
 namespace LioLi {
 
 class TreeGenerators {
@@ -42,10 +45,11 @@ class TreeGenerators {
   }
 
 public:
-  static Tree timestamp(const char *txt) {
+  static Tree timestamp(const char *txt, bool testmode = false) {
     Tree time(txt);
-    time << (Tree("ISO8601")
-             << std::format("{:%FT%TZ}", std::chrono::system_clock::now()));
+    time << (Tree("ISO8601") << std::format(
+                 "{:%FT%TZ}",
+                 TestableTime::now<std::chrono::system_clock>(testmode)));
     return time;
   }
 

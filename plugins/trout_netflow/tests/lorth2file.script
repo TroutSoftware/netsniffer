@@ -1,16 +1,20 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap $testdir/pcaps/google_http.pcap
-cmp output.lorth $testdir/expected_result.lorth
+cmp $testdir/expected_result.lorth output.lorth
 
 -- cfg.lua --
 output_to_file = { file_name = 'output.lorth' }
-output_to_stdout = {}
+output_to_stdout = { }
 
 log_txt = { output = 'output_to_stdout' }
 log_lorth = { output = 'output_to_file' }
 
 alert_lioli = { logger = 'log_lorth',
-                timestamp = false }
+                testmode = true }
+
+trout_netflow = { logger = 'log_lorth',
+                  testmode = true }
+
 stream = {}
 stream_tcp = {}
 stream_udp = {}

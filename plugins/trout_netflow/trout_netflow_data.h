@@ -19,6 +19,7 @@ namespace trout_netflow {
 
 class FlowData : public snort::FlowData {
   std::shared_ptr<LioLi::LogLioLiTree> logger;
+  bool testmode = false;
 
   LioLi::Tree root = {"$"};
 
@@ -36,12 +37,13 @@ class FlowData : public snort::FlowData {
   void dump_delta();
 
 public:
-  FlowData(std::shared_ptr<LioLi::LogLioLiTree>);
+  FlowData(std::shared_ptr<LioLi::LogLioLiTree>, bool);
   ~FlowData();
   unsigned static get_id();
 
   static FlowData *get_from_flow(snort::Flow *flow,
-                                 std::shared_ptr<LioLi::LogLioLiTree> logger);
+                                 std::shared_ptr<LioLi::LogLioLiTree> logger,
+                                 bool testmode);
 
   void process(snort::Packet *);
 
