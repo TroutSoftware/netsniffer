@@ -4,10 +4,13 @@
 // System includes
 #include <cassert>
 #include <iostream>
+#include <regex>
 #include <string>
 
 // Local includes
 #include "lioli.h"
+
+// Debug includes
 
 namespace LioLi {
 namespace {
@@ -80,6 +83,7 @@ public:
 };
 
 } // namespace
+
 Dictionary::Dictionary(uint16_t max_entries) : max_entries(max_entries) {}
 
 void Dictionary::reset() { map.clear(); }
@@ -269,10 +273,20 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta) const {
   return output;
 }
 
-std::string raw; // The raw string (e.i. the string referenced by the tree)
+const static std::regex valid_name("[a-z_][a-z_\\d]*|\\$",
+                                   std::regex::optimize);
+
+bool Tree::is_valid_tree_name(const std::string &name) const {
+
+  return std::regex_match(name, valid_name);
+}
 
 Tree::Tree() {}
-Tree::Tree(const std::string name) : me(name) {}
+
+Tree::Tree(const std::string &name) : me(name) {
+  assert(is_valid_tree_name(name));
+}
+
 Tree &Tree::operator<<(const std::string &text) {
   raw += text;
   me.set_end(raw.size());

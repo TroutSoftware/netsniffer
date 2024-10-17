@@ -47,9 +47,8 @@ class TreeGenerators {
 public:
   static Tree timestamp(const char *txt, bool testmode = false) {
     Tree time(txt);
-    time << (Tree("ISO8601") << std::format(
-                 "{:%FT%TZ}",
-                 TestableTime::now<std::chrono::system_clock>(testmode)));
+    time << std::format("{:%FT%TZ}",
+                        TestableTime::now<std::chrono::system_clock>(testmode));
     return time;
   }
 
@@ -64,7 +63,6 @@ public:
       append_sf_ip(ss, &sf_ip);
 
       addr << (Tree("ip") << ss.str()) << ":" << (Tree("port") << port);
-      return addr;
     } else if (p->has_ip()) {
       const snort::SfIp *sf_ip =
           (is_src ? p->ptrs.ip_api.get_src() : p->ptrs.ip_api.get_dst());
@@ -76,7 +74,7 @@ public:
       if (p->is_tcp() || p->is_udp()) {
         addr << ":" << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
       } else {
-        ss << ':' << '-';
+        addr << ':' << '-';
       }
     } else {
       const snort::eth::EtherHdr *eh =
@@ -94,7 +92,7 @@ public:
         // Nothing to add
       }
     }
-    return ss.str();
+    return addr;
   }
 };
 

@@ -1,7 +1,5 @@
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -16,18 +14,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "81" .
- PayloadDelta "39" .
- PacketAcc "81" .
- PayloadAcc "39" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "81" .
+ payload_delta "39" .
+ packet_acc "81" .
+ payload_acc "39" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -42,18 +36,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "81" .
- PayloadDelta "39" .
- PacketAcc "81" .
- PayloadAcc "39" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "81" .
+ payload_delta "39" .
+ packet_acc "81" .
+ payload_acc "39" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -68,18 +58,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "177" .
- PayloadDelta "135" .
- PacketAcc "258" .
- PayloadAcc "174" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "177" .
+ payload_delta "135" .
+ packet_acc "258" .
+ payload_acc "174" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -94,18 +80,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "193" .
- PayloadDelta "151" .
- PacketAcc "274" .
- PayloadAcc "190" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "193" .
+ payload_delta "151" .
+ packet_acc "274" .
+ payload_acc "190" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -120,18 +102,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "74" .
- PayloadDelta "0" .
- PacketAcc "74" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "74" .
+ payload_delta "0" .
+ packet_acc "74" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -146,18 +124,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "74" .
- PayloadDelta "0" .
- PacketAcc "148" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "74" .
+ payload_delta "0" .
+ packet_acc "148" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -172,18 +146,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "214" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "214" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -198,18 +168,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "191" .
- PayloadDelta "125" .
- PacketAcc "405" .
- PayloadAcc "125" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "191" .
+ payload_delta "125" .
+ packet_acc "405" .
+ payload_acc "125" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -224,18 +190,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "471" .
- PayloadAcc "125" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "471" .
+ payload_acc "125" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -251,18 +213,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "471" .
- PayloadAcc "125" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "471" .
+ payload_acc "125" .
 };
 $ {
- AlertTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  log "\"This is a log of an http header\"" .
  principal {
   addr {
@@ -283,9 +241,7 @@ $ {
  method "GET" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -301,18 +257,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "839" .
- PayloadDelta "773" .
- PacketAcc "1310" .
- PayloadAcc "898" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "839" .
+ payload_delta "773" .
+ packet_acc "1310" .
+ payload_acc "898" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -327,18 +279,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "85" .
- PayloadDelta "43" .
- PacketAcc "85" .
- PayloadAcc "43" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "85" .
+ payload_delta "43" .
+ packet_acc "85" .
+ payload_acc "43" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -353,18 +301,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "85" .
- PayloadDelta "43" .
- PacketAcc "85" .
- PayloadAcc "43" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "85" .
+ payload_delta "43" .
+ packet_acc "85" .
+ payload_acc "43" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -379,18 +323,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "181" .
- PayloadDelta "139" .
- PacketAcc "266" .
- PayloadAcc "182" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "181" .
+ payload_delta "139" .
+ packet_acc "266" .
+ payload_acc "182" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -405,18 +345,14 @@ $ {
    port "53" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "197" .
- PayloadDelta "155" .
- PacketAcc "282" .
- PayloadAcc "198" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "197" .
+ payload_delta "155" .
+ packet_acc "282" .
+ payload_acc "198" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -431,18 +367,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "74" .
- PayloadDelta "0" .
- PacketAcc "74" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "74" .
+ payload_delta "0" .
+ packet_acc "74" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -457,18 +389,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "74" .
- PayloadDelta "0" .
- PacketAcc "148" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "74" .
+ payload_delta "0" .
+ packet_acc "148" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -483,18 +411,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "214" .
- PayloadAcc "0" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "214" .
+ payload_acc "0" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -509,18 +433,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "195" .
- PayloadDelta "129" .
- PacketAcc "409" .
- PayloadAcc "129" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "195" .
+ payload_delta "129" .
+ packet_acc "409" .
+ payload_acc "129" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -535,18 +455,14 @@ $ {
    port "80" .
   }
  }
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "475" .
- PayloadAcc "129" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "475" .
+ payload_acc "129" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -562,18 +478,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "475" .
- PayloadAcc "129" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "475" .
+ payload_acc "129" .
 };
 $ {
- AlertTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  log "\"This is a log of an http header\"" .
  principal {
   addr {
@@ -594,9 +506,7 @@ $ {
  method "GET" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -612,18 +522,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "1466" .
- PayloadDelta "1400" .
- PacketAcc "1941" .
- PayloadAcc "1529" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "1466" .
+ payload_delta "1400" .
+ packet_acc "1941" .
+ payload_acc "1529" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -639,18 +545,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "1532" .
- PayloadDelta "1400" .
- PacketAcc "3473" .
- PayloadAcc "2929" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "1532" .
+ payload_delta "1400" .
+ packet_acc "3473" .
+ payload_acc "2929" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -666,18 +568,14 @@ $ {
   }
  }
  service "http" .
- DeltaTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "1532" .
- PayloadDelta "1400" .
- PacketAcc "5005" .
- PayloadAcc "4329" .
+ delta_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "1532" .
+ payload_delta "1400" .
+ packet_acc "5005" .
+ payload_acc "4329" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -693,20 +591,16 @@ $ {
   }
  }
  service "http" .
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "1376" .
- PayloadAcc "898" .
- PacketSum "1376" .
- PayloadSum "898" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "1376" .
+ payload_acc "898" .
+ packet_sum "1376" .
+ payload_sum "898" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -722,20 +616,16 @@ $ {
   }
  }
  service "http" .
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "66" .
- PayloadDelta "0" .
- PacketAcc "5071" .
- PayloadAcc "4329" .
- PacketSum "5071" .
- PayloadSum "4329" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "66" .
+ payload_delta "0" .
+ packet_acc "5071" .
+ payload_acc "4329" .
+ packet_sum "5071" .
+ payload_sum "4329" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -750,20 +640,16 @@ $ {
    port "53" .
   }
  }
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "258" .
- PayloadAcc "174" .
- PacketSum "258" .
- PayloadSum "174" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "258" .
+ payload_acc "174" .
+ packet_sum "258" .
+ payload_sum "174" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -778,20 +664,16 @@ $ {
    port "53" .
   }
  }
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "274" .
- PayloadAcc "190" .
- PacketSum "274" .
- PayloadSum "190" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "274" .
+ payload_acc "190" .
+ packet_sum "274" .
+ payload_sum "190" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -806,20 +688,16 @@ $ {
    port "53" .
   }
  }
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "266" .
- PayloadAcc "182" .
- PacketSum "266" .
- PayloadSum "182" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "266" .
+ payload_acc "182" .
+ packet_sum "266" .
+ payload_sum "182" .
 };
 $ {
- Timestamp {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
+ timestamp "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -834,13 +712,11 @@ $ {
    port "53" .
   }
  }
- EndTime {
-  ISO8601 "1970-01-01T00:00:00.000000000Z" .
- }
- PacketDelta "0" .
- PayloadDelta "0" .
- PacketAcc "282" .
- PayloadAcc "198" .
- PacketSum "282" .
- PayloadSum "198" .
+ end_time "1970-01-01T00:00:00.000000000Z" .
+ packet_delta "0" .
+ payload_delta "0" .
+ packet_acc "282" .
+ payload_acc "198" .
+ packet_sum "282" .
+ payload_sum "198" .
 };

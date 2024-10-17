@@ -1,6 +1,6 @@
 
 
-log ip any any -> any any (
+alert ip any any -> any any (
   msg:"This is a log of an http header";
 
   http_header:field host;

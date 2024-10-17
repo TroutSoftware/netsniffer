@@ -83,9 +83,11 @@ class Tree {
 
   std::string raw; // The raw string (e.i. the string referenced by the tree)
 
+  bool is_valid_tree_name(const std::string &name) const;
+
 public:
   Tree();
-  Tree(const std::string name);
+  Tree(const std::string &name);
   Tree(const Tree &) = default;
   Tree(Tree &&src) = default;
   Tree &operator=(Tree &&other) = default;

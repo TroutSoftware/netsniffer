@@ -83,7 +83,7 @@ private:
   }
 
   void alert(snort::Packet *pkt, const char *msg, const Event &) override {
-    get_logger().log(std::move(gen_tree("ALERT", pkt, msg)));
+    get_logger().log(std::move(gen_tree("alert", pkt, msg)));
   }
 
   void log(snort::Packet *pkt, const char *msg, Event *) override {
@@ -95,7 +95,7 @@ private:
 
     LioLi::Tree root("$");
 
-    root << LioLi::TreeGenerators::timestamp("AlertTime", testmode);
+    root << LioLi::TreeGenerators::timestamp("timestamp", testmode);
 
     root << (LioLi::Tree(type) << msg);
 
