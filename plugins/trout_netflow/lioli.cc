@@ -19,7 +19,7 @@ class Binary {
 public:
   // Convert to format compatioble with GO varints
   static std::ostream &as_varint(std::ostream &os, uint64_t number) {
-    // assert(number >= 0);
+
     do {
       uint8_t digit = number & 0b0111'1111;
       number >>= 7;

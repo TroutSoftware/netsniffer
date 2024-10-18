@@ -1,11 +1,18 @@
 
+// Snort includes
 #include <framework/cursor.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
 #include <protocols/packet.h>
 
+// System includes
+#include <cassert>
+
+// Local includes
 #include "flow_data.h"
 #include "ips_option.h"
+
+// Debug includes
 
 namespace dhcp_option {
 namespace {

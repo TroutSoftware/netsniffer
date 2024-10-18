@@ -1,6 +1,5 @@
 
 // Snort includes
-#include <log/messages.h>
 
 // System includes
 

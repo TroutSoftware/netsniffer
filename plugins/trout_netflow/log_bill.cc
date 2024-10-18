@@ -3,10 +3,8 @@
 #include <framework/decode_data.h>
 #include <framework/inspector.h>
 #include <framework/module.h>
-#include <log/messages.h>
 
 // System includes
-#include <cassert>
 #include <mutex>
 #include <string>
 

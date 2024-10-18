@@ -6,7 +6,6 @@
 #include <log/messages.h>
 
 // System includes
-#include <cassert>
 #include <string>
 
 // Local includes

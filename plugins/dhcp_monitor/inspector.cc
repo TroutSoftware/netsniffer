@@ -9,6 +9,7 @@
 #include "pub_sub/intrinsic_event_ids.h"
 
 // System includes
+#include <cassert>
 #include <mutex>
 #include <shared_mutex>
 

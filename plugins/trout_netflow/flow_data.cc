@@ -2,6 +2,7 @@
 // Snort includes
 
 // System includes
+#include <cassert>
 
 // Local includes
 #include "flow_data.h"

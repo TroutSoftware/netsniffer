@@ -1,7 +1,5 @@
 
-#include <cstring>
-#include <memory>
-
+// Snort includes
 #include <detection/detection_engine.h>
 #include <framework/base_api.h>
 #include <framework/counts.h>
@@ -9,8 +7,16 @@
 #include <framework/module.h>
 #include <protocols/packet.h>
 
+// System includes
+#include <cassert>
+#include <cstring>
+#include <memory>
+
+// Local includes
 #include "flow_data.h"
 #include "inspector.h"
+
+// Debug includes
 
 namespace dhcp_option {
 namespace {

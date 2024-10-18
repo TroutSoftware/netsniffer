@@ -1,15 +1,4 @@
 
-// System includes
-#include <chrono>
-#include <cstdlib>
-#include <fstream>
-#include <iomanip>
-#include <list>
-#include <memory>
-#include <mutex>
-#include <sstream>
-#include <string>
-
 // Snort includes
 #include "framework/inspector.h"
 #include "framework/module.h"
@@ -21,9 +10,23 @@
 #include "sfip/sf_ip.h"
 #include "time/periodic.h"
 
+// System includes
+#include <cassert>
+#include <chrono>
+#include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <sstream>
+#include <string>
+
 // Local includes
 #include "lioli.h"
 #include "lioli_tree_generator.h"
+
+// Debug includes
 
 using namespace snort;
 
