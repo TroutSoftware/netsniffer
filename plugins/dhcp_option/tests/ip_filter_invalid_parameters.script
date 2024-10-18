@@ -1,0 +1,57 @@
+pcap -expect-fail $testdir/pcaps/dhcp_clean.pcap
+stderr 'invalid argument ip_filter: = 172.31.0.0/32'
+stderr 'invalid argument ip_filter: = 172.31.0/2'
+stderr 'invalid argument ip_filter: = 172.31.0.256/2'
+stderr 'invalid argument ip_filter: = 172.31.0.0/'
+stderr 'FATAL: see prior 4 errors'
+
+-- cfg.lua --
+
+-- Use the talos alert module for this test
+alert_talos = { }
+
+stream = { }
+stream_udp = { }
+
+dhcp = {
+  header_parsing=true
+}
+
+binder =
+{
+  { when = { proto = 'udp' }, use = { type = 'dhcp' }},
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+alert ip any 67 -> any 68 (
+  msg:"Invalid mask test";
+  dhcp_option:domain_name_server;
+  ip_filter:172.31.0.0/32;
+  sid:100005;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Invalid ip test, not enough digits";
+  dhcp_option:domain_name_server;
+  ip_filter:172.31.0/2;
+  sid:100006;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Invalid ip test, not enough digits";
+  dhcp_option:domain_name_server;
+  ip_filter:172.31.0.256/2;
+  sid:100007;
+)
+
+alert ip any 67 -> any 68 (
+  msg:"Invalid ip test, not enough digits";
+  dhcp_option:domain_name_server;
+  ip_filter:172.31.0.0/;
+  sid:100007;
+)

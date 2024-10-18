@@ -1,12 +1,18 @@
 
-#include <string>
-
+// Snort includes
 #include <framework/cursor.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
+#include <log/messages.h>
 #include <protocols/packet.h>
 
+// System includes
+#include <string>
+
+// Local includes
 #include "ips_option_ip_filter.h"
+
+// Debug includes
 
 namespace ip_filter {
 namespace {
@@ -57,47 +63,55 @@ public:
 
       for (int i = 0; i < 4; i++) {
         auto last = input.find_first_not_of("0123456789", first);
-        if (last == std::string::npos)
+        if (last == std::string::npos) {
           last = input.size();
+        }
         ip <<= 8;
         ip |= extract(input, first, last, convertSucess);
         first = last + 1;
         // We don't expect a '.' at the end, important to test i != 3 before the
         // '.' !=... test, to prevent exception at the end
-        if (!convertSucess || (i != 3 && '.' != input.at(last)))
-          return;
+        if (!convertSucess || (i != 3 && '.' != input.at(last))) {
+          throw "unable to extract ip";
+        }
       }
 
       // Check if we have anything after the ip (first is set to skip char after
       // last number above)
       if (--first < input.size()) {
         // We only expect a '/'
-        if ('/' != input.at(first++))
-          return;
+        if ('/' != input.at(first++)) {
+          throw "expected a / after ip";
+        }
 
         // If anything but numbers after this, it is a fault
-        if (std::string::npos != input.find_first_not_of("0123456789", first))
-          return;
+        if (std::string::npos != input.find_first_not_of("0123456789", first)) {
+          throw "Expected a number after <ip>/";
+        }
 
         std::string number_string = input.substr(first, (input.size() - first));
 
         auto value = std::stoul(number_string);
         // A number greater than 31 doesn't make sense, as that would never
         // match anything
-        if (value > 31)
-          return;
+        if (value > 31) {
+          throw "A value higher than 31 after <ip>/ doesn't compute...";
+        }
+
         mask <<= 32 - value;
       }
       valid = true;
+
+    } catch (const char *s) {
+      snort::ErrorMessage("ERROR: %s\n", s);
     } catch (...) {
-      // Nothing to do, valid won't be set to true and object remains in invalid
-      // state
+      snort::ErrorMessage("ERROR: unspecified error\n");
     }
   }
 
   bool check(IpV4 test) {
     assert(valid);
-    return ((ip & mask) == (test & mask)) == match;
+    return valid && ((ip & mask) == (test & mask)) == match;
   }
 
   IpV4 get_ip() const { return ip; }
