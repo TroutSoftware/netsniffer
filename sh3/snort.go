@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -20,10 +21,26 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 	return script.Command(
 		script.CmdUsage{
 			Summary: "run snort against pcap files",
-			Args:    "files...",
+			Args:    "[-expect-fail] files...",
 		},
 		func(s *script.State, args ...string) (script.WaitFunc, error) {
-			if len(args) < 1 {
+			var file_list []string
+			expect_fail := false
+			for i, arg := range args {
+				if arg[0] == '-' {
+					switch arg[1:] {
+					case "expect-fail":
+						expect_fail = true
+					default:
+						return nil, fmt.Errorf("Invalid parameter '%s' to PCAP", arg)
+					}
+				} else {
+					file_list = args[i:]
+					break
+				}
+			}
+
+			if len(file_list) < 1 {
 				return nil, script.ErrUsage
 			}
 
@@ -33,7 +50,7 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 				"-c", s.Path("cfg.lua"),
 				"--script-path", ".",
 				"--plugin-path", "p",
-				"--pcap-list", strings.Join(args, " "),
+				"--pcap-list", strings.Join(file_list, " "),
 				"--warn-all",
 			)
 			cmd.Dir = s.Getwd()
@@ -53,6 +70,15 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 
 			wait := func(s *script.State) (stdout, stderr string, err error) {
 				err = cmd.Wait()
+
+				if expect_fail {
+					if err != nil {
+						err = nil
+					} else {
+						err = fmt.Errorf("Expected error, but it didn't happen")
+					}
+				}
+
 				return stdoutBuf.String(), stderrBuf.String(), err
 			}
 			return wait, nil
