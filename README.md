@@ -4,6 +4,8 @@ This repository contains new modules we found useful when deploying Snort in an 
 
 ## Running integration tests
 
+NOTE: This information is out of date (quick fix: to build and run tests do a 'make test' from the root folder)
+
 The SH3 test runner is responsible for executing full module tests, usually against a recorded pcap.
 With a modern Go version, install the script:
 
