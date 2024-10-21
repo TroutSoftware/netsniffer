@@ -71,12 +71,10 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 			wait := func(s *script.State) (stdout, stderr string, err error) {
 				err = cmd.Wait()
 
-				if expect_fail {
-					if err != nil {
-						err = nil
-					} else {
-						err = fmt.Errorf("Expected error, but it didn't happen")
-					}
+				if expect_fail && err != nil {
+					err = nil
+				} else if expect_fail {
+					err = fmt.Errorf("Expected error, but it didn't happen")
 				}
 
 				return stdoutBuf.String(), stderrBuf.String(), err

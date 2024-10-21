@@ -95,7 +95,7 @@ public:
         auto value = std::stoul(number_string);
         // A number greater than 31 doesn't make sense, as that would never
         // match anything
-        if (value > 31) {
+        if (value > 32) {
           throw "A value higher than 31 after <ip>/ doesn't compute...";
         }
 
