@@ -276,7 +276,7 @@ snort3/clean:
 
 snort3/build: snort3 
 
-snort3/dev: snort3 $(DEBUG_MODULE)
+snort3/dev: snort3 
 	if [ -d $(DEV_FOLDER) ]; then rm -rf $(DEV_FOLDER) ; fi
 	@mkdir -p $(DEV_FOLDER)/include/snort
 	@cp -r $(LIBDAQ_INSTALL_FOLDER)/include/. $(DEV_FOLDER)/include/snort/
@@ -285,6 +285,16 @@ snort3/dev: snort3 $(DEBUG_MODULE)
 	@cp -r $(LIBML_INSTALL_FOLDER)/include/. $(DEV_FOLDER)/include/snort/
 	@cp -r $(LIBML_INSTALL_FOLDER)/lib/. $(DEV_FOLDER)/lib/
 	@cp -r $(SNORT3_INSTALL_FOLDER)/. $(DEV_FOLDER)
-	@cp -r $(DEBUG_MODULE) $(DEV_FOLDER)/bin/
 	@echo "Snort files written to $(DEV_FOLDER)" 
 	@echo "\e[3;32mSnort3 build\e[0m"
+
+package: snort3/dev
+	@cp -r $(DEBUG_MODULE) $(DEV_FOLDER)/bin/
+	@echo Copying done - building package...
+	tar -cf snort.tar -C $(DEV_FOLDER) bin
+	tar -rf snort.tar -C $(DEV_FOLDER) etc
+	tar -rf snort.tar -C $(DEV_FOLDER) lib
+	tar -rf snort.tar -C $(DEV_FOLDER) share
+	@if [ -f snort.tar.gz ]; then rm snort.tar.gz; fi
+	gzip snort.tar
+	@echo "Package building done (./snort.tar.gz)..."
