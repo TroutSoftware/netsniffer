@@ -12,7 +12,7 @@ MODULE_NAME = trout_snort
 DEBUG_MODULE := $(DEBUGDIR)/$(MODULE_NAME).so
 RELEASE_MODULE := $(RELEASEDIR)/$(MODULE_NAME).so
 
-.PHONY: format mkrtest premake postmake usage
+.PHONY: build clean format gdb release release-test release test-data local-test usage
 
 usage:
 	@echo "Trout Snort plugins makefile instructions"
@@ -38,17 +38,11 @@ usage:
 	@echo "the number of threads that should be used for building, e.g."
 	@echo "'make -j8 build' means use up to 8 threads when building."
 
-
-mkrtest: 
-	@echo -------
-	@echo debug: $(DEBUG_MODULE) release: $(RELEASE_MODULE)
-	@echo Sub2: $(LIBDEFS)
-	@echo deps: $(DEPS)
-	@echo objs: $(OBJS)
-
-test: $(DEBUG_MODULE)
+export SNORT 
+test: $(DEBUG_MODULE) 
 	@echo Testing "$(TEST_DIRS)"
-	cd sh3;go install
+	cd sh3;go install .
+	
 	sh3 -sanitize none -t $(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
 release-test: $(RELEASE_MODULE)
@@ -103,7 +97,6 @@ $(MAKE_README_FILENAME): | $(MAKEDIR)
 
 $(MAKEDIR):
 	mkdir -p $(MAKEDIR)
-
 
 $(RELEASEDIR):
 	mkdir -p $(RELEASEDIR)
@@ -179,4 +172,91 @@ $(DEBUG_MODULE): $(OBJS) $(LINK_DEPS) | $(DEBUGDIR)
 $(RELEASE_MODULE): $(CC_SOURCES) $(LINK_DEPS) | $(RELEASEDIR)
 	@echo "\e[3;37mLinking...\e[0m"
 	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(INC_DIRS) $(CC_SOURCES) -o $(RELEASE_MODULE)	
+
+SNORT3_TAG := 3.3.2.0
+LIBML_TAG := 1.1.0
+LIBDAQ_TAG := v3.0.16
+
+DEPS_FOLDER := $(abspath deps)
+DEV_FOLDER := $(DEPS_FOLDER)/dev
+
+SNORT3_FOLDER := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG)
+SNORT3_FILE := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG).tar.gz
+SNORT3_INSTALL_FOLDER := $(DEPS_FOLDER)/install/snort3-$(SNORT3_TAG)
+LIBML_FOLDER := $(DEPS_FOLDER)/libml-$(LIBML_TAG)
+LIBML_FILE := $(DEPS_FOLDER)/libml-$(LIBML_TAG).tag.gz
+LIBML_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libml-$(LIBML_TAG)
+LIBDAQ_FOLDER := $(DEPS_FOLDER)/libdaq-3.0.16
+LIBDAQ_FILE := $(DEPS_FOLDER)/libdaq.$(LIBDAQ_TAG).tag.gz
+LIBDAQ_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libdaq-$(LIBDAQ_TAG)
+
+.PHONY: dependencies
+
+$(DEPS_FOLDER):
+	mkdir -p $(DEPS_FOLDER)
+
+$(SNORT3_FILE): | $(DEPS_FOLDER)
+	curl -q -L https://github.com/snort3/snort3/archive/refs/tags/$(SNORT3_TAG).tar.gz -o $(SNORT3_FILE)
+
+$(LIBML_FILE): | $(DEPS_FOLDER)
+	curl -q -L https://github.com/snort3/libml/archive/refs/tags/$(LIBML_TAG).tar.gz -o $(LIBML_FILE)
+
+$(LIBDAQ_FILE): | $(DEPS_FOLDER)
+	curl -q -L https://github.com/snort3/libdaq/archive/refs/tags/$(LIBDAQ_TAG).tar.gz -o $(LIBDAQ_FILE)
+
+$(SNORT3_FOLDER): $(SNORT3_FILE) | $(DEPS_FOLDER)
+	bsdtar -xf $< -C $(DEPS_FOLDER)
+
+$(LIBML_FOLDER): $(LIBML_FILE) | $(DEPS_FOLDER)
+	bsdtar -xf $< -C $(DEPS_FOLDER)
+
+$(LIBDAQ_FOLDER): $(LIBDAQ_FILE) | $(DEPS_FOLDER)
+	bsdtar -xf $< -C $(DEPS_FOLDER)
+
+.PHONY: libdaq libml snort3
+
+$(LIBDAQ_INSTALL_FOLDER): $(LIBDAQ_FOLDER)
+	cd $(LIBDAQ_FOLDER); ./bootstrap
+	cd $(LIBDAQ_FOLDER); ./configure --prefix=$(LIBDAQ_INSTALL_FOLDER)
+	cd $(LIBDAQ_FOLDER); $(MAKE)
+	cd $(LIBDAQ_FOLDER); $(MAKE) install
+
+libdaq: $(LIBDAQ_INSTALL_FOLDER)
+
+$(LIBML_INSTALL_FOLDER): $(LIBML_FOLDER)
+	cd $(LIBML_FOLDER); ./configure.sh --prefix=$(LIBML_INSTALL_FOLDER)
+	cd $(LIBML_FOLDER)/build; $(MAKE) install/strip
+
+libml: $(LIBML_INSTALL_FOLDER) 
+
+$(SNORT3_INSTALL_FOLDER): $(SNORT3_FOLDER) $(LIBDAQ_INSTALL_FOLDER) $(LIBML_INSTALL_FOLDER)
+	cd $(SNORT3_FOLDER); ./configure_cmake.sh --with-daq-includes=$(LIBDAQ_INSTALL_FOLDER)/include --with-daq-libraries=$(LIBDAQ_INSTALL_FOLDER)/lib --with-libml-includes=$(LIBML_INSTALL_FOLDER)/include --with-libml-libraries=$(LIBML_INSTALL_FOLDER)/lib --prefix=$(SNORT3_INSTALL_FOLDER)
+	cd $(SNORT3_FOLDER)/build; $(MAKE) install
+
+snort3: $(SNORT3_INSTALL_FOLDER)
+
+.PHONY: ubuntu-deps dependencies/clean dependencies
+
+ubuntu-deps:
+	# The irony of having make in this list isn't unnoticed
+	sudo apt install make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev
+
+snort3/clean:
+	if [ -d $(LIBDAQ_FOLDER) ]; then rm -r $(LIBDAQ_FOLDER); fi
+	if [ -d $(LIBDAQ_INSTALL_FOLDER) ]; then rm -r $(LIBDAQ_INSTALL_FOLDER); fi
+	if [ -d $(LIBML_FOLDER) ]; then rm -r $(LIBML_FOLDER); fi
+	if [ -d $(LIBML_INSTALL_FOLDER) ]; then rm -r $(LIBML_INSTALL_FOLDER); fi
+	if [ -d $(SNORT3_FOLDER) ]; then rm -r $(SNORT3_FOLDER); fi
+	if [ -d $(SNORT3_INSTALL_FOLDER) ]; then rm -r $(SNORT3_INSTALL_FOLDER); fi
+	@echo "\e[3;32mDependency clean done\e[0m"
+
+snort3/dev: snort3 
+	if [ -d $(DEV_FOLDER) ]; then rm -rf $(DEV_FOLDER) ; fi
+	@mkdir -p $(DEV_FOLDER)
+	cp -r $(LIBDAQ_INSTALL_FOLDER)/. $(DEV_FOLDER)
+	cp -r $(LIBML_INSTALL_FOLDER)/. $(DEV_FOLDER)
+	cp -r $(SNORT3_INSTALL_FOLDER)/. $(DEV_FOLDER)
+	@echo "\e[3;32mDependencies build\e[0m"
+
+
 
