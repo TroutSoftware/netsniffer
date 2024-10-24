@@ -259,11 +259,14 @@ $(SNORT3_INSTALL_FOLDER): $(SNORT3_FOLDER) $(LIBDAQ_INSTALL_FOLDER) $(LIBML_INST
 
 snort3: $(SNORT3_INSTALL_FOLDER)
 
-.PHONY: ubuntu-deps dependencies/clean dependencies
+.PHONY: ubuntu-dev-deps ubuntu-run-deps snort3/clean snort3/build snort3/dev package
 
-ubuntu-deps:
+ubuntu-dev-deps:
 	# The irony of having make in this list isn't unnoticed
 	sudo apt install make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev
+
+ubuntu-run-deps:
+	sudo apt install libhwloc15 libdumbnet1 libluajit-5.1-2 libpcap0.8t64 libpcre3
 
 snort3/clean:
 	if [ -d $(LIBDAQ_FOLDER) ]; then rm -r $(LIBDAQ_FOLDER); fi
@@ -295,6 +298,7 @@ package: snort3/dev
 	tar -rf snort.tar -C $(DEV_FOLDER) etc
 	tar -rf snort.tar -C $(DEV_FOLDER) lib
 	tar -rf snort.tar -C $(DEV_FOLDER) share
+	tar -rf snort.tar scripts
 	@if [ -f snort.tar.gz ]; then rm snort.tar.gz; fi
 	gzip snort.tar
 	@echo "Package building done (./snort.tar.gz)..."

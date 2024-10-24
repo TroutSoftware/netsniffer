@@ -5,9 +5,9 @@
 --output_to_pipe = { pipe_env = 'pipename' }
 output_to_stdout = {}
 
---log_lorth = { output = 'output_to_stdout' }
 --log_bill = { output = 'output_to_pipe' }
-log_txt = { output = 'output_to_stdout' }
+--log_txt = { output = 'output_to_stdout' }
+log_lorth = { output = 'output_to_stdout' }
 
 alert_lioli = { logger = 'log_txt' }
 
