@@ -1,16 +1,57 @@
 
-
-ISNORT := /opt/snort/include/snort
-SNORT := /opt/snort/bin/snort
+# OUR SNORT MODULE DEFINITIONS
+MODULE_NAME := trout_snort
 RELEASEDIR := $(abspath p/release)
 DEBUGDIR := $(abspath p/debug)
 MAKEDIR := $(abspath .m)
 
-
-MODULE_NAME = trout_snort
-
 DEBUG_MODULE := $(DEBUGDIR)/$(MODULE_NAME).so
 RELEASE_MODULE := $(RELEASEDIR)/$(MODULE_NAME).so
+
+# SNORT3 DEFINTIONS (used for dev builds of snort)
+SNORT3_TAG := 3.3.2.0
+LIBML_TAG := 1.1.0
+LIBDAQ_TAG := v3.0.16
+
+DEPS_FOLDER := $(abspath deps)
+DEV_FOLDER := $(DEPS_FOLDER)/dev
+
+SNORT3_FOLDER := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG)
+SNORT3_FILE := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG).tar.gz
+SNORT3_INSTALL_FOLDER := $(DEPS_FOLDER)/install/snort3-$(SNORT3_TAG)
+LIBML_FOLDER := $(DEPS_FOLDER)/libml-$(LIBML_TAG)
+LIBML_FILE := $(DEPS_FOLDER)/libml-$(LIBML_TAG).tag.gz
+LIBML_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libml-$(LIBML_TAG)
+LIBDAQ_FOLDER := $(DEPS_FOLDER)/libdaq-3.0.16
+LIBDAQ_FILE := $(DEPS_FOLDER)/libdaq.$(LIBDAQ_TAG).tag.gz
+LIBDAQ_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libdaq-$(LIBDAQ_TAG)
+
+# DEFINE WHICH SNORT3 TO USE IN REST OF MAKEFILE
+SYSTEM_SNORT_INCLUDE := /opt/snort/include/snort
+SYSTEM_SNORT_BINARY := /opt/snort/bin/snort
+
+DEV_SNORT_INCLUDE := $(DEV_FOLDER)/include/snort
+DEV_SNORT_BINARY := $(DEV_FOLDER)/bin/snort
+DEV_SNORT_LIBRARY := $(DEV_FOLDER)/lib:$(DEV_FOLDER)/lib/snort/:$(DEV_FOLDER)/lib/snort/daq
+
+ifneq ($(wildcard $(DEV_SNORT_BINARY)),)
+	SNORT := $(DEV_SNORT_BINARY)
+	LD_LIBRARY_PATH := $(DEV_SNORT_LIBRARY)
+	export LD_LIBRARY_PATH
+	export SNORT_DAQ_PATH = $(DEV_FOLDER)/lib/daq
+	SNORT_DAQ_INCLUDE_OPTION = --daq-dir $(DEV_FOLDER)/lib/daq
+else
+	SNORT := $(SYSTEM_SNORT_BINARY)
+endif
+
+export SNORT 
+
+ifneq ($(wildcard $(DEV_SNORT_INCLUDE)/framework/snort_api.h),)
+	ISNORT := $(DEV_SNORT_INCLUDE)
+else
+	ISNORT := $(SYSTEM_SNORT_INCLUDE)
+endif
+
 
 .PHONY: build clean format gdb release release-test release test-data local-test usage
 
@@ -38,11 +79,10 @@ usage:
 	@echo "the number of threads that should be used for building, e.g."
 	@echo "'make -j8 build' means use up to 8 threads when building."
 
-export SNORT 
+
 test: $(DEBUG_MODULE) 
 	@echo Testing "$(TEST_DIRS)"
 	cd sh3;go install .
-	
 	sh3 -sanitize none -t $(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
 release-test: $(RELEASE_MODULE)
@@ -77,20 +117,20 @@ build: $(DEBUG_MODULE) | $(DEBUGDIR)
 
 gdb: $(DEBUG_MODULE)
 	@echo "\e[3;37mStarting debugger...\e[0m"
-	gdb --args $(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
+	gdb --args $(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
 format:
 	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
 
 test-data: $(DEBUG_MODULE)
-	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) --pcap-dir test_data --warn-all
+	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir test_data --warn-all
 
 release-test-data: $(RELEASE_MODULE)
-	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) --pcap-dir test_data --warn-all
+	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir test_data --warn-all
 
 # Look into using % in target (e.g. %/test-local)
 local-test: $(DEBUG_MODULE)
-	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
+	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))
@@ -173,22 +213,6 @@ $(RELEASE_MODULE): $(CC_SOURCES) $(LINK_DEPS) | $(RELEASEDIR)
 	@echo "\e[3;37mLinking...\e[0m"
 	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(INC_DIRS) $(CC_SOURCES) -o $(RELEASE_MODULE)	
 
-SNORT3_TAG := 3.3.2.0
-LIBML_TAG := 1.1.0
-LIBDAQ_TAG := v3.0.16
-
-DEPS_FOLDER := $(abspath deps)
-DEV_FOLDER := $(DEPS_FOLDER)/dev
-
-SNORT3_FOLDER := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG)
-SNORT3_FILE := $(DEPS_FOLDER)/snort3-$(SNORT3_TAG).tar.gz
-SNORT3_INSTALL_FOLDER := $(DEPS_FOLDER)/install/snort3-$(SNORT3_TAG)
-LIBML_FOLDER := $(DEPS_FOLDER)/libml-$(LIBML_TAG)
-LIBML_FILE := $(DEPS_FOLDER)/libml-$(LIBML_TAG).tag.gz
-LIBML_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libml-$(LIBML_TAG)
-LIBDAQ_FOLDER := $(DEPS_FOLDER)/libdaq-3.0.16
-LIBDAQ_FILE := $(DEPS_FOLDER)/libdaq.$(LIBDAQ_TAG).tag.gz
-LIBDAQ_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libdaq-$(LIBDAQ_TAG)
 
 .PHONY: dependencies
 
@@ -250,13 +274,17 @@ snort3/clean:
 	if [ -d $(SNORT3_INSTALL_FOLDER) ]; then rm -r $(SNORT3_INSTALL_FOLDER); fi
 	@echo "\e[3;32mDependency clean done\e[0m"
 
-snort3/dev: snort3 
+snort3/build: snort3 
+
+snort3/dev: snort3 $(DEBUG_MODULE)
 	if [ -d $(DEV_FOLDER) ]; then rm -rf $(DEV_FOLDER) ; fi
-	@mkdir -p $(DEV_FOLDER)
-	cp -r $(LIBDAQ_INSTALL_FOLDER)/. $(DEV_FOLDER)
-	cp -r $(LIBML_INSTALL_FOLDER)/. $(DEV_FOLDER)
-	cp -r $(SNORT3_INSTALL_FOLDER)/. $(DEV_FOLDER)
-	@echo "\e[3;32mDependencies build\e[0m"
-
-
-
+	@mkdir -p $(DEV_FOLDER)/include/snort
+	@cp -r $(LIBDAQ_INSTALL_FOLDER)/include/. $(DEV_FOLDER)/include/snort/
+	@cp -r $(LIBDAQ_INSTALL_FOLDER)/bin/. $(DEV_FOLDER)/bin/
+	@cp -r $(LIBDAQ_INSTALL_FOLDER)/lib/. $(DEV_FOLDER)/lib/
+	@cp -r $(LIBML_INSTALL_FOLDER)/include/. $(DEV_FOLDER)/include/snort/
+	@cp -r $(LIBML_INSTALL_FOLDER)/lib/. $(DEV_FOLDER)/lib/
+	@cp -r $(SNORT3_INSTALL_FOLDER)/. $(DEV_FOLDER)
+	@cp -r $(DEBUG_MODULE) $(DEV_FOLDER)/bin/
+	@echo "Snort files written to $(DEV_FOLDER)" 
+	@echo "\e[3;32mSnort3 build\e[0m"

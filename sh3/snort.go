@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -40,6 +41,13 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 				}
 			}
 
+			if env_snort := os.Getenv("SNORT"); len(env_snort) > 0 {
+				snortloc = env_snort
+			}
+
+			lib_path := os.Getenv("LD_LIBRARY_PATH")
+			daq_path := os.Getenv("SNORT_DAQ_PATH")
+
 			if len(file_list) < 1 {
 				return nil, script.ErrUsage
 			}
@@ -53,9 +61,26 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 				"--pcap-list", strings.Join(file_list, " "),
 				"--warn-all",
 			)
+			// TODO: Fix this if so not almost like the above cmd :=
+			if len(daq_path) > 0 {
+				cmd = exec.CommandContext(s.Context(), snortloc,
+					"-c", s.Path("cfg.lua"),
+					"--script-path", ".",
+					"--plugin-path", "p",
+					"--pcap-list", strings.Join(file_list, " "),
+					"--warn-all",
+					"--daq-dir", daq_path,
+				)
+			}
+
 			cmd.Dir = s.Getwd()
 			// TODO only preload if asan is set
 			cmd.Env = append(s.Environ(), "LUA_PATH="+luascript)
+
+			if len(lib_path) > 0 {
+				cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH="+lib_path)
+			}
+
 			for _, o := range opts {
 				cmd.Args, cmd.Env = o(cmd.Args, cmd.Env)
 			}

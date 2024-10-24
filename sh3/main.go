@@ -20,7 +20,7 @@ import (
 // TODO rewrite with a bit more manners
 func main() {
 	mot := flag.String("t", "", "Module under test")
-	tpath := flag.String("tpath", "testt;tests", "Search path for test cases")
+	tpath := flag.String("tpath", "", "Search path for test cases")
 	only := flag.String("run", "", "Only run script matching this regular expression")
 	sanitize := flag.String("sanitize", "address", "Run with sanitizers: address, none, thread")
 	flag.Parse()
