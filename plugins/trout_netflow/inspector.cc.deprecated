@@ -1,4 +1,7 @@
 
+
+THIS FILE IS ONLY KEPT AS A REFERENCE AND IS NOT PART OF ANY BUILD
+
 // Snort includes
 #include "framework/inspector.h"
 #include "framework/module.h"

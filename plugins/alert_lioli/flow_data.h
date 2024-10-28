@@ -16,7 +16,7 @@
 // Local includes
 #include "lioli.h"
 
-namespace NetFlow {
+namespace alert_lioli {
 
 class FlowData : public snort::FlowData {
   std::queue<std::variant<std::string, LioLi::Tree>> queue;
@@ -33,5 +33,5 @@ public:
   friend LioLi::Tree &operator<<(LioLi::Tree &tree, FlowData &text);
 };
 
-} // namespace NetFlow
+} // namespace alert_lioli
 #endif

@@ -8,6 +8,9 @@
 // System includes
 
 // Local includes
+#include "alert_lioli/alert_lioli.h"
+#include "alert_lioli/ips_lioli_bind.h"
+#include "alert_lioli/ips_lioli_tag.h"
 #include "dhcp_monitor/inspector.h"
 #include "dhcp_option/inspector.h"
 #include "dhcp_option/ips_option.h"
@@ -18,9 +21,6 @@
 #include "log/output_to_file.h"
 #include "log/output_to_pipe.h"
 #include "log/output_to_stdout.h"
-#include "trout_netflow/alert_lioli.h"
-#include "trout_netflow/ips_lioli_bind.h"
-#include "trout_netflow/ips_lioli_tag.h"
 #include "trout_netflow/trout_netflow.h"
 
 // clang-format off

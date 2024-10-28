@@ -7,7 +7,7 @@
 // Local includes
 #include "flow_data.h"
 
-namespace NetFlow {
+namespace alert_lioli {
 
 FlowData::FlowData() : snort::FlowData(get_id()) {}
 
@@ -48,4 +48,4 @@ LioLi::Tree &operator<<(LioLi::Tree &tree, FlowData &flow_data) {
   return tree;
 }
 
-} // namespace NetFlow
+} // namespace alert_lioli
