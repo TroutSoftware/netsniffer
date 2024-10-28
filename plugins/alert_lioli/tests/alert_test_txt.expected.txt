@@ -1,0 +1,60 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"10.67.21.59:48872209.85.202.100:80httpgoogle.comGET
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: "This is a log of an http header"
+-principal: 10.67.21.59:48872
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-protocol: http
+-host: google.com
+-method: GET
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"10.67.21.59:48872209.85.202.100:80http
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-log: "This is a log of an http header"
+-principal: 10.67.21.59:48872
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-protocol: http
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"10.67.21.59:55904172.253.116.147:80httpwww.google.comGET
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: "This is a log of an http header"
+-principal: 10.67.21.59:55904
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-protocol: http
+-host: www.google.com
+-method: GET
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"10.67.21.59:55904172.253.116.147:80http
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-log: "This is a log of an http header"
+-principal: 10.67.21.59:55904
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-protocol: http
+^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,0 +1,43 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap $testdir/pcaps/google_http.pcap
+cmp $testdir/alert_test_bill.expected.bill output.bill
+
+-- cfg.lua --
+output_to_file = { file_name = 'output.bill' }
+output_to_stdout = { }
+
+log_bill = { output = 'output_to_file' }
+
+alert_lioli = { logger = 'log_bill',
+                testmode = true }
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+http_inspect = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+alert ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  http_header:field host;
+  lioli_bind:host;
+  content:"google";
+
+  http_method;
+  lioli_bind:method;
+)
