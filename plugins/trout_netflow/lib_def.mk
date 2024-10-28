@@ -13,13 +13,6 @@ CC_FILES := \
 	inspector.cc \
 	ips_lioli_bind.cc \
 	ips_lioli_tag.cc \
-	log_bill.cc \
-	log_framework.cc \
-	log_lorth.cc \
-	log_txt.cc \
-	output_to_file.cc \
-	output_to_pipe.cc \
-	output_to_stdout.cc \
 	trout_netflow.cc \
 	trout_netflow_data.cc
 
@@ -28,13 +21,6 @@ H_FILES = \
 	flow_data.h \
 	ips_lioli_bind.h \
 	ips_lioli_tag.h \
-	log_bill.h \
-	log_framework.h \
-	log_lorth.h \
-	log_txt.h \
-	output_to_file.h \
-	output_to_pipe.h \
-	output_to_stdout.h \
 	trout_netflow.h \
 	trout_netflow.private.h \
 	trout_netflow_data.h
