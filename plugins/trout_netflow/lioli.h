@@ -83,8 +83,6 @@ class Tree {
 
   std::string raw; // The raw string (e.i. the string referenced by the tree)
 
-  bool is_valid_tree_name(const std::string &name) const;
-
 public:
   Tree();
   Tree(const std::string &name);
@@ -95,8 +93,12 @@ public:
   Tree &operator<<(const std::string &text);
   Tree &operator<<(const int number);
   Tree &operator<<(const Tree &tree);
-  std::string as_string();
+  bool operator==(const Tree &tree) const;
+  std::string as_string() const;
   std::string as_lorth();
+
+  static bool is_valid_tree_name(const std::string &name);
+  uint32_t hash() const { return raw.length(); } // Very simple hash function
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, const Tree &bf);

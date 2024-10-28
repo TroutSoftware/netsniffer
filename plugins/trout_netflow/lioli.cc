@@ -276,8 +276,7 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta) const {
 const static std::regex valid_name("[a-z_][a-z_\\d]*|\\$",
                                    std::regex::optimize);
 
-bool Tree::is_valid_tree_name(const std::string &name) const {
-
+bool Tree::is_valid_tree_name(const std::string &name) {
   return std::regex_match(name, valid_name);
 }
 
@@ -311,7 +310,11 @@ Tree &Tree::operator<<(const Tree &tree) {
   return *this;
 }
 
-std::string Tree::as_string() { return me.dump_string(raw); }
+bool Tree::operator==(const Tree &tree) const {
+  return 0 == tree.as_string().compare(as_string());
+}
+
+std::string Tree::as_string() const { return me.dump_string(raw); }
 
 std::string Tree::as_lorth() {
   std::string output = me.dump_lorth(raw);

@@ -14,6 +14,7 @@
 #include "dhcp_option/ips_option_ip_filter.h"
 #include "trout_netflow/alert_lioli.h"
 #include "trout_netflow/ips_lioli_bind.h"
+#include "trout_netflow/ips_lioli_tag.h"
 #include "trout_netflow/log_bill.h"
 #include "trout_netflow/log_lorth.h"
 #include "trout_netflow/log_txt.h"
@@ -30,6 +31,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &dhcp_option::ips_option.base,
   &ip_filter::ips_option.base,
   &ips_lioli_bind::ips_option.base,
+  &ips_lioli_tag::ips_option.base,
   &log_bill::inspect_api.base,
   &log_lorth::inspect_api.base,
   &log_txt::inspect_api.base,
