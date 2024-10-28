@@ -78,7 +78,8 @@ class Tree {
 
     std::string dump_string(const std::string &raw, unsigned level = 0) const;
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
-    std::string dump_binary(Dictionary &dict, size_t delta) const;
+    std::string dump_binary(Dictionary &dict, size_t delta,
+                            bool add_root_node = true) const;
   } me;
 
   std::string raw; // The raw string (e.i. the string referenced by the tree)
@@ -104,17 +105,19 @@ public:
   friend std::ostream &operator<<(std::ostream &os, const Tree &bf);
 };
 
-// A LioLi can contain multiple trees and be serialized
+// A LioLi can contain multiple trees and be serialized in binary format
 class LioLi {
   Dictionary dict = 64;
   std::stringstream ss;
+  bool add_root_node = true;
 
 public:
   LioLi();
   void reset_dict();
   void insert_header();
   void insert_terminator();
-  std::string as_string();
+  std::string move_binary();
+  void set_no_root_node() { add_root_node = false; }
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, LioLi &out);

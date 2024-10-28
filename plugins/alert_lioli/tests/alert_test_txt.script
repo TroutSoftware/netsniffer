@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap $testdir/pcaps/google_http.pcap
-cmp $testdir/alert_test_txt.expected.txt output.txt
+cmp output.txt $testdir/alert_test_txt.expected.txt 
 
 -- cfg.lua --
 output_to_file = { file_name = 'output.txt' }

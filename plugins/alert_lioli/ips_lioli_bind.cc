@@ -82,7 +82,8 @@ class IpsOption : public snort::IpsOption {
       return NO_MATCH;
     }
 
-    alert_lioli::FlowData *flow_data = alert_lioli::FlowData::get_from_flow(p->flow);
+    alert_lioli::FlowData *flow_data =
+        alert_lioli::FlowData::get_from_flow(p->flow);
 
     const uint8_t *startpos = c.start();
     unsigned length = c.length();

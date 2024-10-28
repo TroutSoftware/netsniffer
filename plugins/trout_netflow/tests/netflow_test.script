@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap $testdir/pcaps/google_http.pcap
-cmp $testdir/netflow_test.expected.lorth output.lorth
+cmp output.lorth $testdir/netflow_test.expected.lorth 
 
 -- cfg.lua --
 output_to_file = { file_name = 'output.lorth' }

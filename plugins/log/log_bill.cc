@@ -23,7 +23,14 @@ static const char *s_help =
 static const snort::Parameter module_params[] = {
     {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
+    {"option_no_root_node", snort::Parameter::PT_BOOL, nullptr, "false",
+     "if set will disable generation of root nodes in output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+// Settings for this module
+static struct Settings {
+  bool option_no_root_node = false;
+} settings;
 
 // MAIN object of this file
 class BillTreeLogger : public LioLi::LogLioLiTree {
@@ -34,11 +41,14 @@ class BillTreeLogger : public LioLi::LogLioLiTree {
   void log(LioLi::Tree &&tree) override {
     std::scoped_lock lock(mutex);
     if (first_write) {
+      if (settings.option_no_root_node) {
+        lioli.set_no_root_node();
+      }
       get_stream().set_binary_mode();
       first_write = false;
     }
     lioli << tree;
-    get_stream() << lioli.as_string();
+    get_stream() << lioli.move_binary();
   }
 
 public:
@@ -52,13 +62,12 @@ public:
     if (!first_write) {
       // A binary lioli must end with a terminator
       lioli.insert_terminator();
-      get_stream() << lioli.as_string();
+      get_stream() << lioli.move_binary();
     }
   }
 };
 
 class Module : public snort::Module {
-
   Module() : snort::Module(s_name, s_help, module_params) {
     // Registers BillTreeLogger instance
     LioLi::LogDB::register_type<BillTreeLogger>();
@@ -73,11 +82,14 @@ class Module : public snort::Module {
       // Configures the BillTreeLogger instance
       LioLi::LogDB::get<BillTreeLogger>(s_name)->set_log_stream_name(
           val.get_string());
-
-      return true;
+    } else if (val.is("option_no_root_node")) {
+      settings.option_no_root_node = val.get_bool();
+    } else {
+      // we didn't understand the setting given to us
+      return false;
     }
 
-    return false;
+    return true;
   }
 
 public:

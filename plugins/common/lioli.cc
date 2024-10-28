@@ -188,81 +188,85 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   return output;
 }
 
-std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta) const {
+std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
+                                    bool add_root_node) const {
   std::string output;
 
-  if (!children.empty()) {
-    output.append(2,
-                  0); // Reserve 2 bytes at the beginning for string content
-  }
-
-  // Try to make a dictionary lookup
-  auto dict_result = dict.find(my_name);
-
-  if (std::holds_alternative<Dictionary::index_t>(dict_result)) {
-    auto index = std::get<Dictionary::index_t>(dict_result);
-    assert(0b0011'1111 >=
-           index); // We can only encode 6 bit's - dict_result should have been
-                   // negative if limit was reached
-
-    output += static_cast<char>(index);
-  } else {
-    if (Dictionary::Result::not_found ==
-        std::get<Dictionary::Result>(
-            dict_result)) { // If dict has space but didn't find name, add it
-
-      // Entry not found
-      dict_result = dict.add(my_name);
-      assert(std::holds_alternative<Dictionary::index_t>(
-          dict_result)); // Logic error, we should be able to add to the dict
+  if (add_root_node) {
+    if (!children.empty()) {
+      output.append(2,
+                    0); // Reserve 2 bytes at the beginning for string content
     }
 
-    // Make full encode of our name
-    auto name_length = my_name.size(); // Length of the name of this node
+    // Try to make a dictionary lookup
+    auto dict_result = dict.find(my_name);
 
-    assert(name_length <= 0b0011'1111'1111'1111); // We can't serialize names
-                                                  // longer than 14 bits
+    if (std::holds_alternative<Dictionary::index_t>(dict_result)) {
+      auto index = std::get<Dictionary::index_t>(dict_result);
+      assert(0b0011'1111 >=
+             index); // We can only encode 6 bit's - dict_result should have
+                     // been negative if limit was reached
 
-    output += static_cast<char>(0b0100'0000 | (name_length & 0b0011'1111));
-    output += static_cast<char>(name_length >> 6);
+      output += static_cast<char>(index);
+    } else {
+      if (Dictionary::Result::not_found ==
+          std::get<Dictionary::Result>(
+              dict_result)) { // If dict has space but didn't find name, add it
 
-    output += my_name;
+        // Entry not found
+        dict_result = dict.add(my_name);
+        assert(std::holds_alternative<Dictionary::index_t>(
+            dict_result)); // Logic error, we should be able to add to the dict
+      }
+
+      // Make full encode of our name
+      auto name_length = my_name.size(); // Length of the name of this node
+
+      assert(name_length <= 0b0011'1111'1111'1111); // We can't serialize names
+                                                    // longer than 14 bits
+
+      output += static_cast<char>(0b0100'0000 | (name_length & 0b0011'1111));
+      output += static_cast<char>(name_length >> 6);
+
+      output += my_name;
+    }
+
+    auto skip = start - delta; // How much of the raw string should be skipped
+                               // before this node starts
+    auto length = end - start; // Length of the raw string captured by this node
+    if (skip <= 0b0000'0111 && length <= 0b0000'1111) {
+      // 1 byte (3-bit start delta (x), 4 bit length (y) 0b0xxx yyyy
+      output += static_cast<char>((skip << 4) | length);
+    } else if (skip <= 0b0011'1111 && length <= 0b1111'1111) {
+      // 2 bytes (6-bit start delta (x), 8 bit length (y) 0b10xx xxxx yyyy
+      // yyyy
+      output += static_cast<char>(0b1000'0000 | skip);
+      output += static_cast<char>(length);
+    } else {
+      // 4 bytes (14-bit start delta (x), 16 bit length (y) 0b11xx xxxx xxxx
+      // xxxx yyyy yyyy yyyy yyyy
+      assert(
+          skip <= 0b0011'1111'1111'1111 &&
+          length <=
+              0b1111'1111'1111'1111); // These are the max sizes we can encode
+      // TODO: We probably want to fail gracefully here, e.g. consider
+      // truncating data / child nodes
+
+      output += static_cast<char>(0b1100'0000 | (0b0011'1111 & skip));
+      output += static_cast<char>(skip >> 6);
+      output += static_cast<char>(0b1111'1111 & length);
+      output += static_cast<char>(length >> 8);
+    }
   }
-
-  auto skip = start - delta; // How much of the raw string should be skipped
-                             // before this node starts
-  auto length = end - start; // Length of the raw string captured by this node
-  if (skip <= 0b0000'0111 && length <= 0b0000'1111) {
-    // 1 byte (3-bit start delta (x), 4 bit length (y) 0b0xxx yyyy
-    output += static_cast<char>((skip << 4) | length);
-  } else if (skip <= 0b0011'1111 && length <= 0b1111'1111) {
-    // 2 bytes (6-bit start delta (x), 8 bit length (y) 0b10xx xxxx yyyy
-    // yyyy
-    output += static_cast<char>(0b1000'0000 | skip);
-    output += static_cast<char>(length);
-  } else {
-    // 4 bytes (14-bit start delta (x), 16 bit length (y) 0b11xx xxxx xxxx
-    // xxxx yyyy yyyy yyyy yyyy
-    assert(skip <= 0b0011'1111'1111'1111 &&
-           length <=
-               0b1111'1111'1111'1111); // These are the max sizes we can encode
-    // TODO: We probably want to fail gracefully here, e.g. consider
-    // truncating data / child nodes
-
-    output += static_cast<char>(0b1100'0000 | (0b0011'1111 & skip));
-    output += static_cast<char>(skip >> 6);
-    output += static_cast<char>(0b1111'1111 & length);
-    output += static_cast<char>(length >> 8);
-  }
-
   size_t new_start = start;
 
   for (auto &child : children) {
-    output += child.dump_binary(dict, new_start);
+    output += child.dump_binary(
+        dict, new_start, true /* Can't be the root node, if it is a child, so first node must be included */);
     new_start = child.end;
   }
 
-  if (!children.empty()) {
+  if (add_root_node && !children.empty()) {
     auto length =
         output.size() - 2; // We don't include the size bytes in the length
     assert(length <= 0b0111'1111'1111'1111); // We only have 15 bits for the
@@ -332,12 +336,12 @@ void LioLi::insert_terminator() {
   Binary::as_varint(ss, 0xFFFF'FFFF'FFFF'FFFF);
 }
 
-std::string LioLi::as_string() {
+std::string LioLi::move_binary() {
   return std::move(ss).str(); // we clear ss by the move
 }
 
 std::ostream &operator<<(std::ostream &os, LioLi &out) {
-  os << out.as_string();
+  os << out.move_binary();
   return os;
 }
 
@@ -345,7 +349,7 @@ LioLi &operator<<(LioLi &ll, const Tree &bf) {
   Binary::as_varint(ll.ss, bf.raw.size());
   ll.ss << bf.raw;
 
-  std::string tree = bf.me.dump_binary(ll.dict, 0);
+  std::string tree = bf.me.dump_binary(ll.dict, 0, ll.add_root_node);
 
   Binary::as_varint(ll.ss, tree.size());
   ll.ss << tree;

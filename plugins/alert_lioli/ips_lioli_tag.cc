@@ -103,7 +103,8 @@ class IpsOption : public snort::IpsOption {
       return NO_MATCH;
     }
 
-    alert_lioli::FlowData *flow_data = alert_lioli::FlowData::get_from_flow(p->flow);
+    alert_lioli::FlowData *flow_data =
+        alert_lioli::FlowData::get_from_flow(p->flow);
 
     // We take a copy of the tag, so we can use it multiple times
     auto tmp = tag;
