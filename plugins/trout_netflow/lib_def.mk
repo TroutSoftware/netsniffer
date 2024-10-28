@@ -13,7 +13,6 @@ CC_FILES := \
 	inspector.cc \
 	ips_lioli_bind.cc \
 	ips_lioli_tag.cc \
-	lioli.cc \
 	log_bill.cc \
 	log_framework.cc \
 	log_lorth.cc \
@@ -29,8 +28,6 @@ H_FILES = \
 	flow_data.h \
 	ips_lioli_bind.h \
 	ips_lioli_tag.h \
-	lioli.h \
-	lioli_tree_generator.h \
 	log_bill.h \
 	log_framework.h \
 	log_lorth.h \

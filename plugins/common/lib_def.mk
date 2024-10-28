@@ -9,7 +9,10 @@ PUBLIC_INC := .
 
 
 # List source (.cc) files that should be included in the build
-#CC_FILES := \
+CC_FILES := \
+	lioli.cc
 
 H_FILES = \
+	lioli.h \
+	lioli_tree_generator.h \
 	testable_time.h
