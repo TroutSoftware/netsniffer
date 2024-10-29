@@ -97,6 +97,11 @@ test: $(DEBUG_MODULE)
 	cd sh3;go install .
 	sh3 -sanitize none -t $(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
 
+test-break: $(DEBUG_MODULE) 
+	@echo Testing "$(TEST_DIRS)"
+	cd sh3;go install .
+	sh3 -sanitize none -break-on-error -t $(DEBUG_MODULE) -tpath "$(TEST_DIRS)" $(TEST_LIMIT)
+
 release-test: $(RELEASE_MODULE)
 	@echo Testing "$(TEST_DIRS)"
 	cd sh3;go install
@@ -141,6 +146,7 @@ release-test-data: $(RELEASE_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(RELEASEDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir test_data --warn-all
 
 # Look into using % in target (e.g. %/test-local)
+# TODO: Update so it takes the test folder from the module definition, instead of having it hardcoded to 'tests'
 local-test: $(DEBUG_MODULE)
 	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 

@@ -23,6 +23,7 @@ func main() {
 	tpath := flag.String("tpath", "", "Search path for test cases")
 	only := flag.String("run", "", "Only run script matching this regular expression")
 	sanitize := flag.String("sanitize", "address", "Run with sanitizers: address, none, thread")
+	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
 	flag.Parse()
 
 	tpathlist := strings.Split(*tpath, ";")
@@ -66,6 +67,7 @@ func main() {
 		//    asanlib = strings.TrimSpace(string(out))
 	}
 
+	test_count := len(files)
 	for _, f := range files {
 		base := filepath.Base(f)
 		base = base[:len(base)-len(".script")]
@@ -121,6 +123,10 @@ func main() {
 			} else {
 				fmt.Fprintf(os.Stderr, "\x1b[1;31mTest Failure: %s\x1b[0m\n", err)
 				tests_failed++
+
+				if *break_on_err {
+					break
+				}
 			}
 		} else {
 			tests_succeed++
@@ -129,7 +135,7 @@ func main() {
 		os.RemoveAll(dir)
 	}
 
-	fmt.Fprintf(os.Stdout, "%d of %d tests passed %d skipped\n", tests_succeed, (tests_succeed + tests_failed), tests_skipped)
+	fmt.Fprintf(os.Stdout, "%d of %d tests passed %d skipped\n", tests_succeed, test_count, tests_skipped)
 
 	if 0 != tests_failed {
 		fmt.Fprintf(os.Stdout, "One or more tests FAILED!!!!\n")
