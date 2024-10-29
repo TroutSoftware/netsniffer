@@ -53,7 +53,7 @@ else
 endif
 
 
-.PHONY: build clean format gdb release release-test release test-data local-test usage
+.PHONY: build clean format gdb release release-test release test-data release-test-data local-test release-local-test usage
 
 usage:
 	@echo "Trout Snort plugins makefile instructions"
@@ -61,13 +61,25 @@ usage:
 	@echo "make build        - To build a debug build"
 	@echo "make clean        - To clean all build folders"
 	@echo "make format       - To run clang-format on all source files"
-	@echo "make gdb          - WIP"
+	@echo "make gdb          - Launces gdb with local test files from the"
+	@echo "                  - module defined by env TEST_MODULE"
+	@echo "                    the test-local.script from the test folder"
+	@echo "                    should be run from on a debug build"
 	@echo "make release      - To build a release build"
 	@echo "make release-test - Run the test suite on release build"
+	@echo "make release-test-data"
+	@echo "                  - Run snort with test_config/cfg.lua on pcaps"
+	@echo "                    in test_data on a release build"
+	@echo "make release-local-test"
+	@echo "                  - Set env TEST_MODULE to name of module where"
+	@echo "                    the test-local.script from the test folder"
+	@echo "                    should be run from on a release build"
 	@echo "make test         - Run the test suite"
 	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
 	@echo "                    in test_data"
-	@echo "make local-test   - (WIP) Set env TEST_MODULE to name of module"
+	@echo "make local-test   - Set env TEST_MODULE to name of module where"
+	@echo "                    the test-local.script from the test folder"
+	@echo "                    should be run from on a debug build"
 	@echo ""
 	@echo "Debug builds will be written to:"
 	@echo $(DEBUG_MODULE)
@@ -131,6 +143,10 @@ release-test-data: $(RELEASE_MODULE)
 # Look into using % in target (e.g. %/test-local)
 local-test: $(DEBUG_MODULE)
 	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
+
+release-local-test: $(RELEASE_MODULE)
+	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(RELEASEDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
+
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))

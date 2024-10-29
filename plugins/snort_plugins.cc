@@ -17,6 +17,7 @@
 #include "dhcp_option/ips_option_ip_filter.h"
 #include "log/log_bill.h"
 #include "log/log_lorth.h"
+#include "log/log_null.h"
 #include "log/log_txt.h"
 #include "log/output_to_file.h"
 #include "log/output_to_pipe.h"
@@ -34,6 +35,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &ips_lioli_tag::ips_option.base,
   &log_bill::inspect_api.base,
   &log_lorth::inspect_api.base,
+  &log_null::inspect_api.base,
   &log_txt::inspect_api.base,
   &output_to_file::inspect_api.base,
   &output_to_pipe::inspect_api.base,

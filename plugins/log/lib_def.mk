@@ -13,6 +13,7 @@ CC_FILES := \
 	log_bill.cc \
 	log_framework.cc \
 	log_lorth.cc \
+	log_null.cc \
 	log_txt.cc \
 	output_to_file.cc \
 	output_to_pipe.cc \
@@ -21,6 +22,7 @@ CC_FILES := \
 H_FILES = \
 	log_bill.h \
 	log_lorth.h \
+	log_null.h \
 	log_txt.h \
 	output_to_file.h \
 	output_to_pipe.h \
