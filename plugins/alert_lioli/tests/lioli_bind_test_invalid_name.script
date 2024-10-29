@@ -1,0 +1,36 @@
+pcap -expect-fail $testdir/pcaps/google_http.pcap
+stderr 'invalid argument lioli_bind: = invalid-name'
+stderr 'FATAL: see prior 1 errors'
+
+-- cfg.lua --
+
+alert_lioli = { logger = 'log_null',
+                testmode = true }
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+http_inspect = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+alert ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  http_header:field host;
+  lioli_bind:invalid-name;
+  content:"google";
+)

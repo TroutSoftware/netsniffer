@@ -75,6 +75,7 @@ usage:
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a release build"
 	@echo "make test         - Run the test suite"
+	@echo "make test-break   - Run the test suite and break on first error"
 	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
 	@echo "                    in test_data"
 	@echo "make local-test   - Set env TEST_MODULE to name of module where"

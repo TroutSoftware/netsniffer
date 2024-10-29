@@ -98,7 +98,6 @@ public:
   std::string as_string() const;
   std::string as_lorth();
 
-  static bool is_valid_tree_name(const std::string &name);
   uint32_t hash() const { return raw.length(); } // Very simple hash function
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);

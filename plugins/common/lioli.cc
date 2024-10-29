@@ -5,10 +5,10 @@
 #include <cassert>
 #include <iostream>
 #include <regex>
-#include <string>
 
 // Local includes
 #include "lioli.h"
+#include "lioli_path_validator.h"
 
 // Debug includes
 
@@ -127,7 +127,9 @@ Tree::Node::Node(const Node &p)
   }
 }
 
-Tree::Node::Node(std::string name) : my_name(name) {}
+Tree::Node::Node(std::string name) : my_name(name) {
+  assert(PathValidator::is_valid_node_name(name));
+}
 
 void Tree::Node::adjust(size_t delta) {
   start += delta;
@@ -277,17 +279,10 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
   return output;
 }
 
-const static std::regex valid_name("[a-z_][a-z_\\d]*|\\$",
-                                   std::regex::optimize);
-
-bool Tree::is_valid_tree_name(const std::string &name) {
-  return std::regex_match(name, valid_name);
-}
-
 Tree::Tree() {}
 
 Tree::Tree(const std::string &name) : me(name) {
-  assert(is_valid_tree_name(name));
+  assert(PathValidator::is_valid_node_name(name));
 }
 
 Tree &Tree::operator<<(const std::string &text) {

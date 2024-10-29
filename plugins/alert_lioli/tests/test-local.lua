@@ -9,10 +9,10 @@ log_lorth = { output = 'output_to_stdout' }
 --log_bill = { output = 'output_to_pipe' }
 log_txt = { output = 'output_to_stdout' }
 
-alert_lioli = { logger = 'log_lorth' }
+alert_lioli = { logger = 'log_txt' }
 
 trout_netflow = { logger = 'log_null',
-                   option_grouped_output = false }                   
+                   option_grouped_output = false } 
 
 stream = {}
 stream_tcp = {}

@@ -3,6 +3,7 @@
 #include <framework/cursor.h>
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
+#include <log/messages.h>
 #include <protocols/packet.h>
 
 // System includes
@@ -12,6 +13,9 @@
 // Local includes
 #include "flow_data.h"
 #include "ips_lioli_bind.h"
+
+// Global includes
+#include "lioli_path_validator.h"
 
 namespace ips_lioli_bind {
 namespace {
@@ -35,6 +39,12 @@ class Module : public snort::Module {
 
     if (val.is("~")) {
       node_name = val.get_as_string();
+
+      if (!LioLi::PathValidator::is_valid_node_name(node_name)) {
+        snort::ErrorMessage("ERROR: %s is not a valid LioLi key\n",
+                            node_name.c_str());
+        return false;
+      }
 
       return true;
     }
