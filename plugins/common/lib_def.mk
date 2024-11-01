@@ -10,11 +10,13 @@ PUBLIC_INC := .
 
 # List source (.cc) files that should be included in the build
 CC_FILES := \
+	dictionary.cc \
 	lioli.cc \
-	lioli_path_validator.cc \
+	lioli_path.cc \
 
 H_FILES = \
+	dictionary.h \
 	lioli.h \
-	lioli_path_validator.h \
+	lioli_path.h \
 	lioli_tree_generator.h \
 	testable_time.h

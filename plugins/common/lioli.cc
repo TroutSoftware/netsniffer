@@ -8,7 +8,7 @@
 
 // Local includes
 #include "lioli.h"
-#include "lioli_path_validator.h"
+#include "lioli_path.h"
 
 // Debug includes
 
@@ -84,34 +84,60 @@ public:
 
 } // namespace
 
-Dictionary::Dictionary(uint16_t max_entries) : max_entries(max_entries) {}
-
-void Dictionary::reset() { map.clear(); }
-
-std::variant<Dictionary::index_t, Dictionary::Result>
-Dictionary::find(const std::string &entry) {
-  auto itr = map.find(entry);
-  if (itr != map.end())
-    return itr->second;
-  if (map.size() < max_entries)
-    return Result::not_found;
-  return Result::overflow;
-}
-
-std::variant<Dictionary::index_t, Dictionary::Result>
-Dictionary::add(const std::string &entry) {
-  if (map.size() >= max_entries)
-    return Result::overflow;
-  if (!map.try_emplace(entry, map.size()).second)
-    return Result::duplicate;
-  return static_cast<index_t>(map.size() - 1);
-}
-
 void Tree::Node::set_end(size_t new_end) { end = new_end; }
 
-void Tree::Node::append_child(const Node &node, size_t delta) {
+void Tree::Node::add_as_child(const Node &node) {
   last_child_added = children.emplace_after(last_child_added, node);
-  last_child_added->adjust(delta);
+  last_child_added->adjust(end);
+  end = last_child_added->end;
+}
+
+// Copy version of append
+void Tree::Node::append(const Node &node) {
+
+  // We only know how to merge node names, if one is null or they are equal
+  if (node.my_name.size() == 0) {
+    // Do nothing
+  } else if (my_name.size() == 0) {
+    my_name = node.my_name;
+  } else if (my_name != node.my_name) {
+    assert(false);
+  }
+
+  for (auto child_node : children) {
+    last_child_added = children.emplace_after(last_child_added, node);
+    // Adjust the newly created child trees start and end
+    last_child_added->adjust(end - child_node.start);
+    end = last_child_added->end;
+  }
+}
+
+// Move version of append
+void Tree::Node::append(Node &&node) {
+  // We only know how to merge node names, if one is null or they are equal
+  if (node.my_name.size() == 0) {
+    // Do nothing
+  } else if (my_name.size() == 0) {
+    my_name = std::move(node.my_name);
+  } else if (my_name != node.my_name) {
+    assert(false);
+  }
+
+  // Shift the incoming node to be after this one
+  node.adjust(end);
+  // Set new end
+  end = node.end;
+
+  // Move nodes children to use
+  while (node.children.begin() != node.children.end()) {
+    last_child_added = children.insert_after(last_child_added,
+                                             std::move(node.children.front()));
+    node.children.pop_front();
+  }
+
+  // Clean up last fields of node
+  start = 0;
+  end = 0;
 }
 
 Tree::Node::Node(){};
@@ -128,7 +154,7 @@ Tree::Node::Node(const Node &p)
 }
 
 Tree::Node::Node(std::string name) : my_name(name) {
-  assert(PathValidator::is_valid_node_name(name));
+  assert(Path::is_valid_node_name(name));
 }
 
 void Tree::Node::adjust(size_t delta) {
@@ -190,7 +216,7 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   return output;
 }
 
-std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
+std::string Tree::Node::dump_binary(Common::Dictionary &dict, size_t delta,
                                     bool add_root_node) const {
   std::string output;
 
@@ -203,21 +229,21 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
     // Try to make a dictionary lookup
     auto dict_result = dict.find(my_name);
 
-    if (std::holds_alternative<Dictionary::index_t>(dict_result)) {
-      auto index = std::get<Dictionary::index_t>(dict_result);
+    if (std::holds_alternative<Common::Dictionary::index_t>(dict_result)) {
+      auto index = std::get<Common::Dictionary::index_t>(dict_result);
       assert(0b0011'1111 >=
              index); // We can only encode 6 bit's - dict_result should have
                      // been negative if limit was reached
 
       output += static_cast<char>(index);
     } else {
-      if (Dictionary::Result::not_found ==
-          std::get<Dictionary::Result>(
+      if (Common::Dictionary::Result::not_found ==
+          std::get<Common::Dictionary::Result>(
               dict_result)) { // If dict has space but didn't find name, add it
 
         // Entry not found
         dict_result = dict.add(my_name);
-        assert(std::holds_alternative<Dictionary::index_t>(
+        assert(std::holds_alternative<Common::Dictionary::index_t>(
             dict_result)); // Logic error, we should be able to add to the dict
       }
 
@@ -282,7 +308,7 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
 Tree::Tree() {}
 
 Tree::Tree(const std::string &name) : me(name) {
-  assert(PathValidator::is_valid_node_name(name));
+  assert(Path::is_valid_node_name(name));
 }
 
 Tree &Tree::operator<<(const std::string &text) {
@@ -301,12 +327,34 @@ Tree &Tree::operator<<(const int number) {
 }
 
 Tree &Tree::operator<<(const Tree &tree) {
-  size_t delta = raw.size(); // Size of raw until now
   raw += tree.raw;
-  me.set_end(raw.size());
-  me.append_child(tree.me, delta);
+  me.add_as_child(tree.me);
 
   return *this;
+}
+
+void Tree::merge(const Tree &tree, bool node_merge) {
+  if (node_merge) {
+    // TODO: Make node_merge version
+  } else {
+    // Merge the nodes
+    me.append(tree.me);
+    // Merge he data
+    raw.append(tree.raw);
+  }
+}
+
+void Tree::merge(Tree &&tree, bool node_merge) {
+  if (node_merge) {
+    // TODO: Make node_merge version
+  } else {
+    // Merge the nodes
+    me.append(std::move(tree.me));
+    // Merge he data
+    raw.append(tree.raw);
+    // Clear incoming tree
+    tree.raw.clear();
+  }
 }
 
 bool Tree::operator==(const Tree &tree) const {

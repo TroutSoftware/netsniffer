@@ -15,7 +15,7 @@
 #include "ips_lioli_bind.h"
 
 // Global includes
-#include "lioli_path_validator.h"
+#include "lioli_path.h"
 
 namespace ips_lioli_bind {
 namespace {
@@ -40,7 +40,7 @@ class Module : public snort::Module {
     if (val.is("~")) {
       node_name = val.get_as_string();
 
-      if (!LioLi::PathValidator::is_valid_node_name(node_name)) {
+      if (!LioLi::Path::is_valid_node_name(node_name)) {
         snort::ErrorMessage("ERROR: %s is not a valid LioLi key\n",
                             node_name.c_str());
         return false;

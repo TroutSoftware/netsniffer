@@ -12,7 +12,7 @@
 // Local includes
 #include "flow_data.h"
 #include "ips_lioli_tag.h"
-#include "lioli_path_validator.h"
+#include "lioli_path.h"
 
 // Debug includes
 
@@ -51,8 +51,8 @@ class Module : public snort::Module {
         auto key = arg.substr(0, split_at);
         auto value = arg.substr(split_at + 1);
 
-        if (!LioLi::PathValidator::is_valid_node_name(key)) {
-          snort::ErrorMessage("ERROR: %s is not a valid LioLi key\n",
+        if (!LioLi::Path::is_valid_path_name(key)) {
+          snort::ErrorMessage("ERROR: %s is not a valid LioLi path\n",
                               key.c_str());
           return false;
         }
