@@ -189,7 +189,7 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
 }
 
 std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
-                                    bool add_root_node) const {
+                                    bool add_root_node, bool use_dict) const {
   std::string output;
 
   if (add_root_node) {
@@ -199,7 +199,8 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
     }
 
     // Try to make a dictionary lookup
-    auto dict_result = dict.find(my_name);
+    std::variant<Dictionary::index_t, Dictionary::Result> dict_result =
+        (use_dict ? dict.find(my_name) : Dictionary::Result::overflow);
 
     if (std::holds_alternative<Dictionary::index_t>(dict_result)) {
       auto index = std::get<Dictionary::index_t>(dict_result);
@@ -261,8 +262,11 @@ std::string Tree::Node::dump_binary(Dictionary &dict, size_t delta,
   size_t new_start = start;
 
   for (auto &child : children) {
-    output += child.dump_binary(
-        dict, new_start, true /* Can't be the root node, if it is a child, so first node must be included */);
+    output += child.dump_binary(dict, new_start,
+                                true /* Can't be the root node, if it is a
+                                        child, so first node must be included */
+                                ,
+                                use_dict);
     new_start = child.end;
   }
 
@@ -349,7 +353,8 @@ LioLi &operator<<(LioLi &ll, const Tree &bf) {
   Binary::as_varint(ll.ss, bf.raw.size());
   ll.ss << bf.raw;
 
-  std::string tree = bf.me.dump_binary(ll.dict, 0, ll.add_root_node);
+  std::string tree =
+      bf.me.dump_binary(ll.dict, 0, ll.add_root_node, ll.use_dict);
 
   Binary::as_varint(ll.ss, tree.size());
   ll.ss << tree;
