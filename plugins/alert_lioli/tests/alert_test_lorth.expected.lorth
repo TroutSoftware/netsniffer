@@ -37,6 +37,8 @@ $ {
   }
  }
  protocol "http" .
+ host "google.com" .
+ method "GET" .
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
@@ -77,4 +79,6 @@ $ {
   }
  }
  protocol "http" .
+ host "www.google.com" .
+ method "GET" .
 };

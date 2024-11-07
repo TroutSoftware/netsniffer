@@ -92,6 +92,12 @@ void Tree::Node::add_as_child(const Node &node) {
   end = last_child_added->end;
 }
 
+void Tree::Node::add_as_child(Node &&node) {
+  last_child_added = children.insert_after(last_child_added, std::move(node));
+  last_child_added->adjust(end);
+  end = last_child_added->end;
+}
+
 // Copy version of append
 void Tree::Node::append(const Node &node) {
 
@@ -104,8 +110,8 @@ void Tree::Node::append(const Node &node) {
     assert(false);
   }
 
-  for (auto child_node : children) {
-    last_child_added = children.emplace_after(last_child_added, node);
+  for (auto child_node : node.children) {
+    last_child_added = children.emplace_after(last_child_added, child_node);
     // Adjust the newly created child trees start and end
     last_child_added->adjust(end - child_node.start);
     end = last_child_added->end;
@@ -136,8 +142,8 @@ void Tree::Node::append(Node &&node) {
   }
 
   // Clean up last fields of node
-  start = 0;
-  end = 0;
+  node.start = 0;
+  node.end = 0;
 }
 
 Tree::Node::Node(){};
@@ -151,6 +157,18 @@ Tree::Node::Node(const Node &p)
   while (++tmp != children.end()) {
     last_child_added = tmp;
   }
+}
+
+Tree::Node::Node(Node &&src) {
+  my_name.swap(src.my_name);
+  start = src.start;
+  src.start = 0;
+  end = src.end;
+  src.end = 0;
+  children = std::move(src.children);
+  src.children.clear();
+  last_child_added = src.last_child_added;
+  src.last_child_added = children.before_begin();
 }
 
 Tree::Node::Node(std::string name) : my_name(name) {
@@ -305,6 +323,22 @@ std::string Tree::Node::dump_binary(Common::Dictionary &dict, size_t delta,
   return output;
 }
 
+bool Tree::Node::is_valid(size_t start, size_t end) const {
+  if (this->start < start || this->end > end) {
+    return false;
+  }
+
+  size_t sp = this->start;
+  for (auto &child : children) {
+    if (!child.is_valid(sp, end)) {
+      return false;
+    }
+    sp = child.end; // Next child can't have overlap with previous one
+  }
+
+  return true;
+}
+
 Tree::Tree() {}
 
 Tree::Tree(const std::string &name) : me(name) {
@@ -312,30 +346,61 @@ Tree::Tree(const std::string &name) : me(name) {
 }
 
 Tree &Tree::operator<<(const std::string &text) {
+  assert(is_valid());
+
   raw += text;
   me.set_end(raw.size());
 
+  assert(is_valid());
   return *this;
 }
 
 Tree &Tree::operator<<(const int number) {
+  assert(is_valid());
+
   std::string sn = std::to_string(number);
   raw += sn;
   me.set_end(raw.size());
 
+  assert(is_valid());
   return *this;
 }
 
 Tree &Tree::operator<<(const Tree &tree) {
+  assert(is_valid());
+  assert(tree.is_valid());
+
   raw += tree.raw;
   me.add_as_child(tree.me);
 
+  assert(is_valid());
+  assert(tree.is_valid());
+
+  return *this;
+}
+
+Tree &Tree::operator<<(Tree &&tree) {
+  assert(is_valid());
+  assert(tree.is_valid());
+
+  if (raw.size() == 0) {
+    raw.swap(tree.raw); // no need to copy string if target string is empty
+  } else {
+    raw += tree.raw;
+    tree.raw.clear();
+  }
+
+  me.add_as_child(std::move(tree.me));
+
+  assert(is_valid());
+  assert(tree.is_valid());
   return *this;
 }
 
 void Tree::merge(const Tree &tree, bool node_merge) {
   if (node_merge) {
     // TODO: Make node_merge version
+    assert(false);
   } else {
     // Merge the nodes
     me.append(tree.me);
@@ -347,6 +412,7 @@ void Tree::merge(const Tree &tree, bool node_merge) {
 void Tree::merge(Tree &&tree, bool node_merge) {
   if (node_merge) {
     // TODO: Make node_merge version
+    assert(false);
   } else {
     // Merge the nodes
     me.append(std::move(tree.me));
@@ -367,6 +433,12 @@ std::string Tree::as_lorth() {
   std::string output = me.dump_lorth(raw);
   output = output.substr(0, output.length() - 1) + ";\n";
   return output;
+}
+
+bool Tree::is_valid() const {
+  size_t rs = raw.size();
+
+  return me.is_valid(0, rs);
 }
 
 LioLi::LioLi() {}

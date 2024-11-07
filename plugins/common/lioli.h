@@ -45,11 +45,13 @@ class Tree {
     Node();
     Node(std::string name);
     Node(const Node &);
-    Node(Node &&src) = default;
+    Node(Node &&src);
     Node &operator=(Node &&other) = default;
+    virtual ~Node() = default;
 
     void set_end(size_t new_end);
     void add_as_child(const Node &node);
+    void add_as_child(Node &&node);
     void append(const Node &node);
     void append(Node &&node);
 
@@ -57,6 +59,11 @@ class Tree {
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
     std::string dump_binary(Common::Dictionary &dict, size_t delta,
                             bool add_root_node = true) const;
+
+    // For debug/test
+    bool is_valid(size_t start,
+                  size_t end) const; // Will validate that node tree is between
+                                     // start and end (length = end-start)
   } me;
 
   std::string raw; // The raw string (e.i. the string referenced by the tree)
@@ -71,16 +78,24 @@ public:
   Tree &operator<<(const std::string &text);
   Tree &operator<<(const int number);
   Tree &operator<<(const Tree &tree);
+  Tree &operator<<(Tree &&tree);
 
   void merge(const Tree &tree, bool node_merge = false);
   void merge(Tree &&tree, bool node_merge = false);
 
   bool operator==(const Tree &tree) const;
+  bool operator!=(const Tree &tree) const { return !(*this == tree); }
   std::string as_string() const;
   std::string as_lorth();
 
-  uint32_t hash() const { return raw.length(); } // Very simple hash function
+  uint32_t hash() const {
+    return raw.length();
+  } // Very fast and simple hash function
 
+  // For Debug
+  bool is_valid() const; // Checks if the tree is valid
+
+  // Friend functions
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, const Tree &bf);
 };

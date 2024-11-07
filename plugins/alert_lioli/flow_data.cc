@@ -30,10 +30,10 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow) {
   return flow_data;
 }
 
-void FlowData::add(std::string &&text) { queue.emplace(std::move(text)); }
+// void FlowData::add(std::string &&text) { queue.emplace(std::move(text)); }
 
-void FlowData::add(LioLi::Tree &&tree) { queue.emplace(std::move(tree)); }
-
+// void FlowData::add(LioLi::Tree &&tree) { queue.emplace(std::move(tree)); }
+/*
 LioLi::Tree &operator<<(LioLi::Tree &tree, FlowData &flow_data) {
 
   while (!flow_data.queue.empty()) {
@@ -47,5 +47,5 @@ LioLi::Tree &operator<<(LioLi::Tree &tree, FlowData &flow_data) {
 
   return tree;
 }
-
+*/
 } // namespace alert_lioli

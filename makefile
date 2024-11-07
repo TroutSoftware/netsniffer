@@ -200,6 +200,7 @@ define EXPAND_SOURCEFILES
   endif
  
   ifdef TEST_FOLDER
+    # TODO: Somehow make it so the test_folder can be retrieved from the module name, and use it for local-test and gdb targets
     TEST_DIRS := $(TEST_DIRS)$(addprefix $$(SRC_DIR),$(TEST_FOLDER));
     undefine TEST_FOLDER
   endif
@@ -237,7 +238,7 @@ $(RELEASE_MODULE): $(CC_SOURCES) $(LINK_DEPS) | $(RELEASEDIR)
 	g++ -O3 -std=c++2b -fPIC -Wall -Wextra -shared -I $(ISNORT) $(INC_DIRS) $(CC_SOURCES) -o $(RELEASE_MODULE)	
 
 
-.PHONY: dependencies
+##### SNORT BUILDING STUFF #####
 
 $(DEPS_FOLDER):
 	mkdir -p $(DEPS_FOLDER)

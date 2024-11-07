@@ -15,6 +15,7 @@
 #include "lioli_path.h"
 
 // Debug includes
+#include <iostream>
 
 namespace ips_lioli_tag {
 namespace {
@@ -30,7 +31,7 @@ static const snort::Parameter module_params[] = {
 
 class Module : public snort::Module {
 
-  LioLi::Tree tag;
+  LioLi::Path tag;
 
   Module() : snort::Module(s_name, s_help, module_params) {}
 
@@ -46,18 +47,17 @@ class Module : public snort::Module {
       auto split_at = arg.find_first_of(':');
 
       if (std::string::npos == split_at || 0 == split_at) {
-        tag = std::move(LioLi::Tree("tag") << arg);
+        tag << std::move(LioLi::Tree("tag") << arg);
       } else {
         auto key = arg.substr(0, split_at);
         auto value = arg.substr(split_at + 1);
-
         if (!LioLi::Path::is_valid_path_name(key)) {
           snort::ErrorMessage("ERROR: %s is not a valid LioLi path\n",
                               key.c_str());
           return false;
         }
 
-        tag = std::move(LioLi::Tree(key) << value);
+        tag << std::move(LioLi::Path(key) << value);
       }
 
       return true;
@@ -74,12 +74,12 @@ public:
 
   static void dtor(snort::Module *p) { delete p; }
 
-  LioLi::Tree &get_tag() { return tag; }
+  LioLi::Path &get_tag() { return tag; }
 };
 
 class IpsOption : public snort::IpsOption {
 
-  LioLi::Tree tag;
+  LioLi::Path tag;
 
   IpsOption(Module &module) : snort::IpsOption(s_name), tag(module.get_tag()) {}
 
@@ -107,9 +107,9 @@ class IpsOption : public snort::IpsOption {
     alert_lioli::FlowData *flow_data =
         alert_lioli::FlowData::get_from_flow(p->flow);
 
-    // We take a copy of the tag, so we can use it multiple times
-    auto tmp = tag;
-    flow_data->add(std::move(tmp));
+    std::cout << "MKRSTEST(Tag):\n" << tag.dump() << std::endl;
+
+    *flow_data << "MKRSTEST(Tag):" << tag.dump();
 
     return MATCH;
   }

@@ -111,7 +111,8 @@ private:
     }
 
     if (pkt->flow) {
-      root << *FlowData::get_from_flow(pkt->flow);
+      root.merge(*FlowData::get_from_flow(pkt->flow));
+      // root << *FlowData::get_from_flow(pkt->flow);
     }
 
     return root;

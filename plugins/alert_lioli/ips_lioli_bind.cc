@@ -100,7 +100,7 @@ class IpsOption : public snort::IpsOption {
 
     std::string content((char *)startpos, length);
 
-    flow_data->add(std::move(LioLi::Tree(node_name) << content));
+    *flow_data << std::move(LioLi::Tree(node_name) << content);
 
     return MATCH;
   }

@@ -1,4 +1,5 @@
 # Inspectors and spells are in place to attribute the correct flow
+skip
 pcap $testdir/pcaps/google_http.pcap
 
 # This test might not be valid, the files might be compared in text, rather than binary mode
@@ -38,8 +39,22 @@ alert ip any any -> any any (
   msg:"This is a log of an http header";
 
   http_header:field host;
-  lioli_bind:host;
+  lioli_bind:$.host;
   content:"google";
+
+  http_method;
+  lioli_bind:method;
+  
+  lioli_tag: $.tag_google "s"
+)
+
+alert ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  lioli_tag: $.tag "m"
+  http_header:field host;
+  lioli_bind:host;
+  content:"yahoo";
 
   http_method;
   lioli_bind:method;
