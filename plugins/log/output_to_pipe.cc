@@ -46,7 +46,7 @@ class PipeLogStream : public LioLi::LogStream {
     }
 
     if (!output_pipe.good()) {
-      snort::ErrorMessage("ERROR: Could not open output pipe\n");
+      snort::ErrorMessage("ERROR: Could not open output pipe: %s\n", pipe_name.c_str());
       return false;
     }
 
@@ -107,7 +107,7 @@ class Module : public snort::Module {
       }
 
       snort::ErrorMessage(
-          "ERROR: Could not read log pipe name from environment\n");
+          "ERROR: Could not read log pipe name from environment: %s\n", env_name.c_str());
     }
 
     // fail if we didn't get something valid
