@@ -55,6 +55,9 @@ class Tree {
     void append(const Node &node);
     void append(Node &&node);
 
+    void set_name(const std::string &new_name) { my_name = new_name; }
+    const std::string &get_name() const { return my_name; }
+
     std::string dump_string(const std::string &raw, unsigned level = 0) const;
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
     std::string dump_binary(Common::Dictionary &dict, size_t delta,
@@ -85,6 +88,9 @@ public:
 
   bool operator==(const Tree &tree) const;
   bool operator!=(const Tree &tree) const { return !(*this == tree); }
+
+  void set_root_name(const std::string &new_name) { me.set_name(new_name); }
+  const std::string &get_root_name() const { return me.get_name(); }
   std::string as_string() const;
   std::string as_lorth();
 

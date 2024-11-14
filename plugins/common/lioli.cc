@@ -113,9 +113,10 @@ void Tree::Node::append(const Node &node) {
   for (auto child_node : node.children) {
     last_child_added = children.emplace_after(last_child_added, child_node);
     // Adjust the newly created child trees start and end
-    last_child_added->adjust(end - child_node.start);
-    end = last_child_added->end;
+    last_child_added->adjust(end);
   }
+
+  end += node.end;
 }
 
 // Move version of append
@@ -160,15 +161,23 @@ Tree::Node::Node(const Node &p)
 }
 
 Tree::Node::Node(Node &&src) {
-  my_name.swap(src.my_name);
+  my_name = std::move(src.my_name);
+  src.my_name.clear();
   start = src.start;
   src.start = 0;
   end = src.end;
   src.end = 0;
   children = std::move(src.children);
   src.children.clear();
-  last_child_added = src.last_child_added;
-  src.last_child_added = children.before_begin();
+
+  // The before begin iterator is specific to a given forward list, but
+  // iterators to elements that are moved, points to the moved elements
+  if (src.last_child_added != src.children.before_begin()) {
+    last_child_added = src.last_child_added;
+    src.last_child_added = children.before_begin();
+  } else {
+    last_child_added = children.before_begin();
+  }
 }
 
 Tree::Node::Node(std::string name) : my_name(name) {

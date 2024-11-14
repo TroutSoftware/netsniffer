@@ -24,7 +24,12 @@ class Path {
   Map::iterator me;
 
 public:
+  Path(const Path &);
+  Path(Path &&);
   Path(std::string path = "$");
+
+  Path &operator=(const Path &);
+  Path &operator=(Path &&);
 
   bool operator==(const Path &path) const;
 
@@ -37,7 +42,7 @@ public:
   bool is_relative() const;
 
   static bool is_absolute(const std::string &path) {
-    return path.starts_with("$.");
+    return path.starts_with("$");
   }
   static bool is_relative(const std::string &path) {
     return !is_absolute(path);
@@ -55,8 +60,7 @@ public:
            (relative.size() + (absolute.size() << 8));
   } // Very fast and simple hash function
 
-  // For debug
-  std::string dump() const;
+  Tree to_tree() const;
 };
 
 } // namespace LioLi

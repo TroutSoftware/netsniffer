@@ -37,6 +37,13 @@ static const snort::Parameter module_params[] = {
      "if set will generate the sizes in separate sub trees"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "packets processed", "Number of packages processed"},
+    {CountType::SUM, "services detected", "Number of services detected"},
+    {CountType::SUM, "packets total size", "Sum of size of all packages"},
+    {CountType::SUM, "payload total size", "Sum of size of all payloads"},
+    {CountType::END, nullptr, nullptr}};
+
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
 static_assert(
     (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==

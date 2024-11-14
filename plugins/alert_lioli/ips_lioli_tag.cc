@@ -15,7 +15,6 @@
 #include "lioli_path.h"
 
 // Debug includes
-#include <iostream>
 
 namespace ips_lioli_tag {
 namespace {
@@ -35,6 +34,13 @@ class Module : public snort::Module {
 
   Module() : snort::Module(s_name, s_help, module_params) {}
 
+  bool begin(const char *, int, snort::SnortConfig *) override {
+    tag = std::move(LioLi::Path());
+    return true;
+  }
+
+  bool end(const char *, int, snort::SnortConfig *) override { return true; }
+
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
 
     if (val.is("~")) {
@@ -51,12 +57,12 @@ class Module : public snort::Module {
       } else {
         auto key = arg.substr(0, split_at);
         auto value = arg.substr(split_at + 1);
+
         if (!LioLi::Path::is_valid_path_name(key)) {
           snort::ErrorMessage("ERROR: %s is not a valid LioLi path\n",
                               key.c_str());
           return false;
         }
-
         tag << std::move(LioLi::Path(key) << value);
       }
 
@@ -107,9 +113,7 @@ class IpsOption : public snort::IpsOption {
     alert_lioli::FlowData *flow_data =
         alert_lioli::FlowData::get_from_flow(p->flow);
 
-    std::cout << "MKRSTEST(Tag):\n" << tag.dump() << std::endl;
-
-    *flow_data << "MKRSTEST(Tag):" << tag.dump();
+    *flow_data << tag;
 
     return MATCH;
   }

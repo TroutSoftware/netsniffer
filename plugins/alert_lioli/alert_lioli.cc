@@ -93,17 +93,17 @@ private:
   LioLi::Tree gen_tree(const char *type, snort::Packet *pkt, const char *msg) {
     assert(type && pkt && msg);
 
-    LioLi::Tree root("$");
+    LioLi::Path root("$");
 
     root << LioLi::TreeGenerators::timestamp("timestamp", testmode);
 
     root << (LioLi::Tree(type) << msg);
 
     // format_IP_MAC handles a null flow
-    root << (LioLi::Tree("principal")
+    root << (LioLi::Path("$.principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
 
-    root << (LioLi::Tree("endpoint")
+    root << (LioLi::Path("$.endpoint")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, false));
 
     if (pkt->flow && pkt->flow->service) {
@@ -111,11 +111,10 @@ private:
     }
 
     if (pkt->flow) {
-      root.merge(*FlowData::get_from_flow(pkt->flow));
-      // root << *FlowData::get_from_flow(pkt->flow);
+      root << *FlowData::get_from_flow(pkt->flow);
     }
 
-    return root;
+    return root.to_tree();
   }
 
 public:

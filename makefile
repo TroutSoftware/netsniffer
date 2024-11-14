@@ -65,6 +65,7 @@ usage:
 	@echo "                  - module defined by env TEST_MODULE"
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a debug build"
+	@echo "make live           Runs Snort with test_config/live.lua"
 	@echo "make release      - To build a release build"
 	@echo "make release-test - Run the test suite on release build"
 	@echo "make release-test-data"
@@ -139,6 +140,9 @@ gdb: $(DEBUG_MODULE)
 
 format:
 	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
+
+live: $(DEBUG_MODULE)
+	$(SNORT) -v -c test_config/live.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) ,a--warn-all
 
 test-data: $(DEBUG_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir test_data --warn-all

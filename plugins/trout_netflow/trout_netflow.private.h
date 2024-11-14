@@ -12,13 +12,6 @@
 
 namespace trout_netflow {
 
-const PegInfo s_pegs[] = {
-    {CountType::SUM, "packets processed", "Number of packages processed"},
-    {CountType::SUM, "services detected", "Number of services detected"},
-    {CountType::SUM, "packets total size", "Sum of size of all packages"},
-    {CountType::SUM, "payload total size", "Sum of size of all payloads"},
-    {CountType::END, nullptr, nullptr}};
-
 // This must match the s_pegs[] array
 struct PegCounts {
   PegCount pkg_processed = 0;

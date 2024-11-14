@@ -14,11 +14,11 @@
 #include <variant>
 
 // Local includes
-#include "lioli.h"
+#include "lioli_path.h"
 
 namespace alert_lioli {
 
-class FlowData : public snort::FlowData, public LioLi::Tree {
+class FlowData : public snort::FlowData, public LioLi::Path {
   // std::queue<std::variant<std::string, LioLi::Tree>> queue;
 
 public:

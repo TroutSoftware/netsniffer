@@ -14,6 +14,36 @@
 
 namespace LioLi {
 
+Path::Path(const Path &src) : relative(src.relative), absolute(src.absolute) {
+  me = (src.is_absolute() ? absolute : relative).find(src.me->first);
+
+  assert(me != absolute.end() && me != relative.end());
+}
+
+Path::Path(Path &&src) { *this = std::move(src); }
+
+Path &Path::operator=(const Path &src) {
+  relative = src.relative;
+  absolute = src.absolute;
+
+  me = (src.is_absolute() ? absolute : relative).find(src.me->first);
+
+  return *this;
+}
+
+Path &Path::operator=(Path &&src) {
+  std::string my_name = src.me->first;
+
+  relative = std::move(src.relative);
+  absolute = std::move(src.absolute);
+
+  me = (src.is_absolute() ? absolute : relative).find(src.me->first);
+
+  assert(me != absolute.end() && me != relative.end());
+
+  return *this;
+}
+
 Path::Path(std::string path_name) {
   auto &map = (is_absolute(path_name) ? absolute : relative);
 
@@ -55,7 +85,7 @@ bool Path::is_valid_node_name(const std::string &node_name) {
 }
 
 // TODO: When we enable relative paths, the initial "$." should be optional
-const static std::regex valid_path_name("\\$(\\.#?[a-z_][a-z_\\d]*)",
+const static std::regex valid_path_name("\\$(\\.#?[a-z_][a-z_\\d]*)*",
                                         std::regex::optimize);
 
 bool Path::is_valid_path_name(const std::string &path_name) {
@@ -127,22 +157,53 @@ Path &Path::operator<<(Path &&path) {
   return *this;
 }
 
-std::string Path::dump() const {
-  std::string output = "sssssssssssssssssssssssssssssss\n";
+Tree Path::to_tree() const {
+  assert(relative.size() == 0); // We can't generate a relative tree
 
-  for (auto &iter : absolute) {
-    output += iter.first + ":\n";
-    output += iter.second.as_string();
+  class Node {
+    Tree me = {"$"};
+    std::map<std::string, Node> map;
+
+  public:
+    void add(std::string key, Tree &value) {
+      size_t pos = std::string("$.").size(); // We skip the initial "$.", string
+                                             // funcs are constexpr (C++20)
+      Node *node = this;
+      while (pos < key.size()) {
+        auto new_pos = key.find('.', pos);
+        std::string sub_key;
+
+        if (new_pos == std::string::npos) {
+          sub_key = key.substr(pos);
+          new_pos = key.size();
+        } else {
+          sub_key = key.substr(pos, new_pos - pos);
+        }
+
+        pos = new_pos + 1;
+        node = &node->map[sub_key];
+        node->me.set_root_name(sub_key);
+      }
+
+      node->me.merge(value);
+    }
+
+    Tree gen_tree() const {
+      Tree tree = me;
+
+      for (auto node : map) {
+        tree << node.second.gen_tree();
+      }
+
+      return tree;
+    }
+  } tree;
+
+  for (auto itr : absolute) {
+    tree.add(itr.first, itr.second);
   }
 
-  for (auto &iter : relative) {
-    output += iter.first + ":\n";
-    output += iter.second.as_string();
-  }
-
-  output += "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
-
-  return output;
+  return tree.gen_tree();
 }
 
 } // namespace LioLi

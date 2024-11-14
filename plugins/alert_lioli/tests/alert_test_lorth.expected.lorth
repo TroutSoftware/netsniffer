@@ -1,13 +1,9 @@
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
  alert "\"This is a log of an http header\"" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "48872" .
-  }
- }
+ protocol "http" .
+ host "google.com" .
+ method "GET" .
  endpoint {
   addr {
    ip "209.85.202.100" .
@@ -15,20 +11,20 @@ $ {
    port "80" .
   }
  }
- protocol "http" .
- host "google.com" .
- method "GET" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
  log "\"This is a log of an http header\"" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "48872" .
-  }
- }
+ protocol "http" .
+ host "google.com" .
+ method "GET" .
  endpoint {
   addr {
    ip "209.85.202.100" .
@@ -36,20 +32,20 @@ $ {
    port "80" .
   }
  }
- protocol "http" .
- host "google.com" .
- method "GET" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "48872" .
+  }
+ }
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
  alert "\"This is a log of an http header\"" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "55904" .
-  }
- }
+ protocol "http" .
+ host "www.google.com" .
+ method "GET" .
  endpoint {
   addr {
    ip "172.253.116.147" .
@@ -57,20 +53,20 @@ $ {
    port "80" .
   }
  }
- protocol "http" .
- host "www.google.com" .
- method "GET" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
  log "\"This is a log of an http header\"" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "55904" .
-  }
- }
+ protocol "http" .
+ host "www.google.com" .
+ method "GET" .
  endpoint {
   addr {
    ip "172.253.116.147" .
@@ -78,7 +74,11 @@ $ {
    port "80" .
   }
  }
- protocol "http" .
- host "www.google.com" .
- method "GET" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
 };
