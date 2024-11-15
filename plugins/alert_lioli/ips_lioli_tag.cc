@@ -6,6 +6,7 @@
 #include <protocols/packet.h>
 
 // System includes
+#include <algorithm>
 #include <cassert>
 #include <regex>
 #include <string>
@@ -53,7 +54,11 @@ class Module : public snort::Module {
       std::smatch sm;
 
       if (std::regex_match(arg, sm, regex)) {
-        tag << (LioLi::Path(sm[1]) << sm[3]);
+        // We need to adjust for the number of parenthesis found in
+        // regex_path_name() (note, this is done compile time)
+        constexpr int parenthesis_count =
+            std::ranges::count(LioLi::Path::regex_path_name(), '(');
+        tag << (LioLi::Path(sm[1]) << sm[1 + parenthesis_count + 1]);
         return true;
       }
     }
