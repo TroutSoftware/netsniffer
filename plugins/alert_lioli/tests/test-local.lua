@@ -12,7 +12,7 @@ log_txt = { output = 'output_to_stdout' }
 alert_lioli = { logger = 'log_txt' }
 
 trout_netflow = { logger = 'log_null',
-                   option_grouped_output = false } 
+                   option_grouped_output = true } 
 
 stream = {}
 stream_tcp = {}

@@ -53,7 +53,8 @@ class Module : public snort::Module {
       auto split_at = arg.find_first_of(':');
 
       if (std::string::npos == split_at || 0 == split_at) {
-        tag << std::move(LioLi::Tree("tag") << arg);
+        return false;
+        //tag << /*std::move(LioLi::Path("tag") <<*/ arg/*)*/;
       } else {
         auto key = arg.substr(0, split_at);
         auto value = arg.substr(split_at + 1);

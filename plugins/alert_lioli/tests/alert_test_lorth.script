@@ -35,9 +35,9 @@ alert ip any any -> any any (
   msg:"This is a log of an http header";
 
   http_header:field host;
-  lioli_bind:host;
+  lioli_bind: $.host;
   content:"google";
 
   http_method;
-  lioli_bind:method;
+  lioli_bind: $.method;
 )

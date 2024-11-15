@@ -29,19 +29,23 @@ static const snort::Parameter module_params[] = {
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 class Module : public snort::Module {
-
-  uint8_t value = 0;
   std::string node_name;
 
   Module() : snort::Module(s_name, s_help, module_params) {}
 
-  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+  bool begin(const char *, int, snort::SnortConfig *) override {
+    node_name.clear();
+    return true;
+  }
 
+  bool end(const char *, int, snort::SnortConfig *) override { return true; }
+
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("~")) {
       node_name = val.get_as_string();
 
-      if (!LioLi::Path::is_valid_node_name(node_name)) {
-        snort::ErrorMessage("ERROR: %s is not a valid LioLi key\n",
+      if (!LioLi::Path::is_valid_path_name(node_name)) {
+        snort::ErrorMessage("ERROR: %s is not a valid LioLi path\n",
                             node_name.c_str());
         return false;
       }
@@ -100,7 +104,7 @@ class IpsOption : public snort::IpsOption {
 
     std::string content((char *)startpos, length);
 
-    *flow_data << std::move(LioLi::Tree(node_name) << content);
+    *flow_data << std::move(LioLi::Path(node_name) << content);
 
     return MATCH;
   }

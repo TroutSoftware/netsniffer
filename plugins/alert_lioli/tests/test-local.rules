@@ -4,18 +4,12 @@ alert ip any any -> any any (
   msg:"This is a log of an http header where the host is google";
 
   http_header:field host;
+  lioli_bind: $.host;
   content:"google";
 
   http_method;
-  lioli_bind: method;
+  lioli_bind: $.principal.method;
 
-  lioli_tag_WIP: "Anonomous";
-  lioli_tag_WIP: "$.tag:This is a tag";
-  lioli_tag_WIP: "$.my_tag:Here is my tag";
-  lioli_tag_WIP: "$.tag:ABC";
-  lioli_tag_WIP: "$.my_tag.level2:DEFG";
-  lioli_tag_WIP: "$.my_tag.level3:HIJK";
-  lioli_tag_WIP: "$.principal.tag:Rule 27";
-  
+  lioli_tag_WIP: "$.principal.tag:Rule 27";  
 )
 
