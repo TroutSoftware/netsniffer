@@ -8,8 +8,8 @@ alert ip any any -> any any (
   content:"google";
 
   http_method;
-  lioli_bind: $.principal.method;
+  lioli_bind:$.principal.method;
 
-  lioli_tag_WIP: "$.principal.tag:Rule 27";  
+  lioli_tag: $.principal.tag "Rule 27";  
 )
 

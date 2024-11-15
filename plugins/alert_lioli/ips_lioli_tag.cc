@@ -7,6 +7,7 @@
 
 // System includes
 #include <cassert>
+#include <regex>
 #include <string>
 
 // Local includes
@@ -19,7 +20,7 @@
 namespace ips_lioli_tag {
 namespace {
 
-static const char *s_name = "lioli_tag_WIP";
+static const char *s_name = "lioli_tag";
 
 static const char *s_help = "generates lioli tag node from parameter";
 
@@ -42,32 +43,19 @@ class Module : public snort::Module {
   bool end(const char *, int, snort::SnortConfig *) override { return true; }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
-
     if (val.is("~")) {
       auto arg = val.get_as_string();
 
-      if (arg.length() >= 2 && arg.starts_with('"') && arg.ends_with('"')) {
-        arg = arg.substr(1, arg.length() - 2);
+      const static std::regex regex("(" + LioLi::Path::regex_path_name() +
+                                        ")\\s\"([^\"]+)\"",
+                                    std::regex::optimize);
+
+      std::smatch sm;
+
+      if (std::regex_match(arg, sm, regex)) {
+        tag << (LioLi::Path(sm[1]) << sm[3]);
+        return true;
       }
-
-      auto split_at = arg.find_first_of(':');
-
-      if (std::string::npos == split_at || 0 == split_at) {
-        return false;
-        //tag << /*std::move(LioLi::Path("tag") <<*/ arg/*)*/;
-      } else {
-        auto key = arg.substr(0, split_at);
-        auto value = arg.substr(split_at + 1);
-
-        if (!LioLi::Path::is_valid_path_name(key)) {
-          snort::ErrorMessage("ERROR: %s is not a valid LioLi path\n",
-                              key.c_str());
-          return false;
-        }
-        tag << std::move(LioLi::Path(key) << value);
-      }
-
-      return true;
     }
 
     // fail if we didn't get something valid

@@ -33,8 +33,14 @@ public:
 
   bool operator==(const Path &path) const;
 
+  constexpr static std::string regex_node_name() {
+    return "\\$|#?\\w[\\w\\d]*";
+  }
   static bool is_valid_node_name(const std::string &name);
 
+  constexpr static std::string regex_path_name() {
+    return "\\$(\\.#?\\w[\\w\\d]*)*";
+  }
   bool is_valid_path_name() const { return is_valid_path_name(me->first); }
   static bool is_valid_path_name(const std::string &name);
 

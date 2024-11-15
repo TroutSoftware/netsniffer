@@ -77,15 +77,14 @@ bool Path::operator==(const Path &path) const {
   return false;
 }
 
-const static std::regex valid_node_name("\\$|#?[a-z_][a-z_\\d]*",
+const static std::regex valid_node_name(Path::regex_node_name(),
                                         std::regex::optimize);
 
 bool Path::is_valid_node_name(const std::string &node_name) {
   return std::regex_match(node_name, valid_node_name);
 }
 
-// TODO: When we enable relative paths, the initial "$." should be optional
-const static std::regex valid_path_name("\\$(\\.#?[a-z_][a-z_\\d]*)*",
+const static std::regex valid_path_name(Path::regex_path_name(),
                                         std::regex::optimize);
 
 bool Path::is_valid_path_name(const std::string &path_name) {
