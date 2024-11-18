@@ -33,15 +33,19 @@ static const snort::Parameter module_params[] = {
 class Module : public snort::Module {
 
   LioLi::Path tag;
+  bool tag_valid = false;
 
   Module() : snort::Module(s_name, s_help, module_params) {}
 
   bool begin(const char *, int, snort::SnortConfig *) override {
     tag = std::move(LioLi::Path());
+    tag_valid = false;
     return true;
   }
 
-  bool end(const char *, int, snort::SnortConfig *) override { return true; }
+  bool end(const char *, int, snort::SnortConfig *) override {
+    return tag_valid;
+  }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("~")) {
@@ -58,7 +62,8 @@ class Module : public snort::Module {
         // regex_path_name() (note, this is done compile time)
         constexpr int parenthesis_count =
             std::ranges::count(LioLi::Path::regex_path_name(), '(');
-        tag << (LioLi::Path(sm[1]) << sm[1 + parenthesis_count + 1]);
+        tag << (LioLi::Path(sm[1]) << sm[2 + parenthesis_count]);
+        tag_valid = true;
         return true;
       }
     }

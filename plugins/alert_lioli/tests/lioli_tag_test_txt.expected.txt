@@ -1,0 +1,72 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"http209.85.202.100:80google.com10.67.21.59:48872Append testTag testNested test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: "This is a log of an http header"
+-protocol: http
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-host: google.com
+-principal: 10.67.21.59:48872Append test
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+--append: Append test
+-tag: Tag testNested test
+--nested: Nested test
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"http209.85.202.100:80google.com10.67.21.59:48872Append testTag testNested test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-log: "This is a log of an http header"
+-protocol: http
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-host: google.com
+-principal: 10.67.21.59:48872Append test
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+--append: Append test
+-tag: Tag testNested test
+--nested: Nested test
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"http172.253.116.147:80www.google.com10.67.21.59:55904Append testTag testNested test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: "This is a log of an http header"
+-protocol: http
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-host: www.google.com
+-principal: 10.67.21.59:55904Append test
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+--append: Append test
+-tag: Tag testNested test
+--nested: Nested test
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z"This is a log of an http header"http172.253.116.147:80www.google.com10.67.21.59:55904Append testTag testNested test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-log: "This is a log of an http header"
+-protocol: http
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-host: www.google.com
+-principal: 10.67.21.59:55904Append test
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+--append: Append test
+-tag: Tag testNested test
+--nested: Nested test
+^^^^^^^^^^^^^^^^^^^^^^^^

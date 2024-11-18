@@ -1,0 +1,48 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap $testdir/pcaps/google_http.pcap
+cmp output.txt $testdir/lioli_tag_test_txt.expected.txt 
+
+-- cfg.lua --
+output_to_file = { file_name = 'output.txt' }
+output_to_stdout = { }
+
+log_txt = { output = 'output_to_file' }
+
+alert_lioli = { logger = 'log_txt',
+                testmode = true }
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+http_inspect = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+alert ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  http_header: field host;
+  lioli_bind: $.host;
+  content:"google";
+
+  lioli_tag: $.tag "Tag test";
+
+  lioli_tag: $.tag.nested "Nested ";
+  lioli_tag: $.tag.nested "test";
+
+  lioli_tag: $.principal.append "Append test";
+  
+)
