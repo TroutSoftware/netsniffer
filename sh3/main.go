@@ -140,7 +140,7 @@ func main() {
 	if 0 != tests_failed {
 		fmt.Fprintf(os.Stdout, "One or more tests FAILED!!!!\n")
 	} else {
-		fmt.Fprintf(os.Stdout, "--All tests are green--\n")
+		fmt.Fprintf(os.Stdout, "\x1b[1;32m--All tests are green--\x1b[0m\n")
 	}
 
 }

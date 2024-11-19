@@ -6,6 +6,7 @@
 
 // System includes
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>

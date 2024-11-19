@@ -10,7 +10,6 @@
 #include <string>
 
 // Local includes
-#include "dictionary.h"
 
 namespace LioLi {
 
@@ -60,8 +59,7 @@ class Tree {
 
     std::string dump_string(const std::string &raw, unsigned level = 0) const;
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
-    std::string dump_binary(Common::Dictionary &dict, size_t delta,
-                            bool add_root_node, bool use_dict) const;
+    std::string dump_binary(size_t delta, bool add_root_node) const;
 
     // For debug/test
     bool is_valid(size_t start,
@@ -108,19 +106,15 @@ public:
 
 // A LioLi can contain multiple trees and be serialized in binary format
 class LioLi {
-  Common::Dictionary dict = 64;
   std::stringstream ss;
   bool add_root_node = true;
-  bool use_dict = true;
 
 public:
   LioLi();
-  void reset_dict();
   void insert_header();
   void insert_terminator();
   std::string move_binary();
   void set_no_root_node() { add_root_node = false; }
-  void disable_dictionary() { use_dict = false; }
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, LioLi &out);

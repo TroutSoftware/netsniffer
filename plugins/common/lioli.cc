@@ -243,8 +243,7 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   return output;
 }
 
-std::string Tree::Node::dump_binary(Common::Dictionary &dict, size_t delta,
-                                    bool add_root_node, bool use_dict) const {
+std::string Tree::Node::dump_binary(size_t delta, bool add_root_node) const {
   std::string output;
 
   if (add_root_node) {
@@ -253,40 +252,15 @@ std::string Tree::Node::dump_binary(Common::Dictionary &dict, size_t delta,
                     0); // Reserve 2 bytes at the beginning for string content
     }
 
-    // Try to make a dictionary lookup
-    std::variant<Common::Dictionary::index_t, Common::Dictionary::Result>
-        dict_result = (use_dict ? dict.find(my_name)
-                                : Common::Dictionary::Result::overflow);
+    auto name_length = my_name.size(); // Length of the name of this node
 
-    if (std::holds_alternative<Common::Dictionary::index_t>(dict_result)) {
-      auto index = std::get<Common::Dictionary::index_t>(dict_result);
-      assert(0b0011'1111 >=
-             index); // We can only encode 6 bit's - dict_result should have
-                     // been negative if limit was reached
+    assert(name_length <= 0b0011'1111'1111'1111); // We can't serialize names
+                                                  // longer than 14 bits
 
-      output += static_cast<char>(index);
-    } else {
-      if (Common::Dictionary::Result::not_found ==
-          std::get<Common::Dictionary::Result>(
-              dict_result)) { // If dict has space but didn't find name, add it
+    output += static_cast<char>(0b0100'0000 | (name_length & 0b0011'1111));
+    output += static_cast<char>(name_length >> 6);
 
-        // Entry not found
-        dict_result = dict.add(my_name);
-        assert(std::holds_alternative<Common::Dictionary::index_t>(
-            dict_result)); // Logic error, we should be able to add to the dict
-      }
-
-      // Make full encode of our name
-      auto name_length = my_name.size(); // Length of the name of this node
-
-      assert(name_length <= 0b0011'1111'1111'1111); // We can't serialize names
-                                                    // longer than 14 bits
-
-      output += static_cast<char>(0b0100'0000 | (name_length & 0b0011'1111));
-      output += static_cast<char>(name_length >> 6);
-
-      output += my_name;
-    }
+    output += my_name;
 
     auto skip = start - delta; // How much of the raw string should be skipped
                                // before this node starts
@@ -318,11 +292,10 @@ std::string Tree::Node::dump_binary(Common::Dictionary &dict, size_t delta,
   size_t new_start = start;
 
   for (auto &child : children) {
-    output += child.dump_binary(dict, new_start,
+    output += child.dump_binary(new_start,
                                 true /* Can't be the root node, if it is a
                                         child, so first node must be included */
-                                ,
-                                use_dict);
+    );
     new_start = child.end;
   }
 
@@ -457,8 +430,6 @@ bool Tree::is_valid() const {
 
 LioLi::LioLi() {}
 
-void LioLi::reset_dict() { dict.reset(); }
-
 void LioLi::insert_header() { ss << "BILL" << '\x0' << '\x1'; }
 
 void LioLi::insert_terminator() {
@@ -478,8 +449,7 @@ LioLi &operator<<(LioLi &ll, const Tree &bf) {
   Binary::as_varint(ll.ss, bf.raw.size());
   ll.ss << bf.raw;
 
-  std::string tree =
-      bf.me.dump_binary(ll.dict, 0, ll.add_root_node, ll.use_dict);
+  std::string tree = bf.me.dump_binary(0, ll.add_root_node);
 
   Binary::as_varint(ll.ss, tree.size());
   ll.ss << tree;

@@ -25,14 +25,11 @@ static const snort::Parameter module_params[] = {
      "Set logger output should be sent to"},
     {"option_no_root_node", snort::Parameter::PT_BOOL, nullptr, "false",
      "if set will disable generation of root nodes in output"},
-    {"option_generate_dictionary", snort::Parameter::PT_BOOL, nullptr, "true",
-     "if set to false, won't use a dictionary in the output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 // Settings for this module
 static struct Settings {
   bool option_no_root_node = false;
-  bool option_generate_dictionary = true;
 } settings;
 
 // MAIN object of this file
@@ -68,8 +65,6 @@ public:
       get_stream() << lioli.move_binary();
     }
   }
-
-  void disable_dictionary() { lioli.disable_dictionary(); }
 };
 
 class Module : public snort::Module {
@@ -89,11 +84,6 @@ class Module : public snort::Module {
           val.get_string());
     } else if (val.is("option_no_root_node")) {
       settings.option_no_root_node = val.get_bool();
-    } else if (val.is("option_generate_dictionary")) {
-      settings.option_generate_dictionary = val.get_bool();
-      if (!settings.option_generate_dictionary) {
-        LioLi::LogDB::get<BillTreeLogger>(s_name)->disable_dictionary();
-      }
     } else {
       // we didn't understand the setting given to us
       return false;
