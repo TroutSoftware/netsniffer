@@ -11,8 +11,7 @@ log_txt = { output = 'output_to_stdout' }
 
 alert_lioli = { logger = 'log_lorth' }
 
-trout_netflow = { logger = 'log_null',
-                   option_grouped_output = false }                   
+trout_netflow = { logger = 'log_null'  }                   
 
 stream = {}
 stream_tcp = {}

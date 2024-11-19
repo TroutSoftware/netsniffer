@@ -1,5 +1,5 @@
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -14,14 +14,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "81" .
- payload_delta "39" .
- packet_acc "81" .
- payload_acc "39" .
+ delta {
+  packet "81" .
+  payload "39" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "81" .
+  payload "39" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -36,14 +40,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "81" .
- payload_delta "39" .
- packet_acc "81" .
- payload_acc "39" .
+ delta {
+  packet "81" .
+  payload "39" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "81" .
+  payload "39" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -58,14 +66,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "177" .
- payload_delta "135" .
- packet_acc "258" .
- payload_acc "174" .
+ delta {
+  packet "177" .
+  payload "135" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "258" .
+  payload "174" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -80,14 +92,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "193" .
- payload_delta "151" .
- packet_acc "274" .
- payload_acc "190" .
+ delta {
+  packet "193" .
+  payload "151" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "274" .
+  payload "190" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -102,14 +118,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "74" .
- payload_delta "0" .
- packet_acc "74" .
- payload_acc "0" .
+ delta {
+  packet "74" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "74" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -124,14 +144,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "74" .
- payload_delta "0" .
- packet_acc "148" .
- payload_acc "0" .
+ delta {
+  packet "74" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "148" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -146,14 +170,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "214" .
- payload_acc "0" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "214" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -168,14 +196,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "191" .
- payload_delta "125" .
- packet_acc "405" .
- payload_acc "125" .
+ delta {
+  packet "191" .
+  payload "125" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "405" .
+  payload "125" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -190,14 +222,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "471" .
- payload_acc "125" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "471" .
+  payload "125" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -213,14 +249,18 @@ $ {
   }
  }
  service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "471" .
- payload_acc "125" .
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "471" .
+  payload "125" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -236,14 +276,18 @@ $ {
   }
  }
  service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "839" .
- payload_delta "773" .
- packet_acc "1310" .
- payload_acc "898" .
+ delta {
+  packet "839" .
+  payload "773" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "1310" .
+  payload "898" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -258,14 +302,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "85" .
- payload_delta "43" .
- packet_acc "85" .
- payload_acc "43" .
+ delta {
+  packet "85" .
+  payload "43" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "85" .
+  payload "43" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -280,14 +328,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "85" .
- payload_delta "43" .
- packet_acc "85" .
- payload_acc "43" .
+ delta {
+  packet "85" .
+  payload "43" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "85" .
+  payload "43" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -302,14 +354,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "181" .
- payload_delta "139" .
- packet_acc "266" .
- payload_acc "182" .
+ delta {
+  packet "181" .
+  payload "139" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "266" .
+  payload "182" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -324,14 +380,18 @@ $ {
    port "53" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "197" .
- payload_delta "155" .
- packet_acc "282" .
- payload_acc "198" .
+ delta {
+  packet "197" .
+  payload "155" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "282" .
+  payload "198" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -346,14 +406,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "74" .
- payload_delta "0" .
- packet_acc "74" .
- payload_acc "0" .
+ delta {
+  packet "74" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "74" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -368,14 +432,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "74" .
- payload_delta "0" .
- packet_acc "148" .
- payload_acc "0" .
+ delta {
+  packet "74" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "148" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -390,14 +458,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "214" .
- payload_acc "0" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "214" .
+  payload "0" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -412,14 +484,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "195" .
- payload_delta "129" .
- packet_acc "409" .
- payload_acc "129" .
+ delta {
+  packet "195" .
+  payload "129" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "409" .
+  payload "129" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -434,60 +510,18 @@ $ {
    port "80" .
   }
  }
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "475" .
- payload_acc "129" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "475" .
+  payload "129" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "55904" .
-  }
- }
- endpoint {
-  addr {
-   ip "172.253.116.147" .
-   ":" .
-   port "80" .
-  }
- }
- service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "475" .
- payload_acc "129" .
-};
-$ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
- principal {
-  addr {
-   ip "10.67.21.59" .
-   ":" .
-   port "55904" .
-  }
- }
- endpoint {
-  addr {
-   ip "172.253.116.147" .
-   ":" .
-   port "80" .
-  }
- }
- service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "1466" .
- payload_delta "1400" .
- packet_acc "1941" .
- payload_acc "1529" .
-};
-$ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -503,14 +537,18 @@ $ {
   }
  }
  service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "1532" .
- payload_delta "1400" .
- packet_acc "3473" .
- payload_acc "2929" .
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "475" .
+  payload "129" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -526,14 +564,72 @@ $ {
   }
  }
  service "http" .
- delta_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "1532" .
- payload_delta "1400" .
- packet_acc "5005" .
- payload_acc "4329" .
+ delta {
+  packet "1466" .
+  payload "1400" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "1941" .
+  payload "1529" .
+ }
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ delta {
+  packet "1532" .
+  payload "1400" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "3473" .
+  payload "2929" .
+ }
+};
+$ {
+ start_time "1970-01-01T00:00:00.000000000Z" .
+ principal {
+  addr {
+   ip "10.67.21.59" .
+   ":" .
+   port "55904" .
+  }
+ }
+ endpoint {
+  addr {
+   ip "172.253.116.147" .
+   ":" .
+   port "80" .
+  }
+ }
+ service "http" .
+ delta {
+  packet "1532" .
+  payload "1400" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "5005" .
+  payload "4329" .
+ }
+};
+$ {
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -549,16 +645,19 @@ $ {
   }
  }
  service "http" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "1376" .
+  payload "898" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "1376" .
- payload_acc "898" .
- packet_sum "1376" .
- payload_sum "898" .
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -574,16 +673,19 @@ $ {
   }
  }
  service "http" .
+ delta {
+  packet "66" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "5071" .
+  payload "4329" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "66" .
- payload_delta "0" .
- packet_acc "5071" .
- payload_acc "4329" .
- packet_sum "5071" .
- payload_sum "4329" .
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -598,16 +700,19 @@ $ {
    port "53" .
   }
  }
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "258" .
+  payload "174" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "258" .
- payload_acc "174" .
- packet_sum "258" .
- payload_sum "174" .
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -622,16 +727,19 @@ $ {
    port "53" .
   }
  }
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "274" .
+  payload "190" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "274" .
- payload_acc "190" .
- packet_sum "274" .
- payload_sum "190" .
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -646,16 +754,19 @@ $ {
    port "53" .
   }
  }
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "266" .
+  payload "182" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "266" .
- payload_acc "182" .
- packet_sum "266" .
- payload_sum "182" .
 };
 $ {
- timestamp "1970-01-01T00:00:00.000000000Z" .
+ start_time "1970-01-01T00:00:00.000000000Z" .
  principal {
   addr {
    ip "10.67.21.59" .
@@ -670,11 +781,14 @@ $ {
    port "53" .
   }
  }
+ delta {
+  packet "0" .
+  payload "0" .
+  time "1970-01-01T00:00:00.000000000Z" .
+ }
+ acc {
+  packet "282" .
+  payload "198" .
+ }
  end_time "1970-01-01T00:00:00.000000000Z" .
- packet_delta "0" .
- payload_delta "0" .
- packet_acc "282" .
- payload_acc "198" .
- packet_sum "282" .
- payload_sum "198" .
 };

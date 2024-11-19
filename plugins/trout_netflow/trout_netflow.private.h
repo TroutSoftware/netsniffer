@@ -30,7 +30,6 @@ struct Settings {
 public:
   std::string logger_name;
   bool testmode = false;
-  bool option_grouped_output = false;
 
   std::shared_ptr<LioLi::LogLioLiTree> get_logger() {
     if (!logger) {

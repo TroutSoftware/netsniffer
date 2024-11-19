@@ -40,20 +40,9 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow, Settings &settings) {
 }
 
 FlowData::~FlowData() {
-  if (settings.option_grouped_output) {
-    auto tmp = gen_delta();
-    tmp << LioLi::TreeGenerators::timestamp("end_time", settings.testmode);
-    settings.get_logger()->log(std::move(tmp));
-  } else {
-    root << LioLi::TreeGenerators::timestamp("end_time", settings.testmode)
-         << (LioLi::Tree("packet_delta") << delta.packet)
-         << (LioLi::Tree("payload_delta") << delta.payload)
-         << (LioLi::Tree("packet_acc") << acc.packet)
-         << (LioLi::Tree("payload_acc") << acc.payload)
-         << (LioLi::Tree("packet_sum") << acc.packet)
-         << (LioLi::Tree("payload_sum") << acc.payload);
-    settings.get_logger()->log(std::move(root));
-  }
+  auto tmp = gen_delta();
+  tmp << LioLi::TreeGenerators::timestamp("end_time", settings.testmode);
+  settings.get_logger()->log(std::move(tmp));
 }
 
 void FlowData::process(snort::Packet *pkt) {
@@ -66,11 +55,9 @@ void FlowData::process(snort::Packet *pkt) {
   if (first_pkt) {
     first_pkt_time = now;
     delta_pkt_time = now;
-    if (settings.option_grouped_output) {
-      root << LioLi::TreeGenerators::timestamp("start_time", settings.testmode);
-    } else {
-      root << LioLi::TreeGenerators::timestamp("timestamp", settings.testmode);
-    }
+
+    root << LioLi::TreeGenerators::timestamp("start_time", settings.testmode);
+
     // format_IP_MAC handles a null flow
     root << (LioLi::Tree("principal")
              << LioLi::TreeGenerators::format_IP_MAC(pkt, pkt->flow, true));
@@ -111,25 +98,7 @@ LioLi::Tree FlowData::gen_delta() {
   return tmp;
 }
 
-void FlowData::dump_delta() {
-  if (settings.option_grouped_output) {
-    settings.get_logger()->log(gen_delta());
-  } else {
-    auto now = TestableTime::now<std::chrono::steady_clock>(settings.testmode);
-    delta_pkt_time = now;
-
-    auto tmp = root;
-    tmp << LioLi::TreeGenerators::timestamp("delta_time", settings.testmode)
-        << (LioLi::Tree("packet_delta") << delta.packet)
-        << (LioLi::Tree("payload_delta") << delta.payload)
-        << (LioLi::Tree("packet_acc") << acc.packet)
-        << (LioLi::Tree("payload_acc") << acc.payload);
-
-    delta.clear();
-
-    settings.get_logger()->log(std::move(tmp));
-  }
-}
+void FlowData::dump_delta() { settings.get_logger()->log(gen_delta()); }
 
 void FlowData::set_service_name(const char *name) {
   root << (LioLi::Tree("service") << std::string(name));

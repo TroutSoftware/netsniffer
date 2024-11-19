@@ -10,8 +10,7 @@ log_txt = { output = 'output_to_stdout' }
 log_lorth = { output = 'output_to_file' }
 
 trout_netflow = { logger = 'log_lorth',
-                  testmode = true,
-                  option_grouped_output = false }
+                  testmode = true } 
 
 stream = {}
 stream_tcp = {}

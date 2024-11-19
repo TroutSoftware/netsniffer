@@ -33,8 +33,6 @@ static const snort::Parameter module_params[] = {
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
      "if set to true it will give consistent output, like using fixed "
      "timestamps"},
-    {"option_grouped_output", snort::Parameter::PT_BOOL, nullptr, "false",
-     "if set will generate the sizes in separate sub trees"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
@@ -62,8 +60,6 @@ class Module : public snort::Module {
       settings.logger_name = val.get_string();
     } else if (val.is("testmode")) {
       settings.testmode = val.get_bool();
-    } else if (val.is("option_grouped_output")) {
-      settings.option_grouped_output = val.get_bool();
     } else {
       // fail if we didn't get something valid
       return false;
