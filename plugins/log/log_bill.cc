@@ -23,7 +23,7 @@ static const char *s_help =
 static const snort::Parameter module_params[] = {
     {"output", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
-    {"option_no_root_node", snort::Parameter::PT_BOOL, nullptr, "false",
+    {"option_no_root_node", snort::Parameter::PT_BOOL, nullptr, "true",
      "if set will disable generation of root nodes in output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 

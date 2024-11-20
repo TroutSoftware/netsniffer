@@ -530,3 +530,16 @@ So the sets for a given option will be called on the module, the option will be 
 
 The consequence for this is that the parameters needs to be persisted in the option, the option can't simply store a pointer to the module.
 
+The begin and end functions (on the module) can be utilized to prevent overlap between options in different instances:
+
+```
+  bool begin(const char *, int, snort::SnortConfig *) override {
+    my_data.clear();
+    my_state = State::Valid;
+    return true;
+  }
+
+  bool end(const char *, int, snort::SnortConfig *) override {
+    return my_state == State::Valid;
+  }
+```
