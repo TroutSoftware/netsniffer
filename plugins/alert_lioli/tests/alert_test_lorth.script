@@ -3,12 +3,13 @@ pcap $testdir/pcaps/google_http.pcap
 cmp output.lorth $testdir/alert_test_lorth.expected.lorth 
 
 -- cfg.lua --
-output_to_file = { file_name = 'output.lorth' }
-output_to_stdout = { }
+logger_file = { file_name = 'output.lorth',
+                serializer = 'serializer_lorth' }
 
-log_lorth = { output = 'output_to_file' }
+serializer_lorth = { }
 
-alert_lioli = { logger = 'log_lorth',
+
+alert_lioli = { logger = 'logger_file',
                 testmode = true }
 
 stream = {}

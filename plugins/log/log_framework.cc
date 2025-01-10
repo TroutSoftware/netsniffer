@@ -8,43 +8,50 @@
 
 namespace LioLi {
 
-std::shared_ptr<LogStream> &LogStream::get_null_obj() {
-  class NullLogStream : public LogStream {
-    void set_binary_mode() override{};
-    void operator<<(const std::string &&) override{};
+std::shared_ptr<Serializer> &Serializer::get_null_obj() {
+  class NullSerializer : public Serializer {
+
+    bool is_binary() override { return false; }
+
+    class Context : public Serializer::Context {
+      bool closed = false;
+
+    public:
+      std::string serialize(const Tree &&) override { return ""; }
+
+      std::string close() override {
+        closed = true;
+        return "";
+      }
+
+      bool is_closed() override { return closed; }
+    };
+
+    std::shared_ptr<Serializer::Context> create_context() override {
+      return std::make_shared<Context>();
+    }
 
   public:
-    NullLogStream() : LogStream("NullLogStream") {}
+    NullSerializer() : Serializer("NullSerializer") {}
   };
 
-  static std::shared_ptr<LogStream> null_stream =
-      std::make_shared<NullLogStream>();
+  static std::shared_ptr<Serializer> null_serializer =
+      std::make_shared<NullSerializer>();
 
-  return null_stream;
+  return null_serializer;
 }
 
-std::shared_ptr<LogLioLiTree> &LogLioLiTree::get_null_obj() {
-  class NullLogTree : public LogLioLiTree {
-    void log(Tree &&) override {}
+std::shared_ptr<Logger> &Logger::get_null_obj() {
+  class NullLogger : public Logger {
+    void operator<<(const Tree &&) override {}
 
   public:
-    NullLogTree() : LogLioLiTree("NullLogTree"){};
+    NullLogger() : Logger("NullLogger") {}
   };
 
-  static std::shared_ptr<LogLioLiTree> null_tree =
-      std::make_shared<NullLogTree>();
-  return null_tree;
-}
+  static std::shared_ptr<Logger> null_logger = std::make_shared<NullLogger>();
 
-LogStream &LogLioLiTree::get_stream() {
-  // Note: log_stream is atomic
-  if (!log_stream.load()) {
-    std::mutex mutex;
-    std::scoped_lock lock(mutex);
-    // LogDB::get will return null obj, and not a null_ptr, so it's safe to call
-    log_stream = LogDB::get<LogStream>(log_stream_name.c_str());
-  }
-  return *log_stream.load().get();
+  return null_logger;
 }
 
 std::mutex LogDB::mutex;

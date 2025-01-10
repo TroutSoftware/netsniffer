@@ -6,7 +6,9 @@ stderr 'FATAL: see prior 5 errors'
 
 -- cfg.lua --
 
-alert_lioli = { logger = 'log_null',
+logger_null = { }
+
+alert_lioli = { logger = 'logger_null',
                 testmode = true }
 
 stream = {}

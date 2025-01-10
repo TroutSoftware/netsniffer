@@ -17,7 +17,7 @@ namespace {
 // Helper functions for serializing
 class Binary {
 public:
-  // Convert to format compatioble with GO varints
+  // Convert to format compatible with GO varints
   static std::ostream &as_varint(std::ostream &os, uint64_t number) {
 
     do {
@@ -416,7 +416,7 @@ bool Tree::operator==(const Tree &tree) const {
 
 std::string Tree::as_string() const { return me.dump_string(raw); }
 
-std::string Tree::as_lorth() {
+std::string Tree::as_lorth() const {
   std::string output = me.dump_lorth(raw);
   output = output.substr(0, output.length() - 1) + ";\n";
   return output;

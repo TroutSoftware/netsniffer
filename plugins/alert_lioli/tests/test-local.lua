@@ -1,18 +1,21 @@
 
 
 --output_to_file = { file_name = 'my_output_file.txt' }
---output_to_pipe = { pipe_name = '/tmp/llpipe_17115325107265013479' }                                            
+--output_to_pipe = { pipe_name = '/tmp/llpipe_1863275496415381555' }
 --output_to_pipe = { pipe_env = 'pipename' }
-output_to_stdout = {}
+--output_to_stdout = {}
 
-log_lorth = { output = 'output_to_stdout' }
+--log_lorth = { output = 'output_to_stdout' }
 --log_bill = { output = 'output_to_pipe' }
-log_txt = { output = 'output_to_stdout' }
+--log_txt = { output = 'output_to_stdout' }
 
-alert_lioli = { logger = 'log_txt' }
+logger_null = {}
+logger_stdout = { serializer = 'serializer_txt' }
+serializer_txt = { }
 
-trout_netflow = { logger = 'log_null',
-                   option_grouped_output = true } 
+alert_lioli = { logger = 'logger_stdout' }
+
+trout_netflow = { logger = 'logger_null' } 
 
 stream = {}
 stream_tcp = {}

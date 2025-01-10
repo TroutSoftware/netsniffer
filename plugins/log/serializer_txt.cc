@@ -3,46 +3,76 @@
 #include <framework/decode_data.h>
 #include <framework/inspector.h>
 #include <framework/module.h>
-#include <log/messages.h>
 
 // System includes
-#include <string>
+#include <iostream>
+#include <mutex>
 
 // Local includes
 #include "lioli.h"
 #include "log_framework.h"
-#include "log_null.h"
+#include "serializer_txt.h"
 
-namespace log_null {
+namespace serializer_txt {
 namespace {
 
-static const char *s_name = "log_null";
-static const char *s_help = "LioLi tree logger, will discard all logs";
+static const char *s_name = "serializer_txt";
+static const char *s_help = "Serializes LioLi trees to txt format";
 
 static const snort::Parameter module_params[] = {
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 // MAIN object of this file
-class NullTreeLogger : public LioLi::LogLioLiTree {
-  void log(LioLi::Tree &&) override {}
+class Serializer : public LioLi::Serializer {
 
 public:
-  NullTreeLogger() : LogLioLiTree(s_name) {}
+  Serializer() : LioLi::Serializer(s_name) {}
+
+  ~Serializer() = default;
+
+  class Context : public LioLi::Serializer::Context {
+    bool closed = false;
+
+  public:
+    std::string serialize(const LioLi::Tree &&tree) override {
+      return "vvvvvvvvvvvvvvvvvvvvvvvv\n" + tree.as_string() +
+             "^^^^^^^^^^^^^^^^^^^^^^^^\n";
+    }
+
+    // Terminate current context, returned byte sequence is any remaining
+    // data/end marker of current context.  Context object is invalid after
+    // this, except the is_closed() function.
+    std::string close() override {
+      closed = true;
+      return "";
+    }
+
+    // Returns true if context is closed (invalid to call)
+    bool is_closed() override { return closed; }
+  };
+
+  // Return TRUE if the serialized output is binary, FALSE if it is text based
+  bool is_binary() override { return false; };
+
+  std::shared_ptr<LioLi::Serializer::Context> create_context() override {
+    return std::make_shared<Context>();
+  };
 };
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    // Registers TxtTreeLogger instance
-    LioLi::LogDB::register_type<NullTreeLogger>();
+    LioLi::LogDB::register_type<Serializer>();
+  }
+
+  bool set(const char *, snort::Value &, snort::SnortConfig *) override {
+
+    // fail as we don't expect any paramters
+    return false;
   }
 
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
-
-  bool set(const char *, snort::Value &, snort::SnortConfig *) override {
-    return false;
-  }
 
 public:
   static snort::Module *ctor() { return new Module(); }
@@ -87,4 +117,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace log_null
+} // namespace serializer_txt

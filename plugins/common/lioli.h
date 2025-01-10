@@ -90,7 +90,7 @@ public:
   void set_root_name(const std::string &new_name) { me.set_name(new_name); }
   const std::string &get_root_name() const { return me.get_name(); }
   std::string as_string() const;
-  std::string as_lorth();
+  std::string as_lorth() const;
 
   uint32_t hash() const {
     return raw.length();

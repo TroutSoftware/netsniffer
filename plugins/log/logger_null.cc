@@ -11,36 +11,38 @@
 // Local includes
 #include "lioli.h"
 #include "log_framework.h"
-#include "output_to_stdout.h"
+#include "logger_null.h"
 
-namespace output_to_stdout {
+// Debug includes
+
+namespace logger_null {
 namespace {
 
-static const char *s_name = "output_to_stdout";
-static const char *s_help = "Maps treelogger output to stdout";
+static const char *s_name = "logger_null";
+static const char *s_help = "Null logger, anything sent to it will disappear";
 
 static const snort::Parameter module_params[] = {
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 // MAIN object of this file
-class StdoutLogStream : public LioLi::LogStream {
-  void set_binary_mode() override {}
-
-  void operator<<(const std::string &&tree) override {
-    static std::mutex mutex;
-    std::scoped_lock lock(mutex);
-
-    // Output under mutex protection
-    std::cout << tree;
-  }
+class Logger : public LioLi::Logger {
 
 public:
-  StdoutLogStream() : LogStream(s_name) {}
+  Logger() : LioLi::Logger(s_name) {}
+
+  ~Logger() {}
+
+  void operator<<(const LioLi::Tree &&) override {}
 };
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<StdoutLogStream>();
+    LioLi::LogDB::register_type<Logger>();
+  }
+
+  bool set(const char *, snort::Value &, snort::SnortConfig *) override {
+    // fail if we didn't get something valid
+    return false;
   }
 
   Usage get_usage() const override {
@@ -90,4 +92,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace output_to_stdout
+} // namespace logger_null

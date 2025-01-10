@@ -16,6 +16,7 @@
 #include "log_framework.h"
 
 // Global includes
+#include <iostream>
 
 namespace alert_lioli {
 namespace {
@@ -66,14 +67,13 @@ class Logger : public snort::Logger {
   Module &module;
   bool testmode = true;
 
-  std::shared_ptr<LioLi::LogLioLiTree> logger;
+  std::shared_ptr<LioLi::Logger> logger;
 
-  LioLi::LogLioLiTree &get_logger() {
+  LioLi::Logger &get_logger() {
     if (!logger) {
-      logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(
-          module.get_logger_name().c_str());
+      logger =
+          LioLi::LogDB::get<LioLi::Logger>(module.get_logger_name().c_str());
     }
-
     return *logger.get();
   }
 
@@ -83,11 +83,11 @@ private:
   }
 
   void alert(snort::Packet *pkt, const char *msg, const Event &) override {
-    get_logger().log(std::move(gen_tree("alert", pkt, msg)));
+    get_logger() << std::move(gen_tree("alert", pkt, msg));
   }
 
   void log(snort::Packet *pkt, const char *msg, Event *) override {
-    get_logger().log(std::move(gen_tree("log", pkt, msg)));
+    get_logger() << std::move(gen_tree("log", pkt, msg));
   }
 
   LioLi::Tree gen_tree(const char *type, snort::Packet *pkt, const char *msg) {

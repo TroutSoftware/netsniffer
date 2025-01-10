@@ -7,9 +7,9 @@ alert ip any any -> any any (
   content:"google";
 
   http_method;
-  lioli_bind:method;
+  lioli_bind: $.method;
 
-  lioli_tag: "This is a tag";
-  lioli_tag: "my_tag:This is another tag";
+  lioli_tag: $.named "This is a tag";
+  lioli_tag: $.my_tag "This is another tag";
 )
 

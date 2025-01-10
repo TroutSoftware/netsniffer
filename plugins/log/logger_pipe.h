@@ -1,5 +1,5 @@
-#ifndef log_text_be408e56
-#define log_text_be408e56
+#ifndef logger_pipe_f8ee48e5
+#define logger_pipe_f8ee48e5
 
 // Snort includes
 #include <framework/base_api.h>
@@ -9,10 +9,10 @@
 
 // Local includes
 
-namespace log_txt {
+namespace logger_pipe {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace log_txt
+} // namespace logger_pipe
 
-#endif // #ifndef log_text_be408e56
+#endif // #ifndef logger_pipe_f8ee48e5

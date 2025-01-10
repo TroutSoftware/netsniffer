@@ -3,12 +3,11 @@ pcap $testdir/pcaps/google_http.pcap
 cmp output.txt $testdir/lioli_tag_test_txt.expected.txt 
 
 -- cfg.lua --
-output_to_file = { file_name = 'output.txt' }
-output_to_stdout = { }
 
-log_txt = { output = 'output_to_file' }
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
 
-alert_lioli = { logger = 'log_txt',
+alert_lioli = { logger = 'logger_file',
                 testmode = true }
 
 stream = {}

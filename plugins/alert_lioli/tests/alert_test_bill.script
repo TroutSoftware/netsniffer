@@ -5,13 +5,13 @@ pcap $testdir/pcaps/google_http.pcap
 cmp output.bill $testdir/alert_test_bill.expected.bill
 
 -- cfg.lua --
-output_to_file = { file_name = 'output.bill' }
-output_to_stdout = { }
 
-log_bill = { output = 'output_to_file',
-             option_no_root_node = false }
+serializer_bill = { option_no_root_node = false }
 
-alert_lioli = { logger = 'log_bill',
+logger_file = { file_name = 'output.bill',
+                serializer = 'serializer_bill'}
+
+alert_lioli = { logger = 'logger_file',
                 testmode = true }
 
 stream = {}

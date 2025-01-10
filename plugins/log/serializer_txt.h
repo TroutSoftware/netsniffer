@@ -1,5 +1,5 @@
-#ifndef log_to_file_b3c4b984
-#define log_to_file_b3c4b984
+#ifndef serializer_txt_f1ed9cda
+#define serializer_txt_f1ed9cda
 
 // Snort includes
 #include <framework/base_api.h>
@@ -9,10 +9,10 @@
 
 // Local includes
 
-namespace output_to_file {
+namespace serializer_txt {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace output_to_file
+} // namespace serializer_txt
 
-#endif // #ifndef log_to_file_b3c4b984
+#endif // #ifndef serializer_txt_f1ed9cda

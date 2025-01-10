@@ -42,7 +42,7 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow, Settings &settings) {
 FlowData::~FlowData() {
   auto tmp = gen_delta();
   tmp << LioLi::TreeGenerators::timestamp("end_time", settings.testmode);
-  settings.get_logger()->log(std::move(tmp));
+  settings.get_logger() << std::move(tmp);
 }
 
 void FlowData::process(snort::Packet *pkt) {
@@ -98,7 +98,7 @@ LioLi::Tree FlowData::gen_delta() {
   return tmp;
 }
 
-void FlowData::dump_delta() { settings.get_logger()->log(gen_delta()); }
+void FlowData::dump_delta() { settings.get_logger() << gen_delta(); }
 
 void FlowData::set_service_name(const char *name) {
   root << (LioLi::Tree("service") << std::string(name));

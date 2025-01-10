@@ -3,13 +3,10 @@ pcap $testdir/pcaps/google_http.pcap
 cmp output.lorth $testdir/netflow_test.expected.lorth 
 
 -- cfg.lua --
-output_to_file = { file_name = 'output.lorth' }
-output_to_stdout = { }
+logger_file = { file_name = 'output.lorth',
+                serializer = 'serializer_lorth' }
 
-log_txt = { output = 'output_to_stdout' }
-log_lorth = { output = 'output_to_file' }
-
-trout_netflow = { logger = 'log_lorth',
+trout_netflow = { logger = 'logger_file',
                   testmode = true } 
 
 stream = {}

@@ -1,5 +1,5 @@
-#ifndef log_bill_78d23db1
-#define log_bill_78d23db1
+#ifndef logger_file_40080a02
+#define logger_file_40080a02
 
 // Snort includes
 #include <framework/base_api.h>
@@ -9,10 +9,10 @@
 
 // Local includes
 
-namespace log_bill {
+namespace logger_file {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace log_bill
+} // namespace logger_file
 
-#endif // #ifndef log_bill_78d23db1
+#endif // #ifndef logger_file_40080a02

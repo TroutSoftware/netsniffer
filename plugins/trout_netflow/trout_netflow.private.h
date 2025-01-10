@@ -25,17 +25,17 @@ extern THREAD_LOCAL struct PegCounts s_peg_counts;
 
 // Structure module level settings are transferred in
 struct Settings {
-  std::shared_ptr<LioLi::LogLioLiTree> logger;
+  std::shared_ptr<LioLi::Logger> logger;
 
 public:
   std::string logger_name;
   bool testmode = false;
 
-  std::shared_ptr<LioLi::LogLioLiTree> get_logger() {
+  LioLi::Logger &get_logger() {
     if (!logger) {
-      logger = LioLi::LogDB::get<LioLi::LogLioLiTree>(logger_name.c_str());
+      logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
     }
-    return logger;
+    return *logger;
   }
 };
 

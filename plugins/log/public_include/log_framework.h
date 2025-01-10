@@ -14,6 +14,8 @@
 // Local includes
 #include "lioli.h"
 
+// Debug includes
+
 namespace LioLi {
 
 class LogBase {
@@ -38,7 +40,9 @@ public:
 
     register_obj(obj->get_name(), obj);
   };
-
+  template <typename T> static std::shared_ptr<T> get(const std::string &name) {
+    return get<T>(name.c_str());
+  }
   template <typename T> static std::shared_ptr<T> get(const char *name) {
     std::scoped_lock lock(mutex);
     auto lookup = db.find(name);
@@ -58,42 +62,49 @@ public:
   }
 };
 
-class LogStream : public LogBase {
+class Serializer : public LogBase {
+
 public:
-  LogStream(const char *my_name) : LogBase(my_name) {}
+  Serializer(const char *my_name) : LogBase(my_name) {}
 
-  // Virtual functions
-  virtual void set_binary_mode() = 0;
+  // There might be multiple serialization contexts in use at any given time or
+  // sequentially, if serialization is in anyway state full, then we need  a
+  // different object for each
+  class Context {
+  public:
+    // Function that does the serialization, input is a LioLi tree and output is
+    // a byte sequence, including any needed headers at the beginning, note
+    // might return an empty object
+    virtual std::string serialize(const Tree &&) = 0;
 
-  virtual void operator<<(const std::string &&tree) = 0;
+    // Terminate current context, returned byte sequence is any remaining
+    // data/end marker of current context.  Context object is invalid after
+    // this, except the is_closed() function.
+    virtual std::string close() = 0;
 
-  // Non virtual functions
-  bool operator==(LogStream &rhs) { return (this == &rhs); }
+    // Returns true if context is closed (invalid to call)
+    virtual bool is_closed() = 0;
 
-  operator bool() const { return (this != get_null_obj().get()); }
+    virtual ~Context() = default;
+  };
 
-  static std::shared_ptr<LogStream> &get_null_obj();
+  // Return TRUE if the serialized output is binary, FALSE if it is text based
+  virtual bool is_binary() = 0;
+
+  virtual std::shared_ptr<Context> create_context() = 0;
+
+  static std::shared_ptr<Serializer> &get_null_obj();
 };
 
-class LogLioLiTree : public LogBase {
-  std::string log_stream_name;
-  std::atomic<std::shared_ptr<LogStream>> log_stream;
-
-protected:
-  LogStream &get_stream();
+class Logger : public LogBase {
 
 public:
-  LogLioLiTree(const char *my_name) : LogBase(my_name) {}
+  Logger(const char *my_name) : LogBase(my_name) {}
 
-  virtual void log(Tree &&) = 0;
+  // Must be non-blocking
+  virtual void operator<<(const Tree &&tree) = 0;
 
-  bool operator==(LogLioLiTree &rhs) { return (this == &rhs); }
-
-  operator bool() const { return (this != get_null_obj().get()); }
-
-  void set_log_stream_name(const char *name) { log_stream_name = name; }
-
-  static std::shared_ptr<LogLioLiTree> &get_null_obj();
+  static std::shared_ptr<Logger> &get_null_obj();
 };
 
 } // namespace LioLi

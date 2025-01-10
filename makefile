@@ -142,7 +142,7 @@ format:
 	clang-format -i $(CC_SOURCES) $(CC_HEADERS)
 
 live: $(DEBUG_MODULE)
-	$(SNORT) -v -c test_config/live.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) ,a--warn-all
+	$(SNORT) -v -c test_config/live.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) --warn-all
 
 test-data: $(DEBUG_MODULE)
 	$(SNORT) -v -c test_config/cfg.lua --plugin-path $(DEBUGDIR) $(SNORT_DAQ_INCLUDE_OPTION) --pcap-dir test_data --warn-all

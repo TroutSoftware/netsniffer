@@ -1,5 +1,5 @@
-#ifndef log_null_d00f682d
-#define log_null_d00f682d
+#ifndef logger_stdout_57113c87
+#define logger_stdout_57113c87
 
 // Snort includes
 #include <framework/base_api.h>
@@ -9,10 +9,10 @@
 
 // Local includes
 
-namespace log_null {
+namespace logger_stdout {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace log_null
+} // namespace logger_stdout
 
-#endif // #ifndef log_null_d00f682d
+#endif // #ifndef logger_stdout_57113c87

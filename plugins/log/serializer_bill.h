@@ -1,5 +1,5 @@
-#ifndef log_to_pipe_31ca5075
-#define log_to_pipe_31ca5075
+#ifndef serializer_bill_14e7f29a
+#define serializer_bill_14e7f29a
 
 // Snort includes
 #include <framework/base_api.h>
@@ -9,10 +9,10 @@
 
 // Local includes
 
-namespace output_to_pipe {
+namespace serializer_bill {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace output_to_pipe
+} // namespace serializer_bill
 
-#endif // #ifndef log_to_pipe_31ca5075
+#endif // #ifndef serializer_bill_14e7f29a
