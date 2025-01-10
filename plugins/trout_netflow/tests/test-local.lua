@@ -13,8 +13,8 @@
 serializer_txt = { }
 serializer_lorth = { }
 
-logger_file = { file_name = 'test.txt',
-                serializer = 'serializer_txt' }
+logger_file = { file_name = 'test.bill',
+                serializer = 'serializer_bill' }
 logger_null = { }
 logger_stdout = { serializer = 'serializer_txt' }
 logger_pipe = { serializer = 'serializer_txt',
@@ -22,7 +22,7 @@ logger_pipe = { serializer = 'serializer_txt',
 
 alert_lioli = { logger = 'logger_null' }
 
-trout_netflow = { logger = 'logger_pipe'  }                   
+trout_netflow = { logger = 'logger_file'  }                   
 
 stream = {}
 stream_tcp = {}

@@ -22,6 +22,11 @@ static const char *s_help = "Serializes LioLi trees to BILL format";
 static const snort::Parameter module_params[] = {
     {"option_no_root_node", snort::Parameter::PT_BOOL, nullptr, "true",
      "if set will disable generation of root nodes in output"},
+    {"bill_secret_sequence", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Setting the variable part of the BILL header, format is a sequence of 9 "
+     "8-bit hex numbers eg. \"0022445566AABB\""},
+    {"bill_secret_env", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "environment variable holding same string as bill_secret_sequence"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 // Settings for this module
@@ -90,6 +95,14 @@ class Module : public snort::Module {
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("option_no_root_node")) {
       settings.option_no_root_node = val.get_bool();
+      return true;
+    } else if (val.is("bill_secret_sequence")) {
+      snort::WarningMessage(
+          "WARNING: option >bill_secret_sequence< is not implemented\n");
+      return true;
+    } else if (val.is("bill_secret_env")) {
+      snort::WarningMessage(
+          "WARNING: option >bill_secret_env< is not implemented\n");
       return true;
     }
 

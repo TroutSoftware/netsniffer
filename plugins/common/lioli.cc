@@ -430,10 +430,15 @@ bool Tree::is_valid() const {
 
 LioLi::LioLi() {}
 
-void LioLi::insert_header() { ss << "BILL" << '\x0' << '\x1'; }
+void LioLi::insert_header() {
+  ss << '\x4' << "BILL" << '\x0' << '\x2';
+  for (int i = 0; i < 9; i++) {
+    ss << '\x0';
+  }
+}
 
 void LioLi::insert_terminator() {
-  Binary::as_varint(ss, 0xFFFF'FFFF'FFFF'FFFF);
+  // BILL02 format does not use terminators
 }
 
 std::string LioLi::move_binary() {
