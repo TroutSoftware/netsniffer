@@ -120,7 +120,7 @@ class Logger : public LioLi::Logger {
       }
 
       while (!queue.empty() && !terminate) {
-        if (next_timeout > clock::now() || !context) {
+        if (next_timeout < clock::now() || !context) {
           if (context) {
             pipe << context->close();
 

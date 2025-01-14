@@ -5,8 +5,10 @@
 #include <framework/module.h>
 
 // System includes
+#include <cstdint>
 #include <iostream>
 #include <mutex>
+#include <vector>
 
 // Local includes
 #include "lioli.h"
@@ -32,6 +34,7 @@ static const snort::Parameter module_params[] = {
 // Settings for this module
 struct Settings {
   bool option_no_root_node = false;
+  std::vector<uint8_t> secret;
 } settings;
 
 // MAIN object of this file
@@ -55,6 +58,11 @@ public:
         if (settings.option_no_root_node) {
           lioli.set_no_root_node();
         }
+        if (settings.secret.size() != 9) {
+          snort::ErrorMessage("ERROR: BILL secret not set to a valid value\n");
+          return "";
+        }
+        lioli.set_secret(settings.secret);
         lioli.insert_header();
         first_write = false;
       }
@@ -83,7 +91,8 @@ public:
   bool is_binary() override { return true; };
 
   std::shared_ptr<LioLi::Serializer::Context> create_context() override {
-    return std::make_shared<Context>();
+    std::shared_ptr<Context> context = std::make_shared<Context>();
+    return context;
   };
 };
 
@@ -92,13 +101,51 @@ class Module : public snort::Module {
     LioLi::LogDB::register_type<Serializer>();
   }
 
+  bool begin(const char *, int, snort::SnortConfig *) override {
+    settings.option_no_root_node = false;
+    settings.secret.clear();
+    return true;
+  }
+
+  bool end(const char *, int, snort::SnortConfig *) override {
+    if (settings.secret.size() != 9) {
+      snort::ErrorMessage("ERROR: BILL secret not set in configuration\n");
+      return false;
+    }
+    return true;
+  }
+
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("option_no_root_node")) {
       settings.option_no_root_node = val.get_bool();
       return true;
     } else if (val.is("bill_secret_sequence")) {
-      snort::WarningMessage(
-          "WARNING: option >bill_secret_sequence< is not implemented\n");
+      std::string input = val.get_as_string();
+      std::cout << "MKRTEST - input is >" << input << "<" << std::endl;
+
+      if (input.length() != 18) {
+        std::cout << "MKRTEST - length is not 18" << std::endl;
+        snort::ErrorMessage("ERROR: option >bill_secret_sequence< needs 9 "
+                            "bytes (18 hex digits) as value\n");
+
+        return false;
+      }
+
+      std::vector<uint8_t> secret(9);
+      if (9 != sscanf(input.c_str(),
+                      "%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
+                      &secret.at(0), &secret.at(1), &secret.at(2),
+                      &secret.at(3), &secret.at(4), &secret.at(5),
+                      &secret.at(6), &secret.at(7), &secret.at(8))) {
+        snort::ErrorMessage("ERROR: option >bill_secret_sequence< could not "
+                            "extract 9 2-hex-digit numbers from %s\n",
+                            input.c_str());
+
+        return false;
+      }
+
+      settings.secret.swap(secret);
+
       return true;
     } else if (val.is("bill_secret_env")) {
       snort::WarningMessage(

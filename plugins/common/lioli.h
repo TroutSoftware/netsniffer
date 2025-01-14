@@ -4,10 +4,12 @@
 // Snort includes
 
 // System includes
+#include <cassert>
 #include <cstdint>
 #include <forward_list>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // Local includes
 
@@ -107,6 +109,7 @@ public:
 // A LioLi can contain multiple trees and be serialized in binary format
 class LioLi {
   std::stringstream ss;
+  std::vector<uint8_t> secret;
   bool add_root_node = true;
 
 public:
@@ -115,6 +118,10 @@ public:
   void insert_terminator();
   std::string move_binary();
   void set_no_root_node() { add_root_node = false; }
+  void set_secret(std::vector<uint8_t> &secret) {
+    assert(secret.size() == 9); // There are exactly 9 bytes in a secret
+    this->secret = secret;
+  }
 
   friend LioLi &operator<<(LioLi &ll, const Tree &bf);
   friend std::ostream &operator<<(std::ostream &os, LioLi &out);

@@ -6,7 +6,8 @@ cmp output.bill $testdir/alert_test_bill.expected.bill
 
 -- cfg.lua --
 
-serializer_bill = { option_no_root_node = false }
+serializer_bill = { option_no_root_node = false,
+                    bill_secret_sequence = '000000000000000000' }
 
 logger_file = { file_name = 'output.bill',
                 serializer = 'serializer_bill'}

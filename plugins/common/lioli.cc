@@ -433,7 +433,7 @@ LioLi::LioLi() {}
 void LioLi::insert_header() {
   ss << '\x4' << "BILL" << '\x0' << '\x2';
   for (int i = 0; i < 9; i++) {
-    ss << '\x0';
+    ss << secret[i];
   }
 }
 
