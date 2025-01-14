@@ -120,11 +120,15 @@ class Module : public snort::Module {
       settings.option_no_root_node = val.get_bool();
       return true;
     } else if (val.is("bill_secret_sequence")) {
+      if (settings.secret.size() != 0) {
+        snort::ErrorMessage("ERROR: You can only set secret/env once in %s\n",
+                            s_name);
+        return false;
+      }
+
       std::string input = val.get_as_string();
-      std::cout << "MKRTEST - input is >" << input << "<" << std::endl;
 
       if (input.length() != 18) {
-        std::cout << "MKRTEST - length is not 18" << std::endl;
         snort::ErrorMessage("ERROR: option >bill_secret_sequence< needs 9 "
                             "bytes (18 hex digits) as value\n");
 
@@ -148,8 +152,37 @@ class Module : public snort::Module {
 
       return true;
     } else if (val.is("bill_secret_env")) {
-      snort::WarningMessage(
-          "WARNING: option >bill_secret_env< is not implemented\n");
+      if (settings.secret.size() != 0) {
+        snort::ErrorMessage("ERROR: You can only set secret/env once in %s\n",
+                            s_name);
+        return false;
+      }
+
+      std::string env_name = val.get_as_string();
+      const char *value = std::getenv(env_name.c_str());
+
+      if (value && *value) {
+        std::vector<uint8_t> secret(9);
+        if (9 != sscanf(value, "%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx",
+                        &secret.at(0), &secret.at(1), &secret.at(2),
+                        &secret.at(3), &secret.at(4), &secret.at(5),
+                        &secret.at(6), &secret.at(7), &secret.at(8))) {
+          snort::ErrorMessage("ERROR: option >bill_secret_sequence< could not "
+                              "extract 9 2-hex-digit numbers from %s\n",
+                              value);
+
+          return false;
+        }
+
+        settings.secret.swap(secret);
+
+        return true;
+      }
+
+      snort::ErrorMessage(
+          "ERROR: Could not read secret from environment: %s in %s\n",
+          env_name.c_str(), s_name);
+
       return true;
     }
 

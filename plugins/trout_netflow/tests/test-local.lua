@@ -12,7 +12,8 @@
 
 serializer_txt = { }
 serializer_lorth = { }
-serializer_bill = { bill_secret_sequence = '001122334455667788'}
+--serializer_bill = { bill_secret_sequence = '001122334455667788',
+serializer_bill = { bill_secret_env = 'secret_bill'}
 
 logger_file = { file_name = 'test.bill',
                 serializer = 'serializer_bill' }
