@@ -127,7 +127,7 @@ class Logger : public LioLi::Logger {
           lock.lock();
 
           if (!pipe.good()) {
-            snort::LogMessage("LOG: %s unable to write end to pipe, retrying",
+            snort::LogMessage("LOG: %s unable to write end to pipe, retrying\n",
                               s_name);
             pipe.close();
             continue;
@@ -135,8 +135,12 @@ class Logger : public LioLi::Logger {
         }
 
         context = serializer->create_context();
-        next_timeout =
-            clock::now() + std::chrono::seconds(serializer_restart_interval_s);
+        if (serializer_restart_interval_s != 0) {
+          next_timeout = clock::now() +
+                         std::chrono::seconds(serializer_restart_interval_s);
+        } else {
+          next_timeout = std::chrono::time_point<clock>::max();
+        }
       }
 
       if (!queue.empty()) {
@@ -150,7 +154,7 @@ class Logger : public LioLi::Logger {
 
         if (!pipe.good()) {
           snort::LogMessage(
-              "LOG: %s unable to write tree to pipe, skipping and retrying",
+              "LOG: %s unable to write tree to pipe, skipping and retrying\n",
               s_name);
           pipe.close();
           continue;
@@ -192,7 +196,7 @@ public:
 
       // Reduce size of the queue until there is space for the new element
       while (queue.size() > max_queue_size - 1) {
-        snort::WarningMessage("WARNING: %s dropping tree from queue", s_name);
+        snort::WarningMessage("WARNING: %s dropping tree from queue\n", s_name);
         queue.pop_front();
       }
 
@@ -230,7 +234,7 @@ public:
     // If queue size is being reduced, reduce it
     if (queue.size() > max) {
       snort::WarningMessage(
-          "WARNING: %s dropping %li trees from queue due to resize", s_name,
+          "WARNING: %s dropping %li trees from queue due to resize\n", s_name,
           queue.size() - max);
     }
     while (queue.size() > max) {
