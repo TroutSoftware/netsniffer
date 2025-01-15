@@ -44,7 +44,7 @@ public:
     // this, except the is_closed() function.
     std::string close() override {
       closed = true;
-      return "";
+      return "------------------------\n";
     }
 
     // Returns true if context is closed (invalid to call)
