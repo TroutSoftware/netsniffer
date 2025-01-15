@@ -124,6 +124,7 @@ class Logger : public LioLi::Logger {
         if (context) {
           lock.unlock();
           pipe << context->close();
+          pipe.flush();
           lock.lock();
 
           if (!pipe.good()) {
