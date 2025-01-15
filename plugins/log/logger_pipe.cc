@@ -117,26 +117,29 @@ class Logger : public LioLi::Logger {
         pipe = open_pipe(lock);
         // We always start a new pipe with a fresh context
         context.reset();
+        continue;
       }
 
-      while (!queue.empty() && !terminate) {
-        if (next_timeout < clock::now() || !context) {
-          if (context) {
-            pipe << context->close();
+      if (next_timeout <= clock::now() || !context) {
+        if (context) {
+          lock.unlock();
+          pipe << context->close();
+          lock.lock();
 
-            if (!pipe.good()) {
-              snort::LogMessage("LOG: %s unable to write end to pipe, retrying",
-                                s_name);
-              pipe.close();
-              break;
-            }
+          if (!pipe.good()) {
+            snort::LogMessage("LOG: %s unable to write end to pipe, retrying",
+                              s_name);
+            pipe.close();
+            continue;
           }
-
-          context = serializer->create_context();
-          next_timeout = clock::now() +
-                         std::chrono::seconds(serializer_restart_interval_s);
         }
 
+        context = serializer->create_context();
+        next_timeout =
+            clock::now() + std::chrono::seconds(serializer_restart_interval_s);
+      }
+
+      if (!queue.empty()) {
         auto output = context->serialize(std::move(queue.front()));
         queue.pop_front();
 
@@ -150,17 +153,19 @@ class Logger : public LioLi::Logger {
               "LOG: %s unable to write tree to pipe, skipping and retrying",
               s_name);
           pipe.close();
-          break;
+          continue;
         }
       }
 
       if (!terminate && queue.empty()) {
-        cv.wait_for(lock, std::chrono::seconds(1));
+        cv.wait_until(lock, next_timeout);
       }
     }
 
     if (pipe.good() && pipe.is_open() && context) {
+      lock.unlock();
       pipe << context->close();
+      lock.lock();
       pipe.close();
     }
 
@@ -183,8 +188,7 @@ public:
     {
       std::scoped_lock lock(mutex);
 
-      assert(max_queue_size >
-             0); // If less than 1, the following loop will never terminate
+      assert(max_queue_size > 0);
 
       // Reduce size of the queue until there is space for the new element
       while (queue.size() > max_queue_size - 1) {
