@@ -5,6 +5,7 @@
 #include <framework/module.h>
 
 // System includes
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <csignal>
@@ -88,8 +89,9 @@ class Logger : public LioLi::Logger {
     lock.lock();
 
     if (!pipe.good() || !pipe.is_open()) {
-      snort::ErrorMessage("ERROR: Could not open output pipe: %s\n",
-                          pipe_name.c_str());
+      snort::ParseAbort(
+          "ERROR: Could not open output pipe: %s with reason %s\n",
+          pipe_name.c_str(), std::strerror(errno));
 
       // This is considered a non-recoverable error, e.g. pipe doesn't exists
       terminate = true;
