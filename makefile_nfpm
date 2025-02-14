@@ -1,0 +1,83 @@
+
+# This file is used by the "main" makefile to generate the nfpm input file
+
+RELEASE_TAG ?= -dev-$(USER)-$(shell git rev-parse HEAD)-$(shell date -u +%s)
+
+$(info $(RELEASE_TAG))
+
+# Format of each line in dependencies (empty line is important
+define NFPM_DEPS
+- $(THIS_DEPS)
+
+endef
+
+# Set NFPM_DEPS_LIST to be the dependencies
+NFPM_DEPS_LIST = $(foreach THIS_DEPS,$(UBUNTU_RUN_TIME_DEPS),$(NFPM_DEPS))
+
+# Format of a copy map (empty lines are important)
+define NFPM_CP_MAP
+
+ - src: $(1)$(3)
+   dst: $(2)$(3)
+
+endef
+
+# Function to generate a copy map
+# Call with mask, input_folder, output_folder, output_var
+define NFPM_CP_MAP_GEN =
+  NFPM_CP_MAP_GEN_IN_LIST := $$(wildcard $$(abspath $(2)/$(1)))
+  NFPM_OUT_PATH := $(abspath $(3))/
+  define $(4)   
+$$(foreach in_path,$$(NFPM_CP_MAP_GEN_IN_LIST), $$(call NFPM_CP_MAP,$$(dir $$(in_path)),$$(NFPM_OUT_PATH),$$(notdir $$(in_path))))
+  endef
+endef
+
+# Fill NFPM_DAQ_LIBS_MAP with content
+$(eval $(call NFPM_CP_MAP_GEN,*.so,$(LIBDAQ_INSTALL_FOLDER)/lib/daq,/usr/lib/snort/daq,NFPM_DAQ_LIBS_MAP))
+
+
+define nfpm_script
+name: "snort"
+arch: "amd64"
+platform: "linux"
+version: "v${SNORT3_TAG}-trout${RELEASE_TAG}"
+section: "default"
+priority: "extra"
+maintainer: "Trout Software <devit@trout.software>"
+description: |
+  Snort Intrusion Prevention System
+
+  This builds also include libDAQ (for acquisition), libML (for inference),
+  and the modules developped by Trout.
+
+contents:
+# TODO: Autogenerate these lines with snort and trout_snort
+ - src: $(DEV_FOLDER)/bin/snort
+   dst: /usr/bin/snort
+
+ - src: $(RELEASE_MODULE)
+   dst: /usr/lib/snort/trout_snort.so   
+
+# TODO: Autogenerate these lines with library includes
+ - src: $(DEV_FOLDER)/lib/libdaq.so.3.0.0
+   dst: /lib/x86_64-linux-gnu/libdaq.so.3.0.0
+
+ - src: /lib/x86_64-linux-gnu/libdaq.so.3.0.0
+   dst: /lib/x86_64-linux-gnu/libdaq.so.3   
+   type: symlink
+  
+ - src: $(DEV_FOLDER)/lib/libml.so
+   dst: /lib/x86_64-linux-gnu/libml.so.1.1.0
+
+ - src: /lib/x86_64-linux-gnu/libml.so.1.1.0
+   dst: /lib/x86_64-linux-gnu/libml.so
+   type: symlink
+
+ # Add packages from DAQ
+ $(NFPM_DAQ_LIBS_MAP)
+
+depends:
+ # Add dependencies
+ $(NFPM_DEPS_LIST)
+ 
+endef

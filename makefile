@@ -26,6 +26,10 @@ LIBDAQ_FOLDER := $(DEPS_FOLDER)/libdaq-3.0.16
 LIBDAQ_FILE := $(DEPS_FOLDER)/libdaq.$(LIBDAQ_TAG).tag.gz
 LIBDAQ_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libdaq-$(LIBDAQ_TAG)
 
+# DEPENDENCIES WE HAVE (used for packaging and development)
+UBUNTU_RUN_TIME_DEPS := libhwloc15 libdumbnet1 libluajit-5.1-2 libpcap0.8t64 libpcre3
+UBUNTU_DEV_TIME_DEPS := make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev libmnl-dev
+
 # DEFINE WHICH SNORT3 TO USE IN REST OF MAKEFILE
 SYSTEM_SNORT_INCLUDE := /opt/snort/include/snort
 SYSTEM_SNORT_BINARY := /opt/snort/bin/snort
@@ -39,7 +43,7 @@ ifneq ($(wildcard $(DEV_SNORT_BINARY)),)
 	LD_LIBRARY_PATH := $(DEV_SNORT_LIBRARY)
 	export LD_LIBRARY_PATH
 	export SNORT_DAQ_PATH = $(DEV_FOLDER)/lib/daq
-	SNORT_DAQ_INCLUDE_OPTION = --daq-dir $(DEV_FOLDER)/lib/daq
+	SNORT_DAQ_INCLUDE_OPTION = --daq-dir $(DEV_FOLDER)/lib/daq 
 else
 	SNORT := $(SYSTEM_SNORT_BINARY)
 endif
@@ -60,12 +64,14 @@ usage:
 	@echo ""
 	@echo "make build        - To build a debug build"
 	@echo "make clean        - To clean all build folders"
+	@echo "make deb-package  - Build Debian package with all components"
 	@echo "make format       - To run clang-format on all source files"
 	@echo "make gdb          - Launces gdb with local test files from the"
 	@echo "                  - module defined by env TEST_MODULE"
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a debug build"
 	@echo "make live           Runs Snort with test_config/live.lua"
+	@echo "make package      - Creates zip file with all components"
 	@echo "make release      - To build a release build"
 	@echo "make release-test - Run the test suite on release build"
 	@echo "make release-test-data"
@@ -291,10 +297,10 @@ snort3: $(SNORT3_INSTALL_FOLDER)
 
 ubuntu-dev-deps:
 	# The irony of having make in this list isn't unnoticed
-	sudo apt install make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev
+	sudo apt install $(UBUNTU_DEV_TIME_DEPS)
 
 ubuntu-run-deps:
-	sudo apt install libhwloc15 libdumbnet1 libluajit-5.1-2 libpcap0.8t64 libpcre3
+	sudo apt install $(UBUNTU_RUN_TIME_DEPS)
 
 snort3/clean:
 	if [ -d $(LIBDAQ_FOLDER) ]; then rm -r $(LIBDAQ_FOLDER); fi
@@ -319,7 +325,7 @@ snort3/dev: snort3
 	@echo "Snort files written to $(DEV_FOLDER)" 
 	@echo "\e[3;32mSnort3 build\e[0m"
 
-package: snort3/dev
+package: snort3/dev build
 	@cp -r $(DEBUG_MODULE) $(DEV_FOLDER)/bin/
 	@echo Copying done - building package...
 	tar -cf snort.tar -C $(DEV_FOLDER) bin
@@ -330,3 +336,13 @@ package: snort3/dev
 	@if [ -f snort.tar.gz ]; then rm snort.tar.gz; fi
 	gzip snort.tar
 	@echo "Package building done (./snort.tar.gz)..."
+
+include makefile_nfpm
+
+deb-package: snort3 release | $(MAKE_README_FILENAME)
+	@echo Generating package script...
+	$(file > $(MAKEDIR)/nfpm.yaml,$(nfpm_script))
+	@echo "\e[3;32mPackage script generated: $(MAKEDIR)/nfpm.yaml\e[0m"
+	@echo Building deb package....
+	nfpm p -f $(MAKEDIR)/nfpm.yaml -p deb -t .
+
