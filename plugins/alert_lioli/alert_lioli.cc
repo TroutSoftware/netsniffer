@@ -33,6 +33,23 @@ static const snort::Parameter module_params[] = {
      "timestamps"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "alerts generated", "Number of alerts generated"},
+    {CountType::SUM, "logs generated", "Number of logs generated"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+THREAD_LOCAL struct PegCounts {
+  PegCount alerts_generated = 0;
+  PegCount logs_generated = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 class Module : public snort::Module {
 
   Module() : snort::Module(s_name, s_help, module_params) {}
@@ -54,6 +71,12 @@ class Module : public snort::Module {
   }
 
   Usage get_usage() const override { return GLOBAL; }
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    return reinterpret_cast<PegCount *>(&s_peg_counts);
+  }
 
 public:
   std::string &get_logger_name() { return logger_name; }
@@ -83,10 +106,12 @@ private:
   }
 
   void alert(snort::Packet *pkt, const char *msg, const Event &) override {
+    s_peg_counts.alerts_generated++;
     get_logger() << std::move(gen_tree("alert", pkt, msg));
   }
 
   void log(snort::Packet *pkt, const char *msg, Event *) override {
+    s_peg_counts.logs_generated++;
     get_logger() << std::move(gen_tree("log", pkt, msg));
   }
 
