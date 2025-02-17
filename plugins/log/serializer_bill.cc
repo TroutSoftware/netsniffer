@@ -200,7 +200,7 @@ public:
 };
 
 class Inspector : public snort::Inspector {
-  void eval(snort::Packet *) override{};
+  void eval(snort::Packet *) override {};
 
 public:
   static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }

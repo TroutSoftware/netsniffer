@@ -28,7 +28,7 @@ LIBDAQ_INSTALL_FOLDER := $(DEPS_FOLDER)/install/libdaq-$(LIBDAQ_TAG)
 
 # DEPENDENCIES WE HAVE (used for packaging and development)
 UBUNTU_RUN_TIME_DEPS := libhwloc15 libdumbnet1 libluajit-5.1-2 libpcap0.8t64 libpcre3
-UBUNTU_DEV_TIME_DEPS := make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev libmnl-dev
+UBUNTU_DEV_TIME_DEPS := make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev libmnl-dev clang-format
 
 # DEFINE WHICH SNORT3 TO USE IN REST OF MAKEFILE
 SYSTEM_SNORT_INCLUDE := /opt/snort/include/snort
@@ -81,6 +81,8 @@ usage:
 	@echo "                  - Set env TEST_MODULE to name of module where"
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a release build"
+	@echo "ubuntu-dev-deps   - Installs development packages needed for dev builds"
+	@echo "ubuntu-run-deps   - Installs packages needed run time"
 	@echo "make test         - Run the test suite"
 	@echo "make test-break   - Run the test suite and break on first error"
 	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
