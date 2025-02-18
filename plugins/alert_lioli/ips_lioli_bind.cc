@@ -28,6 +28,27 @@ static const snort::Parameter module_params[] = {
     {"~", snort::Parameter::PT_STRING, nullptr, nullptr, "name of lioli node"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "binds",
+     "Number of times something was bounded to a package"},
+    {CountType::SUM, "no_flows",
+     "Number of times something couldn't be bound as there was no flow"},
+    {CountType::SUM, "config_pass", "Count of config file parses that passed"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+THREAD_LOCAL struct PegCounts {
+  PegCount binds = 0;
+  PegCount no_flow = 0;
+  PegCount config_pass = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 class Module : public snort::Module {
   std::string node_name;
 
@@ -50,6 +71,7 @@ class Module : public snort::Module {
         return false;
       }
 
+      s_peg_counts.config_pass++;
       return true;
     }
 
@@ -58,6 +80,12 @@ class Module : public snort::Module {
   }
 
   Usage get_usage() const override { return DETECT; }
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    return reinterpret_cast<PegCount *>(&s_peg_counts);
+  }
 
 public:
   static snort::Module *ctor() { return new Module(); }
@@ -93,6 +121,7 @@ class IpsOption : public snort::IpsOption {
 
   EvalStatus eval(Cursor &c, snort::Packet *p) override {
     if (!p->flow) {
+      s_peg_counts.no_flow++;
       return NO_MATCH;
     }
 
@@ -105,6 +134,8 @@ class IpsOption : public snort::IpsOption {
     std::string content((char *)startpos, length);
 
     *flow_data << std::move(LioLi::Path(node_name) << content);
+
+    s_peg_counts.binds++;
 
     return MATCH;
   }

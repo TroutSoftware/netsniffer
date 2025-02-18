@@ -30,6 +30,26 @@ static const snort::Parameter module_params[] = {
      "tag that should be added"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "tags_added", "Number of times a package was tagged"},
+    {CountType::SUM, "no_flows",
+     "Number of times something couldn't be bound as there was no flow"},
+    {CountType::SUM, "config_pass", "Count of config file parses that passed"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+THREAD_LOCAL struct PegCounts {
+  PegCount tags_added = 0;
+  PegCount no_flow = 0;
+  PegCount config_pass = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 class Module : public snort::Module {
 
   LioLi::Path tag;
@@ -64,6 +84,8 @@ class Module : public snort::Module {
             std::ranges::count(LioLi::Path::regex_path_name(), '(');
         tag << (LioLi::Path(sm[1]) << sm[2 + parenthesis_count]);
         tag_valid = true;
+
+        s_peg_counts.config_pass++;
         return true;
       }
     }
@@ -73,6 +95,12 @@ class Module : public snort::Module {
   }
 
   Usage get_usage() const override { return DETECT; }
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    return reinterpret_cast<PegCount *>(&s_peg_counts);
+  }
 
 public:
   static snort::Module *ctor() { return new Module(); }
@@ -106,6 +134,7 @@ class IpsOption : public snort::IpsOption {
 
   EvalStatus eval(Cursor &, snort::Packet *p) override {
     if (!p->flow) {
+      s_peg_counts.no_flow++;
       return NO_MATCH;
     }
 
@@ -113,6 +142,8 @@ class IpsOption : public snort::IpsOption {
         alert_lioli::FlowData::get_from_flow(p->flow);
 
     *flow_data << tag;
+
+    s_peg_counts.tags_added++;
 
     return MATCH;
   }

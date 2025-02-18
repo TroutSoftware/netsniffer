@@ -116,6 +116,8 @@ public:
   LioLi();
   void insert_header();
   void insert_terminator();
+
+  size_t length(); // Get the currently stored length
   std::string move_binary();
   void set_no_root_node() { add_root_node = false; }
   void set_secret(std::vector<uint8_t> &secret) {

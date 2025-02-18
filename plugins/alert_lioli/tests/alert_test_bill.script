@@ -3,6 +3,11 @@ pcap $testdir/pcaps/google_http.pcap
 
 # This test might not be valid, the files might be compared in text, rather than binary mode
 cmp output.bill $testdir/alert_test_bill.expected.bill
+stdout 'alerts_generated: 2'
+stdout 'logs_generated: 2'
+stdout 'binds: 4'
+stdout 'tree_count: 4'
+stdout 'output_bytes: 1004'
 
 -- cfg.lua --
 

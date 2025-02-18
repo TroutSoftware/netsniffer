@@ -44,6 +44,34 @@ static const snort::Parameter module_params[] = {
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "logs_in", "Count of logs we were asked to write"},
+    {CountType::SUM, "logs_out", "Count of logs we sent on the pipe"},
+    {CountType::SUM, "overflows", "Count of logs we discarded due to overflow"},
+    {CountType::MAX, "max_queued",
+     "Max number of items ever queued at one time"},
+    {CountType::SUM, "write_errors", "Count of write errors detected"},
+    {CountType::SUM, "restarts", "Count of (re)starts of the serializer"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+// NOTE: we cant use the THREAD_LOCAL pattern here as we have our own threads
+std::mutex peg_count_mutex; // Protects the peg counts
+struct PegCounts {
+  PegCount logs_in = 0;
+  PegCount logs_out = 0;
+  PegCount overflows = 0;
+  PegCount max_queued = 0;
+  PegCount write_errors = 0;
+  PegCount restarts = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 // SIGPIPE handler
 void pipe_signal_handler(int) {}
 
@@ -133,6 +161,11 @@ class Logger : public LioLi::Logger {
             snort::LogMessage("LOG: %s unable to write end to pipe, retrying\n",
                               s_name);
             pipe.close();
+            {
+              std::scoped_lock lock(peg_count_mutex);
+              s_peg_counts.write_errors++;
+            }
+
             continue;
           }
         }
@@ -143,6 +176,11 @@ class Logger : public LioLi::Logger {
                          std::chrono::seconds(serializer_restart_interval_s);
         } else {
           next_timeout = std::chrono::time_point<clock>::max();
+        }
+
+        {
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.restarts++;
         }
       }
 
@@ -160,7 +198,14 @@ class Logger : public LioLi::Logger {
               "LOG: %s unable to write tree to pipe, skipping and retrying\n",
               s_name);
           pipe.close();
+          {
+            std::scoped_lock lock(peg_count_mutex);
+            s_peg_counts.write_errors++;
+          }
           continue;
+        } else {
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.logs_out++;
         }
       }
 
@@ -201,9 +246,22 @@ public:
       while (queue.size() > max_queue_size - 1) {
         snort::WarningMessage("WARNING: %s dropping tree from queue\n", s_name);
         queue.pop_front();
+        {
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.overflows++;
+        }
       }
 
       queue.push_back(std::move(tree));
+
+      {
+        std::scoped_lock lock(peg_count_mutex);
+        if (s_peg_counts.max_queued < queue.size()) {
+          s_peg_counts.max_queued = queue.size();
+        }
+
+        s_peg_counts.logs_in++;
+      }
     }
 
     // Kick worker
@@ -398,6 +456,19 @@ class Module : public snort::Module {
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    // We need to return a copy of the peg counts as we don't know when snort
+    // are done with them
+    static PegCounts static_pegs;
+
+    std::scoped_lock lock(peg_count_mutex);
+    static_pegs = s_peg_counts;
+
+    return reinterpret_cast<PegCount *>(&static_pegs);
+  }
 
 public:
   static snort::Module *ctor() { return new Module(); }

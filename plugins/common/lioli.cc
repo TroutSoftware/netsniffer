@@ -441,6 +441,8 @@ void LioLi::insert_terminator() {
   // BILL02 format does not use terminators
 }
 
+size_t LioLi::length() { return ss.str().length(); }
+
 std::string LioLi::move_binary() {
   return std::move(ss).str(); // we clear ss by the move
 }

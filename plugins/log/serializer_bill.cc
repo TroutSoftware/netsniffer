@@ -31,6 +31,25 @@ static const snort::Parameter module_params[] = {
      "environment variable holding same string as bill_secret_sequence"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "tree_count", "Number of trees serialized"},
+    {CountType::SUM, "output_bytes", "Total number of bytes generated"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+// NOTE: we cant use the THREAD_LOCAL pattern here as we have our own threads
+std::mutex peg_count_mutex; // Protects the peg counts
+struct PegCounts {
+  PegCount tree_count = 0;
+  PegCount output_bytes = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 // Settings for this module
 struct Settings {
   bool option_no_root_node = false;
@@ -60,13 +79,25 @@ public:
         }
         if (settings.secret.size() != 9) {
           snort::ErrorMessage("ERROR: BILL secret not set to a valid value\n");
+          {
+            std::scoped_lock lock(peg_count_mutex);
+            s_peg_counts.tree_count++;
+          }
+
           return "";
         }
         lioli.set_secret(settings.secret);
         lioli.insert_header();
         first_write = false;
       }
+
       lioli << std::move(tree);
+
+      {
+        std::scoped_lock lock(peg_count_mutex);
+        s_peg_counts.tree_count++;
+        s_peg_counts.output_bytes += lioli.length();
+      }
 
       return lioli.move_binary();
     }
@@ -80,6 +111,12 @@ public:
         lioli.insert_terminator();
       }
       closed = true;
+
+      {
+        std::scoped_lock lock(peg_count_mutex);
+        s_peg_counts.output_bytes += lioli.length();
+      }
+
       return lioli.move_binary();
     }
 
@@ -193,6 +230,19 @@ class Module : public snort::Module {
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    // We need to return a copy of the peg counts as we don't know when snort
+    // are done with them
+    static PegCounts static_pegs;
+
+    std::scoped_lock lock(peg_count_mutex);
+    static_pegs = s_peg_counts;
+
+    return reinterpret_cast<PegCount *>(&static_pegs);
+  }
 
 public:
   static snort::Module *ctor() { return new Module(); }

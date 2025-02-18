@@ -34,8 +34,8 @@ static const snort::Parameter module_params[] = {
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
-    {CountType::SUM, "alerts generated", "Number of alerts generated"},
-    {CountType::SUM, "logs generated", "Number of logs generated"},
+    {CountType::SUM, "alerts_generated", "Number of alerts generated"},
+    {CountType::SUM, "logs_generated", "Number of logs generated"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
