@@ -137,6 +137,12 @@ class Logger : public LioLi::Logger {
 
     // Our serializer
     auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+
+    while (serializer == serializer->get_null_obj()) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+    }
+
     std::shared_ptr<LioLi::Serializer::Context> context;
 
     std::ofstream pipe;
