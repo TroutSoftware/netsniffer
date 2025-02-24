@@ -22,6 +22,8 @@ for packet in packets:
     del packet[IP].chksum
   if packet.haslayer(TCP):
     del packet[TCP].chksum
+  if packet.haslayer(UDP):
+    del packet[UDP].chksum
 
 print("Writing: ", args.outfile[0])
 wrpcap(args.outfile[0], packets)
