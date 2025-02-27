@@ -22,6 +22,7 @@
 #include "log/serializer_bill.h"
 #include "log/serializer_lorth.h"
 #include "log/serializer_txt.h"
+#include "smnp/inspector.h"
 #include "trout_netflow/trout_netflow.h"
 
 // clang-format off
@@ -39,7 +40,8 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &logger_stdout::inspect_api.base,
   &serializer_bill::inspect_api.base,
   &serializer_lorth::inspect_api.base,
-  &serializer_txt::inspect_api.base,  
+  &serializer_txt::inspect_api.base,
+  &smnp::inspect_api.base,
   &trout_netflow::inspect_api.base,
   
   nullptr

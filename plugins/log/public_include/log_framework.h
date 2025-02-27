@@ -40,9 +40,11 @@ public:
 
     register_obj(obj->get_name(), obj);
   };
+
   template <typename T> static std::shared_ptr<T> get(const std::string &name) {
     return get<T>(name.c_str());
   }
+
   template <typename T> static std::shared_ptr<T> get(const char *name) {
     std::scoped_lock lock(mutex);
     auto lookup = db.find(name);

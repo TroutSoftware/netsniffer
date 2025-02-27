@@ -1,0 +1,13 @@
+
+
+alert icmp any any -> any  any (
+  msg:"This is a log of a ping";
+
+ sid:20000;
+)
+
+alert smnp any any -> any  any (
+  msg:"This is a log of an smnp";
+
+ sid:20001;
+)

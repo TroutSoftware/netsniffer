@@ -95,7 +95,9 @@ public:
       FlowData *data = FlowData::get_from_flow(flow, settings);
       assert(data);
 
-      data->set_service_name(flow->service);
+      if (0 != flow->service) {
+        data->set_service_name(flow->service);
+      }
     }
   }
 };

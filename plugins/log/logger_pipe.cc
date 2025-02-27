@@ -86,6 +86,8 @@ class Logger : public LioLi::Logger {
   std::string pipe_name;
   uint32_t max_queue_size = 1;
   uint32_t serializer_restart_interval_s = 0; // 0 = never
+  uint64_t dropped_sequence_count =
+      0; // Counts the number of packages dropped in this sequence
 
   std::deque<LioLi::Tree> queue;
 
@@ -191,6 +193,11 @@ class Logger : public LioLi::Logger {
       }
 
       if (!queue.empty()) {
+        if (dropped_sequence_count != 0) {
+          snort::WarningMessage(
+              "WARNING: %s droped %lu tree(s) from queue, resuming output\n",
+              s_name, dropped_sequence_count);
+        }
         auto output = context->serialize(std::move(queue.front()));
         queue.pop_front();
 
@@ -250,7 +257,10 @@ public:
 
       // Reduce size of the queue until there is space for the new element
       while (queue.size() > max_queue_size - 1) {
-        snort::WarningMessage("WARNING: %s dropping tree from queue\n", s_name);
+        if (dropped_sequence_count++ == 0) {
+          snort::WarningMessage("WARNING: %s dropping tree(s) from queue\n",
+                                s_name);
+        }
         queue.pop_front();
         {
           std::scoped_lock lock(peg_count_mutex);
