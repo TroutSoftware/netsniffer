@@ -9,14 +9,16 @@
 #include <cassert>
 #include <iostream>
 
+// Global includes
+#include <lioli_path.h>
+#include <lioli_tree_generator.h>
+#include <log_framework.h>
+
 // Local includes
 #include "alert_lioli.h"
-#include "flow_data.h"
-#include "lioli_tree_generator.h"
-#include "log_framework.h"
+#include "common.h"
 
-// Global includes
-#include <iostream>
+// Debug includes
 
 namespace alert_lioli {
 namespace {

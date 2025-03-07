@@ -10,12 +10,12 @@
 #include <cassert>
 #include <string>
 
-// Local includes
-#include "flow_data.h"
-#include "ips_lioli_bind.h"
-
 // Global includes
-#include "lioli_path.h"
+#include <lioli_path.h>
+
+// Local includes
+#include "common.h"
+#include "ips_lioli_bind.h"
 
 namespace ips_lioli_bind {
 namespace {

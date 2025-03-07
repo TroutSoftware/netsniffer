@@ -11,10 +11,12 @@
 #include <regex>
 #include <string>
 
+// Global includes
+#include <lioli_path.h>
+
 // Local includes
-#include "flow_data.h"
+#include "common.h"
 #include "ips_lioli_tag.h"
-#include "lioli_path.h"
 
 // Debug includes
 

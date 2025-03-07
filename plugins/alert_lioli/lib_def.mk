@@ -9,13 +9,12 @@ TEST_FOLDER := tests
 
 CC_FILES := \
 	alert_lioli.cc \
-	flow_data.cc \
 	ips_lioli_bind.cc \
 	ips_lioli_tag.cc \
 
 H_FILES = \
 	alert_lioli.h \
-	flow_data.h \
+	common.h \
 	ips_lioli_bind.h \
 	ips_lioli_tag.h \
 
