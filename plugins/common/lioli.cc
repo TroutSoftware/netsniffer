@@ -34,6 +34,42 @@ public:
 
 class LorthHelpers {
 public:
+  static std::string escape2(std::string &&in) {
+    std::string output;
+    for (char c : in) {
+      // Normal format chars are escaped C style
+      switch (c) {
+      case '\"':
+        output += "\\\"";
+        continue;
+
+      case '\n':
+        output += "\\n";
+        continue;
+
+      case '\t':
+        output += "\\t";
+        continue;
+
+      case '\r':
+        output += "\\r";
+        continue;
+      }
+
+      // Printable ascii is transfered raw
+      if (c >= ' ' && c <= '~') {
+        output += c;
+        continue;
+      }
+
+      // What remains are hex escaped
+      char to_hex[5];
+      sprintf(to_hex, "\\x%2x", c);
+      output += to_hex;
+    }
+    return output;
+  }
+
   static std::string escape(std::string &&in) {
     // Chars that should be escaped
     const static std::string esc("\"\n\t\r");
@@ -200,7 +236,7 @@ std::string Tree::Node::dump_string(const std::string &raw,
 
   output += my_name + ": ";
 
-  output += raw.substr(start, end - start);
+  output += LorthHelpers::escape2(raw.substr(start, end - start));
 
   output += "\n";
 
@@ -237,7 +273,7 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   } else {
 
     output +=
-        "\"" + LorthHelpers::escape(raw.substr(start, end - start)) + "\" .\n";
+        "\"" + LorthHelpers::escape2(raw.substr(start, end - start)) + "\" .\n";
   }
 
   return output;
