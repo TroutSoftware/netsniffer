@@ -64,9 +64,10 @@ public:
 
       // What remains are hex escaped
       char to_hex[5];
-      sprintf(to_hex, "\\x%2x", c);
+      sprintf(to_hex, "\\x%02x", (unsigned char)c);
       output += to_hex;
     }
+
     return output;
   }
 
