@@ -47,8 +47,9 @@ class TreeGenerators {
 public:
   static Tree timestamp(const char *txt, bool testmode = false) {
     Tree time(txt);
-    time << std::format("{:%FT%TZ}",
-                        TestableTime::now<std::chrono::system_clock>(testmode));
+    time << std::format(
+        "{:%FT%TZ}",
+        Common::TestableTime::now<std::chrono::system_clock>(testmode));
     return time;
   }
 

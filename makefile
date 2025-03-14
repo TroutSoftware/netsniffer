@@ -77,7 +77,7 @@ usage:
 	@echo "make release-test-data"
 	@echo "                  - Run snort with test_config/cfg.lua on pcaps"
 	@echo "                    in test_data on a release build"
-	@echo "make release-local-test"
+	@echo "make release-test-local"
 	@echo "                  - Set env TEST_MODULE to name of module where"
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a release build"
@@ -87,7 +87,7 @@ usage:
 	@echo "make test-break   - Run the test suite and break on first error"
 	@echo "make test-data    - Run snort with test_config/cfg.lua on pcaps"
 	@echo "                    in test_data"
-	@echo "make local-test   - Set env TEST_MODULE to name of module where"
+	@echo "make test-local   - Set env TEST_MODULE to name of module where"
 	@echo "                    the test-local.script from the test folder"
 	@echo "                    should be run from on a debug build"
 	@echo ""
@@ -160,12 +160,11 @@ release-test-data: $(RELEASE_MODULE)
 
 # Look into using % in target (e.g. %/test-local)
 # TODO: Update so it takes the test folder from the module definition, instead of having it hardcoded to 'tests'
-local-test: $(DEBUG_MODULE)
+test-local: $(DEBUG_MODULE)
 	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(DEBUGDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
 
-release-local-test: $(RELEASE_MODULE)
+release-test-local: $(RELEASE_MODULE)
 	$(SNORT) -v -c plugins/$(TEST_MODULE)/tests/test-local.lua $(SNORT_DAQ_INCLUDE_OPTION) --plugin-path $(RELEASEDIR) --pcap-dir plugins/$(TEST_MODULE)/tests/pcaps --warn-all
-
 
 $(MAKE_README_FILENAME): | $(MAKEDIR)
 	$(file >$(MAKE_README_FILENAME),$(README_CONTENT))

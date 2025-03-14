@@ -3,6 +3,7 @@
 
 // System includes
 #include <cassert>
+#include <format>
 #include <iostream>
 #include <regex>
 
@@ -34,11 +35,14 @@ public:
 
 class LorthHelpers {
 public:
-  static std::string escape2(std::string &&in) {
+  static std::string escape2(const std::string &&in) {
     std::string output;
     for (char c : in) {
       // Normal format chars are escaped C style
       switch (c) {
+      case '\\':
+        output += "\\\\";
+        continue;
       case '\"':
         output += "\\\"";
         continue;
@@ -63,15 +67,13 @@ public:
       }
 
       // What remains are hex escaped
-      char to_hex[5];
-      sprintf(to_hex, "\\x%02x", (unsigned char)c);
-      output += to_hex;
+      output += std::format("\\x{:02x}", c);
     }
 
     return output;
   }
 
-  static std::string escape(std::string &&in) {
+  static std::string escape(const std::string &&in) {
     // Chars that should be escaped
     const static std::string esc("\"\n\t\r");
 
@@ -280,6 +282,40 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   return output;
 }
 
+std::string Tree::Node::dump_python(const std::string &raw,
+                                    unsigned level) const {
+  std::string output;
+  std::string nc_output; // String containing the NonChild part of raw
+  std::string c_output;  // String contianing the Child part of raw
+  std::string spacer;
+  spacer.insert(0, level, ' ');
+
+  size_t pos = start; // Current position
+
+  for (auto &child : children) {
+    nc_output += raw.substr(pos, child.start - pos);
+    c_output += child.dump_python(raw, level + 1);
+    pos = child.end;
+  }
+
+  if (!c_output.empty()) {
+    c_output = c_output.substr(0, c_output.length() - 2) + "\n";
+  }
+
+  nc_output += raw.substr(pos, end - pos);
+
+  output += spacer + '\"' + my_name + "\" : ( \"" +
+            LorthHelpers::escape2(std::move(nc_output)) + "\",";
+  if (c_output.empty()) {
+    output += "{}),\n";
+  } else {
+    output += "{\n";
+    output += c_output;
+    output += spacer + " }\n" + spacer + "),\n";
+  }
+  return output;
+}
+
 std::string Tree::Node::dump_binary(size_t delta, bool add_root_node) const {
   std::string output;
 
@@ -456,6 +492,12 @@ std::string Tree::as_string() const { return me.dump_string(raw); }
 std::string Tree::as_lorth() const {
   std::string output = me.dump_lorth(raw);
   output = output.substr(0, output.length() - 1) + ";\n";
+  return output;
+}
+
+std::string Tree::as_python() const {
+  std::string output = me.dump_python(raw, 1);
+  output = output.substr(0, output.length() - 2);
   return output;
 }
 

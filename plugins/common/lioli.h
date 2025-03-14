@@ -61,6 +61,7 @@ class Tree {
 
     std::string dump_string(const std::string &raw, unsigned level = 0) const;
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
+    std::string dump_python(const std::string &raw, unsigned level = 0) const;
     std::string dump_binary(size_t delta, bool add_root_node) const;
 
     // For debug/test
@@ -93,6 +94,7 @@ public:
   const std::string &get_root_name() const { return me.get_name(); }
   std::string as_string() const;
   std::string as_lorth() const;
+  std::string as_python() const;
 
   uint32_t hash() const {
     return raw.length();
