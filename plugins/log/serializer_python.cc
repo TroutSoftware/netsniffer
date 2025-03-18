@@ -24,6 +24,10 @@ static const char *s_help = "Serializes LioLi trees to BILL format";
 static const snort::Parameter module_params[] = {
     {"log_tag", snort::Parameter::PT_STRING, nullptr, nullptr,
      "if specified will tag all trees with value"},
+    {"data_name", snort::Parameter::PT_STRING, nullptr, "data",
+     "sets the name of the generated data structure"},
+    {"add_print", snort::Parameter::PT_BOOL, nullptr, "true",
+     "if true will add python code that prints the data to the output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
@@ -46,6 +50,8 @@ static_assert(
 // Settings for this module
 struct Settings {
   std::string tag;
+  std::string data_name;
+  bool add_print;
 } settings;
 
 // MAIN object of this file
@@ -68,14 +74,13 @@ public:
       std::string output;
       if (first_write) {
         first_write = false;
-        output += "#!/usr/bin/env python3\n"
-                  "data = ( {";
+        output += "#!/usr/bin/env python3\n" + settings.data_name + " = ( {";
       } else {
         output += " {";
       }
 
       if (!settings.tag.empty()) {
-        output += "  \"tag\" : \"" + settings.tag + "\",\n";
+        output += "\n  \"tag\" : \"" + settings.tag + "\",\n";
       }
 
       output += tree.as_python() + "\n },";
@@ -87,9 +92,11 @@ public:
     // this, except the is_closed() function.
     std::string close() override {
       closed = true;
-      return ")\n"
-             "\n"
-             "print(data)\n";
+      if (settings.add_print) {
+        return ")\n\nprint(" + settings.data_name + ")\n";
+      } else {
+        return ")\n";
+      }
     }
 
     // Returns true if context is closed (invalid to call)
@@ -120,6 +127,12 @@ class Module : public snort::Module {
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("log_tag")) {
       settings.tag = val.get_as_string();
+      return true;
+    } else if (val.is("data_name")) {
+      settings.data_name = val.get_as_string();
+      return true;
+    } else if (val.is("add_print")) {
+      settings.add_print = val.get_bool();
       return true;
     }
 
