@@ -282,37 +282,55 @@ std::string Tree::Node::dump_lorth(const std::string &raw,
   return output;
 }
 
-std::string Tree::Node::dump_python(const std::string &raw,
-                                    unsigned level) const {
+std::string Tree::Node::dump_python(const std::string &raw, unsigned level,
+                                    bool array_item) const {
+
+  assert(my_name.size() >= 1); // A name must at least have 1 char
+  bool is_array = (my_name[0] == '#');
   std::string output;
   std::string nc_output; // String containing the NonChild part of raw
   std::string c_output;  // String contianing the Child part of raw
   std::string spacer;
-  spacer.insert(0, level, ' ');
+  spacer.insert(0, level * 2, ' ');
 
   size_t pos = start; // Current position
 
   for (auto &child : children) {
     nc_output += raw.substr(pos, child.start - pos);
-    c_output += child.dump_python(raw, level + 1);
+    c_output += child.dump_python(raw, level + 1, is_array);
     pos = child.end;
   }
+
+  nc_output += raw.substr(pos, end - pos);
 
   if (!c_output.empty()) {
     c_output = c_output.substr(0, c_output.length() - 2) + "\n";
   }
 
-  nc_output += raw.substr(pos, end - pos);
+  output += spacer;
 
-  output += spacer + '\"' + my_name + "\" : ( \"" +
-            LorthHelpers::escape2(std::move(nc_output)) + "\",";
-  if (c_output.empty()) {
-    output += "{}),\n";
-  } else {
-    output += "{\n";
-    output += c_output;
-    output += spacer + " }\n" + spacer + "),\n";
+  if (!array_item) {
+    output += '\"' + my_name + "\" : ";
   }
+
+  output += "(\"" + LorthHelpers::escape2(std::move(nc_output)) + "\",";
+
+  if (is_array) {
+    if (c_output.empty()) {
+      output += "()),\n";
+    } else {
+      output += "(\n" + c_output + spacer + " )\n";
+      output += spacer + "),\n";
+    }
+  } else {
+    if (c_output.empty()) {
+      output += "{}),\n";
+    } else {
+      output += "{\n" + c_output + spacer + " }\n";
+      output += spacer + "),\n";
+    }
+  }
+
   return output;
 }
 

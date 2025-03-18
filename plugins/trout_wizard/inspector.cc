@@ -10,6 +10,7 @@
 
 // Global includes
 #include <flow_data.h>
+#include <lioli_path.h>
 
 // Local includes
 #include "inspector.h"
@@ -33,10 +34,6 @@ private:
   struct Cache {
     // Settings
     std::shared_ptr<Settings> settings;
-    // Set to true if chunks should be concatenated
-    //    const bool concatenate = false;
-    // Max size to cache before saving
-    //    const uint32_t split_size = 253;
     // Timestamp of first packet data is cached for
     struct timeval time_stamp = {0, 0};
     // Actual data cache
@@ -81,9 +78,6 @@ private:
     }
   } server_cache, client_cache;
 
-  // Set to true if client and server data should be packed together
-  //  const bool pack_data = false;
-
   // Set on first data received
   std::optional<bool> client_first = {};
   std::optional<uint16_t> port = {};
@@ -93,7 +87,7 @@ private:
 
   unsigned id = 0;
 
-  LioLi::Tree root = {"$"};
+  LioLi::Path root = {"$"};
 
   std::shared_ptr<Settings> settings;
 
@@ -111,7 +105,7 @@ public:
 
   ~WizardFlow() {
     flush();
-    settings->get_logger() << std::move(root);
+    settings->get_logger() << std::move(root.to_tree());
   }
 
   void set_settings(std::shared_ptr<Settings> settings,
@@ -165,12 +159,10 @@ public:
       client_cache.reset();
     }
 
-    root << chunk;
+    root << (LioLi::Path("#Chunks") << chunk);
 
     client_first_after_flush.reset();
   }
-  //  TODO: Add function(s) to add protocol (TCP/UDP/...) port, direction, data
-  //  etc..
 
   void process(bool from_client, snort::Packet *p, const uint8_t *data,
                uint32_t data_length) {
@@ -253,12 +245,6 @@ void dump_pkt(bool from_client, snort::Packet *p, const uint8_t *data,
   }
 }
 
-std::mutex m;
-static int i = 0;  // packages
-static int f = 0;  // With flow
-static int ps = 0; // payload size
-static int lens = 0;
-
 } // namespace
 
 class Splitter : public snort::StreamSplitter {
@@ -277,19 +263,7 @@ class Splitter : public snort::StreamSplitter {
   }
 
   bool is_paf() override { return true; }
-  /*
-      virtual const StreamBuffer reassemble(
-          Flow*,
-          unsigned total,        // total amount to flush (sum of iterations)
-          unsigned offset,       // data offset from start of reassembly
-          const uint8_t* data,   // data to reassemble
-          unsigned len,          // length of data to process this iteration
-          uint32_t flags,        // packet flags indicating pdu head and/or tail
-          unsigned& copied       // actual data copied (1 <= copied <= len)
-          );
 
-      virtual bool sync_on_start() const { return true; }
-  */
   unsigned max(snort::Flow *) override { return 32000; }
 
 public:
@@ -300,55 +274,9 @@ public:
 void Inspector::eval(snort::Packet *p) {
 
   dump_pkt(p->is_from_client(), p, p->data, p->dsize, module.get_settings());
-
-#if 0  
-  
-  std::scoped_lock lock(m);
-  assert(p);
-  ps += p->dsize;
-  if (p->flow) {    
-    std::cout << "MKRTEST TroutWizard got package with flow (" << ++i << ", " << ++f << ")" << "total size: " << ps << ", " << lens << std::endl;
-  } else {
-    std::cout << "MKRTEST TroutWizard got package (" << ++i << ", " << f << ")" << "total size: " << ps << ", " << lens << std::endl;
-  }
-
-  if (p && p->pkth) {
-    std::cout << "  timestamp: " << p->pkth->ts.tv_sec << "." << std::format("{:06}", p->pkth->ts.tv_usec) << std::endl;
-  }
-
-  std::cout << "  pktlen: " << p->pktlen << " dsize: " << p->dsize << "\n  raw (pkt) data: ";
-
-
-  if ( p->pkt && p->pktlen ) {
-    for (unsigned i = 0; i < p->pktlen && i < 16;) {
-      std::cout << std::hex << std::format("{:02x}", (unsigned)p->pkt[i++]) << std::dec << " ";
-    }
-  } else {
-    std::cout << "no data";
-  }
-
-
-  std::cout << "\n  payload data: ";
-
-  if ( p->data && p->dsize ) {
-    for (int i = 0; i < p->dsize && i < 16;) {
-      std::cout << std::hex << std::format("{:02x}", (unsigned)p->data[i++]) << std::dec << " ";
-    }
-  } else {
-    std::cout << "no data";
-  }
-
-
-  std::cout << std::endl;
-#endif
 }
 
-Inspector::~Inspector() {
-  std::scoped_lock lock(m);
-  std::cout << "MKRTEST result " << i << " packages " << f
-            << " with a flow transfered " << ps << " bytes lens is: " << lens
-            << std::endl;
-}
+Inspector::~Inspector() {}
 
 snort::StreamSplitter *Inspector::get_splitter(bool c2s) {
   return new Splitter(module.get_settings(), c2s);
