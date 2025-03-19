@@ -303,10 +303,6 @@ std::string Tree::Node::dump_python(const std::string &raw, unsigned level,
 
   nc_output += raw.substr(pos, end - pos);
 
-  if (!c_output.empty()) {
-    c_output = c_output.substr(0, c_output.length() - 2) + "\n";
-  }
-
   output += spacer;
 
   if (!array_item) {
@@ -317,9 +313,10 @@ std::string Tree::Node::dump_python(const std::string &raw, unsigned level,
 
   if (is_array) {
     if (c_output.empty()) {
-      output += "()),\n";
+      output += "(),),\n"; // NOTE: Python needs a comma after an empty tuple to
+                           // recognize it as a tuple
     } else {
-      output += "(\n" + c_output + spacer + " )\n";
+      output += "(\n" + c_output + spacer + " ),\n";
       output += spacer + "),\n";
     }
   } else {
