@@ -4,6 +4,9 @@ MODULE_NAME := trout_wizard
 # Folder where test cases for this module can be found
 TEST_FOLDER := tests
 
+# our extensions to make
+LOCAL_MAKEFILE := ai_training/makefile
+
 # Include folder that should be included in the public search path
 #PUBLIC_INC := ./public_include
 

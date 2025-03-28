@@ -101,10 +101,13 @@ public:
     return id;
   }
 
-  WizardFlow() { root << (LioLi::Tree("Flow") << flow_number()); }
+  WizardFlow() { root << (LioLi::Tree("flow") << flow_number()); }
 
   ~WizardFlow() {
     flush();
+    if (settings->tag.length() > 0) {
+      root << (LioLi::Tree("tag") << settings->tag);
+    }
     settings->get_logger() << std::move(root.to_tree());
   }
 

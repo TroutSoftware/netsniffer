@@ -5,7 +5,7 @@ RELEASE_TAG ?= -dev-$(USER)-$(shell git rev-parse HEAD)-$(shell date -u +%s)
 
 $(info $(RELEASE_TAG))
 
-# Format of each line in dependencies (empty line is important
+# Format of each line in dependencies (empty line is important)
 define NFPM_DEPS
 - $(THIS_DEPS)
 

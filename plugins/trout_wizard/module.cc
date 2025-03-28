@@ -23,6 +23,8 @@ static const snort::Parameter module_params[] = {
      "How much data can be packed in each chunk from each direction"},
     {"pack_data", snort::Parameter::PT_BOOL, nullptr, "false",
      "Set to false if you only want unidirectional data in each chunk"},
+    {"tag", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Adds $.tag to logs and sets the value of it"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
@@ -70,6 +72,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->pack_data = val.get_bool();
   } else if (val.is("split_size")) {
     settings->split_size = val.get_uint32();
+  } else if (val.is("tag") && val.get_as_string().size() > 0) {
+    settings->tag = val.get_string();
   } else {
     // fail if we didn't get something valid
     return false;

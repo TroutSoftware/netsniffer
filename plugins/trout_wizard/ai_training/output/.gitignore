@@ -1,0 +1,4 @@
+# Ignore evertything except the readme
+
+*
+!readme.txt

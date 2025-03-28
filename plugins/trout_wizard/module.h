@@ -20,6 +20,7 @@ public:
   bool concatenate = false;
   bool pack_data = false;
   uint32_t split_size = 253;
+  std::string tag;
 
   LioLi::Logger &get_logger();
 };

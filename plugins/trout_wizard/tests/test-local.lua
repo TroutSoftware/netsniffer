@@ -9,11 +9,23 @@ logger_file = { file_name = 'test.py',
 logger_null = { }
 logger_stdout = { serializer = 'serializer_python' }
 
+
 trout_wizard = { logger = 'logger_file',
                  pack_data = true,
                  split_size = 253,
                  concatenate = true
-               }                   
+               }
+
+serializer_csv = { string = 'THIS IS THE STRING',
+                   my_table = {param_1 = "another string",
+                               string = "inside string"},
+                   my_list = {"item2", "item3"},
+                   my_lookup = {{key = "k1",
+                                 value = "v1"},
+                                {key = "k2",
+                                 value = "v2"},
+                               }
+                   }
 
 stream = {}
 stream_icmp = {}

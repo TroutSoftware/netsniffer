@@ -220,6 +220,11 @@ define EXPAND_SOURCEFILES
     INC_DIRS := $(INC_DIRS) -I $(addprefix $$(SRC_DIR),$(PUBLIC_INC))
     undefine PUBLIC_INC
   endif
+
+  ifdef LOCAL_MAKEFILE
+    include $(addprefix $$(SRC_DIR),$(LOCAL_MAKEFILE))
+    undefine LOCAL_MAKEFILE    
+  endif
   
 endef
 
