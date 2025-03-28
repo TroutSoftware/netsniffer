@@ -11,6 +11,7 @@
 
 // Debug includes
 
+namespace Common {
 // Class that will give fake timestamps in testmode, and real when not in
 // testmode
 class TestableTime {
@@ -24,5 +25,5 @@ public:
     return T::now();
   }
 };
-
+} // namespace Common
 #endif // #ifndef testable_time_e780753d

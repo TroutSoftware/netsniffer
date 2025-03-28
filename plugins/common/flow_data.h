@@ -13,15 +13,23 @@
 
 namespace Common {
 
-template <class T> class FlowData : public snort::FlowData, public T {
+// The Common::FlowData template class takes care of registering an ID
+// and creating/retreiving flow data from a packet - nothe that the
+// class given to Common::FlowData as the template class is what the
+// ID is based on, e.g. to get a unique flowdata type, you need to give
+// a unique type as template class
 
-public:
-  FlowData() : snort::FlowData(get_id()) {}
+template <class T> class FlowData : public snort::FlowData, public T {
+private:
 
   unsigned static get_id() {
     static unsigned flow_data_id = snort::FlowData::create_flow_data_id();
     return flow_data_id;
   }
+
+  FlowData() : snort::FlowData(get_id()) {}
+
+public:
 
   static FlowData *get_from_flow(snort::Flow *flow) {
     assert(flow);

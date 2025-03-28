@@ -16,6 +16,7 @@ CC_FILES := \
 	logger_pipe.cc \
 	logger_stdout.cc \
 	serializer_bill.cc \
+	serializer_csv.cc \
 	serializer_lorth.cc \
 	serializer_python.cc \
 	serializer_txt.cc \
@@ -28,6 +29,7 @@ H_FILES = \
 	logger_stdout.h \
 	public_include/log_framework.h \
 	serializer_bill.h \
+	serializer_csv.h \
 	serializer_lorth.h \
 	serializer_python.h \
 	serializer_txt.h \

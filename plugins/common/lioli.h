@@ -7,6 +7,9 @@
 #include <cassert>
 #include <cstdint>
 #include <forward_list>
+#include <functional>
+#include <iterator>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -69,6 +72,13 @@ class Tree {
     bool is_valid(size_t start,
                   size_t end) const; // Will validate that node tree is between
                                      // start and end (length = end-start)
+    bool
+    lookup(std::string key, size_t &start, size_t &end,
+           size_t &skip) const; // get pos of child, returns false if not found
+    bool regex_lookup(std::regex &regex,
+                      std::function<bool(size_t start, size_t end)> lambda,
+                      std::string &rkey)
+        const; // Calls lambda with start and end of all keys matching regex
   } me;
 
   std::string raw; // The raw string (e.i. the string referenced by the tree)
@@ -96,6 +106,12 @@ public:
   std::string as_string() const;
   std::string as_lorth() const;
   std::string as_python() const;
+
+  std::string lookup(std::string key) const; // value of key
+
+  void regex_lookup(std::string regex,
+                    std::function<bool(std::string value)> lambda)
+      const; // Calls lambda with value of all keys matching regex
 
   uint32_t hash() const {
     return raw.length();

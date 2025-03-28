@@ -20,6 +20,7 @@
 #include "log/logger_pipe.h"
 #include "log/logger_stdout.h"
 #include "log/serializer_bill.h"
+#include "log/serializer_csv.h"
 #include "log/serializer_lorth.h"
 #include "log/serializer_python.h"
 #include "log/serializer_txt.h"
@@ -41,6 +42,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &logger_pipe::inspect_api.base,
   &logger_stdout::inspect_api.base,
   &serializer_bill::inspect_api.base,
+  &serializer_csv::inspect_api.base,
   &serializer_lorth::inspect_api.base,
   &serializer_python::inspect_api.base,
   &serializer_txt::inspect_api.base,
