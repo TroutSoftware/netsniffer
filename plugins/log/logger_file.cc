@@ -27,6 +27,8 @@ static const char *s_help =
 static const snort::Parameter module_params[] = {
     {"file_name", snort::Parameter::PT_STRING, nullptr, nullptr,
      "File name logs should be written to"},
+    {"file_env", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "File name will be read from environment variable"},
     {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Serializer to use for generating output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
@@ -140,9 +142,35 @@ class Module : public snort::Module {
 
       return true;
     } else if (val.is("file_name") && val.get_as_string().size() > 0) {
+      if (file_name_set) {
+        snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
+                            s_name);
+        return false;
+      }
+
       file_name_set = logger->set_file_name(val.get_string());
 
       return true;
+    } else if (val.is("file_env")) {
+      std::string env_name = val.get_as_string();
+      const char *name = std::getenv(env_name.c_str());
+
+      if (name && *name) {
+        if (file_name_set) {
+          snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
+                              s_name);
+          return false;
+        }
+
+        logger->set_file_name(name);
+        file_name_set = true;
+
+        return true;
+      }
+
+      snort::ErrorMessage(
+          "ERROR: Could not read log file name from environment: %s in %s\n",
+          env_name.c_str(), s_name);
     }
 
     // fail if we didn't get something valid
