@@ -48,43 +48,51 @@ serializer_csv = {
 */
 
 static const snort::Parameter map_params[] = {
-    {"if_input", snort::Parameter::PT_STRING, nullptr, nullptr, "key of entry"},
+    {"if_input", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "(NOT IMPLEMENTED) key of entry"},
     {"then_output", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "value of entry"},
+     "(NOT IMPLEMENTED) value of entry"},
     {"default_output", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "default value of map"},
+     "(NOT IMPLEMENTED) default value of map"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 static const snort::Parameter pad_params[] = {
     {"padding", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "padding string/char"},
+     "(NOT IMPLEMENTED) padding string/char"},
     {"length", snort::Parameter::PT_INT, "1:max53", nullptr,
-     "length that should be padded to"},
+     "(NOT IMPLEMENTED) length that should be padded to"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 static const snort::Parameter item_params[] = {
-    {"lookup", snort::Parameter::PT_STRING, nullptr, nullptr, "key of entry"},
+    {"lookup", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "(NOT IMPLEMENTED) key of entry"},
     {"lookup_regex", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "key of entry as regex, all values will be concatenated as input"},
+     "(NOT IMPLEMENTED) key of entry as regex, all values will be concatenated "
+     "as input"},
     {"truncate_input_after", snort::Parameter::PT_INT, "1:max53", nullptr,
-     "max size of input value that will be considered"},
+     "(NOT IMPLEMENTED) max size of input value that will be considered"},
     {"format_as_hex", snort::Parameter::PT_BOOL, nullptr, "false",
-     "set to true to get all input converted to hex"},
+     "(NOT IMPLEMENTED) set to true to get all input converted to hex"},
     {"map", snort::Parameter::PT_LIST, map_params, nullptr,
-     "map to translate input to output"},
+     "(NOT IMPLEMENTED) map to translate input to output"},
     {"pad_output", snort::Parameter::PT_TABLE, pad_params, nullptr,
-     "padding options of output"},
+     "(NOT IMPLEMENTED) padding options of output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 static const snort::Parameter module_params[] = {
     {"item_separator", snort::Parameter::PT_STRING, nullptr, ", ",
      "string inserted between each item"},
     {"items", snort::Parameter::PT_LIST, item_params, nullptr,
-     "list of items that should be added"},
+     "(NOT IMPLEMENTED) list of items that should be added"},
     {"if_item_blank_then_output", snort::Parameter::PT_STRING, nullptr, "-",
      "string to output if item is missing or empty"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+// Settings for this module
+struct Settings {
+  std::string separator;
+  std::string blank_replace;
+} settings;
 
 // MAIN object of this file
 class Serializer : public LioLi::Serializer {
@@ -102,25 +110,26 @@ public:
 
       // Input is where data is from, output is where it is going to
       std::map<std::string, std::string> direction_map;
-      direction_map[""] = "-";
+      direction_map[""] = settings.blank_replace;
       direction_map["client"] = "S";
       direction_map["server"] = "C";
       std::string direction = tree.lookup("$.#Chunks.chunk.first_from");
       std::string output =
           (direction_map.contains(direction) ? direction_map[direction] : "O") +
-          ' ';
+          settings.separator;
 
       std::map<std::string, std::string> protocol_map;
-      protocol_map[""] = "-";
+      protocol_map[""] = settings.blank_replace;
       protocol_map["TCP"] = "T";
       protocol_map["UDP"] = "U";
       std::string protocol = tree.lookup("$.protocol");
       output +=
           (protocol_map.contains(protocol) ? protocol_map[protocol] : "O") +
-          ' ';
+          settings.separator;
 
       std::string port = tree.lookup("$.port");
-      output += (port.length() > 0 ? port : "-") + ' ';
+      output += (port.length() > 0 ? port : settings.blank_replace) +
+                settings.separator;
 
       std::string data;
       tree.regex_lookup("\\$\\.\\#Chunks\\.chunk\\.(client|server)\\.data",
@@ -129,26 +138,30 @@ public:
                           return true;
                         });
 
-      static const unsigned max_length =
-          1024; // Max number of bytes of data serialized, note this is input
-                // bytes, each byte will be 2 hex chars
-      static const bool zero_extend =
-          true; // Set to true to pad shorter data with zero up to max_length
-      unsigned cur_length = 0;
-      std::string data_string;
-      data_string.reserve(max_length * 2);
+      if (data.length() > 0) {
+        static const unsigned max_length =
+            1024; // Max number of bytes of data serialized, note this is input
+                  // bytes, each byte will be 2 hex chars
+        static const bool zero_extend =
+            true; // Set to true to pad shorter data with zero up to max_length
+        unsigned cur_length = 0;
+        std::string data_string;
+        data_string.reserve(max_length * 2);
 
-      for (char &c : data) {
-        data_string += std::format("{:02x}", c);
-        if (++cur_length >= max_length)
-          break;
+        for (char &c : data) {
+          data_string += std::format("{:02x}", c);
+          if (++cur_length >= max_length)
+            break;
+        }
+
+        if (zero_extend) {
+          data_string = std::format("{:0<2048}", data_string);
+        }
+
+        output += data_string;
+      } else {
+        output += settings.blank_replace;
       }
-
-      if (zero_extend) {
-        data_string = std::format("{:0<2048}", data_string);
-      }
-
-      output += data_string;
 
       output += '\n';
       return output;
@@ -179,23 +192,20 @@ class Module : public snort::Module {
     LioLi::LogDB::register_type<Serializer>();
   }
 
-  bool begin(const char *s, int i, snort::SnortConfig *) override {
-    std::cout << "MKRTEST: begin input: >" << s << "< index: " << i
-              << std::endl;
+  bool begin(const char *, int, snort::SnortConfig *) override { return true; }
 
-    return true;
-  }
+  bool end(const char *, int, snort::SnortConfig *) override { return true; }
 
-  bool end(const char *s, int i, snort::SnortConfig *) override {
-    std::cout << "MKRTEST: end input: >" << s << "< index: " << i << std::endl;
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+    if (val.is("item_separator")) {
+      settings.separator = val.get_as_string();
+      return true;
+    } else if (val.is("if_item_blank_then_output")) {
+      settings.blank_replace = val.get_as_string();
+      return true;
+    }
 
-    return true;
-  }
-
-  bool set(const char *input, snort::Value &val,
-           snort::SnortConfig *) override {
-
-    return true;
+    return false;
   }
 
   Usage get_usage() const override {
