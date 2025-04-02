@@ -1,4 +1,4 @@
-redo-ifchange ./envrc
+redo-ifchange envrc
 . ./envrc
 
 # $3 is the output

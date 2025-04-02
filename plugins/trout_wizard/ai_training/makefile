@@ -1,7 +1,7 @@
 
 LOCAL_MAKE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 
-.PHONY: wizard_training wizard/envrc.do wizard/envrc
+.PHONY: wizard_training wizard/envrc
 
 wizard_training: $(DEBUG_MODULE)
 	@echo MAKEDIR: $(LOCAL_MAKE_DIR)
@@ -18,9 +18,7 @@ SNORT_PLUGIN_PATH="$(DEBUGDIR)"
 SNORT_DAQ_INCLUDE_OPTION="$(SNORT_DAQ_INCLUDE_OPTION)"
 endef
 
-$(file >$(MAKEDIR)/wizard.envrc,$(WIZARD_ENVRC_TXT))
-WIZARD_ENVRC_FILE_NAME=$(LOCAL_MAKE_DIR)/envrc
-
-wizard/envrc: $(DEBUG_MODULE) $(LOCAL_MAKE_DIR)/makefile
-	@mv $(MAKEDIR)/wizard.envrc $(LOCAL_MAKE_DIR)/$(WIZARD_ENVRC_FILE_NAME)
+wizard/envrc:
+	@echo
+	$(info $(WIZARD_ENVRC_TXT))
 
