@@ -1,5 +1,6 @@
 
-serializer_csv = { }
+serializer_csv = { item_separator = " ", }
+
 serializer_python = { log_tag = "ssh",
                       data_name = "data",
                       add_print = false }
