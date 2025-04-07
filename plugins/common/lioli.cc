@@ -8,8 +8,8 @@
 #include <regex>
 
 // Local includes
-#include "lioli.h"
-#include "lioli_path.h"
+#include <lioli.h>
+#include <lioli_path.h>
 
 // Debug includes
 

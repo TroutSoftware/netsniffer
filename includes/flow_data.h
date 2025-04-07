@@ -14,7 +14,7 @@
 namespace Common {
 
 // The Common::FlowData template class takes care of registering an ID
-// and creating/retreiving flow data from a packet - nothe that the
+// and creating/retreiving flow data from a packet - note that the
 // class given to Common::FlowData as the template class is what the
 // ID is based on, e.g. to get a unique flowdata type, you need to give
 // a unique type as template class

@@ -1,0 +1,10 @@
+serializer_csv.cc
+serializer_python.cc
+serializer_txt.cc
+logger_null.cc
+logger_file.cc
+serializer_bill.cc
+serializer_lorth.cc
+log_framework.cc
+logger_stdout.cc
+logger_pipe.cc

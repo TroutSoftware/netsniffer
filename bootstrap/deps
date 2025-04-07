@@ -1,0 +1,5 @@
+# runtime
+libhwloc15 libdumbnet1 libluajit-5.1-2 libpcap0.8t64 libpcre3
+
+# dev
+make libarchive-tools dh-autoreconf cmake g++ pkgconf libdumbnet-dev flex libhwloc-dev libluajit-5.1-dev libssl-dev libpcap-dev libpcre3-dev libarchive-dev libmnl-dev clang-format
