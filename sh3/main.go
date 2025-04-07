@@ -17,6 +17,11 @@ import (
 	"rsc.io/script"
 )
 
+const usage = `
+Usage
+  sh3 
+`
+
 // TODO rewrite with a bit more manners
 func main() {
 	mot := flag.String("t", "", "Module under test")
@@ -58,15 +63,6 @@ func main() {
 		}
 	}
 
-	if *sanitize != "none" {
-		// TODO: Set asanlib to full path to libasan.so
-		//    out, err := exec.Command("gcc", "-print-file-name=libasan.so").Output()
-		//    if err != nil {
-		//      errf("cannot get libasan from gcc: %s", err)
-		//    }
-		//    asanlib = strings.TrimSpace(string(out))
-	}
-
 	test_count := len(files)
 	for _, f := range files {
 		base := filepath.Base(f)
@@ -105,7 +101,8 @@ func main() {
 			errf("cannot copy module: %s -> %s :%s", *mot, filepath.Join(dir, *mot), err)
 		}
 
-		st, err := script.NewState(context.Background(), dir, []string{fmt.Sprintf("exedir=%s", wd), fmt.Sprintf("testdir=%s", wd+"/"+test_dir)})
+		env := []string{fmt.Sprintf("exedir=%s", wd), fmt.Sprintf("testdir=%s", wd+"/"+test_dir)}
+		st, err := script.NewState(context.Background(), dir, env)
 		if err != nil {
 			errf("cannot start new script: %s", err)
 		}
@@ -116,9 +113,9 @@ func main() {
 			if skip := errors.As(err, &se); skip {
 				tests_skipped++
 				if se.msg != "" {
-					fmt.Fprintf(os.Stdout, "Skipping test\n")
+					fmt.Fprintf(os.Stderr, "Skipping test\n")
 				} else {
-					fmt.Fprintf(os.Stdout, "Skipping test: %s\n", se.msg)
+					fmt.Fprintf(os.Stderr, "Skipping test: %s\n", se.msg)
 				}
 			} else {
 				fmt.Fprintf(os.Stderr, "\x1b[1;31mTest Failure: %s\x1b[0m\n", err)
@@ -135,14 +132,13 @@ func main() {
 		os.RemoveAll(dir)
 	}
 
-	fmt.Fprintf(os.Stdout, "%d of %d tests passed %d skipped\n", tests_succeed, test_count, tests_skipped)
+	fmt.Fprintf(os.Stderr, "%d of %d tests passed %d skipped\n", tests_succeed, test_count, tests_skipped)
 
 	if 0 != tests_failed {
-		fmt.Fprintf(os.Stdout, "One or more tests FAILED!!!!\n")
+		fmt.Fprintf(os.Stderr, "One or more tests FAILED!!!!\n")
 	} else {
-		fmt.Fprintf(os.Stdout, "\x1b[1;32m--All tests are green--\x1b[0m\n")
+		fmt.Fprintf(os.Stderr, "\x1b[1;32m--All tests are green--\x1b[0m\n")
 	}
-
 }
 
 func copy(src, dst string) (int64, error) {

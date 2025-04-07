@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,14 +11,11 @@ import (
 )
 
 var snortloc = "/opt/snort/bin/snort"
-
-// var snortloc = "/home/mike/code/snort/snort3/build/src/snort"
 var luascript = "/opt/snort/include/snort/lua/?.lua;;"
 
-var asanlib string
+// PCAP runs snort against PCAP files.
+// A default configuration, optionally in multiple files, is attached from the txtar by the runner.
 
-// PCAP runs snort against PCAP files, without any rule.
-// $(SNORT) -v -c cfg.lua --plugin-path p -A talos --pcap-dir ../../test_data --warn-all
 func PCAP(opts ...CompileOpt) script.Cmd {
 	return script.Command(
 		script.CmdUsage{
@@ -26,20 +24,14 @@ func PCAP(opts ...CompileOpt) script.Cmd {
 		},
 		func(s *script.State, args ...string) (script.WaitFunc, error) {
 			var file_list []string
-			expect_fail := false
-			for i, arg := range args {
-				if arg[0] == '-' {
-					switch arg[1:] {
-					case "expect-fail":
-						expect_fail = true
-					default:
-						return nil, fmt.Errorf("Invalid parameter '%s' to PCAP", arg)
-					}
-				} else {
-					file_list = args[i:]
-					break
-				}
+			var expect_fail bool
+
+			fs := flag.NewFlagSet("pcap", flag.ContinueOnError)
+			fs.BoolVar(&expect_fail, "expect-fail", false, "expect failure")
+			if err := fs.Parse(args); err != nil {
+				return nil, err
 			}
+			file_list = fs.Args()
 
 			if env_snort := os.Getenv("SNORT"); len(env_snort) > 0 {
 				snortloc = env_snort
