@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $testdir/pcaps/google_http.pcap
-cmp output.txt $testdir/lioli_tag_test_txt.expected.txt 
+pcap testdata/google_http.pcap
+cmp output.txt testdata/lioli_tag_test_txt.expected.txt 
 
 -- cfg.lua --
 

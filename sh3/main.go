@@ -7,10 +7,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 
+	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/tools/txtar"
 	"rsc.io/script"
 )
@@ -56,6 +58,9 @@ func main() {
 	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
 	flag.Parse()
 
+	var fail = lipgloss.NewStyle().Foreground(lipgloss.Color("#ea580c"))
+	var pass = lipgloss.NewStyle().Foreground(lipgloss.Color("#6ee7b7"))
+
 	modules := flag.Args()
 
 	tests_failed := 0
@@ -65,6 +70,7 @@ func main() {
 	ng := script.NewEngine()
 	ng.Cmds["pcap"] = PCAP()
 	ng.Cmds["skip"] = Skip()
+	ng.Cmds["cmp"] = Eq()
 
 	if wd == "" {
 		w, err := os.Getwd()
@@ -93,24 +99,24 @@ func main() {
 	}
 
 	test_count := len(scripts)
-	for _, f := range scripts {
-		base := filepath.Base(f)
+	for _, tscrpt := range scripts {
+		base := filepath.Base(tscrpt)
 		base = base[:len(base)-len(".script")]
 
+		// ignore skipped tests
 		if mtch != nil && !mtch.MatchString(base) {
 			continue
 		}
 
-		fmt.Fprintf(os.Stderr, "---- TEST_%s", base)
+		fmt.Fprintf(os.Stderr, "---- TEST_%s ", base)
 
+		// create temporary environment, extract txtar files
 		test_dir, err := os.MkdirTemp("", "sh3env_")
 		if err != nil {
 			errf("cannot create temporary directory: %s", err)
 		}
 
-		fmt.Println("==> debug tmp dir", test_dir)
-
-		ar, err := txtar.ParseFile(f)
+		ar, err := txtar.ParseFile(tscrpt)
 		if err != nil {
 			errf("script is not a valid sh3 script: %s", err)
 		}
@@ -122,6 +128,7 @@ func main() {
 			}
 		}
 
+		// symlink snort (/bin, …) and trout module (/p/tm.so)
 		links := []string{"bin", "include", "lib"}
 		for _, l := range links {
 			if err := os.Symlink(filepath.Join(wd, "p/install", l), filepath.Join(test_dir, l)); err != nil {
@@ -139,14 +146,23 @@ func main() {
 			errf("cannot symlink %s: %s", mod, err)
 		}
 
-		env := []string{fmt.Sprintf("LD_LIBRARY_PATH=%s/lib", test_dir)}
+		// optionally include testdata folder
+		if _, err := os.Stat(filepath.Dir(tscrpt) + "/testdata"); err == nil {
+			if err := os.Symlink(filepath.Join(wd, filepath.Dir(tscrpt)+"/testdata"), filepath.Join(test_dir, "testdata")); err != nil {
+				errf("cannot symlink %s: %s", mod, err)
+			}
+		}
+
+		// execute script, check output
+		env := []string{}
 		st, err := script.NewState(context.Background(), test_dir, env)
 		if err != nil {
 			errf("cannot start new script: %s", err)
 		}
 
 		ts := bytes.NewReader(ar.Comment)
-		if err := ng.Execute(st, f, bufio.NewReader(ts), os.Stderr); err != nil {
+		var buf bytes.Buffer
+		if err := ng.Execute(st, tscrpt, bufio.NewReader(ts), &buf); err != nil {
 			var se skipError
 			if skip := errors.As(err, &se); skip {
 				tests_skipped++
@@ -156,16 +172,24 @@ func main() {
 					fmt.Fprintf(os.Stderr, "Skipping test: %s\n", se.msg)
 				}
 			} else {
-				fmt.Fprintf(os.Stderr, "\x1b[1;31mTest Failure: %s\x1b[0m\n", err)
-				tests_failed++
+				fmt.Fprintln(os.Stderr, fail.Render("FAIL"))
+				fmt.Fprintf(os.Stderr, "%s\n", err)
+				io.Copy(os.Stderr, &buf)
 
+				tests_failed++
 				if *break_on_err {
 					break
 				}
 			}
 		} else {
 			tests_succeed++
+			fmt.Fprintln(os.Stderr, pass.Render("ok"))
 			os.RemoveAll(test_dir)
+		}
+
+		buf.Reset()
+		if err := st.CloseAndWait(&buf); err != nil {
+			io.Copy(os.Stderr, &buf)
 		}
 	}
 
@@ -174,7 +198,7 @@ func main() {
 	if 0 != tests_failed {
 		fmt.Fprintf(os.Stderr, "One or more tests FAILED!!!!\n")
 	} else {
-		fmt.Fprintf(os.Stderr, "\x1b[1;32m--All tests are green--\x1b[0m\n")
+		fmt.Fprintln(os.Stderr, pass.Render("--All tests are green--"))
 	}
 }
 

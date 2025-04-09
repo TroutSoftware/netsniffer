@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $testdir/pcaps/google_http.pcap
-cmp output.lorth $testdir/alert_test_lorth.expected.lorth 
+pcap testdata/google_http.pcap
+cmp output.lorth testdata/alert_test_lorth.expected.lorth 
 
 -- cfg.lua --
 logger_file = { file_name = 'output.lorth',

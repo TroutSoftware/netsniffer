@@ -1,4 +1,4 @@
-pcap -expect-fail $testdir/pcaps/google_http.pcap
+pcap -expect-fail testdata/google_http.pcap
 stderr 'invalid argument lioli_bind: = invalid-name'
 stderr 'FATAL: see prior 1 errors'
 

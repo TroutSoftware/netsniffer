@@ -5,3 +5,4 @@ dhcp_monitor
 dhcp_option
 trout_netflow
 trout_wizard
+smnp

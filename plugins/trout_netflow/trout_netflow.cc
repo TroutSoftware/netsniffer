@@ -16,6 +16,8 @@
 #include "trout_netflow.private.h"
 #include "trout_netflow_data.h"
 
+#include <iostream>
+
 // Debug includes
 
 namespace trout_netflow {

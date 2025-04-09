@@ -1,12 +1,18 @@
-. ./envrc
+#!/bin/sh
+#
+# Configure script generates the build files needed by Ninja for the project.
+# It is run as part of redo release / redo debug, and usually not manually.
+#
+# for loops avoid creating a subshell
+# shellcheck disable=SC2013
 
-sflags="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security"
+. ./envrc
 
 cat << EOF
 pd = $PD
-cflags = $CFLAGS -Wall -Wextra -std=c++2b -fPIC -shared
+cflags = $CFLAGS -Wall -Wextra -std=c++2b -fPIC -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security
 rule cc
-  command = g++ -MD -MF \$out.d \$cflags -I $ID -I $INSTALL_DIR/include -I $INSTALL_DIR/include/snort -o \$out \$in
+  command = g++ -MD -MF \$out.d \$cflags -I $ID -I $INSTALL_DIR/include -I $INSTALL_DIR/include/snort -c \$in -o \$out 
   deps = gcc
   depfile = \$out.d
 
@@ -18,11 +24,13 @@ EOF
 
 final="build tm.so: lk snort_plugins.o "
 
+link() { final="$final $1"; }
+
 for m in $(cat plugins.list); do
-	printf "build $m.o: cc "
-	cat "$PD/$m/files.list" | sed s#^#$PD/$m/# | tr '\n' ' '
-	printf "\n"
-	final="$final $m.o"
+	for f in $(cat "$PD/$m/files.list"); do
+		echo "build $m/${f%.cc}.o: cc $PD/$m/$f"
+		link "$m/${f%.cc}.o"
+	done
 done
 
-echo $final
+echo "$final"

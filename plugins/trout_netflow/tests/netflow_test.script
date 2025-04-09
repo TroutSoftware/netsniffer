@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $testdir/pcaps/google_http.pcap
-cmp output.lorth $testdir/netflow_test.expected.lorth 
+pcap testdata/google_http.pcap
+cmp output.lorth testdata/netflow_test.expected.lorth 
 
 -- cfg.lua --
 logger_file = { file_name = 'output.lorth',
@@ -8,7 +8,6 @@ logger_file = { file_name = 'output.lorth',
 
 trout_netflow = { logger = 'logger_file',
                   testmode = true } 
-
 stream = {}
 stream_tcp = {}
 stream_udp = {}
@@ -22,4 +21,3 @@ binder = {
     { when = { service = 'http' }, use = { type = 'http_inspect' } },
     { use = { type = 'wizard' } }
 }
-

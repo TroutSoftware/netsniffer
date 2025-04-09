@@ -42,15 +42,13 @@ func PCAP() script.Cmd {
 				"-c", s.Path("cfg.lua"),
 				"--script-path", s.Path("."),
 				"--plugin-path", s.Path("p"),
-				"--daq-dir", s.Path("lib"),
+				"--daq-dir", s.Path("lib/daq"),
 				"--warn-all",
 				"--pcap-list", strings.Join(file_list, " "),
 			)
 
 			cmd.Dir = s.Getwd()
 			cmd.Env = s.Environ()
-
-			fmt.Println("==> cmd env", cmd.Env)
 
 			cmd.Stdout = &stdoutBuf
 			cmd.Stderr = &stderrBuf
@@ -103,17 +101,17 @@ func Eq() script.Cmd {
 			Summary: "check if two files are byte-equal",
 			Args:    "f1 f2",
 		},
-		func(_ *script.State, args ...string) (script.WaitFunc, error) {
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
 			if len(args) != 2 {
 				return nil, script.ErrUsage
 			}
 
-			f1, err := os.ReadFile(args[0])
+			f1, err := os.ReadFile(s.Path(args[0]))
 			if err != nil {
 				return nil, fmt.Errorf("opening %s: %w", args[0], err)
 			}
 
-			f2, err := os.ReadFile(args[1])
+			f2, err := os.ReadFile(s.Path(args[1]))
 			if err != nil {
 				return nil, fmt.Errorf("opening %s: %w", args[1], err)
 			}

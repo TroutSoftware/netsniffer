@@ -1,4 +1,4 @@
-pcap $testdir/pcaps/dhcp_clean.pcap
+pcap testdata/dhcp_clean.pcap
 stdout '8000\:1003\:0.*(alerts: 5)'
 stdout 'info_event\: 1'
 stdout 'check_count\: 1'

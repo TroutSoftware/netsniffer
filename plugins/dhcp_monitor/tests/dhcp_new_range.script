@@ -1,4 +1,4 @@
-pcap $testdir/pcaps/dhcp_new_range.pcap
+pcap testdata/dhcp_new_range.pcap
 stdout '8000\:1002\:0.*(alerts: 1)'
 
 -- cfg.lua --

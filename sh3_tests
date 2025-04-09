@@ -1,0 +1,5 @@
+# list of modules with sh3-driven test scripts
+alert_lioli
+dhcp_monitor
+dhcp_option
+trout_netflow
