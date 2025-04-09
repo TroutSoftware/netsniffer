@@ -48,6 +48,7 @@ func main() {
 		only  string
 		wd    string
 		debug bool
+		gdb   bool
 	)
 	flag.StringVar(&only, "run", "", "Only run script matching this regular expression")
 	flag.StringVar(&only, "r", "", "Only run script matching this regular expression")
@@ -55,6 +56,7 @@ func main() {
 	flag.BoolVar(&debug, "d", false, "Use the debug binary")
 	flag.StringVar(&wd, "C", "", "Change to dir")
 	flag.StringVar(&wd, "chdir", "", "Change to dir")
+	flag.BoolVar(&gdb, "gdb", false, "Attach debugger")
 	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
 	flag.Parse()
 
@@ -68,7 +70,7 @@ func main() {
 	tests_skipped := 0
 
 	ng := script.NewEngine()
-	ng.Cmds["pcap"] = PCAP()
+	ng.Cmds["pcap"] = snort(gdb)
 	ng.Cmds["skip"] = Skip()
 	ng.Cmds["cmp"] = Eq()
 
@@ -78,6 +80,13 @@ func main() {
 			errf("cannot grok current wd: %s", err)
 		}
 		wd = w
+	}
+	if !filepath.IsAbs(wd) {
+		var err error
+		wd, err = filepath.Abs(wd)
+		if err != nil {
+			errf("cannot get an absolute path: %s", err)
+		}
 	}
 
 	var scripts []string
@@ -100,11 +109,17 @@ func main() {
 
 	test_count := len(scripts)
 	for _, tscrpt := range scripts {
+		tscrpt, err := filepath.Abs(tscrpt)
+		if err != nil {
+			errf("cannot get absolute path: %s", err)
+		}
+
 		base := filepath.Base(tscrpt)
 		base = base[:len(base)-len(".script")]
 
 		// ignore skipped tests
 		if mtch != nil && !mtch.MatchString(base) {
+			tests_skipped++
 			continue
 		}
 
@@ -148,7 +163,7 @@ func main() {
 
 		// optionally include testdata folder
 		if _, err := os.Stat(filepath.Dir(tscrpt) + "/testdata"); err == nil {
-			if err := os.Symlink(filepath.Join(wd, filepath.Dir(tscrpt)+"/testdata"), filepath.Join(test_dir, "testdata")); err != nil {
+			if err := os.Symlink(filepath.Dir(tscrpt)+"/testdata", filepath.Join(test_dir, "testdata")); err != nil {
 				errf("cannot symlink %s: %s", mod, err)
 			}
 		}

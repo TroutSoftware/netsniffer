@@ -14,14 +14,13 @@ import (
 var snort_path = "/bin/snort"
 var daq_path = "/lib"
 
-// PCAP runs snort against PCAP files.
+// snort runs snort against PCAP files.
 // A default configuration, optionally in multiple files, is attached from the txtar by the runner.
-
-func PCAP() script.Cmd {
+func snort(gdb bool) script.Cmd {
 	return script.Command(
 		script.CmdUsage{
 			Summary: "run snort against pcap files",
-			Args:    "[-expect-fail] files...",
+			Args:    "files...",
 		},
 		func(s *script.State, args ...string) (script.WaitFunc, error) {
 			var expect_fail bool
@@ -38,20 +37,26 @@ func PCAP() script.Cmd {
 
 			var stdoutBuf, stderrBuf strings.Builder
 
-			cmd := exec.CommandContext(s.Context(), s.Path("bin/snort"),
-				"-c", s.Path("cfg.lua"),
+			cargs := []string{"-c", s.Path("cfg.lua"),
 				"--script-path", s.Path("."),
 				"--plugin-path", s.Path("p"),
 				"--daq-dir", s.Path("lib/daq"),
 				"--warn-all",
-				"--pcap-list", strings.Join(file_list, " "),
-			)
+				"--pcap-list", strings.Join(file_list, " ")}
+			var cmd *exec.Cmd
+			if gdb {
+				cmd = exec.CommandContext(s.Context(), "gdb", append([]string{"--args", s.Path("bin/snort")}, cargs...)...)
+				cmd.Stdin = os.Stdin
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+			} else {
+				cmd = exec.CommandContext(s.Context(), s.Path("bin/snort"), cargs...)
+				cmd.Stdout = &stdoutBuf
+				cmd.Stderr = &stderrBuf
+			}
 
 			cmd.Dir = s.Getwd()
 			cmd.Env = s.Environ()
-
-			cmd.Stdout = &stdoutBuf
-			cmd.Stderr = &stderrBuf
 
 			err := cmd.Start()
 			if err != nil {
