@@ -7,11 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"golang.org/x/tools/txtar"
 	"rsc.io/script"
@@ -19,55 +17,85 @@ import (
 
 const usage = `
 Usage
-  sh3 
+  sh3 [-r REGEXP] [-C DIR] MODULE
+
+Options
+  --run, -r         Only run tests matching REGEXP
+  --debug, -d       Use debug build (by default release ones)
+  --break-on-error  Terminate on the first error encountered
+  --chdir, -C       Change do DIR before executing the script
+
+sh3 runs the tests scripts present in MODULE/tests.
+
+Each script consists of a txtar archive with the files required to run the test.
+All archives are extracted to a temporary folder (given a temporary directory T,
+a file rule/lua.rule in the archive will be copied at T/rule/lua.rule).
+Furthermore:
+ - the "p/install/{bin,lib,include}" directory is symlinked at T/{bin,lib,include} 
+   (snort and dependencies are available in PATH and LDPATH).
+ - the "p/release/tm.so" is copied to "T/p/tm.so" (unless --debug is given)
+ - the "pcaps" directory is symlinked at T/pcaps, and can be referred in scripts.
+
+The test is then executed in the T directory (and must only refer to local files).
 `
 
-// TODO rewrite with a bit more manners
 func main() {
-	mot := flag.String("t", "", "Module under test")
-	tpath := flag.String("tpath", "", "Search path for test cases")
-	only := flag.String("run", "", "Only run script matching this regular expression")
-	sanitize := flag.String("sanitize", "address", "Run with sanitizers: address, none, thread")
+	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", usage) }
+
+	var (
+		only  string
+		wd    string
+		debug bool
+	)
+	flag.StringVar(&only, "run", "", "Only run script matching this regular expression")
+	flag.StringVar(&only, "r", "", "Only run script matching this regular expression")
+	flag.BoolVar(&debug, "debug", false, "Use the debug binary")
+	flag.BoolVar(&debug, "d", false, "Use the debug binary")
+	flag.StringVar(&wd, "C", "", "Change to dir")
+	flag.StringVar(&wd, "chdir", "", "Change to dir")
 	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
 	flag.Parse()
 
-	tpathlist := strings.Split(*tpath, ";")
+	modules := flag.Args()
+
 	tests_failed := 0
 	tests_succeed := 0
 	tests_skipped := 0
 
 	ng := script.NewEngine()
-	ng.Cmds["pcap"] = PCAP(LoadSanitize(*sanitize))
+	ng.Cmds["pcap"] = PCAP()
 	ng.Cmds["skip"] = Skip()
 
-	wd, err := os.Getwd()
-	if err != nil {
-		errf("cannot grok current wd: %s", err)
+	if wd == "" {
+		w, err := os.Getwd()
+		if err != nil {
+			errf("cannot grok current wd: %s", err)
+		}
+		wd = w
 	}
 
-	var files []string
-
-	for _, path := range tpathlist {
-		tmp, err := filepath.Glob(path + "/*.script")
-		files = append(files, tmp...)
+	var scripts []string
+	for _, path := range modules {
+		s, err := filepath.Glob(path + "/tests/*.script")
+		scripts = append(scripts, s...)
 		if err != nil {
 			errf("could not find tests: %s", err)
 		}
 	}
+
 	var mtch *regexp.Regexp
-	if *only != "" {
+	if only != "" {
 		var err error
-		mtch, err = regexp.Compile(*only)
+		mtch, err = regexp.Compile(only)
 		if err != nil {
-			errf("invalid filter regexp %s: %s", *only, err)
+			errf("invalid filter regexp %s: %s", only, err)
 		}
 	}
 
-	test_count := len(files)
-	for _, f := range files {
+	test_count := len(scripts)
+	for _, f := range scripts {
 		base := filepath.Base(f)
 		base = base[:len(base)-len(".script")]
-		test_dir := filepath.Dir(f)
 
 		if mtch != nil && !mtch.MatchString(base) {
 			continue
@@ -75,10 +103,12 @@ func main() {
 
 		fmt.Fprintf(os.Stderr, "---- TEST_%s", base)
 
-		dir, err := os.MkdirTemp("", "sh3env_"+base)
+		test_dir, err := os.MkdirTemp("", "sh3env_")
 		if err != nil {
 			errf("cannot create temporary directory: %s", err)
 		}
+
+		fmt.Println("==> debug tmp dir", test_dir)
 
 		ar, err := txtar.ParseFile(f)
 		if err != nil {
@@ -86,23 +116,31 @@ func main() {
 		}
 
 		for _, tf := range ar.Files {
-			err := os.WriteFile(filepath.Join(dir, tf.Name), tf.Data, 0644)
+			err := os.WriteFile(filepath.Join(test_dir, tf.Name), tf.Data, 0644)
 			if err != nil {
 				errf("cannot create file %s: %s", tf.Name, err)
 			}
 		}
 
-		// TODO make this part of copy
-		if err := os.Mkdir(filepath.Join(dir, "p"), 0755); err != nil {
+		links := []string{"bin", "include", "lib"}
+		for _, l := range links {
+			if err := os.Symlink(filepath.Join(wd, "p/install", l), filepath.Join(test_dir, l)); err != nil {
+				errf("cannot symlink %s: %s", l, err)
+			}
+		}
+		if err := os.Mkdir(filepath.Join(test_dir, "p"), 0755); err != nil {
 			errf("cannot create temporary structure: %s", err)
 		}
-
-		if _, err := copy(*mot, filepath.Join(dir, "p/"+filepath.Base(*mot))); err != nil {
-			errf("cannot copy module: %s -> %s :%s", *mot, filepath.Join(dir, *mot), err)
+		mod := "p/release/tm.so"
+		if debug {
+			mod = "p/debug/tm.so"
+		}
+		if err := os.Symlink(filepath.Join(wd, mod), filepath.Join(test_dir, "p", "tm.so")); err != nil {
+			errf("cannot symlink %s: %s", mod, err)
 		}
 
-		env := []string{fmt.Sprintf("exedir=%s", wd), fmt.Sprintf("testdir=%s", wd+"/"+test_dir)}
-		st, err := script.NewState(context.Background(), dir, env)
+		env := []string{fmt.Sprintf("LD_LIBRARY_PATH=%s/lib", test_dir)}
+		st, err := script.NewState(context.Background(), test_dir, env)
 		if err != nil {
 			errf("cannot start new script: %s", err)
 		}
@@ -127,9 +165,8 @@ func main() {
 			}
 		} else {
 			tests_succeed++
+			os.RemoveAll(test_dir)
 		}
-
-		os.RemoveAll(dir)
 	}
 
 	fmt.Fprintf(os.Stderr, "%d of %d tests passed %d skipped\n", tests_succeed, test_count, tests_skipped)
@@ -141,52 +178,7 @@ func main() {
 	}
 }
 
-func copy(src, dst string) (int64, error) {
-	sourceFileStat, err := os.Stat(src)
-	if err != nil {
-		return 0, err
-	}
-
-	if !sourceFileStat.Mode().IsRegular() {
-		return 0, fmt.Errorf("%s is not a regular file", src)
-	}
-
-	source, err := os.Open(src)
-	if err != nil {
-		return 0, err
-	}
-	defer source.Close()
-
-	destination, err := os.Create(dst)
-	if err != nil {
-		return 0, err
-	}
-	defer destination.Close()
-	nBytes, err := io.Copy(destination, source)
-	return nBytes, err
-}
-
 func errf(msg string, args ...any) {
 	fmt.Fprintf(os.Stderr, msg, args...)
 	os.Exit(1)
-}
-
-// TODO pass env variable to script, for use in conditionals
-type CompileOpt func(args, env []string) (nargs, nenv []string)
-
-func LoadSanitize(stz string) CompileOpt {
-	switch stz {
-	case "none":
-		return func(args, env []string) (nargs []string, nenv []string) {
-			return args, env
-		}
-
-	case "address":
-		return func(args, env []string) (nargs []string, nenv []string) {
-			return args, append(env, "LD_PRELOAD="+asanlib)
-		}
-
-	default:
-		panic("Not implemented")
-	}
 }

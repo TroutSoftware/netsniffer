@@ -7,4 +7,4 @@ curl -sL "https://github.com/snort3/libml/archive/refs/tags/$tag.tar.gz" | tar -
 exec >libml_install_log
 exec 2>libml_install_log
 (cd "$BUILD_DIR/libml-$tag"; ./configure.sh --prefix="$INSTALL_DIR")
-(cd "$BUILD_DIR/libml-$tag/build"; make install/strip)
+(cd "$BUILD_DIR/libml-$tag/build"; make -j $(nproc) install/strip)

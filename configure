@@ -4,17 +4,19 @@ sflags="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security"
 
 cat << EOF
 pd = $PD
-cflags = $CFLAGS -Wall -Wextra -std=c++2b -fpic -shared
+cflags = $CFLAGS -Wall -Wextra -std=c++2b -fPIC -shared
 rule cc
-  command = gcc -MD -MF \$out.d \$cflags -I $ID -I $INSTALL_DIR/include -I $INSTALL_DIR/include/snort -o \$out \$in
+  command = g++ -MD -MF \$out.d \$cflags -I $ID -I $INSTALL_DIR/include -I $INSTALL_DIR/include/snort -o \$out \$in
   deps = gcc
   depfile = \$out.d
 
 rule lk
-  command = g++ \$in -shared -O0 -Wall -g -Wextra -o \$out
+  command = g++ -O -o \$out -shared -fPIC -Wall \$in
+
+build snort_plugins.o: cc $PD/snort_plugins.cc
 EOF
 
-final="build tm.so: lk "
+final="build tm.so: lk snort_plugins.o "
 
 for m in $(cat plugins.list); do
 	printf "build $m.o: cc "

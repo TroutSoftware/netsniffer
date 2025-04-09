@@ -1,7 +1,7 @@
 redo-ifchange envrc
 
 . ./envrc
-redo-ifchange configure plugins.list
+redo-ifchange configure plugins.list $PD/snort_plugins.cc
 for m in $(cat plugins.list); do echo "$PD/$m/files.list"; done | xargs redo-ifchange
 
 mkdir -p p/release

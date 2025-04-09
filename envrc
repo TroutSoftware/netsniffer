@@ -1,4 +1,0 @@
-BUILD_DIR=/home/romain/wk/snort/snort-modules/p
-INSTALL_DIR=/home/romain/wk/snort/snort-modules/p/install
-PD=/home/romain/wk/snort/snort-modules/plugins
-ID=/home/romain/wk/snort/snort-modules/includes
