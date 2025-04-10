@@ -1,5 +1,5 @@
 redo-ifchange envrc
 . ./envrc
 
-redo-ifchange deps
+mkdir -p $BUILD_DIR
 redo-ifchange test

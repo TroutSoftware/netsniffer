@@ -1,3 +1,6 @@
-cat bootstrap/deps | grep -v "^#" | xargs sudo apt-get -y install >&2
+echo "You may need to install dependencies by running ./install_deps " >&2
+
+redo-ifchange envrc
+. ./envrc
 mkdir -p p
 redo-ifchange bootstrap/deps bootstrap/snort
