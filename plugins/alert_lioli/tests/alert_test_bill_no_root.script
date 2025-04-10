@@ -1,8 +1,8 @@
 # Inspectors and spells are in place to attribute the correct flow
-pcap $testdir/pcaps/google_http.pcap
+pcap testdata/google_http.pcap
 
 # This test might not be valid, the files might be compared in text, rather than binary mode
-cmp output.bill $testdir/alert_test_bill_no_root.expected.bill
+cmp output.bill testdata/alert_test_bill_no_root.expected.bill
 
 -- cfg.lua --
 logger_file = { file_name = 'output.bill',

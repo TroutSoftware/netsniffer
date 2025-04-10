@@ -1,4 +1,4 @@
-pcap -expect-fail $testdir/pcaps/dhcp_clean.pcap
+pcap -expect-fail testdata/dhcp_clean.pcap
 stderr 'invalid argument ip_filter: = 172.31.0.0/33'
 stderr 'invalid argument ip_filter: = 172.31.0/2'
 stderr 'invalid argument ip_filter: = 172.31.0.256/2'

@@ -1,4 +1,4 @@
-pcap -expect-fail $testdir/pcaps/google_http.pcap
+pcap -expect-fail testdata/google_http.pcap
 
 stderr 'invalid argument lioli_tag: = invalid "path needs to start with \$."'
 stderr 'invalid argument lioli_tag: = \$.invalid-path "'

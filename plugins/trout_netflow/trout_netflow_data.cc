@@ -50,7 +50,7 @@ void FlowData::process(snort::Packet *pkt) {
 
   // Note, this uses steady_clock instead of system_clock to ensure delta times
   // are correct
-  auto now = TestableTime::now<std::chrono::steady_clock>(settings.testmode);
+  auto now = Common::TestableTime::now<std::chrono::steady_clock>(settings.testmode);
 
   if (first_pkt) {
     first_pkt_time = now;

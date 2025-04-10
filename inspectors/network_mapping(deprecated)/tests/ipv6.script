@@ -1,8 +1,0 @@
-pcap $moddir/pcaps/ipv6.pcap
-grep '^N \[fe80::a094:d637:c884:fc70\]:- -> \[ff02::2\]:- -' flow.txt
-
--- cfg.lua --
-stream = { }
-stream_tcp = { }
-wizard = { }
-network_mapping = { noflow_log = true }

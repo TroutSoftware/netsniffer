@@ -1,4 +1,4 @@
-pcap $testdir/pcaps/dhcp_clean.pcap
+pcap testdata/dhcp_clean.pcap
 stdout '\[1:100001:0] .* \(alerts: 1\)'
 stdout '\[1:100003:0] .* \(alerts: 2\)'
 stdout '\[1:100004:0] .* \(alerts: 1\)'

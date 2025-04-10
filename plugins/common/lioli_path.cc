@@ -6,7 +6,7 @@
 #include <regex>
 
 // Local includes
-#include "lioli_path.h"
+#include <lioli_path.h>
 
 // Global includes
 

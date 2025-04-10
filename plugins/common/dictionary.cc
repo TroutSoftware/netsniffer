@@ -4,7 +4,7 @@
 // System includes
 
 // Local includes
-#include "dictionary.h"
+#include <dictionary.h>
 
 // Global includes
 
