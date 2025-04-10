@@ -4,14 +4,15 @@ package=$(cat control | awk -F ": " '$1 == "Package" { print $2 }')
 
 . ../envrc
 
-rm -r "${package}_$version"
+rm -rf "${package}_$version"
 
-install -D "$BUILD_DIR/install/bin/snort" "${package}_$version/bin/snort"
-install -D "$BUILD_DIR/install/lib/libdaq.so.3.0.0" "${package}_$version/lib/x86_64-linux-gnu/libdaq.so.3.0.0"
-(cd "${package}_$version/lib/x86_64-linux-gnu"; ln -s libdaq.so.3.0.0 libdaq.so.3)
+install() { /usr/bin/install -D $1 "${package}_$version/$2"; }
+symlink() { (cd "${package}_$version/$(dirname $1)"; ln -s $1 $2;) }
 
-install -D ../changelog "${package}_$version/usr/share/doc/snort/changelog"
-
-install -D control "${package}_$version/DEBIAN/control"
+install "$BUILD_DIR/install/bin/snort"             bin/snort
+install "$BUILD_DIR/install/lib/libdaq.so.3.0.0"   lib/x86_64-linux-gnu/libdaq.so.3.0.0
+symlink lib/x86_64-linux-gnu/libdaq.so.3.0.0       libdaq.so.3
+install ../changelog                               usr/share/doc/snort/changelog
+install control                                    DEBIAN/control
 
 dpkg-deb --build --root-owner-group "${package}_$version"
