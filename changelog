@@ -1,0 +1,10 @@
+# Changelog
+
+All notable changes to this project are be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and the versioning scheme follows the upstream Snort one: for each upstream release,
+we add an increment number, e.g.: v3.2.0-trout~4 means:
+ - base snort release v3.2.0
+ - this module release 4
+

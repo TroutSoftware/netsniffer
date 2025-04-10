@@ -1,3 +1,7 @@
 p/
 .redo/
 envrc
+
+# packaging info
+*.deb
+deb/snort-trout_*

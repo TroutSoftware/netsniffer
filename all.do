@@ -1,4 +1,4 @@
-redo-ifchange envrc
+redo-ifchange envrc deps
 . ./envrc
 
 mkdir -p $BUILD_DIR

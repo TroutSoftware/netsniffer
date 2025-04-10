@@ -169,7 +169,7 @@ func main() {
 		}
 
 		// execute script, check output
-		env := []string{}
+		env := []string{fmt.Sprintf("LD_LIBRARY_PATH=%s", filepath.Join(test_dir, "/lib"))}
 		st, err := script.NewState(context.Background(), test_dir, env)
 		if err != nil {
 			errf("cannot start new script: %s", err)

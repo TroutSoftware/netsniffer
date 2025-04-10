@@ -1,0 +1,17 @@
+#!/bin/sh
+version=$(cat control | awk -F ": " '$1 == "Version" { print $2 }')
+package=$(cat control | awk -F ": " '$1 == "Package" { print $2 }')
+
+. ../envrc
+
+rm -r "${package}_$version"
+
+install -D "$BUILD_DIR/install/bin/snort" "${package}_$version/bin/snort"
+install -D "$BUILD_DIR/install/lib/libdaq.so.3.0.0" "${package}_$version/lib/x86_64-linux-gnu/libdaq.so.3.0.0"
+(cd "${package}_$version/lib/x86_64-linux-gnu"; ln -s libdaq.so.3.0.0 libdaq.so.3)
+
+install -D ../changelog "${package}_$version/usr/share/doc/snort/changelog"
+
+install -D control "${package}_$version/DEBIAN/control"
+
+dpkg-deb --build --root-owner-group "${package}_$version"

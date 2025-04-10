@@ -40,7 +40,6 @@ func snort(gdb bool) script.Cmd {
 			cargs := []string{"-c", s.Path("cfg.lua"),
 				"--script-path", s.Path("."),
 				"--plugin-path", s.Path("p"),
-				"--daq-dir", s.Path("lib/daq"),
 				"--warn-all",
 				"--pcap-list", strings.Join(file_list, " ")}
 			var cmd *exec.Cmd
