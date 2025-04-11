@@ -11,6 +11,7 @@ symlink() { (cd "${package}_$version/$(dirname $1)"; ln -s $1 $2;) }
 
 install "$BUILD_DIR/install/bin/snort"             bin/snort
 install "$BUILD_DIR/install/lib/libdaq.so.3.0.0"   lib/x86_64-linux-gnu/libdaq.so.3.0.0
+install "$BUILD_DIR/release/tm.so"                 usr/lib/snort/tm.so
 symlink lib/x86_64-linux-gnu/libdaq.so.3.0.0       libdaq.so.3
 install ../changelog                               usr/share/doc/snort/changelog
 install control                                    DEBIAN/control
