@@ -7,7 +7,7 @@ package=$(cat control | awk -F ": " '$1 == "Package" { print $2 }')
 rm -rf "${package}_$version"
 
 install() { /usr/bin/install -D $1 "${package}_$version/$2"; }
-symlink() { (cd "${package}_$version/$(dirname $1)"; ln -s $1 $2;) }
+symlink() { (cd "${package}_$version/$(dirname $1)"; ln -s $(basename $1) $2;) }
 
 install "$BUILD_DIR/install/bin/snort"             bin/snort
 install "$BUILD_DIR/install/lib/libdaq.so.3.0.0"   lib/x86_64-linux-gnu/libdaq.so.3.0.0
