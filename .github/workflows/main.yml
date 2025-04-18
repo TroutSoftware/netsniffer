@@ -10,8 +10,17 @@ jobs:
           go-version: '1.24.2'
       - run: sh ./install_deps
       - run: sh ./bootstrap/do
-      - name: archive build logs
+      - run: cd deb; sh ./buildpkg
+
+      - name: archive deb package
+        id: archive
         uses: actions/upload-artifact@v4
         with:
-          name: snort_build_log
-          path: bootstrap/snort_install_log
+          name: snort-trout.deb
+          path: 'deb/snort-trout_*.deb'
+
+      - name: attest package
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: snort-trout.deb
+          subject-digest: sha256:${{ steps.archive.outputs.artifact-digest }}
