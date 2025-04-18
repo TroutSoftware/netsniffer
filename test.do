@@ -4,4 +4,4 @@ redo-ifchange sh3_tests.list release envrc
 exec >&2
 go test ./...
 ninja -C p/release
-cat sh3_tests.list | grep -v '^#' | sed s#^#$PD/# |  xargs go tool sh3 
+grep -v '^#' sh3_tests.list | sed s#^#$PD/# |  xargs go tool sh3 
