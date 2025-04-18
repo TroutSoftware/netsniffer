@@ -1,4 +1,4 @@
-name: execute tests
+name: create_deb
 on: [workflow_dispatch]
 jobs:
   execute_tests:
