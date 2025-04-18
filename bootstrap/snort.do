@@ -6,8 +6,7 @@ tag=3.7.2.0
 
 curl -sL "https://github.com/snort3/snort3/archive/refs/tags/$tag.tar.gz" | tar -C "$BUILD_DIR" -xzf -
 
-exec >snort_install_log
-exec 2>snort_install_log
+exec >&2
 (cd "$BUILD_DIR/snort3-$tag" || exit;
  PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig" ./configure_cmake.sh \
  --with-daq-includes="$INSTALL_DIR/include" --with-daq-libraries="$INSTALL_DIR/libdaq/lib" \
