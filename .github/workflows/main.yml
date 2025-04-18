@@ -1,0 +1,12 @@
+name: execute tests
+on: [push]
+jobs:
+  execute_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+      - run: sh ./install_deps
+      - run: sh ./bootstrap/do
