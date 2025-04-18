@@ -10,3 +10,8 @@ jobs:
           go-version: '1.24.2'
       - run: sh ./install_deps
       - run: sh ./bootstrap/do
+      - name: archive build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: snort_build_log
+          path: bootstrap/snort_install_log
