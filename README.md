@@ -1,16 +1,25 @@
-# Extra Modules for Snort 
+# Trout Snort Modules
 
-This repository contains new modules we found useful when deploying Snort in an advanced detection package.
+[Snort](https://snort.org/) is one of the best, most robust open-source IPS available.
+The third version is built around an open plugin architecture, enabling third-party extensions.
 
-## Running integration tests
+This repository contains the plugins we developed when embedding snort as the network analyzer in [Access Gate](https://www.trout.software/).
 
-NOTE: This information is out of date (quick fix: to build and run tests do a 'make test' from the root folder)
+# Getting started
 
-The SH3 test runner is responsible for executing full module tests, usually against a recorded pcap.
-With a modern Go version, install the script:
+The project is built with [redo](https://redo.readthedocs.io/). To get started, run:
 
 ```
-go install ./sh3
+sh ./bootstrap/do
 ```
 
-With `$HOME/go/bin` set in your path, all the `test` targets in makefiles should work.
+This will download and build snort, then our plugins, and run our tests.
+
+You might need to install dependencies to build snort, using:
+```
+sh ./install_deps 
+```
+
+# Testing
+
+Our test suite is executed via the small `sh3` Go runner.

@@ -1,5 +1,8 @@
 p/
 .redo/
+all.did
+.do_built
+.do_built.dir/
 envrc
 
 # packaging info
