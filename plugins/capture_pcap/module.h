@@ -2,8 +2,11 @@
 #define module_23669415
 
 // Snort includes
+#include <framework/counts.h>
+#include <framework/module.h>
 
 // System includes
+#include <memory>
 
 // Global includes
 #include <log_framework.h>
@@ -28,13 +31,19 @@ struct PegCounts {
   PegCount pkg_processed = 0;
   PegCount pkg_logged = 0;
   PegCount compiled_filters = 0;
+  PegCount pkg_evaluated = 0;
+  PegCount pkg_matched = 0;
 };
 
 class Module : public snort::Module {
-  Settings settings;
+  std::shared_ptr<Settings> settings = std::make_shared<Settings>();
 
   Module();
-
+  ~Module();
+  
+  bool begin(const char*, int, snort::SnortConfig*) override;
+  bool end(const char*, int, snort::SnortConfig*) override;
+    
   Usage get_usage() const override;
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override;
@@ -45,7 +54,7 @@ class Module : public snort::Module {
 
 
 public:
-  Settings &get_settings();
+  std::shared_ptr<Settings> get_settings();
   PegCounts &get_peg_counts();
 
   static snort::Module *ctor() { return new Module(); }

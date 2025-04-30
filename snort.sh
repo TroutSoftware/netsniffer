@@ -1,9 +1,10 @@
 #!/bin/sh
 
-redo-ifchange envrc
+redo-ifchange envrc debug  || exit 1
 
 . ./envrc
 
-redo debug  # this can't be redo-ifchange as it MUST invoke Ninja
+echo "$INSTALL_DIR/bin/snort --plugin-path $BUILD_DIR/debug/tm.so $*"
 
-$INSTALL_DIR/bin/snort --plugin-path $BUILD_DIR/debug/tm.so $*
+$INSTALL_DIR/bin/snort -v --warn-all --plugin-path $BUILD_DIR/debug/tm.so $*
+

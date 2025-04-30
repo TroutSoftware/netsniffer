@@ -8,6 +8,9 @@
 #include "module.h"
 #include "plugin_def.h"
 
+// Debug includes
+#include <iostream>
+
 namespace capture_pcap {
 namespace {
 
@@ -25,9 +28,12 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "packets processed", "Number of packages processed"},
     {CountType::SUM, "packets logged", "Number of packages logged"},
     {CountType::SUM, "compiled_filters", "Number of bpf filters succesfully compiled"},
+    {CountType::SUM, "packets evaluated", "Number of packages evaluated (by filter)"},
+    {CountType::SUM, "packets matched", "Number of packages matched by filter"},
     {CountType::END, nullptr, nullptr}};
 
-THREAD_LOCAL struct PegCounts s_peg_counts;
+// TODO: Understand the pegs in a threaded context...
+/*THREAD_LOCAL*/ struct PegCounts s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
 static_assert(
@@ -45,7 +51,20 @@ LioLi::Logger &Settings::get_logger() {
 }
 
 Module::Module()
-    : snort::Module(s_name, s_help, module_params) {}
+    : snort::Module(s_name, s_help, module_params) {
+}
+
+Module::~Module() {
+}
+
+bool Module::begin(const char*, int, snort::SnortConfig*) {
+  return true;
+}
+
+bool Module::end(const char*, int, snort::SnortConfig*) {
+  return true;
+}
+
 
 Module::Usage Module::get_usage() const {
   return INSPECT; /* GLOBAL, CONTEXT, INSPECT, DETECT */
@@ -53,11 +72,11 @@ Module::Usage Module::get_usage() const {
 
 bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
   if (val.is("logger") && val.get_as_string().size() > 0) {
-    settings.logger_name = val.get_string();
-  } if (val.is("snap_length")) {
-    settings.snaplen = val.get_int32();
-  } if (val.is("optimize_filter")) {
-    settings.optimize_filter = val.get_bool();
+    settings->logger_name = val.get_string();
+  } else if (val.is("snap_length")) {
+    settings->snaplen = val.get_int32();
+  } else if (val.is("optimize_filter")) {
+    settings->optimize_filter = val.get_bool();
   } else {
     // fail if we didn't get something valid
     return false;
@@ -66,7 +85,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
   return true;
 }
 
-const PegInfo *Module::get_pegs() const { return s_pegs; }
+const PegInfo *Module::get_pegs() const {
+    return s_pegs; }
 
 PegCount *Module::get_counts() const {
   return reinterpret_cast<PegCount *>(&s_peg_counts);
@@ -76,7 +96,7 @@ PegCounts &Module::get_peg_counts() {
   return s_peg_counts;
 }
 
-Settings &Module::get_settings() { return settings; }
+std::shared_ptr<Settings> Module::get_settings() { return settings; }
 
 const snort::InspectApi inspect_api = {
     {PT_INSPECTOR, sizeof(snort::InspectApi), INSAPI_VERSION, 0, API_RESERVED,

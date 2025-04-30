@@ -1,2 +1,4 @@
+filter.cc
 inspector.cc
 module.cc
+pcap_dumper.cc

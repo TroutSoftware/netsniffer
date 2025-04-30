@@ -1,12 +1,10 @@
 // Snort includes
 #include <log/messages.h>
-#include <packet_io/sfdaq.h>
 #include <protocols/packet.h>
 #include <stream/stream_splitter.h>
 
 // System includes
 #include <mutex>
-#include <pcap/pcap.h>
 #include <string>
 
 // Global includes
@@ -27,67 +25,59 @@
 namespace capture_pcap {
 namespace {
 
-class Filter {
-  Module &module;
-  const std::string filter_string;      // Clear text filter
-  bool compiled_valid = false;   // Set to true if the compiled bpf program is valid
-  struct bpf_program compiled;   // Compiled filter
-  
-  // The following function is copied from snorts packet_capture plugin
-  int get_dlt()
-  {
-    int dlt = snort::SFDAQ::get_base_protocol();
-    if (dlt == DLT_USER1)
-        return DLT_EN10MB;
-    return dlt;
-  }
-  
-public:
-  Filter(std::string &filter_string, Module &module) : module(module), filter_string(filter_string) {
-    pcap_t *dead = pcap_open_dead(get_dlt(), module.get_settings().snaplen);
-    if(pcap_compile(dead, &compiled, filter_string.c_str(), module.get_settings().optimize_filter, PCAP_NETMASK_UNKNOWN)) {      
-      snort::ErrorMessage("ERROR: pcap compile returns \"%s\" when given \"%s\" as input",
-                          pcap_geterr(dead), filter_string.c_str());
-      
-    } else {
-      compiled_valid = true;
-      module.get_peg_counts().compiled_filters++;
-    }
-  }
-
-  ~Filter() {
-    // Clean up
-    if(compiled_valid) {
-      pcap_freecode(&compiled);
-      compiled_valid = false;
-    }
-  }
-
-  bool is_valid() {
-    return compiled_valid;
-  }
-};
+int flow_count = 0;
 
 class CaptureFlow {
-  
+public:
+  CaptureFlow() {
+
+  }
+
+  ~CaptureFlow() {
+
+  }
 };
+
+}
 
 using FlowData = Common::FlowData<CaptureFlow>;
 
 
-} // namespace
-
-
 void Inspector::eval(snort::Packet * p) {
+
+//std::cout << "MKRTEST: Got package";
+
+//if (p->flow) std::cout << " with flow";
+
+//std::cout << std::endl;
+  FlowData *flow_data = (p->flow) ? FlowData::get_from_flow(p->flow) : nullptr;
+
+  if (flow_data) {
+    
+  }
+
+  if (!filter) {
+    std::string filter_string("net 140.82.121.4");
+
+    filter = std::unique_ptr<Filter>(new Filter(filter_string, module));
+  }
+  
   module.get_peg_counts().pkg_processed++;
-std::cout << "MKRTEST: Got package";
 
-if (p->flow) std::cout << " with flow";
+  if(filter->match(p)) {
+std::cout << "MKRTEST Got a filter match!!!" << std::endl;  
 
-std::cout << std::endl;
+  }
+
+
 }
 
-Inspector::~Inspector() {}
+Inspector::Inspector(Module &module) : module(module) {
+  assert(&module);
+};
+
+Inspector::~Inspector() {
+}
 
 
 snort::Inspector *Inspector::ctor(snort::Module *module) {
