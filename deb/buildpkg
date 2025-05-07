@@ -6,14 +6,33 @@ package=$(cat control | awk -F ": " '$1 == "Package" { print $2 }')
 
 rm -rf "${package}_$version"
 
+if [ ! -e odp ]; then
+	echo "AppID detectors are missing"
+	exit 1
+fi
+
 install() { /usr/bin/install -D $1 "${package}_$version/$2"; }
 symlink() { (cd "${package}_$version/$(dirname $1)"; ln -s $(basename $1) $2;) }
+rcopy()   { /usr/bin/install -D -t "${package}_$version/$2" $(find $1 -type f); }
 
 install "$BUILD_DIR/install/bin/snort"             bin/snort
+install "$BUILD_DIR/install/etc/snort/file_magic.rules"             etc/snort/file_magic.rules
 install "$BUILD_DIR/install/lib/libdaq.so.3.0.0"   lib/x86_64-linux-gnu/libdaq.so.3.0.0
 install "$BUILD_DIR/release/tm.so"                 usr/lib/snort/tm.so
 symlink lib/x86_64-linux-gnu/libdaq.so.3.0.0       libdaq.so.3
+rcopy   odp                                        usr/lib/snort/appid/odp
+rcopy   rules                                      /usr/lib/snort/rules
+install snort_config.lua                           etc/snort/config.lua
+install snort_site.lua                             etc/snort/site.lua
+install snort_defaults.lua                         etc/snort/defaults.lua
+install blocklist                                  usr/lib/snort/blacklist_ip
 install ../changelog                               usr/share/doc/snort/changelog
 install control                                    DEBIAN/control
+
+cat << EOF > ${package}_$version/DEBIAN/conffiles
+/etc/snort/config.lua
+/etc/snort/site.lua
+/etc/snort/defaults.lua
+EOF
 
 dpkg-deb --build --root-owner-group "${package}_$version"

@@ -1,0 +1,1 @@
+ls pcaps/*.pcap | sed "s#^pcaps/#output/#" | sed "s#.pcap\$#.tsv#" | xargs redo-ifchange

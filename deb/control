@@ -1,5 +1,5 @@
 Package: snort-trout
-Version: 3.7.2-trout~1
+Version: 3.7.2-trout~2
 Architecture: amd64
 Depends: libhwloc15, libdumbnet1, libluajit-5.1-2, libpcap0.8t64, libpcre3
 Maintainer: "Trout Packaging Team <pkg@trout.software>"

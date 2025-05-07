@@ -13,4 +13,4 @@ exec 2>snort_install_log
  --with-daq-includes="$INSTALL_DIR/include" --with-daq-libraries="$INSTALL_DIR/libdaq/lib" \
  --prefix="$INSTALL_DIR" --enable-stdlog --generator=Ninja \
  --enable-luajit-static --enable-static-daq)
-(cd "$BUILD_DIR/snort3-$tag/build" || exit; ninja install)
+(cd "$BUILD_DIR/snort3-$tag/build" || exit; ninja install/strip)

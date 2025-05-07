@@ -1,0 +1,7 @@
+Build instructions
+==================
+
+For licensing reasons, we cannot include the provided ODP in this debian packages.
+Instead, users must go to https://snort.org/downloads, and retrieve it under the “OpenAddID” tab, then add it to the odp folder.
+
+Custom and malware rules must be retrieved from our internal repository
