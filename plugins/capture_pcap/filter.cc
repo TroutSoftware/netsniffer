@@ -8,6 +8,7 @@
 // Global includes
 
 // Local includes
+#include "common.h"
 #include "filter.h"
 #include "module.h"
 
@@ -15,16 +16,6 @@
 
 
 namespace capture_pcap {
-
-// The following function is copied from snorts packet_capture plugin  
-int Filter::get_dlt()
-{
-  int dlt = snort::SFDAQ::get_base_protocol();
-  if (dlt == DLT_USER1)
-      return DLT_EN10MB;
-  return dlt;
-}
-  
 
 Filter::Filter(std::string &filter_string, Module &module) : settings(module.get_settings()), pegs(module.get_peg_counts()), filter_string(filter_string) {
   pcap_t *dead = pcap_open_dead(get_dlt(), settings->snaplen);

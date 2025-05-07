@@ -7,24 +7,17 @@
 
 // System includes
 #include <memory>
+//#include <optional>
 
 // Global includes
 #include <log_framework.h>
 
 // Local includes
 
+
 namespace capture_pcap {
 
-struct Settings {
-  std::shared_ptr<LioLi::Logger> logger;
-
-public:
-  std::string logger_name;
-  int snaplen;    // libpcap snap lenght that should be used
-  bool optimize_filter;
-
-  LioLi::Logger &get_logger();
-};
+class Settings;
 
 // This must match the s_pegs[] array
 struct PegCounts {
@@ -33,20 +26,21 @@ struct PegCounts {
   PegCount compiled_filters = 0;
   PegCount pkg_evaluated = 0;
   PegCount pkg_matched = 0;
+  PegCount pkg_written = 0;
 };
 
 class Module : public snort::Module {
-  std::shared_ptr<Settings> settings = std::make_shared<Settings>();
+  std::shared_ptr<Settings> settings;  // Settings is a shared ptr as users of the settings migh live longer than the module
 
   Module();
   ~Module();
   
   bool begin(const char*, int, snort::SnortConfig*) override;
   bool end(const char*, int, snort::SnortConfig*) override;
-    
-  Usage get_usage() const override;
-
+  
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override;
+
+  Usage get_usage() const override;
 
   const PegInfo *get_pegs() const override;
 
@@ -55,6 +49,7 @@ class Module : public snort::Module {
 
 public:
   std::shared_ptr<Settings> get_settings();
+  // TODO: Solve the threading mystery (for now it is ignored)
   PegCounts &get_peg_counts();
 
   static snort::Module *ctor() { return new Module(); }

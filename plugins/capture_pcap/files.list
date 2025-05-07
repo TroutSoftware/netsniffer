@@ -1,4 +1,6 @@
+common.cc
 filter.cc
 inspector.cc
 module.cc
+settings.cc
 pcap_dumper.cc

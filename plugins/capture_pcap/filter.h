@@ -12,6 +12,7 @@
 
 // Local includes
 #include "module.h"
+#include "settings.h"
 
 // Debug includes
 
@@ -25,8 +26,7 @@ class Filter {
   bool compiled_valid = false;   // Set to true if the compiled bpf program is valid
   struct bpf_program compiled;   // Compiled filter
   
-  
-  int get_dlt();
+
   
 public:
   Filter(std::string &filter_string, Module &module);

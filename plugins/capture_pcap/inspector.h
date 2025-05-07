@@ -13,6 +13,7 @@
 
 // Local includes
 #include "filter.h"
+#include "pcap_dumper.h"
 
 // Debug includes
 
@@ -24,7 +25,9 @@ class Inspector : public snort::Inspector {
 private:
   // TODO: The module WILL BE deleted before the inspector make this safe for all inspectors  
   Module &module;
-  std::unique_ptr<Filter> filter;  // For testing purposes, DO NOT COMMIT!!!
+  std::unique_ptr<Filter> filter;     // For testing purposes, DO NOT COMMIT!!!
+  std::shared_ptr<PcapDumper> dumper; // For testing purposes, DO NOT COMMIT!!!
+  
 public:
   //Inspector(Module &module) : module(module) { assert(&module); };
   Inspector(Module &module);
