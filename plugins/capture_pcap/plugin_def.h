@@ -13,6 +13,6 @@ namespace capture_pcap {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace trout_wizard
+} // namespace capture_pcap
 
 #endif // #ifndef plugin_def_3d911349

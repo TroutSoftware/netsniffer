@@ -3,7 +3,6 @@
 
 // Snort includes
 
-
 // System includes
 #include <condition_variable>
 #include <mutex>
@@ -31,16 +30,16 @@ class PcapDumper {
     pcap_pkthdr pcaphdr;
 
   public:
-    PackageBufferElement(snort::Packet *p);    
-    PackageBufferElement(PackageBufferElement&& ) = delete;
-    PackageBufferElement(PackageBufferElement& ) = delete;
+    PackageBufferElement(snort::Packet *p);
+    PackageBufferElement(PackageBufferElement &&) = delete;
+    PackageBufferElement(PackageBufferElement &) = delete;
 
     unsigned char *get_data();
     size_t get_data_size();
     pcap_pkthdr *get_pkthdr();
   };
 
-  std::mutex mutex;  // Protects queue
+  std::mutex mutex; // Protects queue
   std::queue<PackageBufferElement> queue;
 
   // Worker thread controls
@@ -48,19 +47,21 @@ class PcapDumper {
   std::thread worker_thread;
   std::condition_variable cv; // Used to enable worker to sleep when there
                               // aren't anything for it to do
-  volatile bool terminate = false; // Set to true if worker loop should be terminated
-  void worker_loop();         // Thread doing all the fun
-  int dlt;                    // dlt to use
+  volatile bool terminate =
+      false;          // Set to true if worker loop should be terminated
+  void worker_loop(); // Thread doing all the fun
+  int dlt;            // dlt to use
 
   std::string gen_dump_file_name(); // Creates the dump file name
-  
+
 public:
-  PcapDumper(std::string base_name, Module &module);  // Creates a dumper with base_name as postfixed
-  PcapDumper(std::string base_name, std::shared_ptr<Settings> settings, PegCounts &pegs);
+  PcapDumper(std::string base_name,
+             Module &module); // Creates a dumper with base_name as postfixed
+  PcapDumper(std::string base_name, std::shared_ptr<Settings> settings,
+             PegCounts &pegs);
   ~PcapDumper();
 
   void queue_package(snort::Packet *p); // Write p to the file
-  
 };
 
 } // namespace capture_pcap

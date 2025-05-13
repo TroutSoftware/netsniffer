@@ -11,11 +11,10 @@
 
 namespace capture_pcap {
 
-Settings::Settings(const char* module_name, PegCounts &pegs) : pegs(pegs), module_name(module_name) {
+Settings::Settings(const char *module_name, PegCounts &pegs)
+    : pegs(pegs), module_name(module_name) {}
 
-}
-
-bool Settings::begin(const char* s, int) {
+bool Settings::begin(const char *s, int) {
   // Check if this is a fresh load of settings
   if (module_name == s) {
     reset();
@@ -39,7 +38,7 @@ bool Settings::begin(const char* s, int) {
   return false;
 }
 
-bool Settings::end(const char* s, int i) {
+bool Settings::end(const char *s, int i) {
   if (module_name == s) {
     // TODO: Validate settings
     return true;
@@ -47,7 +46,8 @@ bool Settings::end(const char* s, int i) {
 
   if (module_name + ".map" == s) {
     if (!current_item) {
-      snort::ErrorMessage("ERROR: Internal parsing error on %s, end with no beginning\n", s);
+      snort::ErrorMessage(
+          "ERROR: Internal parsing error on %s, end with no beginning\n", s);
       return false;
     }
     if (0 == i && !current_item->filter && !current_item->dumper) {
@@ -83,7 +83,8 @@ bool Settings::set(const char *, snort::Value &val) {
     rotate_limit = val.get_int32();
   } else if (val.is("filter")) {
     assert(current_item);
-    current_item->filter = std::make_unique<Filter>(val.get_as_string(), shared_from_this(), pegs);
+    current_item->filter =
+        std::make_unique<Filter>(val.get_as_string(), shared_from_this(), pegs);
     return current_item->filter->is_valid();
   } else if (val.is("pcap_prefix")) {
     assert(current_item);
@@ -105,7 +106,7 @@ bool Settings::set(const char *, snort::Value &val) {
     assert(current_item);
     uint8_t addr[4];
     val.get_addr_ip4(addr);
-    current_item->ip = *reinterpret_cast<uint32_t*>(addr);
+    current_item->ip = *reinterpret_cast<uint32_t *>(addr);
   } else if (val.is("hint_port")) {
     assert(current_item);
     current_item->port = val.get_uint16();
@@ -123,8 +124,8 @@ void Settings::reset() {
   zero_item.reset();
   current_item.reset();
 
-  // The dumper map will not be cleared, as existing flows will continue to write to a given dumper,
-  // but we will do a cleanup of unused entries
+  // The dumper map will not be cleared, as existing flows will continue to
+  // write to a given dumper, but we will do a cleanup of unused entries
   for (auto itr = dumper_map.begin(); itr != dumper_map.end();) {
     if (itr->second.lock()) {
       itr++;
@@ -134,4 +135,4 @@ void Settings::reset() {
   }
 }
 
-} // namespace capture_pcap {
+} // namespace capture_pcap

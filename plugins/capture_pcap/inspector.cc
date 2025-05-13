@@ -10,7 +10,6 @@
 // Global includes
 #include <flow_data.h>
 
-
 // Local includes
 #include "inspector.h"
 #include "module.h"
@@ -28,30 +27,33 @@ struct CaptureFlow {
   std::optional<std::shared_ptr<PcapDumper>> dumper;
 };
 
-}
+} // namespace
 
 using FlowData = Common::FlowData<CaptureFlow>;
 
-
-void Inspector::eval(snort::Packet * p) {
+void Inspector::eval(snort::Packet *p) {
   assert(p);
 
   FlowData *flow_data = (p->flow) ? FlowData::get_from_flow(p->flow) : nullptr;
   std::shared_ptr<PcapDumper> pcap_dump;
 
   if (!flow_data || !flow_data->dumper) {
-    for (auto& item : settings->map) {
-      if (item->ip && (!p->has_ip() ||
-      !((p->ptrs.ip_api.get_src()->is_ip4() && *item->ip == p->ptrs.ip_api.get_src()->get_ip4_value())
-    ||  (p->ptrs.ip_api.get_dst()->is_ip4() && *item->ip == p->ptrs.ip_api.get_dst()->get_ip4_value()))
-      )) {
+    for (auto &item : settings->map) {
+      if (item->ip &&
+          (!p->has_ip() ||
+           !((p->ptrs.ip_api.get_src()->is_ip4() &&
+              *item->ip == p->ptrs.ip_api.get_src()->get_ip4_value()) ||
+             (p->ptrs.ip_api.get_dst()->is_ip4() &&
+              *item->ip == p->ptrs.ip_api.get_dst()->get_ip4_value())))) {
         continue;
       }
-      if (item->port && (!p->has_ip() || (*item->port != p->ptrs.sp && *item->port != p->ptrs.dp))) {
+      if (item->port && (!p->has_ip() || (*item->port != p->ptrs.sp &&
+                                          *item->port != p->ptrs.dp))) {
         continue;
       }
 
-      assert(item->filter);  // Something went horrible wrong if there is no filter
+      assert(
+          item->filter); // Something went horrible wrong if there is no filter
 
       bool log_pkg = item->filter->match(p);
 
@@ -74,13 +76,12 @@ void Inspector::eval(snort::Packet * p) {
   pegs.pkg_processed++;
 }
 
-Inspector::Inspector(Module &module) : settings(module.get_settings()), pegs(module.get_peg_counts()) {
+Inspector::Inspector(Module &module)
+    : settings(module.get_settings()), pegs(module.get_peg_counts()){
 
-};
+                                       };
 
-Inspector::~Inspector() {
-}
-
+Inspector::~Inspector() {}
 
 snort::Inspector *Inspector::ctor(snort::Module *module) {
   return new Inspector(*dynamic_cast<Module *>(module));

@@ -4,7 +4,6 @@
 
 // Snort includes
 
-
 // System includes
 #include <packet_io/sfdaq.h>
 #include <pcap/pcap.h>

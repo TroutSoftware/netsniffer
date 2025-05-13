@@ -4,7 +4,7 @@
 #include <protocols/packet.h>
 
 // System includes
-#include <cstring>    // For memcpy to queue raw packages
+#include <cstring> // For memcpy to queue raw packages
 #include <queue>
 
 // Local includes
@@ -17,22 +17,25 @@
 
 namespace capture_pcap {
 
-namespace {
-
-
-}
+namespace {}
 
 std::string PcapDumper::gen_dump_file_name() {
-    return base_name + std::format(
-        "{:%FT%TZ}", Common::TestableTime::now<std::chrono::system_clock>(settings->testmode)) +
-        ".pcap";
+  return base_name +
+         std::format("{:%FT%TZ}",
+                     Common::TestableTime::now<std::chrono::system_clock>(
+                         settings->testmode)) +
+         ".pcap";
 }
 
-PcapDumper::PcapDumper(std::string base_name, std::shared_ptr<Settings> settings, PegCounts &pegs) : settings(settings), pegs(pegs), base_name(base_name) {
+PcapDumper::PcapDumper(std::string base_name,
+                       std::shared_ptr<Settings> settings, PegCounts &pegs)
+    : settings(settings), pegs(pegs), base_name(base_name) {
   start_worker();
 }
 
-PcapDumper::PcapDumper(std::string base_name, Module &module) : settings(module.get_settings()), pegs(module.get_peg_counts()), base_name(base_name) {
+PcapDumper::PcapDumper(std::string base_name, Module &module)
+    : settings(module.get_settings()), pegs(module.get_peg_counts()),
+      base_name(base_name) {
   start_worker();
 }
 
@@ -45,12 +48,13 @@ PcapDumper::~PcapDumper() {
 
 void PcapDumper::start_worker() {
   // Start worker thread
-  //dlt = get_dlt();    // Note: This needs to happen from the main thread
+  // dlt = get_dlt();    // Note: This needs to happen from the main thread
   dlt = DLT_EN10MB;
   worker_thread = std::thread{&PcapDumper::worker_loop, this};
 }
 
-PcapDumper::PackageBufferElement::PackageBufferElement(snort::Packet *p) : data(new uint8_t[p->pktlen]) {
+PcapDumper::PackageBufferElement::PackageBufferElement(snort::Packet *p)
+    : data(new uint8_t[p->pktlen]) {
   assert(data.get());
 
   pcaphdr.ts = p->pkth->ts;
@@ -68,9 +72,7 @@ size_t PcapDumper::PackageBufferElement::get_data_size() {
   return pcaphdr.caplen;
 }
 
-pcap_pkthdr *PcapDumper::PackageBufferElement::get_pkthdr() {
-  return &pcaphdr;
-}
+pcap_pkthdr *PcapDumper::PackageBufferElement::get_pkthdr() { return &pcaphdr; }
 
 void PcapDumper::queue_package(snort::Packet *p) {
   std::scoped_lock lock(mutex);
@@ -79,23 +81,27 @@ void PcapDumper::queue_package(snort::Packet *p) {
 }
 
 void PcapDumper::worker_loop() {
-  pcap_dumper_t *dumper = nullptr;    // Handle to the dump file
+  pcap_dumper_t *dumper = nullptr; // Handle to the dump file
   pcap_t *dead = pcap_open_dead(dlt, settings->snaplen);
   size_t data_written = 0;
 
-  assert(dead); // This is not expected to fail (i.e. something is wrong in the code if it happens)
+  assert(dead); // This is not expected to fail (i.e. something is wrong in the
+                // code if it happens)
 
   std::unique_lock lock(mutex);
-  while(!terminate) {
-    while(!queue.empty() && !terminate) {
+  while (!terminate) {
+    while (!queue.empty() && !terminate) {
       PackageBufferElement &front = queue.front();
-      lock.unlock();  // We don't want to block while we deal with the filesystem and we are the only thread removing elements, so our front is good.
+      lock.unlock(); // We don't want to block while we deal with the filesystem
+                     // and we are the only thread removing elements, so our
+                     // front is good.
 
       if (!dumper) {
         std::string file_name = gen_dump_file_name();
         dumper = pcap_dump_open(dead, file_name.c_str());
         if (!dumper) {
-          snort::ErrorMessage("ERROR: pcap reports \"%s\" when trying to open \"%s\" for writing",
+          snort::ErrorMessage("ERROR: pcap reports \"%s\" when trying to open "
+                              "\"%s\" for writing",
                               pcap_geterr(dead), file_name.c_str());
           // In case of failure we just skip a package and continue
           lock.lock();
@@ -106,7 +112,7 @@ void PcapDumper::worker_loop() {
       }
 
       // NOTE: pcap_dump doesn't have any return value, we assume all is good
-      pcap_dump((unsigned char*)dumper, front.get_pkthdr(), front.get_data());
+      pcap_dump((unsigned char *)dumper, front.get_pkthdr(), front.get_data());
       data_written += front.get_data_size();
       pegs.pkg_written++;
 
@@ -115,10 +121,10 @@ void PcapDumper::worker_loop() {
         dumper = nullptr;
       }
 
-      lock.lock();  // Retake the lock as we are going to manipulate queue
+      lock.lock(); // Retake the lock as we are going to manipulate queue
       queue.pop();
     }
-    cv.wait(lock, [this]{return (terminate || !queue.empty());});
+    cv.wait(lock, [this] { return (terminate || !queue.empty()); });
   };
 
   if (dumper) {
@@ -132,4 +138,4 @@ void PcapDumper::worker_loop() {
   }
 }
 
-} //namespace capture_pcap
+} // namespace capture_pcap

@@ -2,7 +2,6 @@
 #ifndef inspector_1c989490
 #define inspector_1c989490
 
-
 // Snort includes
 #include "framework/inspector.h"
 
@@ -10,11 +9,8 @@
 
 // Local includes
 
-
-
 namespace dhcp_monitor {
-  extern const snort::InspectApi dhcpmonitor_api;
+extern const snort::InspectApi dhcpmonitor_api;
 }
 
-
-#endif 
+#endif

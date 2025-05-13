@@ -21,24 +21,26 @@ namespace capture_pcap {
 class Filter {
   std::shared_ptr<Settings> settings;
   PegCounts &pegs;
-  
-  const std::string filter_string;      // Clear text filter
-  bool compiled_valid = false;   // Set to true if the compiled bpf program is valid
-  struct bpf_program compiled;   // Compiled filter
-  
+
+  const std::string filter_string; // Clear text filter
+  bool compiled_valid =
+      false; // Set to true if the compiled bpf program is valid
+  struct bpf_program compiled; // Compiled filter
+
   void compile();
-  
+
 public:
   Filter(std::string &filter_string, Module &module);
-  Filter(std::string &&filter_string, std::shared_ptr<Settings> settings, PegCounts &pegs);  
+  Filter(std::string &&filter_string, std::shared_ptr<Settings> settings,
+         PegCounts &pegs);
 
   ~Filter();
-  
+
   bool is_valid();
 
-  bool match(snort::Packet *p); // Runs filter on p, invalid filter will return false
+  bool
+  match(snort::Packet *p); // Runs filter on p, invalid filter will return false
 };
-
 
 } // namespace capture_pcap
 

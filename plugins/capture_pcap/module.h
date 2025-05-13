@@ -7,13 +7,12 @@
 
 // System includes
 #include <memory>
-//#include <optional>
+// #include <optional>
 
 // Global includes
 #include <log_framework.h>
 
 // Local includes
-
 
 namespace capture_pcap {
 
@@ -30,14 +29,16 @@ struct PegCounts {
 };
 
 class Module : public snort::Module {
-  std::shared_ptr<Settings> settings;  // Settings is a shared ptr as users of the settings migh live longer than the module
+  std::shared_ptr<Settings>
+      settings; // Settings is a shared ptr as users of the settings migh live
+                // longer than the module
 
   Module();
   ~Module();
-  
-  bool begin(const char*, int, snort::SnortConfig*) override;
-  bool end(const char*, int, snort::SnortConfig*) override;
-  
+
+  bool begin(const char *, int, snort::SnortConfig *) override;
+  bool end(const char *, int, snort::SnortConfig *) override;
+
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override;
 
   Usage get_usage() const override;
@@ -45,7 +46,6 @@ class Module : public snort::Module {
   const PegInfo *get_pegs() const override;
 
   PegCount *get_counts() const override;
-
 
 public:
   std::shared_ptr<Settings> get_settings();
