@@ -1,11 +1,9 @@
 #!/bin/sh
 
-redo-ifchange envrc debug
+redo-ifchange envrc debug || exit 1
 
-if [ $? -eq 0 ]; then
-  . ./envrc
-  
-  gdb --args $INSTALL_DIR/bin/snort -v --plugin-path $BUILD_DIR/debug/tm.so $*
-else
-  echo "Build issues found, check log for errors"
-fi
+. ./envrc
+
+echo gdb --args $INSTALL_DIR/bin/snort -v --plugin-path $BUILD_DIR/debug/tm.so $*
+
+gdb --args $INSTALL_DIR/bin/snort -v --plugin-path $BUILD_DIR/debug/tm.so $*

@@ -4,6 +4,7 @@ all.did
 .do_built
 .do_built.dir/
 envrc
+snort-modules.tar.gz
 
 # packaging info
 *.deb
