@@ -26,9 +26,6 @@ private:
   std::shared_ptr<Settings> settings;
   PegCounts &pegs;
 
-  std::unique_ptr<Filter> filter;     // For testing purposes, DO NOT COMMIT!!!
-  std::shared_ptr<PcapDumper> dumper; // For testing purposes, DO NOT COMMIT!!!
-
 public:
   Inspector(Module &module);
   ~Inspector();
