@@ -1,6 +1,7 @@
 // Snort includes
 
 // System includes
+#include <arpa/inet.h>
 
 // Global includes
 
@@ -104,9 +105,13 @@ bool Settings::set(const char *, snort::Value &val) {
     current_item->dumper = dumper;
   } else if (val.is("hint_ip")) {
     assert(current_item);
-    uint8_t addr[4];
-    val.get_addr_ip4(addr);
-    current_item->ip = *reinterpret_cast<uint32_t *>(addr);
+
+    in_addr addr;
+    if (!inet_pton(AF_INET, val.get_string(), &addr)) {
+      return false;
+    }
+
+    current_item->ip = *reinterpret_cast<uint32_t *>(&addr);
   } else if (val.is("hint_port")) {
     assert(current_item);
     current_item->port = val.get_uint16();

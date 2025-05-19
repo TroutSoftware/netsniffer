@@ -24,10 +24,10 @@ static const snort::Parameter map_item[] = {
     {"filter", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Filter strinng, for format see "
      "https://www.tcpdump.org/manpages/pcap-filter.7.html"},
-    {"hint_ip", snort::Parameter::PT_IP4, nullptr, nullptr,
+    {"hint_ip", snort::Parameter::PT_STRING, nullptr, nullptr,
      "IPv4 address in the format aaa.bbb.ccc.ddd that might be matched before "
      "the filter"},
-    {"hint_port", snort::Parameter::PT_INT, "0:65535", nullptr,
+    {"hint_port", snort::Parameter::PT_PORT, nullptr, nullptr,
      "Port number that might be matched before the filter"},
     {"pcap_prefix", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Prefix for pcap file that will be written, it will be extended by "
