@@ -53,12 +53,21 @@ static const snort::Parameter module_params[] = {
 const PegInfo s_pegs[] = {
     {CountType::SUM, "packets processed", "Number of packages processed"},
     {CountType::SUM, "packets logged", "Number of packages logged"},
-    {CountType::SUM, "compiled_filters",
-     "Number of bpf filters succesfully compiled"},
+    {CountType::SUM, "compiled filters",
+     "Number of bpf filters succesfully compiled (currently not reliable)"},
     {CountType::SUM, "packets evaluated",
      "Number of packages evaluated (by filter)"},
     {CountType::SUM, "packets matched", "Number of packages matched by filter"},
     {CountType::SUM, "packets written", "Number of packages written to pcap"},
+    {CountType::SUM, "flow verdicts", "Number of flows that got a verdict"},
+    {CountType::SUM, "no-flow verdicts",
+     "Number of stand alone packets that got a verdict"},
+    {CountType::SUM, "ip hint mismatch",
+     "Number of times an ip hint rejected a package"},
+    {CountType::SUM, "ip hint match", "Number of times an ip hint matched"},
+    {CountType::SUM, "port hint mismatch",
+     "Number of times a port hint rejected a package"},
+    {CountType::SUM, "port hint match", "Number of times a port hint matched"},
     {CountType::END, nullptr, nullptr}};
 
 // TODO: Understand the pegs in a threaded context...

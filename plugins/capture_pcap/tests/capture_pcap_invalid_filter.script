@@ -1,0 +1,17 @@
+pcap -expect-fail testdata/test.pcap
+
+stderr 'ERROR:.*capture_pcap.map.filter is invalid'
+
+-- cfg.lua --
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+    { filter = "net 2.a.0.0",
+      pcap_prefix = "out",
+    }
+  }
+}

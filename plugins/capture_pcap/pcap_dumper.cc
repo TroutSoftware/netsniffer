@@ -101,7 +101,7 @@ void PcapDumper::worker_loop() {
         dumper = pcap_dump_open(dead, file_name.c_str());
         if (!dumper) {
           snort::ErrorMessage("ERROR: pcap reports \"%s\" when trying to open "
-                              "\"%s\" for writing",
+                              "\"%s\" for writing\n",
                               pcap_geterr(dead), file_name.c_str());
           // In case of failure we just skip a package and continue
           lock.lock();

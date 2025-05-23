@@ -1,0 +1,31 @@
+pcap testdata/test.pcap
+
+stdout 'packets processed: 300'
+stdout 'packets evaluated: 10'
+stdout 'packets matched: 1'
+stdout 'packets written: 2'
+stdout 'flow verdicts: 200'
+stdout 'ip hint mismatch: 190'
+stdout 'ip hint match: 10'
+
+-- cfg.lua --
+
+
+stream = {}
+stream_icmp = {}
+stream_tcp = {}
+stream_udp = {}
+stream_ip = {}
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+    { filter = "net 2.0.0.0",
+      hint_ip = "2.0.0.1",
+      pcap_prefix = "out",
+    }
+  }
+}

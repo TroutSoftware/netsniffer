@@ -30,7 +30,6 @@ class Filter {
   void compile();
 
 public:
-  Filter(std::string &filter_string, Module &module);
   Filter(std::string &&filter_string, std::shared_ptr<Settings> settings,
          PegCounts &pegs);
 

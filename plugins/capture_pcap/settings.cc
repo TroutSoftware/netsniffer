@@ -41,7 +41,11 @@ bool Settings::begin(const char *s, int) {
 
 bool Settings::end(const char *s, int i) {
   if (module_name == s) {
-    // TODO: Validate settings
+    if (map.empty()) {
+      snort::WarningMessage(
+          "WARNING: Missing or empty map given in %s configuration\n",
+          module_name.c_str());
+    }
     return true;
   }
 

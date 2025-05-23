@@ -1,0 +1,19 @@
+pcap -expect-fail testdata/test.pcap
+
+stderr 'ERROR.*capture_pcap.map.hint_ip is invalid'
+
+-- cfg.lua --
+
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+    { filter = "net 2.0.0.0",
+      hint_ip = "not an IPv4",
+      pcap_prefix = "out",
+    }
+  }
+}

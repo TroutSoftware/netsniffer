@@ -22,12 +22,6 @@ Filter::Filter(std::string &&filter_string, std::shared_ptr<Settings> settings,
   compile();
 }
 
-Filter::Filter(std::string &filter_string, Module &module)
-    : settings(module.get_settings()), pegs(module.get_peg_counts()),
-      filter_string(filter_string) {
-  compile();
-}
-
 Filter::~Filter() {
   // Clean up
   if (compiled_valid) {
@@ -60,8 +54,8 @@ bool Filter::match(snort::Packet *p) {
   uint32_t filter_pkt_len = p->pktlen;
   uint32_t filter_pkth_len = p->pkth->pktlen;
 
-  if (bpf_filter(compiled.bf_insns, filter_pkt, filter_pkt_len,
-                 filter_pkth_len)) {
+  if (is_valid() && bpf_filter(compiled.bf_insns, filter_pkt, filter_pkt_len,
+                               filter_pkth_len)) {
     pegs.pkg_matched++;
     return true;
   }

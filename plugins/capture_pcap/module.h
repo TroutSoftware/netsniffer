@@ -26,6 +26,12 @@ struct PegCounts {
   PegCount pkg_evaluated = 0;
   PegCount pkg_matched = 0;
   PegCount pkg_written = 0;
+  PegCount pkg_flow_verdict = 0;
+  PegCount pkg_no_flow_verdict = 0;
+  PegCount ip_hint_mismatch = 0;
+  PegCount ip_hint_match = 0;
+  PegCount port_hint_mismatch = 0;
+  PegCount port_hint_match = 0;
 };
 
 class Module : public snort::Module {

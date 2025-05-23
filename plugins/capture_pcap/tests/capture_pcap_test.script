@@ -1,0 +1,28 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/test.pcap
+
+stdout 'packets processed: 300'
+stdout 'packets evaluated: 200'
+stdout 'packets matched: 19'
+stdout 'packets written: 38'
+stdout 'flow verdicts: 200'
+
+-- cfg.lua --
+
+stream = {}
+stream_icmp = {}
+stream_tcp = {}
+stream_udp = {}
+stream_ip = {}
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+    { filter = "net 2.0.0.0",
+      pcap_prefix = "out",
+    }
+  }
+}

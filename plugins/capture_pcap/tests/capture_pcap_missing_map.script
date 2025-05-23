@@ -1,0 +1,15 @@
+pcap testdata/test.pcap
+
+stderr 'WARNING: Missing or empty map given in capture_pcap configuration'
+
+-- cfg.lua --
+
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+  }
+}

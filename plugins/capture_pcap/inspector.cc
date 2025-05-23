@@ -39,17 +39,25 @@ void Inspector::eval(snort::Packet *p) {
 
   if (!flow_data || !flow_data->dumper) {
     for (auto &item : settings->map) {
-      if (item->ip &&
-          (!p->has_ip() ||
-           !((p->ptrs.ip_api.get_src()->is_ip4() &&
-              *item->ip == p->ptrs.ip_api.get_src()->get_ip4_value()) ||
-             (p->ptrs.ip_api.get_dst()->is_ip4() &&
-              *item->ip == p->ptrs.ip_api.get_dst()->get_ip4_value())))) {
-        continue;
+      if (item->ip) {
+        if ((!p->has_ip() ||
+             !((p->ptrs.ip_api.get_src()->is_ip4() &&
+                *item->ip == p->ptrs.ip_api.get_src()->get_ip4_value()) ||
+               (p->ptrs.ip_api.get_dst()->is_ip4() &&
+                *item->ip == p->ptrs.ip_api.get_dst()->get_ip4_value())))) {
+          pegs.ip_hint_mismatch++;
+          continue;
+        }
+        pegs.ip_hint_match++;
       }
-      if (item->port && (!p->has_ip() || (*item->port != p->ptrs.sp &&
-                                          *item->port != p->ptrs.dp))) {
-        continue;
+
+      if (item->port) {
+        if ((!p->has_ip() ||
+             (*item->port != p->ptrs.sp && *item->port != p->ptrs.dp))) {
+          pegs.port_hint_mismatch++;
+          continue;
+        }
+        pegs.port_hint_match++;
       }
 
       assert(
@@ -59,12 +67,17 @@ void Inspector::eval(snort::Packet *p) {
 
       if (log_pkg) {
         pcap_dump = item->dumper;
-      }
-
-      if (flow_data) {
-        flow_data->dumper = pcap_dump;
+        break; // We found something, no need to continue loop
       }
     }
+
+    if (flow_data) {
+      pegs.pkg_flow_verdict++;
+      flow_data->dumper = pcap_dump;
+    } else {
+      pegs.pkg_no_flow_verdict++;
+    }
+
   } else {
     pcap_dump = flow_data->dumper.value(); //->get();
   }

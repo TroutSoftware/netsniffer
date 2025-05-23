@@ -1,0 +1,41 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/test.pcap
+
+stdout 'packets processed: 300'
+stdout 'packets evaluated: 228'
+stdout 'packets matched: 38'
+stdout 'packets written: 57'
+stdout 'flow verdicts: 200'
+stdout 'ip hint mismatch: 334'
+stdout 'ip hint match: 28'
+
+
+-- cfg.lua --
+
+stream = {}
+stream_icmp = {}
+stream_tcp = {}
+stream_udp = {}
+stream_ip = {}
+
+capture_pcap = {
+  snap_length = 4096,
+  optimize_filter = true,
+  rotate_limit = 1000000,
+  testmode = true;
+  map = {
+    { filter = "net 2.0.0.0",
+      pcap_prefix = "out",
+    },
+    { filter = "net 3.0.0.0",
+      pcap_prefix = "out",
+      hint_ip = "2.0.0.1"
+    },
+    { filter = "net 3.0.0.0",
+      pcap_prefix = "out",
+      hint_ip = "3.0.0.0"
+    },
+
+  }
+
+}
