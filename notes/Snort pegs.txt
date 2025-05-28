@@ -1,0 +1,16 @@
+Notes about snort pegs
+----------------------
+
+The words module and plugin are refering to the same thing in this text.
+
+The pegs used in snort modules to keep track of data are summed over the different threads snort knows about, but only these, so a thread_local declaration should be used with care if your module is spawning its own threads.
+
+On startup snort loads all modules wether or not they are in the active configuration.
+
+After startup snort configures the plugins that are mentioned in the current configuration file(s).
+
+After the initial configuration has completed, snort will reset all pegs in all modules.
+
+If a configuration is changed, (including adding or removing plugin configurations) and a "reload" signal is sent to snort, there will be no additional reset done on pegs.
+
+
