@@ -1,0 +1,69 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run MyApp",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceRoot}/d/sh3env/bin/snort",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${workspaceFolder}"
+        }
+      ],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceRoot}/d/sh3env/bin/snort",
+      "cwd": "${workspaceRoot}/d/sh3env",
+      "environment": [
+        {
+          "name": "LD_LIBRARY_PATH",
+          "value": "${workspaceRoot}/d/sh3env/lib"
+        },
+      ],
+      "MIMode": "gdb",
+      "miDebuggerPath": "/usr/bin/gdb",
+      "args": [
+        "-v",
+        "--warn-all",
+        "--plugin-path",
+        "${workspaceRoot}/d/sh3env/p/tm.so",
+        "-c",
+        "${workspaceRoot}/d/sh3env/cfg.lua",
+        "--pcap-list",
+        "${workspaceRoot}/d/sh3env/testdata/DNP3_0000.pcap"
+      ],
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "stopAtEntry": false,
+      "stopAtConnect": true,
+      "logging": {
+        "engineLogging": true,
+        "trace": true,
+        "traceResponse": true
+      }
+    }
+  ]
+}
