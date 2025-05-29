@@ -1,0 +1,29 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/DNP3_0000.pcap
+
+-- cfg.lua --
+serializer_csv =  { item_separator = " ",
+                    if_item_blank_then_output = "-",
+                  }
+
+-- logger file output set from command line
+logger_file = { serializer = 'serializer_csv',
+                file_name= 'temp.txt'
+              }
+
+stream = {}
+stream_icmp = {}
+stream_tcp = {}
+stream_udp = {}
+stream_ip = {}
+
+trout_wizard = { tag = 'NA',
+                 logger = 'logger_file',
+                 pack_data = false,
+                 split_size = 253,
+                 concatenate = true                 
+               }
+               
+binder = {
+  { use = {type = 'trout_wizard'} }
+}               

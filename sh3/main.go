@@ -45,10 +45,12 @@ func main() {
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "%s\n", usage) }
 
 	var (
-		only  string
-		wd    string
-		debug bool
-		gdb   bool
+		only   string
+		wd     string
+		debug  bool
+		gdb    bool
+		notest bool
+		tdir   string
 	)
 	flag.StringVar(&only, "run", "", "Only run script matching this regular expression")
 	flag.StringVar(&only, "r", "", "Only run script matching this regular expression")
@@ -57,6 +59,8 @@ func main() {
 	flag.StringVar(&wd, "C", "", "Change to dir")
 	flag.StringVar(&wd, "chdir", "", "Change to dir")
 	flag.BoolVar(&gdb, "gdb", false, "Attach debugger")
+	flag.BoolVar(&notest, "notest", false, "No test")
+	flag.StringVar(&tdir, "tdir", "", "tdir")
 	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
 	flag.Parse()
 
@@ -126,7 +130,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "---- TEST_%s ", base)
 
 		// create temporary environment, extract txtar files
-		test_dir, err := os.MkdirTemp("", "sh3env_")
+		test_dir, err := os.MkdirTemp(tdir, "sh3env_")
 		if err != nil {
 			errf("cannot create temporary directory: %s", err)
 		}
@@ -166,6 +170,10 @@ func main() {
 			if err := os.Symlink(filepath.Dir(tscrpt)+"/testdata", filepath.Join(test_dir, "testdata")); err != nil {
 				errf("cannot symlink %s: %s", mod, err)
 			}
+		}
+
+		if notest {
+			continue
 		}
 
 		// execute script, check output
