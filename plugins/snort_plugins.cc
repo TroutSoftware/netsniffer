@@ -11,6 +11,7 @@
 #include "alert_lioli/alert_lioli.h"
 #include "alert_lioli/ips_lioli_bind.h"
 #include "alert_lioli/ips_lioli_tag.h"
+#include "arp_monitor/plugin_def.h"
 #include "capture_pcap/plugin_def.h"
 #include "dhcp_monitor/inspector.h"
 #include "dhcp_option/inspector.h"
@@ -32,6 +33,7 @@
 // clang-format off
 SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &alert_lioli::log_api.base,
+  &arp_monitor::inspect_api.base,
   &capture_pcap::inspect_api.base,
   &dhcp_monitor::dhcpmonitor_api.base,
   &dhcp_option::inspector.base,
@@ -51,7 +53,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &smnp::inspect_api.base,
   &trout_netflow::inspect_api.base,
   &trout_wizard::inspect_api.base,
-  
+
   nullptr
 };
 // clang-format on
