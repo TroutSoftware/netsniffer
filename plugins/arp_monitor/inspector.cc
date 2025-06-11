@@ -6,12 +6,14 @@
 #include <protocols/packet.h>
 
 // System includes
+#include <condition_variable>
+#include <thread>
 
 // Global includes
-#include <algorithm>
 
 // Local includes
 #include "inspector.h"
+#include "module.h"
 #include "pegs.h"
 
 // Debug includes
@@ -71,27 +73,162 @@ void dump_to_stdout(uint8_t *data, uint16_t size) {
 namespace {
 const uint8_t null_hw_adr[6] = {0, 0, 0, 0, 0, 0};
 const uint8_t broadcast_hw_adr[6]{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 } // namespace
 
+using TP = std::chrono::time_point<std::chrono::steady_clock>;
+
+class Inspector::Worker {
+  std::shared_ptr<Settings> settings;
+
+  struct ReqEntry {
+    TP request_time;
+    snort::arp::EtherARP request;
+  };
+
+  struct ReplyEntry {
+    TP reply_time;
+    snort::arp::EtherARP reply;
+  };
+
+  std::mutex worker_mutex; // Mutex for worker
+  std::thread worker_thread;
+  bool worker_running = false;
+  bool worker_terminating = false;
+  void worker_loop();
+  std::condition_variable worker_cv;
+  std::list<ReqEntry> req_list;
+  std::list<ReplyEntry> reply_list;
+
+public:
+  Worker(std::shared_ptr<Settings> settings);
+  ~Worker();
+
+  void start();
+  void stop();
+
+  void got_request(const snort::arp::EtherARP &ah);
+  void got_reply(const snort::arp::EtherARP &ah);
+};
+
+Inspector::Worker::Worker(std::shared_ptr<Settings> settings)
+    : settings(settings) {
+  start();
+}
+
+Inspector::Worker::~Worker() { stop(); }
+
+void Inspector::Worker::start() {
+  std::scoped_lock lock(worker_mutex);
+  assert(!worker_terminating); // We currently don't handle restarts
+  if (!worker_running) {
+    worker_thread = std::thread{&Inspector::Worker::worker_loop, this};
+    worker_running = true;
+  }
+}
+
+void Inspector::Worker::stop() {
+  {
+    std::scoped_lock lock(worker_mutex);
+    if (worker_running) {
+      worker_terminating = true;
+      worker_cv.notify_all();
+    }
+  }
+  worker_thread.join();
+}
+
+void Inspector::Worker::got_request(const snort::arp::EtherARP &ah) {
+  TP now = std::chrono::steady_clock::now();
+  std::scoped_lock lock(worker_mutex);
+  if (req_list.size() < settings->get_max_req_queue()) {
+    req_list.emplace_front(now, ah);
+  } else {
+    Pegs::s_peg_counts.arp_request_overflow++;
+  }
+  worker_cv.notify_all();
+}
+
+void Inspector::Worker::got_reply(const snort::arp::EtherARP &ah) {
+  TP now = std::chrono::steady_clock::now();
+  std::scoped_lock lock(worker_mutex);
+  reply_list.emplace_front(now, ah);
+  worker_cv.notify_all();
+}
+
+void Inspector::Worker::worker_loop() {
+  std::unique_lock lock(worker_mutex);
+
+  while (!worker_terminating) {
+
+    worker_cv.wait(lock);
+  }
+}
+
+/*
+struct Inspector::ReqEntry {
+  TP request_time;
+  snort::arp::EtherARP request;
+};
+
+bool Inspector::remove_entries(const snort::arp::EtherARP *ah) {
+  // TODO: Move to worker thread
+  std::scoped_lock lock(req_list_mutex);
+  for(auto e: req_list) {
+
+
+  }
+
+  return false;
+}
+*/
 void Inspector::eval(snort::Packet *p) {
   // std::cout << "MKRTEST: ARP Package:" << std::endl;
+
+  // If we don't get arp, then something is wrong
+  assert(p && p->proto_bits & PROTO_BIT__ARP);
 
   Pegs::s_peg_counts.arp_packets++;
 
   const snort::arp::EtherARP *ah = snort::layer::get_arp_layer(p);
+
+  if (!ah) {
+    // TODO: Report no arp layer - not sure if this should be an assert (i.e. if
+    // it is expected to happen or not)
+    return;
+  }
 
   switch (ntohs(ah->ea_hdr.ar_op)) {
   case ARPOP_REQUEST:
     // A request to one self, is the same as an anouncement
     // TODO: Check it is a broadcast on the ethernet level
     if (memcmp(ah->arp_tpa, ah->arp_spa, 4)) {
+      // New requests are queued
       Pegs::s_peg_counts.arp_requests++;
+
+      worker->got_request(*ah);
+      /*
+            if (settings->get_max_req_queue() >= req_list.size() ) {
+              Pegs::s_peg_counts.arp_request_overflow++;
+              return;
+            }
+
+            std::scoped_lock lock(req_list_mutex);
+            TP now = std::chrono::steady_clock::now();
+            req_list.emplace_front(now, *ah);
+      */
     } else {
       Pegs::s_peg_counts.arp_announcements++;
+
+      if (settings->get_announcement_is_reply()) {
+        worker->got_reply(*ah);
+      }
     }
     break;
   case ARPOP_REPLY:
     Pegs::s_peg_counts.arp_replies++;
+    worker->got_reply(*ah);
+    // remove_entries(ah);
     break;
   case ARPOP_RREQUEST:
     Pegs::s_peg_counts.arp_rrequests++;
@@ -111,38 +248,16 @@ void Inspector::eval(snort::Packet *p) {
     std::cout << "MKRTEST: NO ARP LAYER" << std::endl;
     return;
   }
-  /*
-    std::cout << "Command (" << ntohs(ah->ea_hdr.ar_op) << ") :";
-
-    switch (ntohs(ah->ea_hdr.ar_op)) {
-      case ARPOP_REQUEST:
-        std::cout << "Requst";
-        break;
-      case ARPOP_REPLY:
-        std::cout << "Reply";
-        break;
-      case ARPOP_RREQUEST:
-        std::cout << "RRequst";
-        break;
-      case ARPOP_RREPLY:
-        std::cout << "RReply";
-        break;
-      default:
-        std::cout << "Invalid";
-    }
-  */
-  // std::cout << std::endl;
-
-  //  std::cout << "MKRTEST: pkt size = " << p->pktlen << std::endl;
-  //  std::cout << "MKRTEST: payload size = " << p->dsize << std::endl;
-  //  std::cout << "MKRTEST: apr size = " << sizeof(snort::arp::EtherARP) <<
-  //  std::endl;
 }
 
-Inspector::Inspector(Module & /*module*/)
-    //: settings(module.get_settings()), pegs(module.get_peg_counts()){
-    {};
+Inspector::Inspector(Module *module)
+    : worker(std::make_unique<Worker>(module->get_settings())),
+      settings(module->get_settings()) {}
 
 Inspector::~Inspector() {}
+
+snort::Inspector *Inspector::ctor(snort::Module *module) {
+  return new Inspector(dynamic_cast<Module *>(module));
+}
 
 } // namespace arp_monitor

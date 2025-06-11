@@ -21,6 +21,8 @@ PegInfo Pegs::s_pegs[] = {
     {CountType::SUM, "arp rreplies", "Number of arp reverse replies"},
     {CountType::SUM, "arp announcements", "Number of arp announcements"},
     {CountType::SUM, "arp unknown command", "Number of unknown arp commands"},
+    {CountType::SUM, "arp request overflow",
+     "Number of request overflows, try to increase max_req_queue if seen"},
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;

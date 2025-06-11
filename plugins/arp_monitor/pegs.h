@@ -29,6 +29,7 @@ struct Pegs {
     PegCount arp_rreplies = 0;
     PegCount arp_announcements = 0;
     PegCount arp_unknown_command = 0;
+    PegCount arp_request_overflow = 0;
   };
 
   static PegInfo s_pegs[];

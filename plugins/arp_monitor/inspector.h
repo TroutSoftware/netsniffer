@@ -3,35 +3,44 @@
 
 // Snort includes
 #include <framework/inspector.h>
-#include <framework/module.h>
 
 // System includes
+#include <memory>
 
 // Global includes
 
 // Local includes
-#include "module.h"
 
 // Debug includes
 
 namespace arp_monitor {
+class Module;
+class Settings;
 
 class Inspector : public snort::Inspector {
 private:
-  //  std::shared_ptr<Settings> settings;
-  //  PegCounts &pegs;
+  class Worker;
 
-public:
-  Inspector(Module &module);
-  ~Inspector();
+  std::unique_ptr<Worker> worker;
+
+  /*
+    std::mutex req_list_mutex;  // Protects the request list
+    struct ReqEntry;
+    std::list<ReqEntry> req_list;
+
+
+    // Removes entries from req_list, return true if something was removed
+    bool remove_entries(const snort::arp::EtherARP *ah);
+  */
+  std::shared_ptr<Settings> settings;
 
   void eval(snort::Packet *) override;
 
 public:
-  static snort::Inspector *ctor(snort::Module *module) {
-    return new Inspector(*dynamic_cast<Module *>(module));
-  }
+  Inspector(Module *module);
+  ~Inspector();
 
+  static snort::Inspector *ctor(snort::Module *module);
   static void dtor(snort::Inspector *p) { delete p; }
 };
 

@@ -24,10 +24,14 @@ struct Settings {
   std::string logger_name;
   std::shared_ptr<LioLi::Logger> logger;
   uint32_t timeout_ms;
+  uint32_t max_req_queue;
+  bool announcement_is_reply;
 
 public:
-  uint32_t get_timeout_ms();
   LioLi::Logger &get_logger();
+  uint32_t get_timeout_ms();
+  uint32_t get_max_req_queue();
+  bool get_announcement_is_reply();
 };
 
 } // namespace arp_monitor
