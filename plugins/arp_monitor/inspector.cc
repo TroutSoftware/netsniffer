@@ -21,55 +21,6 @@
 
 namespace arp_monitor {
 
-#if 0
-namespace snort
-{
-namespace arp
-{
-
-struct ARPHdr
-{
-    uint16_t ar_hrd;       /* format of hardware address   */
-    uint16_t ar_pro;       /* format of protocol address   */
-    uint8_t ar_hln;        /* length of hardware address   */
-    uint8_t ar_pln;        /* length of protocol address   */
-    uint16_t ar_op;        /* ARP opcode (command)         */
-};
-
-struct EtherARP
-{
-    ARPHdr ea_hdr;      /* fixed-size header */
-    uint8_t arp_sha[6];    /* sender hardware address */
-    union
-    {
-        uint8_t arp_spa[4];    /* sender protocol address */
-        uint32_t arp_spa32;
-    };
-    uint8_t arp_tha[6];    /* target hardware address */
-    uint8_t arp_tpa[4];    /* target protocol address */
-} __attribute__((__packed__));
-
-constexpr uint16_t ETHERARP_HDR_LEN = 28; /*  sizeof EtherARP != 28 */
-
-} // namespace arp
-} // namespace snort
-
-#endif
-
-/*
-void dump_to_stdout(uint8_t *data, uint16_t size) {
-    int r = 0;
-    for (int i = 0 ; i < size; i++) {
-      std::cout << std::format("{:02x} ", data[i]);
-      if( ++r >= 16 ) {
-        std::cout << "\n";
-        r = 0;
-      }
-    }
-    std::cout << std::endl;
-}
-*/
-
 namespace {
 const uint8_t null_hw_adr[6] = {0, 0, 0, 0, 0, 0};
 const uint8_t broadcast_hw_adr[6]{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -83,13 +34,15 @@ class Inspector::Worker {
 
   struct ReqEntry {
     TP request_time;
-    snort::arp::EtherARP request;
+    snort::arp::EtherARP arp;
   };
 
   struct ReplyEntry {
     TP reply_time;
-    snort::arp::EtherARP reply;
+    snort::arp::EtherARP arp;
   };
+
+  bool match(const ReqEntry &req, const ReplyEntry &reply) const;
 
   std::mutex worker_mutex; // Mutex for worker
   std::thread worker_thread;
@@ -99,6 +52,8 @@ class Inspector::Worker {
   std::condition_variable worker_cv;
   std::list<ReqEntry> req_list;
   std::list<ReplyEntry> reply_list;
+
+  void log(ReqEntry &);
 
 public:
   Worker(std::shared_ptr<Settings> settings);
@@ -138,30 +93,105 @@ void Inspector::Worker::stop() {
   worker_thread.join();
 }
 
+bool Inspector::Worker::match(const ReqEntry &req,
+                              const ReplyEntry &reply) const {
+  const uint32_t qt = *reinterpret_cast<const uint32_t *>(req.arp.arp_tpa);
+  const uint32_t qs = req.arp.arp_spa32;
+  const uint32_t yt = *reinterpret_cast<const uint32_t *>(reply.arp.arp_tpa);
+  const uint32_t ys = reply.arp.arp_spa32;
+
+  return qt == ys &&
+         (qs == yt || (yt == ys && reply.arp.ea_hdr.ar_op == ARPOP_REQUEST));
+}
+
 void Inspector::Worker::got_request(const snort::arp::EtherARP &ah) {
   TP now = std::chrono::steady_clock::now();
   std::scoped_lock lock(worker_mutex);
   if (req_list.size() < settings->get_max_req_queue()) {
     req_list.emplace_front(now, ah);
+    // If this was the first element, we need to wake the worker, so it can set
+    // a timeout
+    if (req_list.size() == 1) {
+      worker_cv.notify_all();
+    }
   } else {
     Pegs::s_peg_counts.arp_request_overflow++;
   }
-  worker_cv.notify_all();
 }
 
 void Inspector::Worker::got_reply(const snort::arp::EtherARP &ah) {
   TP now = std::chrono::steady_clock::now();
   std::scoped_lock lock(worker_mutex);
-  reply_list.emplace_front(now, ah);
-  worker_cv.notify_all();
+
+  if (req_list.size()) {
+    // It is likely that a reply matches the last request we saw, in which case
+    // we don't need to involve the worker
+    if (match(req_list.front(), {now, ah})) {
+      Pegs::s_peg_counts.arp_matches++;
+      req_list.pop_front();
+      return;
+    }
+
+    reply_list.emplace_front(now, ah);
+    worker_cv.notify_all();
+  } else {
+    // There were no requests, so it is an orphan reply
+    Pegs::s_peg_counts.arp_orphan_reply++;
+  }
 }
+
+void Inspector::Worker::log(ReqEntry &) { Pegs::s_peg_counts.arp_unmatched++; }
 
 void Inspector::Worker::worker_loop() {
   std::unique_lock lock(worker_mutex);
 
   while (!worker_terminating) {
+    // We start by waiting to get more consistent testing results, as it will
+    // flush the lists
+    if (req_list.size()) {
+      worker_cv.wait_for(lock,
+                         std::chrono::milliseconds(settings->get_timeout_ms()),
+                         [this] { return worker_terminating; });
+    } else {
+      worker_cv.wait(lock,
+                     [this] { return worker_terminating || req_list.size(); });
+    }
 
-    worker_cv.wait(lock);
+    // Remove expired entries
+    TP exp = std::chrono::steady_clock::now() -
+             std::chrono::milliseconds(settings->get_timeout_ms());
+    while (req_list.size() &&
+           (req_list.back().request_time < exp || worker_terminating)) {
+      log(req_list.back());
+      req_list.pop_back();
+    }
+
+    // Match replies, we don't use the for(auto e:list) format as we are
+    // modifying the lists inline
+    for (auto reply = reply_list.begin(); reply != reply_list.end(); reply++) {
+      for (auto request = req_list.rbegin(); request != req_list.rend();) {
+        if (match(*request, *reply)) {
+          Pegs::s_peg_counts.arp_matches++;
+          Pegs::s_peg_counts.arp_late_match++;
+
+          auto request_to_delete =
+              (++request).base(); // request is a reverse iterator
+          auto reply_to_delete = reply++;
+
+          req_list.erase(request_to_delete);
+          reply_list.erase(reply_to_delete);
+
+          if (reply == reply_list.end())
+            goto bail_double_for_loop;
+        } else {
+          request++;
+        }
+      }
+    }
+  bail_double_for_loop:
+
+    Pegs::s_peg_counts.arp_orphan_reply += reply_list.size();
+    reply_list.clear();
   }
 }
 

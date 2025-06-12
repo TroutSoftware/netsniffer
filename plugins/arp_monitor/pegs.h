@@ -30,6 +30,10 @@ struct Pegs {
     PegCount arp_announcements = 0;
     PegCount arp_unknown_command = 0;
     PegCount arp_request_overflow = 0;
+    PegCount arp_orphan_reply = 0;
+    PegCount arp_matches = 0;
+    PegCount arp_late_match = 0;
+    PegCount arp_unmatched = 0;
   };
 
   static PegInfo s_pegs[];

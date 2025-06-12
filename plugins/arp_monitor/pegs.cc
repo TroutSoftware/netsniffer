@@ -23,6 +23,11 @@ PegInfo Pegs::s_pegs[] = {
     {CountType::SUM, "arp unknown command", "Number of unknown arp commands"},
     {CountType::SUM, "arp request overflow",
      "Number of request overflows, try to increase max_req_queue if seen"},
+    {CountType::SUM, "arp orphan replies", "Replies without requests"},
+    {CountType::SUM, "arp matches", "Replies matching requests"},
+    {CountType::SUM, "arp late match",
+     "Reply matched something that wasn't the last request"},
+    {CountType::SUM, "arp unmatched", "Unmatched requests"},
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;
