@@ -32,7 +32,8 @@ const snort::Parameter module_params[] = {
     {"missing_reply_alert_tag", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set tag for missing reply alert"},
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
-     "Testmode will assume alerts have timed out on exit"},
+     "Testmode will assume alerts have timed out on exit (note, this will not "
+     "affect peg counts"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace

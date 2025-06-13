@@ -143,30 +143,30 @@ void Inspector::Worker::got_reply(const snort::arp::EtherARP &ah) {
 void Inspector::Worker::log(ReqEntry &req) {
   Pegs::s_peg_counts.arp_unmatched++;
 
-  LioLi::Tree alert("alert");
+  LioLi::Tree root("$");
 
-  alert << "Arp missing reply";
+  root << LioLi::TreeGenerators::timestamp("timestamp",
+                                           settings->get_testmode());
+  root << (LioLi::Tree("alert") << "Arp missing reply");
 
   std::string tag = settings->get_missing_reply_alert_tag();
   if (tag.length()) {
-    alert << LioLi::Tree("tag") << tag;
+    root << LioLi::Tree("tag") << tag;
   }
 
-  LioLi::Tree arp_req("unanswered_arp_req");
+  root << (LioLi::Tree("sid") << 1040);
+  root << (LioLi::Tree("gid") << 8000);
+  root << (LioLi::Tree("rev") << 0);
+
   const auto src_mac = std::to_array<const uint8_t>(req.arp.arp_sha);
   const auto src_ip = std::to_array<const uint8_t>(req.arp.arp_spa);
-  arp_req << (LioLi::Tree("principal")
-              << LioLi::TreeGenerators::format_MAC(src_mac)
-              << LioLi::TreeGenerators::format_IPv4(src_ip));
+  root << (LioLi::Tree("principal")
+           << LioLi::TreeGenerators::format_MAC(src_mac)
+           << LioLi::TreeGenerators::format_IPv4(src_ip));
 
   const auto dst_ip = std::to_array<const uint8_t>(req.arp.arp_tpa);
-  arp_req << (LioLi::Tree("looking_for")
-              << LioLi::TreeGenerators::format_IPv4(dst_ip));
-
-  alert << arp_req;
-
-  LioLi::Tree root("$");
-  root << alert;
+  root << (LioLi::Tree("looking_for")
+           << LioLi::TreeGenerators::format_IPv4(dst_ip));
 
   settings->get_logger() << std::move(root);
 }
