@@ -60,7 +60,7 @@ public:
   }
 
   static Tree format_IPv4(const std::array<uint8_t, 4> &ip) {
-    return Tree("ip") << std::format("{}.{}.{}.{}", ip.at(3),ip.at(2),ip.at(1),ip.at(0));
+    return Tree("ip") << std::format("{}.{}.{}.{}", ip.at(0),ip.at(1),ip.at(2),ip.at(3));
   }
 
   static Tree format_IP_MAC(const snort::Packet *p, const snort::Flow *flow,
