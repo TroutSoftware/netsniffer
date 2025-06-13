@@ -27,8 +27,12 @@ const snort::Parameter module_params[] = {
     {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
     {"announcement_is_reply", snort::Parameter::PT_BOOL, nullptr, "false",
-     "If set to true, announcements sent will be seen as a reply to all "
-     "matching requests"},
+     "If set to true, announcements sent will be seen as a reply to a"
+     "matching request"},
+    {"missing_reply_alert_tag", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Set tag for missing reply alert"},
+    {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Testmode will assume alerts have timed out on exit"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -44,13 +48,17 @@ bool Module::end(const char *, int, snort::SnortConfig *) { return true; }
 
 bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
   if (val.is("logger") && val.get_as_string().size() > 0) {
-    settings->logger_name = val.get_string();
+    settings->logger_name = val.get_as_string();
   } else if (val.is("alert_time_out_ms")) {
     settings->timeout_ms = val.get_uint32();
   } else if (val.is("max_req_queue")) {
     settings->max_req_queue = val.get_uint32();
   } else if (val.is("announcement_is_reply")) {
     settings->announcement_is_reply = val.get_bool();
+  } else if (val.is("missing_reply_alert_tag")) {
+    settings->missing_reply_alert_tag = val.get_as_string();
+  } else if (val.is("testmode")) {
+    settings->testmode = val.get_bool();
   } else {
     // fail if we didn't get something we knew about
     return false;

@@ -26,4 +26,10 @@ LioLi::Logger &Settings::get_logger() {
   return *logger;
 }
 
+std::string &Settings::get_missing_reply_alert_tag() {
+  return missing_reply_alert_tag;
+}
+
+bool Settings::get_testmode() { return testmode; }
+
 } // namespace arp_monitor

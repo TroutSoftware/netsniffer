@@ -10,6 +10,7 @@
 #include <thread>
 
 // Global includes
+#include <lioli_tree_generator.h>
 
 // Local includes
 #include "inspector.h"
@@ -17,7 +18,6 @@
 #include "pegs.h"
 
 // Debug includes
-#include <iostream>
 
 namespace arp_monitor {
 
@@ -140,21 +140,46 @@ void Inspector::Worker::got_reply(const snort::arp::EtherARP &ah) {
   }
 }
 
-void Inspector::Worker::log(ReqEntry &) { Pegs::s_peg_counts.arp_unmatched++; }
+void Inspector::Worker::log(ReqEntry &req) {
+  Pegs::s_peg_counts.arp_unmatched++;
+
+  LioLi::Tree alert("alert");
+
+  alert << "Arp missing reply";
+
+  std::string tag = settings->get_missing_reply_alert_tag();
+  if (tag.length()) {
+    alert << LioLi::Tree("tag") << tag;
+  }
+
+  LioLi::Tree arp_req("unanswered_arp_req");
+  const auto src_mac = std::to_array<const uint8_t>(req.arp.arp_sha);
+  const auto src_ip = std::to_array<const uint8_t>(req.arp.arp_spa);
+  arp_req << (LioLi::Tree("principal")
+              << LioLi::TreeGenerators::format_MAC(src_mac)
+              << LioLi::TreeGenerators::format_IPv4(src_ip));
+
+  const auto dst_ip = std::to_array<const uint8_t>(req.arp.arp_tpa);
+  arp_req << (LioLi::Tree("looking_for")
+              << LioLi::TreeGenerators::format_IPv4(dst_ip));
+
+  alert << arp_req;
+
+  LioLi::Tree root("$");
+  root << alert;
+
+  settings->get_logger() << std::move(root);
+}
 
 void Inspector::Worker::worker_loop() {
   std::unique_lock lock(worker_mutex);
+  bool just_one_more_turn = settings->get_testmode();
 
-  while (!worker_terminating) {
-    // We start by waiting to get more consistent testing results, as it will
-    // flush the lists
-    if (req_list.size()) {
-      worker_cv.wait_for(lock,
-                         std::chrono::milliseconds(settings->get_timeout_ms()),
-                         [this] { return worker_terminating; });
-    } else {
-      worker_cv.wait(lock,
-                     [this] { return worker_terminating || req_list.size(); });
+  while (!worker_terminating || just_one_more_turn) {
+    // This will ensure that in testmode, we have one extra round in the loop to
+    // report all answered requests
+    if (worker_terminating && just_one_more_turn) {
+      just_one_more_turn = false;
     }
 
     // Remove expired entries
@@ -192,29 +217,19 @@ void Inspector::Worker::worker_loop() {
 
     Pegs::s_peg_counts.arp_orphan_reply += reply_list.size();
     reply_list.clear();
+
+    if (req_list.size()) {
+      worker_cv.wait_for(lock,
+                         std::chrono::milliseconds(settings->get_timeout_ms()),
+                         [this] { return worker_terminating; });
+    } else {
+      worker_cv.wait(lock,
+                     [this] { return worker_terminating || req_list.size(); });
+    }
   }
 }
 
-/*
-struct Inspector::ReqEntry {
-  TP request_time;
-  snort::arp::EtherARP request;
-};
-
-bool Inspector::remove_entries(const snort::arp::EtherARP *ah) {
-  // TODO: Move to worker thread
-  std::scoped_lock lock(req_list_mutex);
-  for(auto e: req_list) {
-
-
-  }
-
-  return false;
-}
-*/
 void Inspector::eval(snort::Packet *p) {
-  // std::cout << "MKRTEST: ARP Package:" << std::endl;
-
   // If we don't get arp, then something is wrong
   assert(p && p->proto_bits & PROTO_BIT__ARP);
 
@@ -268,15 +283,6 @@ void Inspector::eval(snort::Packet *p) {
     break;
   default:
     Pegs::s_peg_counts.arp_unknown_command++;
-  }
-
-  //    PegCount arp_requests = 0;
-  //    PegCount arp_replies = 0;
-  //    PegCount arp_id_broadcasts = 0;
-
-  if (!ah) {
-    std::cout << "MKRTEST: NO ARP LAYER" << std::endl;
-    return;
   }
 }
 
