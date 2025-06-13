@@ -53,6 +53,16 @@ public:
     return time;
   }
 
+  static Tree format_MAC(const std::array<uint8_t, 6> &mac) {
+    std::stringstream ss;
+    append_MAC(ss, mac);
+    return Tree("mac") << ss.str();
+  }
+
+  static Tree format_IPv4(const std::array<uint8_t, 4> &ip) {
+    return Tree("ip") << std::format("{}.{}.{}.{}", ip.at(3),ip.at(2),ip.at(1),ip.at(0));
+  }
+
   static Tree format_IP_MAC(const snort::Packet *p, const snort::Flow *flow,
                             bool is_src) {
     Tree addr("addr");
@@ -85,9 +95,8 @@ public:
       if (eh) {
         const auto mac = std::to_array<const uint8_t>(is_src ? eh->ether_src
                                                              : eh->ether_dst);
-        append_MAC(ss, mac);
 
-        addr << (Tree("mac") << ss.str());
+        addr << format_MAC(mac);
 
       } else {
         // Nothing to add
