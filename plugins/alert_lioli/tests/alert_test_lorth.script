@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap testdata/google_http.pcap
-cmp output.lorth testdata/alert_test_lorth.expected.lorth 
+cmp output.lorth testdata/alert_test_lorth.expected.lorth
 
 -- cfg.lua --
 logger_file = { file_name = 'output.lorth',
@@ -41,4 +41,5 @@ alert ip any any -> any any (
 
   http_method;
   lioli_bind: $.method;
+  rev:2
 )

@@ -1,6 +1,6 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap testdata/google_http.pcap
-cmp output.txt testdata/lioli_tag_test_txt.expected.txt 
+cmp output.txt testdata/lioli_tag_test_txt.expected.txt
 
 -- cfg.lua --
 
@@ -43,5 +43,5 @@ alert ip any any -> any any (
   lioli_tag: $.tag.nested "test";
 
   lioli_tag: $.principal.append "Append test";
-  
+
 )

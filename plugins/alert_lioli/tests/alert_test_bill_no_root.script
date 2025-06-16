@@ -43,4 +43,5 @@ alert ip any any -> any any (
 
   http_method;
   lioli_bind:$.method;
+  sid:3000000;
 )

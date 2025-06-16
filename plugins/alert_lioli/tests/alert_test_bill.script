@@ -7,7 +7,7 @@ stdout 'alerts_generated: 2'
 stdout 'logs_generated: 2'
 stdout 'binds: 4'
 stdout 'tree_count: 4'
-stdout 'output_bytes: 1004'
+stdout 'output_bytes: 1102'
 
 -- cfg.lua --
 
@@ -49,4 +49,5 @@ alert ip any any -> any any (
 
   http_method;
   lioli_bind:$.method;
+  sid:3000;
 )

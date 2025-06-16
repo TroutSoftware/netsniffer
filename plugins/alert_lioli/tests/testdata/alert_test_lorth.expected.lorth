@@ -1,5 +1,8 @@
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
+ sid "0" .
+ gid "1" .
+ rev "2" .
  alert "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -21,6 +24,9 @@ $ {
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
+ sid "0" .
+ gid "1" .
+ rev "2" .
  log "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -42,6 +48,9 @@ $ {
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
+ sid "0" .
+ gid "1" .
+ rev "2" .
  alert "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -63,6 +72,9 @@ $ {
 };
 $ {
  timestamp "1970-01-01T00:00:00.000000000Z" .
+ sid "0" .
+ gid "1" .
+ rev "2" .
  log "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {

@@ -1,12 +1,12 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap testdata/google_http.pcap
-cmp output.txt testdata/alert_test_txt.expected.txt 
+cmp output.txt testdata/alert_test_txt.expected.txt
 
 -- cfg.lua --
 logger_file = { file_name = 'output.txt',
                 serializer = 'serializer_txt' }
 
-serializer_txt = { }                
+serializer_txt = { }
 
 alert_lioli = { logger = 'logger_file',
                 testmode = true }

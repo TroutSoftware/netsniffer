@@ -107,22 +107,29 @@ private:
     assert(module);
   }
 
-  void alert(snort::Packet *pkt, const char *msg, const Event &) override {
+  void alert(snort::Packet *pkt, const char *msg, const Event &e) override {
     s_peg_counts.alerts_generated++;
-    get_logger() << std::move(gen_tree("alert", pkt, msg));
+    get_logger() << std::move(gen_tree("alert", pkt, msg, &e));
   }
 
-  void log(snort::Packet *pkt, const char *msg, Event *) override {
+  void log(snort::Packet *pkt, const char *msg, Event *e) override {
     s_peg_counts.logs_generated++;
-    get_logger() << std::move(gen_tree("log", pkt, msg));
+    get_logger() << std::move(gen_tree("log", pkt, msg, e));
   }
 
-  LioLi::Tree gen_tree(const char *type, snort::Packet *pkt, const char *msg) {
+  LioLi::Tree gen_tree(const char *type, snort::Packet *pkt, const char *msg,
+                       const Event *e) {
     assert(type && pkt && msg);
 
     LioLi::Path root("$");
 
     root << LioLi::TreeGenerators::timestamp("timestamp", testmode);
+
+    if (e) {
+      root << (LioLi::Tree("sid") << e->get_sid());
+      root << (LioLi::Tree("gid") << e->get_gid());
+      root << (LioLi::Tree("rev") << e->get_rev());
+    }
 
     root << (LioLi::Tree(type) << msg);
 
