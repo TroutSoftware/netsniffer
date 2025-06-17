@@ -28,7 +28,7 @@ static const snort::Parameter module_params[] = {
 class Logger : public LioLi::Logger {
 
 public:
-  Logger() : LioLi::Logger(s_name) {}
+  Logger(const char *name) : LioLi::Logger(name) {}
 
   ~Logger() {}
 
@@ -37,7 +37,7 @@ public:
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Logger>();
+    LioLi::LogDB::register_type<Logger>(s_name);
   }
 
   bool set(const char *, snort::Value &, snort::SnortConfig *) override {

@@ -20,13 +20,13 @@ namespace LioLi {
 
 class LogBase {
 private:
-  const char *my_name = "unknown";
+  std::string my_name = "unknown";
 
 public:
   LogBase(const char *my_name) : my_name(my_name){};
   virtual ~LogBase() = default;
 
-  const char *get_name() { return my_name; }
+  const char *get_name() { return my_name.c_str(); }
 };
 
 class LogDB {
@@ -35,8 +35,8 @@ class LogDB {
   static bool register_obj(std::string, std::shared_ptr<LogBase>);
 
 public:
-  template <typename T> static void register_type() {
-    auto obj = std::make_shared<T>();
+  template <typename T> static void register_type(const char *name) {
+    auto obj = std::make_shared<T>(name);
 
     register_obj(obj->get_name(), obj);
   };

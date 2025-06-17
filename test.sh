@@ -1,4 +1,4 @@
-redo-ifchange deps sh3_tests.list release envrc
+redo-ifchange deps sh3_tests.list release envrc || exit -1
 . ./envrc
 
 go test ./...

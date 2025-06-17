@@ -20,6 +20,7 @@
 #include "log/logger_file.h"
 #include "log/logger_null.h"
 #include "log/logger_pipe.h"
+#include "log/logger_pipe_netflow.h"
 #include "log/logger_stdout.h"
 #include "log/serializer_bill.h"
 #include "log/serializer_csv.h"
@@ -44,6 +45,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &logger_file::inspect_api.base,
   &logger_null::inspect_api.base,
   &logger_pipe::inspect_api.base,
+  &logger_pipe_netflow::inspect_api.base,
   &logger_stdout::inspect_api.base,
   &serializer_bill::inspect_api.base,
   &serializer_csv::inspect_api.base,

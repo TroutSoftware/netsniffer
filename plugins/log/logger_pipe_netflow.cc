@@ -19,15 +19,20 @@
 // Local includes
 #include "lioli.h"
 #include "log_framework.h"
-#include "logger_pipe.h"
+#include "logger_pipe_netflow.h"
 
 // Debug includes
 
-namespace logger_pipe {
+//
+// THIS IS TEMPORARY CODE for testing/evaluation purposes, this MUST somehow
+// be merged with logger_pipe, or a common base for the two MUST be created
+//
+
+namespace logger_pipe_netflow {
 namespace {
 
-static const char *s_name = "logger_pipe";
-static const char *s_help = "Outputs LioLi trees to a named pipe";
+static const char *s_name = "logger_pipe_netflow";
+static const char *s_help = "temporary clone of logger_pipe";
 
 static const snort::Parameter module_params[] = {
     {"pipe_name", snort::Parameter::PT_STRING, nullptr, nullptr,
@@ -535,4 +540,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace logger_pipe
+} // namespace logger_pipe_netflow

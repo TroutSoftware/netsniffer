@@ -8,3 +8,4 @@ serializer_lorth.cc
 log_framework.cc
 logger_stdout.cc
 logger_pipe.cc
+logger_pipe_netflow.cc

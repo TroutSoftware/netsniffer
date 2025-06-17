@@ -26,7 +26,7 @@ static const snort::Parameter module_params[] = {
 class Serializer : public LioLi::Serializer {
 
 public:
-  Serializer() : LioLi::Serializer(s_name) {}
+  Serializer(const char *name) : LioLi::Serializer(name) {}
 
   ~Serializer() = default;
 
@@ -60,7 +60,7 @@ public:
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Serializer>();
+    LioLi::LogDB::register_type<Serializer>(s_name);
   }
 
   bool set(const char *, snort::Value &, snort::SnortConfig *) override {

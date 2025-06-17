@@ -74,7 +74,7 @@ class Logger : public LioLi::Logger {
   }
 
 public:
-  Logger() : LioLi::Logger(s_name) {}
+  Logger(const char *name) : LioLi::Logger(name) {}
 
   ~Logger() {
     // We can't request a context here, as it isn't safe during shutdown
@@ -109,7 +109,7 @@ public:
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Logger>();
+    LioLi::LogDB::register_type<Logger>(s_name);
   }
 
   bool file_name_set = false;
