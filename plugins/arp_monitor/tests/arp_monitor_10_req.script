@@ -1,0 +1,22 @@
+pcap testdata/10_req.pcap
+
+cmp 10_req.txt testdata/10_req.expected.txt
+
+stdout 'arp packets: 10'
+stdout 'arp requests: 10'
+stdout 'arp request overflow: 5'
+
+
+-- cfg.lua --
+
+logger_file = {serializer = 'serializer_txt',
+               file_name = '10_req.txt'}
+
+serializer_txt = { }
+
+arp_monitor = {
+  logger = "logger_file",
+  max_req_queue = 5,
+  missing_reply_alert_tag = "This is a test tag",
+  testmode = true,
+}

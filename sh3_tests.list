@@ -1,5 +1,6 @@
 # list of modules with sh3-driven test scripts
 alert_lioli
+arp_monitor
 capture_pcap
 dhcp_monitor
 dhcp_option

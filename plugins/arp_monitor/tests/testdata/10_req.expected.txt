@@ -1,0 +1,71 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000ZArp missing replyThis is a test tag10408000000:12:34:56:78:900.1.2.3192.168.1.0
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: Arp missing reply
+-tag: This is a test tag
+-sid: 1040
+-gid: 8000
+-rev: 0
+-principal: 00:12:34:56:78:900.1.2.3
+--mac: 00:12:34:56:78:90
+--ip: 0.1.2.3
+-looking_for: 192.168.1.0
+--ip: 192.168.1.0
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000ZArp missing replyThis is a test tag10408000010:12:34:56:78:901.1.2.3192.168.1.1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: Arp missing reply
+-tag: This is a test tag
+-sid: 1040
+-gid: 8000
+-rev: 0
+-principal: 10:12:34:56:78:901.1.2.3
+--mac: 10:12:34:56:78:90
+--ip: 1.1.2.3
+-looking_for: 192.168.1.1
+--ip: 192.168.1.1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000ZArp missing replyThis is a test tag10408000020:12:34:56:78:902.1.2.3192.168.1.2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: Arp missing reply
+-tag: This is a test tag
+-sid: 1040
+-gid: 8000
+-rev: 0
+-principal: 20:12:34:56:78:902.1.2.3
+--mac: 20:12:34:56:78:90
+--ip: 2.1.2.3
+-looking_for: 192.168.1.2
+--ip: 192.168.1.2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000ZArp missing replyThis is a test tag10408000030:12:34:56:78:903.1.2.3192.168.1.3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: Arp missing reply
+-tag: This is a test tag
+-sid: 1040
+-gid: 8000
+-rev: 0
+-principal: 30:12:34:56:78:903.1.2.3
+--mac: 30:12:34:56:78:90
+--ip: 3.1.2.3
+-looking_for: 192.168.1.3
+--ip: 192.168.1.3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000ZArp missing replyThis is a test tag10408000040:12:34:56:78:904.1.2.3192.168.1.4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-alert: Arp missing reply
+-tag: This is a test tag
+-sid: 1040
+-gid: 8000
+-rev: 0
+-principal: 40:12:34:56:78:904.1.2.3
+--mac: 40:12:34:56:78:90
+--ip: 4.1.2.3
+-looking_for: 192.168.1.4
+--ip: 192.168.1.4
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------

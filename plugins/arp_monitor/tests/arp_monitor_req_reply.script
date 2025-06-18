@@ -1,0 +1,18 @@
+pcap testdata/req_reply.pcap
+
+stdout 'arp packets: 2'
+stdout 'arp requests: 1'
+stdout 'arp replies: 1'
+stdout 'arp matches: 1'
+
+
+-- cfg.lua --
+
+logger_stdout = { serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+arp_monitor = {
+  logger = "logger_stdout",
+  testmode = true,
+}

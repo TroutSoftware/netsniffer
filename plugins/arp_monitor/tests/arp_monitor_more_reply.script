@@ -1,0 +1,19 @@
+pcap testdata/more_reply.pcap
+
+stdout 'arp packets: 5'
+stdout 'arp requests: 2'
+stdout 'arp replies: 3'
+stdout 'arp orphan replies: 1'
+stdout 'arp matches: 2'
+
+
+-- cfg.lua --
+
+logger_stdout = { serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+arp_monitor = {
+  logger = "logger_stdout",
+  testmode = true,
+}
