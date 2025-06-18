@@ -18,6 +18,7 @@
 #include "pegs.h"
 
 // Debug includes
+#include <iostream>
 
 namespace arp_monitor {
 
@@ -151,7 +152,7 @@ void Inspector::Worker::log(ReqEntry &req) {
 
   std::string tag = settings->get_missing_reply_alert_tag();
   if (tag.length()) {
-    root << LioLi::Tree("tag") << tag;
+    root << (LioLi::Tree("tag") << tag);
   }
 
   root << (LioLi::Tree("sid") << 1040);
