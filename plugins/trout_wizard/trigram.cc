@@ -26,7 +26,7 @@ bool Negative_cache::test(uint32_t tgm) {
   uint32_t i = ntgs_index[tgm];
 
   if (i < ntgs.size()) {
-    return ntgs[i] == tgm ? true : false;
+    return ntgs[i] == tgm;
   }
   return false;
 }

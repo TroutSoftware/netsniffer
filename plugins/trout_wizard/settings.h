@@ -2,7 +2,6 @@
 #define settings_d22993cc
 
 // Snort includes
-#include <framework/value.h>
 
 // System includes
 #include <list>
@@ -14,7 +13,7 @@
 #include <unordered_set>
 
 // Global includes
-#include <log_framework.h>
+
 // Local includes
 #include "module.h"
 // Debug includes

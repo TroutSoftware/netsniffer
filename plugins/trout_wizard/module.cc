@@ -5,6 +5,7 @@
 
 // Local includes
 #include "inspector.h"
+#include "module.h"
 #include "plugin_def.h"
 
 namespace trout_wizard {
@@ -59,9 +60,7 @@ Module::Module()
   std::cout << "Module Constructor";
 }
 
-Module::~Module() {
-  settings.reset(); // Will gracefully kill all workers from the dataset writers
-}
+Module::~Module() { settings.reset(); }
 
 bool Module::begin(const char *s, int i, snort::SnortConfig *) {
   return settings->begin(s, i);

@@ -2,11 +2,8 @@
 #ifndef TRIGRAM_DATASET_H
 #define TRIGRAM_DATASET_H
 
+// System includes
 #include <cstdint>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <unordered_map>
 #include <vector>
 
 struct TrigramSet {

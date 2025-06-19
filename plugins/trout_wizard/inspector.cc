@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <mutex>
 #include <optional>
-#include <string>
 
 // Global includes
 #include <flow_data.h>
@@ -233,6 +232,8 @@ public:
     }
   }
 #ifdef ENABLE_INFERENCE
+  // WIP - after deriving the accurate protocol, we have to attach the that
+  // protocol to flow.
   std::string get_protocol(const uint8_t *data, size_t data_len,
                            std::shared_ptr<Negative_cache> neg_cache,
                            std::shared_ptr<Settings> settings) {
@@ -273,6 +274,7 @@ public:
       uint32_t tgm = (static_cast<uint32_t>(data[i]) << 16) |
                      (static_cast<uint32_t>(data[i + 1]) << 8) |
                      (static_cast<uint32_t>(data[i + 2]));
+      bool found = false;
 
       if (neg_cache->test(tgm) || tgm == 0U) {
         continue;
@@ -280,9 +282,11 @@ public:
         for (auto &item : settings->data_set) {
           if (item->tgm_set.find(tgm) != item->tgm_set.end()) {
             flow_map[{item->protocol, tgm}]++;
-          } else {
-            neg_cache->add(tgm);
+            found = true;
           }
+        }
+        if (!found) {
+          neg_cache->add(tgm);
         }
       }
     }
