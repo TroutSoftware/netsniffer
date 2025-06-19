@@ -19,6 +19,8 @@
 // Global includes
 #include <testable_time.h>
 
+// Debug includes
+
 namespace LioLi {
 
 class TreeGenerators {
@@ -72,7 +74,6 @@ public:
       const uint16_t port = (is_src ? flow->client_port : flow->server_port);
 
       append_sf_ip(ss, &sf_ip);
-
       addr << (Tree("ip") << ss.str()) << ":" << (Tree("port") << port);
     } else if (p->has_ip()) {
       const snort::SfIp *sf_ip =
@@ -85,7 +86,7 @@ public:
       if (p->is_tcp() || p->is_udp()) {
         addr << ":" << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
       } else {
-        addr << ':' << '-';
+        addr << ":" << "-";
       }
     } else {
       const snort::eth::EtherHdr *eh =
