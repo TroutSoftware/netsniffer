@@ -17,6 +17,7 @@
 #include "dhcp_option/inspector.h"
 #include "dhcp_option/ips_option.h"
 #include "dhcp_option/ips_option_ip_filter.h"
+#include "icmp_logger/plugin_def.h"
 #include "log/logger_file.h"
 #include "log/logger_null.h"
 #include "log/logger_pipe.h"
@@ -39,6 +40,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &dhcp_monitor::dhcpmonitor_api.base,
   &dhcp_option::inspector.base,
   &dhcp_option::ips_option.base,
+  &icmp_logger::inspect_api.base,
   &ip_filter::ips_option.base,
   &ips_lioli_bind::ips_option.base,
   &ips_lioli_tag::ips_option.base,

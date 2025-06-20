@@ -124,7 +124,12 @@ private:
     LioLi::Path root("$");
 
     root << LioLi::TreeGenerators::timestamp("timestamp", testmode);
-
+#if 0
+    if (pkt->pkth) {
+      root << (LioLi::Tree("pkt_timestamp")
+               << pkt->pkth->ts.tv_sec << "." << pkt->pkth->ts.tv_usec);
+    }
+#endif
     if (e) {
       root << (LioLi::Tree("sid") << e->get_sid());
       root << (LioLi::Tree("gid") << e->get_gid());

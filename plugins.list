@@ -4,6 +4,7 @@ capture_pcap
 common
 dhcp_monitor
 dhcp_option
+icmp_logger
 log
 smnp
 trout_netflow
