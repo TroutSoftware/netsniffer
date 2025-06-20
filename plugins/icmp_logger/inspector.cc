@@ -76,6 +76,11 @@ void Inspector::log_unreachable(const snort::icmp::ICMPHdr &hdr) {
   root << (LioLi::Tree("src") << LioLi::TreeGenerators::format_IPv4(src_ip));
   root << (LioLi::Tree("dst") << LioLi::TreeGenerators::format_IPv4(dst_ip));
 
+  // TODO: also fire the proper snort event
+  root << (LioLi::Tree("sid") << 1070);
+  root << (LioLi::Tree("gid") << 8000);
+  root << (LioLi::Tree("rev") << 0);
+
   settings->get_logger() << std::move(root);
 }
 

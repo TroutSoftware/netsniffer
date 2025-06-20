@@ -1,0 +1,8 @@
+
+
+log icmp  (
+  msg:"This is an icmp log";
+  pkt_data;
+  content:"|3|";
+
+)

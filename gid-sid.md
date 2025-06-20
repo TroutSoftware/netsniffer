@@ -18,3 +18,7 @@ Range for DHCP Options plugin
 ### SID 1040-1060
 
 Range for APR Monitor plugin
+
+### SID 1070-1100
+
+Range for icmp_logger
