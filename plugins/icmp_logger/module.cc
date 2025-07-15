@@ -8,6 +8,7 @@
 
 // Local includes
 #include "module.h"
+#include "gid_sid.h"
 #include "pegs.h"
 
 // Debug includes
@@ -60,6 +61,10 @@ Module::Module()
 Module::~Module() {}
 
 Module::Usage Module::get_usage() const { return INSPECT; }
+
+unsigned Module::get_gid() const { return icmp_logger_gid; }
+
+const snort::RuleMap *Module::get_rules() const { return s_rules; }
 
 const char *Module::get_module_name() { return s_name; }
 

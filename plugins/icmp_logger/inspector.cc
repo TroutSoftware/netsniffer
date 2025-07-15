@@ -1,7 +1,5 @@
 // Snort includes
-#include <cstdint> // This is needed here as protocols/apr.h is depending on it
-
-// #include <log/messages.h>
+#include <detection/detection_engine.h>
 #include <protocols/icmp4.h>
 #include <protocols/packet.h>
 
@@ -9,8 +7,10 @@
 
 // Global includes
 #include <lioli_tree_generator.h>
+#include <trout_gid.h>
 
 // Local includes
+#include "gid_sid.h"
 #include "inspector.h"
 #include "module.h"
 #include "pegs.h"
@@ -75,13 +75,14 @@ void Inspector::log_unreachable(const snort::icmp::ICMPHdr &hdr) {
 
   root << (LioLi::Tree("src") << LioLi::TreeGenerators::format_IPv4(src_ip));
   root << (LioLi::Tree("dst") << LioLi::TreeGenerators::format_IPv4(dst_ip));
-
-  // TODO: also fire the proper snort event
-  root << (LioLi::Tree("sid") << 1070);
-  root << (LioLi::Tree("gid") << 8000);
+  root << (LioLi::Tree("sid") << icmp_logger_destination_unreachable);
+  root << (LioLi::Tree("gid") << icmp_logger_gid);
   root << (LioLi::Tree("rev") << 0);
 
   settings->get_logger() << std::move(root);
+
+  snort::DetectionEngine::queue_event(icmp_logger_gid,
+                                      icmp_logger_destination_unreachable);
 }
 
 Inspector::Inspector(Module *module) : settings(module->get_settings()) {}

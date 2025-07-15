@@ -18,10 +18,10 @@ arp_monitor = {
   testmode = true,
 }
 
-udp = {}
-icmp4 = {}
+--udp = {}
+--icmp4 = {}
 --icmp4_ip = {}
-stream_icmp = {}
+--stream_icmp = {}
 
 --codec::icmp4 v0 static
 --codec::icmp4_ip v0 static

@@ -13,13 +13,18 @@
 #include <mutex>
 #include <shared_mutex>
 
+// Global includes
+#include "trout_gid.h"
+
 // Local includes
 #include "inspector.h"
+
+// Debug includes
 
 namespace dhcp_monitor {
 namespace {
 
-const static unsigned dhcp_monitor_gid = 8000;
+const static unsigned dhcp_monitor_gid = Common::trout_gid;
 const static unsigned dhcp_monitor_ip_conflict_sid = 1001;
 const static unsigned dhcp_monitor_dhcp_conflict_sid = 1002;
 const static unsigned dhcp_monitor_unknown_network_sid = 1003;

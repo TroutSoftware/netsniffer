@@ -12,6 +12,9 @@
 #include <cstring>
 #include <memory>
 
+// Global includes
+#include <trout_gid.h>
+
 // Local includes
 #include "flow_data.h"
 #include "inspector.h"
@@ -24,7 +27,7 @@ namespace {
 static const char *s_name = "dhcp";
 static const char *s_help = "Identifies and parses DHCP packages";
 
-static const unsigned gid = 8000; // Module wide GID
+static const unsigned gid = Common::trout_gid; // Module wide GID
 
 // SID List
 enum class SID {
