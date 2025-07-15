@@ -1,6 +1,6 @@
 p/
 .redo/
-all.did
+*.did
 .do_built
 .do_built.dir/
 envrc
