@@ -1,0 +1,6 @@
+alert ip any any -> any any (
+  msg:"destination unreachable";
+
+  gid:8000;
+  sid:1070;
+)
