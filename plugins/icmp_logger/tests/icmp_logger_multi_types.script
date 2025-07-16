@@ -1,0 +1,34 @@
+pcap testdata/icmp_multi.pcap
+
+stdout '8000\:1070\:0.*(alerts: 2)'
+stdout 'ICMP unreachable192.168.1.75192.168.1.74107080000'
+stdout 'icmp packets: 3'
+stdout 'analyzed: 4'
+
+
+-- cfg.lua --
+
+alert_talos = { }
+
+logger_stdout = { serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+
+icmp_logger = {
+  logger = "logger_stdout",
+  testmode = true,
+}
+
+ips = {
+  include = 'cfg.rules'
+}
+
+-- cfg.rules --
+
+alert ip any any -> any any (
+  msg:"destination unreachable";
+
+  gid:8000;
+  sid:1070;
+)
