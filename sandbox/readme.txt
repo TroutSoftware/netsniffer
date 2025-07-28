@@ -4,7 +4,10 @@ A sandbox project, in this context, is something that is quickly thrown together
 
 Contents:
 
-Programs for testing/learning about pipes
+Programs for testing/learning about pipes:
 fix_checksum - python script using scapy to fix checksums in .pcap files
 pipe_read - cli program that reads from a pipe, with various options to manipulate the pipe
 pipe_write - cli program that writes to a pipe, with various options to manipulate the pipe
+
+Sample scripts:
+bpftrace - some scripts that uses bpftrace to analyze snort runtime
