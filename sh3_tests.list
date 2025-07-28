@@ -4,5 +4,6 @@ arp_monitor
 capture_pcap
 dhcp_monitor
 dhcp_option
+icmp_logger
 trout_netflow
 trout_wizard
