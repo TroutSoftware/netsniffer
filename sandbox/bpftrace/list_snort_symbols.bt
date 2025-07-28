@@ -1,0 +1,3 @@
+
+bpftrace -l uprobe:../../p/install/bin/snort*:*
+bpftrace -l uprobe:../../p/debug/tm.so*:*

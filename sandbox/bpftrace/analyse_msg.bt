@@ -1,0 +1,43 @@
+#!/usr/bin/env bpftrace
+
+
+BEGIN
+{
+  printf("Trout snort daq package message tracer\n");
+  printf("Press ^C to terminate\n");
+}
+
+
+uprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
+uprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE,
+uprobe:../../p/install/bin/snort*:*process_daq_pkt_msg*,
+{
+  @st[tid] += 1;
+
+  //@func[tid, @st[tid]] = func;
+  @stack[tid, @st[tid]] = ustack(4);
+
+  @start[tid, @st[tid]] = nsecs;
+}
+
+uretprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
+uretprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE,
+uretprobe:../../p/install/bin/snort*:*process_daq_pkt_msg*,
+/ @st[tid] > 0/
+{
+  $time = nsecs - @start[tid, @st[tid]];
+  //@avg_time_ns[@stack[tid, @st[tid]]] = avg($time);
+  @stats_ns[@stack[tid, @st[tid]]] = stats($time);
+  @execute_time_ns[@stack[tid, @st[tid]]] = hist($time);
+  @st[tid] -= 1;
+}
+
+END
+{
+  clear(@st);
+  //clear(@func);
+  clear(@start);
+  clear(@stack);
+
+}
+
