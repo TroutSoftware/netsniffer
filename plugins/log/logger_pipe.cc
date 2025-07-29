@@ -197,6 +197,7 @@ class Logger : public LioLi::Logger {
           snort::WarningMessage(
               "WARNING: %s droped %lu tree(s) from queue, resuming output\n",
               s_name, dropped_sequence_count);
+          dropped_sequence_count = 0;
         }
         auto output = context->serialize(std::move(queue.front()));
         queue.pop_front();
@@ -256,7 +257,7 @@ public:
       snort::ErrorMessage("ERROR: no pipe_name specified for %s\n", get_name());
       all_valid = false;
     }
-    if (!serializer_name.empty()) {
+    if (serializer_name.empty()) {
       snort::ErrorMessage("ERROR: no serializer specified for %s\n",
                           get_name());
       all_valid = false;
