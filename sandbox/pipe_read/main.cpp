@@ -10,7 +10,7 @@
 using namespace std::chrono_literals;
 
 int open_pipe(std::string pipe_name) {
-  std::cout << "\nOpening pipe for input: " << pipe_name << " ..." << std::flush;  
+  std::cout << "\nOpening pipe for input: " << pipe_name << " ..." << std::flush;
 std::cout << "1..." << std::flush;
   int input_pipe = open(pipe_name.c_str(), O_RDONLY | O_NONBLOCK);
 std::cout << "2..." << std::flush;
@@ -30,10 +30,10 @@ void read_cin(std::string &input) {
   std::cout << "\nWaiting for command\n"
                "\tq = Quit\n"
                "\tc = Close pipe\n"
-               "\to = (Re-)open pipe\n" 
-               "\tt = Toggle reading from pipe\n" 
+               "\to = (Re-)open pipe\n"
+               "\tt = Toggle reading from pipe\n"
                "\tm = Toggle mute output\n" << std::endl;
-  std::cin >> input;  
+  std::cin >> input;
   done = true;
 }
 
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
   bool read_enabled = true;
   bool mute = false;
   size_t read_sum = 0;
-    
+
   do {
 
       if (done) {
@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
         }
 
         std::string ui = ins;
-              
+
         if (ui.size()>0) {
           if (ui == "q") break;
             else if (ui == "c") {
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
               std::cout << "\nPipe closed" << std::endl;
           } else if (ui == "o") {
             if (input_pipe < 0) {
-              close(input_pipe);              
+              close(input_pipe);
             }
             input_pipe = open_pipe(pipe_name);
           } else if (ui == "t") {
@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
             if(mute)
               std::cout << "\nmuting" << std::endl;
             else
-              std::cout << "\nunmuting" << std::endl;            
+              std::cout << "\nunmuting" << std::endl;
           } else {
             std::cout << "\nnot a valid command" << std::endl;
           }
@@ -102,29 +102,37 @@ int main(int argc, char *argv[]) {
       }
 
       if (input_pipe >= 0 && read_enabled) {
-        char c;
-        auto sz = read(input_pipe, &c, 1);
+        char cb[100];
 
-        if (sz <= 0) {
-          std::this_thread::sleep_for(200ms);
-        } else {
-          read_sum++;
-          if (!mute) {
-            if (c == '\n') {
-              std::cout << "\\n" << std::endl;
-            } else if (c == '\r') {
-              std::cout << "\\r" << std::flush;
-            } else {      
-              std::cout << (char)c << std::flush;
+        auto sz = read(input_pipe, cb, 100);
+
+        if (sz > 0) {
+          for (int i=0;i<sz;i++)
+          {
+            //std::cout << "\nLooking at one char" << std::endl;
+            char c = cb[i];
+            read_sum++;
+            if (!mute) {
+              if (c == '\n') {
+                std::cout << "\\n" << std::endl;
+              } else if (c == '\r') {
+                std::cout << "\\r" << std::flush;
+              } else {
+                std::cout << (char)c << std::flush;
+              }
             }
-          } else {
+          }
+
+          if (mute) {
             std::cout << "\rReceived " << read_sum << " bytes" << std::flush;
           }
         }
       } else {
-        std::this_thread::sleep_for(200ms);
+
       }
+      //std::this_thread::sleep_for(200ms);
+      std::this_thread::sleep_for(1ms);
   } while (true);
-   
+
   return 0;
 }
