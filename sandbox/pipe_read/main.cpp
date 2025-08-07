@@ -32,7 +32,8 @@ void read_cin(std::string &input) {
                "\tc = Close pipe\n"
                "\to = (Re-)open pipe\n"
                "\tt = Toggle reading from pipe\n"
-               "\tm = Toggle mute output\n" << std::endl;
+               "\tm = Toggle mute output\n"
+               "\tr = Change read block size\n" << std::endl;
   std::cin >> input;
   done = true;
 }
@@ -57,6 +58,8 @@ int main(int argc, char *argv[]) {
 
   bool read_enabled = true;
   bool mute = false;
+  const unsigned max_read_size = 1024*1024; // 1 MB
+  unsigned read_size = 1;
   size_t read_sum = 0;
 
   do {
@@ -71,10 +74,10 @@ int main(int argc, char *argv[]) {
 
         if (ui.size()>0) {
           if (ui == "q") break;
-            else if (ui == "c") {
-              close(input_pipe);
-              input_pipe = -1;
-              std::cout << "\nPipe closed" << std::endl;
+          else if (ui == "c") {
+            close(input_pipe);
+            input_pipe = -1;
+            std::cout << "\nPipe closed" << std::endl;
           } else if (ui == "o") {
             if (input_pipe < 0) {
               close(input_pipe);
@@ -92,6 +95,13 @@ int main(int argc, char *argv[]) {
               std::cout << "\nmuting" << std::endl;
             else
               std::cout << "\nunmuting" << std::endl;
+          } else if (ui == "r") {
+            read_size <<= 1;
+
+            if (read_size > max_read_size) read_size = 1;
+
+            std::cout << "\nNow attempting to read " << read_size << " byte(s) from the pipe at a time" << std::endl;
+
           } else {
             std::cout << "\nnot a valid command" << std::endl;
           }
@@ -102,9 +112,10 @@ int main(int argc, char *argv[]) {
       }
 
       if (input_pipe >= 0 && read_enabled) {
-        char cb[100];
+        //const unsigned cb_size = max_read_size;
+        static char cb[max_read_size];  // Don't allocate on stack
 
-        auto sz = read(input_pipe, cb, 100);
+        auto sz = read(input_pipe, cb, read_size);
 
         if (sz > 0) {
           for (int i=0;i<sz;i++)
