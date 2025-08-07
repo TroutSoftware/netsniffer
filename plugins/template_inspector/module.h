@@ -1,5 +1,5 @@
 #ifndef module_[RANDOM_32BIT_HEX_NUMBER]
-#define module_[RANDOM_32BIT_HEX_NUMBER]
+#define module_ [RANDOM_32BIT_HEX_NUMBER]
 
 // Snort includes
 #include <framework/module.h>

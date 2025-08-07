@@ -1,5 +1,5 @@
 #ifndef inspector_[RANDOM_32BIT_HEX_NUMBER]
-#define inspector_[RANDOM_32BIT_HEX_NUMBER]
+#define inspector_ [RANDOM_32BIT_HEX_NUMBER]
 
 // Snort includes
 #include <framework/inspector.h>

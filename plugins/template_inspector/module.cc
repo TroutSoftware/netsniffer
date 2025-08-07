@@ -16,8 +16,10 @@
 // outside of this file)
 namespace {
 
-const char *s_name = "my_plugin_name";  // TODO: Replace with the name of the plugin
-const char *s_help = "Help text for plugin"; // TODO: Replace with help text for your plugin
+const char *s_name =
+    "my_plugin_name"; // TODO: Replace with the name of the plugin
+const char *s_help =
+    "Help text for plugin"; // TODO: Replace with help text for your plugin
 
 // TODO: Sample parameteres, replace with your own
 const snort::Parameter module_params[] = {
