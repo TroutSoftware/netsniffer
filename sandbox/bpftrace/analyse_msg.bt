@@ -10,6 +10,7 @@ BEGIN
 
 uprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
 uprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE,
+uprobe:../../p/debug/tm.so*:*evalEPN5snort6PacketE,
 uprobe:../../p/install/bin/snort*:*process_daq_pkt_msg*,
 {
   @st[tid] += 1;
@@ -22,6 +23,7 @@ uprobe:../../p/install/bin/snort*:*process_daq_pkt_msg*,
 
 uretprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
 uretprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE,
+uretprobe:../../p/debug/tm.so*:*evalEPN5snort6PacketE,
 uretprobe:../../p/install/bin/snort*:*process_daq_pkt_msg*,
 / @st[tid] > 0/
 {

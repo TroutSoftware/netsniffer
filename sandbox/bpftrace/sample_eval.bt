@@ -6,8 +6,10 @@ BEGIN
   printf("Press ^C to terminate\n");
 }
 
-uprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
-uprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE
+uprobe:../../p/install/bin/snort*:*eval*snort*Packet*,
+uprobe:../../p/release/tm.so*:*eval*snort*Packet*,
+uprobe:../../p/debug/tm.so*:*eval*snort*Packet*
+//uprobe:../../p/debug/tm.so*:*evalEPN5snort6PacketE
 {
   @eval_key[tid] = func;
   @start2[tid, func] = nsecs;
@@ -15,8 +17,9 @@ uprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE
   //print(ustack());
 }
 
-uretprobe:../../p/install/bin/snort*:*evalEPN5snort6PacketE,
-uretprobe:../../p/release/tm.so*:*evalEPN5snort6PacketE
+uretprobe:../../p/install/bin/snort*:*eval*snort*Packet*,
+uretprobe:../../p/release/tm.so*:*eval*snort*Packet*,
+uretprobe:../../p/debug/tm.so*:*eval*snort*Packet*
 / @start2[tid, @eval_key[tid]] /
 {
   @execute_time_ns[@eval_key[tid]] = hist(nsecs - @start2[tid, @eval_key[tid]]);
