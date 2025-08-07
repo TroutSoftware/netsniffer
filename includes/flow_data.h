@@ -2,6 +2,7 @@
 #define flow_data_17e351d7
 
 // Snort includes
+#include <flow/flow.h>
 
 // System includes
 
@@ -44,7 +45,8 @@ public:
 
     return flow_data;
   }
+
 };
 
-} // namespace Common 
+} // namespace Common
 #endif // #ifndef flow_data_17e351d7
