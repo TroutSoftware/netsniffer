@@ -12,7 +12,12 @@
 namespace trout_netflow2 {
 
 PegInfo Pegs::s_pegs[] = {
-    {CountType::SUM, "flows_detected", "Number of flows detected by snort"},
+    {CountType::SUM, "flows_seen", "Number of snort flows seen"},
+    {CountType::SUM, "pkts_without_flow",
+     "Number of packets seen without a flow"},
+    {CountType::SUM, "pkts_seen", "Number of packets seen"},
+    {CountType::SUM, "total_bytes", "Sum of size of all packets seen"},
+
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;

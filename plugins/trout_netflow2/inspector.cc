@@ -6,7 +6,7 @@
 // Global includes
 
 // Local includes
-#include "cache.h"
+#include "cache_element.h"
 #include "flow_data.h"
 #include "inspector.h"
 #include "module.h"
@@ -19,12 +19,16 @@ namespace trout_netflow2 {
 void Inspector::eval(snort::Packet *p) {
   assert(p);
 
+  Pegs::s_peg_counts.pkts_seen++;
+
   if (p->flow) {
-    PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
-    flow_data->get_cache()->update(p);
+    PacketFlowData *flow_data = PacketFlowData::get_from_flow(
+        p->flow, [](FlowData &) { Pegs::s_peg_counts.flows_seen++; });
+    flow_data->get_cache_element()->update(p);
   } else {
     FlowData flow_data;
-    flow_data.get_cache()->update(p);
+    Pegs::s_peg_counts.pkts_without_flow++;
+    flow_data.get_cache_element()->update(p);
   }
 }
 

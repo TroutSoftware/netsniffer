@@ -5,6 +5,7 @@
 #include <flow/flow.h>
 
 // System includes
+#include <functional>
 
 // Local includes
 
@@ -32,7 +33,8 @@ private:
 
 public:
 
-  static FlowData *get_from_flow(snort::Flow *flow) {
+  // Gets or create and asign T to the snort flow, init is optional init function called if T is created
+  static FlowData *get_from_flow(snort::Flow *flow, std::function<void(T&)> init = [](T&){}) {
     assert(flow);
 
     FlowData *flow_data =
@@ -40,6 +42,7 @@ public:
 
     if (!flow_data) {
       flow_data = new FlowData();
+      init(*flow_data);
       flow->set_flow_data(flow_data);
     }
 
