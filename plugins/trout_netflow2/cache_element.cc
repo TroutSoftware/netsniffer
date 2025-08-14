@@ -4,6 +4,7 @@
 #include <protocols/packet.h>
 
 // System includes
+#include <atomic>
 
 // Global includes
 
@@ -19,9 +20,9 @@ class Packet;
 
 namespace {
 uint64_t generate_flow_id() {
-  static uint64_t id = 0;
-  id++;
-  return id;
+  static std::atomic<uint64_t> id = 0;
+
+  return id.fetch_add(1);
 }
 
 } // namespace
@@ -38,9 +39,15 @@ std::shared_ptr<CacheElement> CacheElement::create_cache_element() {
 
 CacheElement::CacheElement() { trout_flow_id = generate_flow_id(); };
 
-void CacheElement::set_service_name(const char * /*name*/) {}
+bool CacheElement::set_service_name(const char *name) {
+  service_name = name;
 
-void CacheElement::update(snort::Packet *p) {
+  bool newly_updated = !data_updated;
+  data_updated = true;
+  return newly_updated;
+}
+
+bool CacheElement::update(snort::Packet *p) {
   assert(p);
   assert(
       Status::terminated !=
@@ -88,9 +95,31 @@ void CacheElement::update(snort::Packet *p) {
     out_bytes += p->pktlen;
   }
 
+
   Pegs::s_peg_counts.total_bytes += p->pktlen;
+
+  bool newly_updated = !data_updated;
+  data_updated = true;
+  return newly_updated;
 }
 
-void CacheElement::flow_terminated() { trout_flow_status = Status::terminated; }
+bool CacheElement::flow_terminated() {
+  std::scoped_lock lock(mutex);
+  trout_flow_status = Status::terminated;
+  bool newly_updated = !data_updated;
+  data_updated = true;
+  return newly_updated;
+
+}
+
+bool CacheElement::operator()(const CacheElement &lhs, const CacheElement &rhs) const {
+  return lhs.ipv4_src_addr < rhs.ipv4_src_addr || (lhs.ipv4_src_addr == rhs.ipv4_src_addr && (
+         lhs.ipv4_dst_addr < rhs.ipv4_dst_addr || (lhs.ipv4_dst_addr == rhs.ipv4_dst_addr && (
+         lhs.l4_src_port   < rhs.l4_src_port   || (lhs.l4_src_port   == rhs.l4_src_port   && (
+         lhs.l4_dst_port   < rhs.l4_dst_port   || (lhs.l4_dst_port   == rhs.l4_dst_port   && (
+         (lhs.src_mac <=> rhs.src_mac) < 0     || ((lhs.src_mac <=> rhs.src_mac) == 0     && (
+         (lhs.dst_mac <=> rhs.dst_mac) < 0))))))))));
+}
+
 
 } // namespace trout_netflow2

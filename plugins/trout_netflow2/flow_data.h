@@ -23,7 +23,7 @@ class FlowData {
 public:
   FlowData();
   ~FlowData();
-  std::shared_ptr<CacheElement> get_cache_element();
+  std::shared_ptr<CacheElement> get_cache_element() const;
 };
 
 using PacketFlowData = Common::FlowData<FlowData>;

@@ -16,7 +16,7 @@ FlowData::FlowData(){};
 
 FlowData::~FlowData() { cache_element->flow_terminated(); }
 
-std::shared_ptr<CacheElement> FlowData::get_cache_element() {
+std::shared_ptr<CacheElement> FlowData::get_cache_element() const {
   return cache_element;
 }
 

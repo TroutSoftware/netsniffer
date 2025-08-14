@@ -22,6 +22,8 @@ const snort::Parameter module_params[] = {
      "Set logger output should be sent to"},
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
      "Testmode will make deterministic (fake) timestamps"},
+    {"cache_size", snort::Parameter::PT_INT, "1:100000", "10000",
+     "The max number of simultaneous conections that can be handled at any given time"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -40,6 +42,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->logger_name = val.get_as_string();
   } else if (val.is("testmode")) {
     settings->testmode = val.get_bool();
+  } else if (val.is("cache_size")) {
+    settings->cache_size = val.get_int32();
   } else {
     // fail if we didn't get something we knew about
     return false;

@@ -22,6 +22,7 @@ struct Settings {
   std::string logger_name;
   std::shared_ptr<LioLi::Logger> logger;
   bool testmode;
+  uint32_t cache_size;
 
 public:
   LioLi::Logger &get_logger();

@@ -10,6 +10,7 @@
 // Global includes
 
 // Local includes
+#include "cache.h"
 
 // Debug includes
 
@@ -20,6 +21,7 @@ class Settings;
 class Inspector : public snort::Inspector {
 private:
   std::shared_ptr<Settings> settings;
+  Cache cache;
 
   void eval(snort::Packet *) override;
 

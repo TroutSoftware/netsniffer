@@ -22,17 +22,22 @@ void Inspector::eval(snort::Packet *p) {
   Pegs::s_peg_counts.pkts_seen++;
 
   if (p->flow) {
-    PacketFlowData *flow_data = PacketFlowData::get_from_flow(
-        p->flow, [](FlowData &) { Pegs::s_peg_counts.flows_seen++; });
+    PacketFlowData *flow_data =
+        PacketFlowData::get_from_flow(p->flow, [this](FlowData &flow_data) {
+          // Things we should only do on the first create of the FlowData
+          Pegs::s_peg_counts.flows_seen++;
+          cache.add(flow_data.get_cache_element());
+        });
     flow_data->get_cache_element()->update(p);
   } else {
     FlowData flow_data;
     Pegs::s_peg_counts.pkts_without_flow++;
+    cache.add(flow_data.get_cache_element());
     flow_data.get_cache_element()->update(p);
   }
 }
 
-Inspector::Inspector(Module *module) : settings(module->get_settings()) {}
+Inspector::Inspector(Module *module) : settings(module->get_settings()), cache(settings) {}
 
 Inspector::~Inspector() {}
 
