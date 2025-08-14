@@ -19,6 +19,9 @@
 #include <iostream>
 
 // Debug includes
+#include <chrono>
+#include <thread>
+using namespace std::chrono_literals;
 
 namespace trout_netflow {
 
@@ -42,6 +45,9 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "services detected", "Number of services detected"},
     {CountType::SUM, "packets total size", "Sum of size of all packages"},
     {CountType::SUM, "payload total size", "Sum of size of all payloads"},
+    {CountType::SUM, "flows created",
+     "Number of flow objects created (incl. faked)"},
+    {CountType::SUM, "fake flows", "Number of flow objects that were faked"},
     {CountType::END, nullptr, nullptr}};
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -114,14 +120,16 @@ class Inspector : public snort::Inspector {
   }
 
   void eval(snort::Packet *pkt) override {
+    assert(pkt);
     s_peg_counts.pkg_processed++;
-
-    if (pkt && pkt->flow) {
+    // std::this_thread::sleep_for(100ms);
+    if (pkt->flow) {
       FlowData *data = FlowData::get_from_flow(pkt->flow, settings);
       data->process(pkt);
     } else {
       FlowData tmp(settings);
       tmp.process(pkt);
+      s_peg_counts.fake_flows++;
     }
   };
 

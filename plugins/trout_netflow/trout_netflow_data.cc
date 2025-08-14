@@ -17,7 +17,9 @@
 namespace trout_netflow {
 
 FlowData::FlowData(Settings &settings)
-    : snort::FlowData(get_id()), settings(settings) {}
+    : snort::FlowData(get_id()), settings(settings) {
+  s_peg_counts.flows_created++;
+}
 
 unsigned FlowData::get_id() {
   static unsigned flow_data_id = snort::FlowData::create_flow_data_id();
@@ -31,7 +33,6 @@ FlowData *FlowData::get_from_flow(snort::Flow *flow, Settings &settings) {
       dynamic_cast<FlowData *>(flow->get_flow_data(FlowData::get_id()));
 
   if (!flow_data) {
-
     flow_data = new FlowData(settings);
     flow->set_flow_data(flow_data);
   }

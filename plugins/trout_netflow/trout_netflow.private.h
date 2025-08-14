@@ -18,6 +18,8 @@ struct PegCounts {
   PegCount srv_detected = 0;
   PegCount pkt_size = 0;
   PegCount payload_size = 0;
+  PegCount flows_created = 0;
+  PegCount fake_flows = 0;
 };
 
 // This must match the s_pegs[] array
