@@ -12,12 +12,17 @@
 
 namespace trout_netflow2 {
 
-FlowData::FlowData(){};
+/*
+FlowData::FlowData() {}
 
-FlowData::~FlowData() { cache_element->flow_terminated(); }
-
+FlowData::~FlowData() {
+  //cache_element->flow_terminated();
+}
+*/
+/*
 std::shared_ptr<CacheElement> FlowData::get_cache_element() const {
   return cache_element;
 }
+*/
 
 } // namespace trout_netflow2

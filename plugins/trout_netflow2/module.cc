@@ -23,7 +23,8 @@ const snort::Parameter module_params[] = {
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
      "Testmode will make deterministic (fake) timestamps"},
     {"cache_size", snort::Parameter::PT_INT, "1:100000", "10000",
-     "The max number of simultaneous conections that can be handled at any given time"},
+     "The max number of simultaneous conections that can be handled at any "
+     "given time"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace

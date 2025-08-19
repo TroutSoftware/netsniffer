@@ -21,7 +21,7 @@ class Settings;
 class Inspector : public snort::Inspector {
 private:
   std::shared_ptr<Settings> settings;
-  Cache cache;
+  std::shared_ptr<Cache> cache;
 
   void eval(snort::Packet *) override;
 

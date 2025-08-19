@@ -1,4 +1,6 @@
 
+#error This file is deprecated and will be deleted from the project
+
 // Snort includes
 #include <protocols/eth.h>
 #include <protocols/packet.h>
@@ -95,7 +97,6 @@ bool CacheElement::update(snort::Packet *p) {
     out_bytes += p->pktlen;
   }
 
-
   Pegs::s_peg_counts.total_bytes += p->pktlen;
 
   bool newly_updated = !data_updated;
@@ -109,17 +110,22 @@ bool CacheElement::flow_terminated() {
   bool newly_updated = !data_updated;
   data_updated = true;
   return newly_updated;
-
 }
 
-bool CacheElement::operator()(const CacheElement &lhs, const CacheElement &rhs) const {
-  return lhs.ipv4_src_addr < rhs.ipv4_src_addr || (lhs.ipv4_src_addr == rhs.ipv4_src_addr && (
-         lhs.ipv4_dst_addr < rhs.ipv4_dst_addr || (lhs.ipv4_dst_addr == rhs.ipv4_dst_addr && (
-         lhs.l4_src_port   < rhs.l4_src_port   || (lhs.l4_src_port   == rhs.l4_src_port   && (
-         lhs.l4_dst_port   < rhs.l4_dst_port   || (lhs.l4_dst_port   == rhs.l4_dst_port   && (
-         (lhs.src_mac <=> rhs.src_mac) < 0     || ((lhs.src_mac <=> rhs.src_mac) == 0     && (
-         (lhs.dst_mac <=> rhs.dst_mac) < 0))))))))));
+bool CacheElement::operator()(const CacheElement &lhs,
+                              const CacheElement &rhs) const {
+  return lhs.ipv4_src_addr < rhs.ipv4_src_addr ||
+         (lhs.ipv4_src_addr == rhs.ipv4_src_addr &&
+          (lhs.ipv4_dst_addr < rhs.ipv4_dst_addr ||
+           (lhs.ipv4_dst_addr == rhs.ipv4_dst_addr &&
+            (lhs.l4_src_port < rhs.l4_src_port ||
+             (lhs.l4_src_port == rhs.l4_src_port &&
+              (lhs.l4_dst_port < rhs.l4_dst_port ||
+               (lhs.l4_dst_port == rhs.l4_dst_port &&
+                ((lhs.src_mac <=> rhs.src_mac) < 0 ||
+                 ((lhs.src_mac <=> rhs.src_mac) == 0 &&
+                  ((lhs.dst_mac <=> rhs.dst_mac) < 0))))))))));
 }
-
 
 } // namespace trout_netflow2
+#endif

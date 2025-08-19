@@ -1,6 +1,7 @@
 #ifndef cache_element_091148c6
 #define cache_element_091148c6
 
+#if 0
 // Snort includes
 
 // System includes
@@ -91,5 +92,5 @@ public:
 };
 
 } // namespace trout_netflow2
-
+#endif //  #if 0
 #endif // #ifndef cache_element_091148c6
