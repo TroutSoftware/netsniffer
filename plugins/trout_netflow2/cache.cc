@@ -120,12 +120,15 @@ void Cache::Handle::add_service(std::string &s) {
   data->service_key = key;
 }
 
-void Cache::add(snort::Packet *p) {
-  // The add is the same as create, just discarding the handle
-  create(p);
-}
+void Cache::add(snort::Packet *p) { add_to_cache(p); }
 
 std::unique_ptr<Cache::Handle> Cache::create(snort::Packet *p) {
+  return std::unique_ptr<Handle>(
+      new Handle(shared_from_this(), add_to_cache(p)));
+}
+
+std::shared_ptr<Cache::CacheElement2::VolatileValues>
+Cache::add_to_cache(snort::Packet *p) {
   CacheElement2::ConstValues key;
 
   const snort::eth::EtherHdr *eh =
@@ -180,6 +183,8 @@ std::unique_ptr<Cache::Handle> Cache::create(snort::Packet *p) {
   }
 
   itr->second->updated = true;
+
+  return itr->second;
 }
 
 /*

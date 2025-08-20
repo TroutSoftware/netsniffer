@@ -107,6 +107,9 @@ private:
 
   Cache(std::shared_ptr<Settings> settings);
 
+  // Adds content of p to the cache, a new element will be created if needed
+  std::shared_ptr<CacheElement2::VolatileValues> add_to_cache(snort::Packet *p);
+
 public:
   // Using a Handle to add service names or packets to the cache is faster than
   // adding them without

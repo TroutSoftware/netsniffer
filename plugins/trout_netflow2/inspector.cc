@@ -18,6 +18,7 @@ namespace trout_netflow2 {
 
 void Inspector::eval(snort::Packet *p) {
   assert(p);
+  assert(cache);
 
   Pegs::s_peg_counts.pkts_seen++;
 
