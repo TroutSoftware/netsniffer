@@ -25,6 +25,8 @@ private:
 
   void eval(snort::Packet *) override;
 
+  bool configure(snort::SnortConfig *);
+
 public:
   Inspector(Module *module);
   ~Inspector();

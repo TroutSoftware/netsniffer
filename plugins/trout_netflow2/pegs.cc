@@ -17,6 +17,12 @@ PegInfo Pegs::s_pegs[] = {
      "Number of packets seen without a flow"},
     {CountType::SUM, "pkts_seen", "Number of packets seen"},
     {CountType::SUM, "total_bytes", "Sum of size of all packets seen"},
+    {CountType::SUM, "service_change",
+     "Number of changes to existing service name on flow"},
+    {CountType::SUM, "services_seen",
+     "Count of times a service was assigned to a flow"},
+    {CountType::SUM, "different_services",
+     "Number of different services that were seen"},
 
     {CountType::END, nullptr, nullptr}};
 

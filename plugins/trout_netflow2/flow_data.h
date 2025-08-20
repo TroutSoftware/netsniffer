@@ -19,13 +19,6 @@ namespace trout_netflow2 {
 
 struct FlowData {
   std::unique_ptr<Cache::Handle> handle;
-  //  std::shared_ptr<CacheElement> cache_element =
-  //      CacheElement::create_cache_element();
-  // public:
-  //  FlowData();
-  //  ~FlowData();
-  //
-  //  std::shared_ptr<CacheElement> get_cache_element() const;
 };
 
 using PacketFlowData = Common::FlowData<FlowData>;

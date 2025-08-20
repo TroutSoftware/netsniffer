@@ -8,7 +8,6 @@
 
 // Local includes
 #include "cache.h"
-#include "cache_element.h"
 #include "pegs.h"
 #include "settings.h"
 
@@ -16,37 +15,10 @@
 
 namespace trout_netflow2 {
 
-/*
-void Cache::add(std::shared_ptr<CacheElement> ce) {
-  std::scoped_lock lock(mutex);
-
-  // Check our cache has space for the new element
-  if (data.size() >= settings->cache_size) {
-    log();  // A log will remove any terminated elements
-
-    // Se if it helped, otherwise make room
-    if (data.size() >= settings->cache_size) {
-      remove_random_element();  // We need to remove the element in an
-unpredictable way
-    }
-  };
-
-  data.push_back(ce);
-}
-
-void Cache::log() {
-
-}
-
-void Cache::remove_random_element() {
-  // TODO: Fill out
-}
-*/
 // ------------- New stuff -----------
 
 Cache::Cache(std::shared_ptr<Settings> settings) : settings(settings) {
   assert(settings);
-  // data.reserve(settings->cache_size);
 }
 
 std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings) {
@@ -70,12 +42,9 @@ Cache::ServiceMap::ServiceKey
 Cache::ServiceMap::get_add(const std::string &service_name) {
   return get_add(service_name.c_str());
 }
-/*
-Cache::ServiceMap::ServiceKey Cache::ServiceMap::get_add(std::string
-&service_name) { std::scoped_lock lock(mutex); return
-(service_map.emplace(service_name, service_map.size()).first)->second;
-}
-*/
+
+std::size_t Cache::ServiceMap::size() { return service_map.size() - 1; }
+
 bool Cache::CacheElement2::ConstValuesComp::operator()(
     const Cache::CacheElement2::ConstValues &lhs,
     const Cache::CacheElement2::ConstValues &rhs) const {
@@ -113,10 +82,19 @@ void Cache::Handle::add_sizes(snort::Packet *p) {
   Pegs::s_peg_counts.total_bytes += p->pktlen;
 }
 
-void Cache::Handle::add_service(std::string &s) {
+void Cache::Handle::add_service(const char *s) {
+  assert(data);
   ServiceMap::ServiceKey key = cache->service_map.get_add(s);
 
+  Pegs::s_peg_counts.different_services = cache->service_map.size();
+
   std::scoped_lock lock(data->mutex);
+
+  if (data->service_key != 0 && data->service_key != key) {
+    // Count if the service name changed from a different name
+    Pegs::s_peg_counts.service_change++;
+  }
+
   data->service_key = key;
 }
 
@@ -178,8 +156,16 @@ Cache::add_to_cache(snort::Packet *p) {
     itr->second->out_bytes += p->pktlen;
   }
 
+  // TODO: Figure out if this is ever relevant, or the service is always given
+  // through the event system too
   if (p->flow && p->flow->service) {
-    itr->second->service_key = service_map.get_add(p->flow->service);
+    auto key = service_map.get_add(p->flow->service);
+    Pegs::s_peg_counts.different_services = service_map.size();
+    if (itr->second->service_key != 0 && itr->second->service_key != key) {
+      // Count if the service name changed from a different name
+      Pegs::s_peg_counts.service_change++;
+    }
+    itr->second->service_key = key;
   }
 
   itr->second->updated = true;
@@ -187,17 +173,4 @@ Cache::add_to_cache(snort::Packet *p) {
   return itr->second;
 }
 
-/*
-  Handle(std::shared_ptr<Cache> cache,
-  std::shared_ptr<CacheElement2::VolatileValues> data);
-    std::shared_ptr<CacheElement2::VolatileValues> data;
-
-    Handle(std::shared_ptr<CacheElement2::VolatileValues> *data);       //
-  Creates a new Handle pointing to data
-
-  public:
-    void add_sizes(snort::Packet *p);   // Adds sizes from packet to handle
-  (incl. any service found) void add_service(std::string &s);    // Adds service
-  to handle
-*/
 } // namespace trout_netflow2

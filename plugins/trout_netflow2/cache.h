@@ -24,25 +24,6 @@ class CacheElement;
 class Settings;
 
 class Cache : public std::enable_shared_from_this<Cache> {
-  // Old interface--------------------------------------
-  // Mutex protects all private members and private functions
-  // std::mutex mutex;
-
-  // std::shared_ptr<Settings> settings;
-  // std::vector<std::shared_ptr<CacheElement>> data;
-
-  // Local functions all assume to be called with the mutex taken
-  // void log();                   // Generate log for all updated and/or
-  // terminated elements
-  //  void remove_random_element(); // Removes a random element from the list
-
-  // public:
-
-  //  Cache(std::shared_ptr<Settings> settings);
-  //  void add(std::shared_ptr<CacheElement> ce);
-
-  // New interface -------------------------------------
-private:
   std::shared_ptr<Settings> settings;
 
   class ServiceMap {
@@ -58,6 +39,7 @@ private:
     // Returns the ServiceKey corresponding to service_name
     ServiceKey get_add(const char *service_name);
     ServiceKey get_add(const std::string &service_name);
+    std::size_t size();
   } service_map;
 
   struct CacheElement2 {
@@ -131,7 +113,7 @@ public:
   public:
     void add_sizes(snort::Packet *p); // Adds sizes from packet to handle (incl.
                                       // any service found)
-    void add_service(std::string &s); // Adds service to handle
+    void add_service(const char *);   // Adds service to handle
   };
 
   std::unique_ptr<Handle> create(
