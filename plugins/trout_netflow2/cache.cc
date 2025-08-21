@@ -15,8 +15,6 @@
 
 namespace trout_netflow2 {
 
-// ------------- New stuff -----------
-
 Cache::Cache(std::shared_ptr<Settings> settings) : settings(settings) {
   assert(settings);
 }
@@ -27,10 +25,7 @@ std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings) {
   return cache;
 }
 
-Cache::ServiceMap::ServiceMap() {
-  std::string unknown("[unknown]");
-  get_add(unknown);
-}
+Cache::ServiceMap::ServiceMap() { get_add("[unknown]"); }
 
 Cache::ServiceMap::ServiceKey
 Cache::ServiceMap::get_add(const char *service_name) {
