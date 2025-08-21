@@ -130,14 +130,18 @@ class LioLi {
   std::stringstream ss;
   std::vector<uint8_t> secret;
   bool add_root_node = true;
+  bool is_in_raw_mode = false;
 
 public:
   LioLi();
+  void set_raw_mode();    // Puts LioLi in raw mode, ie. will only output the raw part of the tree
   void insert_header();
   void insert_terminator();
 
+
   size_t length(); // Get the currently stored length
   std::string move_binary();
+
   void set_no_root_node() { add_root_node = false; }
   void set_secret(std::vector<uint8_t> &secret) {
     assert(secret.size() == 9); // There are exactly 9 bytes in a secret

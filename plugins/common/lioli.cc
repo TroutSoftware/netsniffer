@@ -624,8 +624,14 @@ bool Tree::is_valid() const {
 
 LioLi::LioLi() {}
 
+void LioLi::set_raw_mode() { is_in_raw_mode = true; }
+
 void LioLi::insert_header() {
-  ss << '\x4' << "BILL" << '\x0' << '\x2';
+  if (is_in_raw_mode) {
+    ss << '\x4' << "RAW " << '\x0' << '\x1';
+  } else {
+    ss << '\x4' << "BILL" << '\x0' << '\x2';
+  }
   for (int i = 0; i < 9; i++) {
     ss << secret[i];
   }
@@ -650,10 +656,12 @@ LioLi &operator<<(LioLi &ll, const Tree &bf) {
   Binary::as_varint(ll.ss, bf.raw.size());
   ll.ss << bf.raw;
 
-  std::string tree = bf.me.dump_binary(0, ll.add_root_node);
+  if (!ll.is_in_raw_mode) {
+    std::string tree = bf.me.dump_binary(0, ll.add_root_node);
 
-  Binary::as_varint(ll.ss, tree.size());
-  ll.ss << tree;
+    Binary::as_varint(ll.ss, tree.size());
+    ll.ss << tree;
+  }
 
   return ll;
 }

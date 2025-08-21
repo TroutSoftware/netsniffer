@@ -27,6 +27,7 @@
 #include "log/serializer_csv.h"
 #include "log/serializer_lorth.h"
 #include "log/serializer_python.h"
+#include "log/serializer_raw.h"
 #include "log/serializer_txt.h"
 #include "smnp/inspector.h"
 #include "trout_netflow/trout_netflow.h"
@@ -54,6 +55,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &serializer_csv::inspect_api.base,
   &serializer_lorth::inspect_api.base,
   &serializer_python::inspect_api.base,
+  &serializer_raw::inspect_api.base,
   &serializer_txt::inspect_api.base,
   &smnp::inspect_api.base,
   &trout_netflow::inspect_api.base,
