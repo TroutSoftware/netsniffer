@@ -26,7 +26,7 @@ static const snort::Parameter module_params[] = {
      "Setting the variable part of the raw header, format is a sequence of 9 "
      "8-bit hex numbers eg. \"0022445566AABB\""},
     {"secret_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "environment variable holding same string as secret_sequence"},
+     "environment variable holding string with same format as secret_sequence"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
