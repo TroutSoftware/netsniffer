@@ -6,4 +6,5 @@ dhcp_monitor
 dhcp_option
 icmp_logger
 trout_netflow
+trout_netflow2
 trout_wizard

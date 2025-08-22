@@ -24,7 +24,7 @@ static const char *s_help = "Serializes the raw data part of LioLi trees";
 static const snort::Parameter module_params[] = {
     {"secret_sequence", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Setting the variable part of the raw header, format is a sequence of 9 "
-     "8-bit hex numbers eg. \"0022445566AABB\""},
+     "8-bit hex numbers eg. \"0022445566AABBCCDD\""},
     {"secret_env", snort::Parameter::PT_STRING, nullptr, nullptr,
      "environment variable holding string with same format as secret_sequence"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};

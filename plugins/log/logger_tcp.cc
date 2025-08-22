@@ -25,27 +25,63 @@
 
 // TODO: After initial version is made, add to build system and plugin structure
 
-namespace logger_pipe {
+namespace logger_tcp {
 namespace {
 
-static const char *s_name = "logger_tcp";
-static const char *s_help = "Outputs LioLi trees over a tcp connection";
+const char *s_name = "logger_tcp";
+const char *s_help = "Outputs LioLi trees over a tcp connection";
 
-static const snort::Parameter module_params[] = {
-// TODO: Let this be multi config w. explicit naming
+const snort::Parameter temp[] = {
+    {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Serializer to use for generating output"},
+
+    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+const snort::Parameter config_list[] = {
+    {"name", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "The alias name for the logger with specific config"},
     {"output_ip", snort::Parameter::PT_IP4, nullptr, nullptr,
      "the ip address data should be written to"},
     {"output_port", snort::Parameter::PT_PORT, nullptr, nullptr,
      "the port number data should be written to"},
     {"output_ip_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the ip address data should be written to"},
+     "name of an environment variable containing the ip address data should be "
+     "written to"},
     {"output_port_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the port number data should be written to"},
+     "name of an environment variable containing the port number data should "
+     "be written to"},
     {"queue_max", snort::Parameter::PT_INT, "1:10000", "1024",
      "Max number of trees that will be queued before discarding"},
     {"restart_interval_s", snort::Parameter::PT_INT, "0:86400", "0",
      "Seconds between restarting the serializer (max: 86400 s (1 day), 0 = "
-     "never)), a restart will result in a new connection being made to the server"},
+     "never)), a restart will result in a new connection being made to the "
+     "server"},
+    {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "Serializer to use for generating output"},
+
+    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
+
+const snort::Parameter module_params[] = {
+    {"list", snort::Parameter::PT_LIST, config_list, nullptr,
+     "Alias configuration, let you define multiple instances of the logger, "
+     "with different parameters"},
+
+    {"output_ip", snort::Parameter::PT_IP4, nullptr, nullptr,
+     "the ip address data should be written to"},
+    {"output_port", snort::Parameter::PT_PORT, nullptr, nullptr,
+     "the port number data should be written to"},
+    {"output_ip_env", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "name of an environment variable containing the ip address data should be "
+     "written to"},
+    {"output_port_env", snort::Parameter::PT_STRING, nullptr, nullptr,
+     "name of an environment variable containing the port number data should "
+     "be written to"},
+    {"queue_max", snort::Parameter::PT_INT, "1:10000", "1024",
+     "Max number of trees that will be queued before discarding"},
+    {"restart_interval_s", snort::Parameter::PT_INT, "0:86400", "0",
+     "Seconds between restarting the serializer (max: 86400 s (1 day), 0 = "
+     "never)), a restart will result in a new connection being made to the "
+     "server"},
     {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Serializer to use for generating output"},
 
@@ -79,7 +115,6 @@ static_assert(
         sizeof(PegCounts) / sizeof(PegCount),
     "Entries in s_pegs doesn't match number of entries in s_peg_counts");
 
-
 // MAIN object of this file
 class Logger : public LioLi::Logger {
   using clock = std::chrono::steady_clock;
@@ -88,9 +123,9 @@ class Logger : public LioLi::Logger {
 
   // Configs
   std::string serializer_name;
-  //std::string pipe_name;
+  // std::string pipe_name;
   uint32_t max_queue_size = 1;
-  uint32_t restart_interval_s = 0; // 0 = never
+  uint32_t serializer_restart_interval_s = 0; // 0 = never
   uint64_t dropped_sequence_count =
       0; // Counts the number of packages dropped in this sequence
 
@@ -104,38 +139,39 @@ class Logger : public LioLi::Logger {
   bool worker_done = false;   // Worker won't block anymore
 
   // TODO: Change to open a socket instead
-  std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
-    assert(serializer_name.length() != 0 && pipe_name.length() != 0);
+  /*
+    std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
+      assert(serializer_name.length() != 0 && pipe_name.length() != 0);
 
-    if (terminate)
-      return std::ofstream();
+      if (terminate)
+        return std::ofstream();
 
-    std::ios_base::openmode openmode = std::ios::out;
+      std::ios_base::openmode openmode = std::ios::out;
 
-    if (LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_binary()) {
-      openmode |= std::ios::binary;
+      if (LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_binary()) {
+        openmode |= std::ios::binary;
+      }
+
+      std::string tmp_name = pipe_name;
+
+      // Release the lock while opening, as it will block until a reader is
+      // attached to the pipe
+      lock.unlock();
+      std::ofstream pipe = std::ofstream(tmp_name, openmode);
+      lock.lock();
+
+      if (!pipe.good() || !pipe.is_open()) {
+        snort::ParseAbort(
+            "ERROR: Could not open output pipe: %s with reason %s\n",
+            pipe_name.c_str(), std::strerror(errno));
+
+        // This is considered a non-recoverable error, e.g. pipe doesn't exists
+        terminate = true;
+      }
+
+      return pipe;
     }
-
-    std::string tmp_name = pipe_name;
-
-    // Release the lock while opening, as it will block until a reader is
-    // attached to the pipe
-    lock.unlock();
-    std::ofstream pipe = std::ofstream(tmp_name, openmode);
-    lock.lock();
-
-    if (!pipe.good() || !pipe.is_open()) {
-      snort::ParseAbort(
-          "ERROR: Could not open output pipe: %s with reason %s\n",
-          pipe_name.c_str(), std::strerror(errno));
-
-      // This is considered a non-recoverable error, e.g. pipe doesn't exists
-      terminate = true;
-    }
-
-    return pipe;
-  }
-
+  */
   void worker_loop() {
     // Stay protected
     std::unique_lock lock(mutex);
@@ -159,7 +195,7 @@ class Logger : public LioLi::Logger {
     while (!terminate) {
       if (!pipe.is_open()) {
         // open_pipe will set terminate to true if something went wrong
-        pipe = open_pipe(lock);
+        // pipe = open_pipe(lock);
         // We always start a new pipe with a fresh context
         context.reset();
         continue;
@@ -248,17 +284,17 @@ class Logger : public LioLi::Logger {
   }
 
 public:
-  Logger(const char *name) : LioLi::Logger(name) {  }
+  Logger(const char *name) : LioLi::Logger(name) {}
 
   ~Logger() {}
 
   bool is_valid() {
     bool all_valid = true; // Assume all good
 
-    if (pipe_name.empty()) {
-      snort::ErrorMessage("ERROR: no pipe_name specified for %s\n", get_name());
-      all_valid = false;
-    }
+    //    if (pipe_name.empty()) {
+    //      snort::ErrorMessage("ERROR: no pipe_name specified for %s\n",
+    //      get_name()); all_valid = false;
+    //    }
     if (serializer_name.empty()) {
       snort::ErrorMessage("ERROR: no serializer specified for %s\n",
                           get_name());
@@ -266,6 +302,11 @@ public:
     }
 
     return all_valid;
+  }
+
+  bool had_data_loss(bool) override {
+    // TODO: Implement this
+    return false;
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
@@ -315,17 +356,18 @@ public:
 
   const std::string &get_serializer() { return serializer_name; }
 
-// Change to IP:PORT
-  void set_pipe_name(std::string name) {
-    std::scoped_lock lock(mutex);
+  // Change to IP:PORT
+  /*
+    void set_pipe_name(std::string name) {
+      std::scoped_lock lock(mutex);
 
-    assert(pipe_name.empty() ||
-           name == pipe_name); // We do not handle changing of the pipe name
+      assert(pipe_name.empty() ||
+             name == pipe_name); // We do not handle changing of the pipe name
 
-    pipe_name = name;
-  }
-
-  const std::string &get_pipe_name() { return pipe_name; }
+      pipe_name = name;
+    }
+  */
+  //  const std::string &get_pipe_name() { return pipe_name; }
 
   void set_max_queue_size(uint32_t max) {
     std::scoped_lock lock(mutex);
@@ -380,9 +422,10 @@ public:
         if (std::cv_status::timeout ==
                 cv.wait_for(lock, std::chrono::seconds(2)) &&
             !worker_done) {
-// TODO: How do we do this for a socket
+          // TODO: How do we do this for a socket
           // Faking a reader (most likely it is stuck in the open)
-          std::ifstream pipe = std::ifstream(pipe_name, std::ios::in);
+          //          std::ifstream pipe = std::ifstream(pipe_name,
+          //          std::ios::in);
           cv.wait_for(lock, std::chrono::seconds(2));
           if (!worker_done) {
             // Still not done, set it free
@@ -398,30 +441,36 @@ public:
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Logger>(s_name);
+    //    LioLi::LogDB::register_type<Logger>(s_name);
   }
 
   ~Module() {
     // Stop worker
-    LioLi::LogDB::get<Logger>(s_name)->stop();
+    //    LioLi::LogDB::get<Logger>(s_name)->stop();
   }
 
   bool begin(const char *, int, snort::SnortConfig *) override { return true; }
 
   bool end(const char *, int, snort::SnortConfig *) override {
-    auto logger = LioLi::LogDB::get<Logger>(s_name);
-    if (logger->is_valid()) {
-      // Start worker
-      logger->start();
-      return true;
-    }
+    return true;
+    /*
+        auto logger = LioLi::LogDB::get<Logger>(s_name);
+        if (logger->is_valid()) {
+          // Start worker
+          logger->start();
+          return true;
+        }
 
-    return false;
+        return false;
+    */
   }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+    return true;
+#if 0
     auto logger = LioLi::LogDB::get<Logger>(s_name);
     // TODO: Change to correct parameters
+/*
     if (val.is("pipe_name") && val.get_as_string().size() > 0) {
 
       if (!logger->get_pipe_name().empty()) {
@@ -452,7 +501,7 @@ class Module : public snort::Module {
       snort::ErrorMessage(
           "ERROR: Could not read log pipe name from environment: %s in %s\n",
           env_name.c_str(), get_name());
-    } else if (val.is("serializer") && val.get_as_string().size() > 0) {
+    } else */ if (val.is("serializer") && val.get_as_string().size() > 0) {
 
       if (!logger->get_serializer().empty()) {
         snort::ErrorMessage("ERROR: You can only set serializer once in %s\n",
@@ -476,6 +525,7 @@ class Module : public snort::Module {
 
     // fail if we didn't get something valid
     return false;
+#endif
   }
 
   Usage get_usage() const override {
@@ -541,4 +591,4 @@ const snort::InspectApi inspect_api = {
     nullptr  // reset
 };
 
-} // namespace logger_pipe
+} // namespace logger_tcp

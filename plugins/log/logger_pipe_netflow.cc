@@ -103,6 +103,11 @@ class Logger : public LioLi::Logger {
   bool terminate = false;     // Set to true if worker loop should be terminated
   bool worker_done = false;   // Worker won't block anymore
 
+  bool had_data_loss(bool) override {
+    assert(false); // pipe_netflow is deprecated, and don't have the data_loss
+                   // feature
+  }
+
   std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
     assert(serializer_name.length() != 0 && pipe_name.length() != 0);
 

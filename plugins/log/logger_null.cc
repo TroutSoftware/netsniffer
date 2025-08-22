@@ -32,6 +32,8 @@ public:
 
   ~Logger() {}
 
+  bool had_data_loss(bool) override { return false; }
+
   void operator<<(const LioLi::Tree &&) override {}
 };
 

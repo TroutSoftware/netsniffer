@@ -28,7 +28,7 @@ static const snort::Parameter module_params[] = {
      "alias for secret_sequence"},
     {"secret_sequence", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Setting the variable part of the BILL header, format is a sequence of "
-     "9 8-bit hex numbers eg. \"0022445566AABB\""},
+     "9 8-bit hex numbers eg. \"0022445566AABBCCDD\""},
     {"bill_secret_env", snort::Parameter::PT_STRING, nullptr, nullptr,
      "alias for secret_env"},
     {"secret_env", snort::Parameter::PT_STRING, nullptr, nullptr,

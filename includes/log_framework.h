@@ -106,6 +106,8 @@ public:
   // Must be non-blocking
   virtual void operator<<(const Tree &&tree) = 0;
 
+  virtual bool had_data_loss(bool clear_flag = true) = 0;
+
   static std::shared_ptr<Logger> &get_null_obj();
 };
 

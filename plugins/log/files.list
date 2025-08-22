@@ -4,6 +4,7 @@ logger_null.cc
 logger_pipe.cc
 logger_pipe_netflow.cc
 logger_stdout.cc
+logger_tcp.cc
 serializer_bill.cc
 serializer_csv.cc
 serializer_lorth.cc
