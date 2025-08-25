@@ -5,7 +5,8 @@ pcap testdata/google_http.pcap
 -- cfg.lua --
 
 serializer_raw = { secret_sequence = "0022445566AABBCCDD"}
-logger_tcp = { }
+logger_tcp = {  output_ip = '127.0.0.1',
+                output_port = 12345,}
 
 logger_file = { file_name = 'output.lorth',
                 serializer = 'serializer_lorth' }

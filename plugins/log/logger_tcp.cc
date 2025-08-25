@@ -22,6 +22,7 @@
 #include "logger_tcp.h"
 
 // Debug includes
+#include <iostream>
 
 // TODO: After initial version is made, add to build system and plugin structure
 
@@ -31,50 +32,18 @@ namespace {
 const char *s_name = "logger_tcp";
 const char *s_help = "Outputs LioLi trees over a tcp connection";
 
-const snort::Parameter temp[] = {
-    {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "Serializer to use for generating output"},
-
-    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
-
-const snort::Parameter config_list[] = {
-    {"name", snort::Parameter::PT_STRING, nullptr, nullptr,
+const snort::Parameter module_params[] = {
+    {"alias", snort::Parameter::PT_STRING, nullptr, nullptr,
      "The alias name for the logger with specific config"},
     {"output_ip", snort::Parameter::PT_IP4, nullptr, nullptr,
-     "the ip address data should be written to"},
+     "The ip address data should be written to"},
     {"output_port", snort::Parameter::PT_PORT, nullptr, nullptr,
-     "the port number data should be written to"},
+     "The port number data should be written to"},
     {"output_ip_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the ip address data should be "
+     "Name of an environment variable containing the ip address data should be "
      "written to"},
     {"output_port_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the port number data should "
-     "be written to"},
-    {"queue_max", snort::Parameter::PT_INT, "1:10000", "1024",
-     "Max number of trees that will be queued before discarding"},
-    {"restart_interval_s", snort::Parameter::PT_INT, "0:86400", "0",
-     "Seconds between restarting the serializer (max: 86400 s (1 day), 0 = "
-     "never)), a restart will result in a new connection being made to the "
-     "server"},
-    {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "Serializer to use for generating output"},
-
-    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
-
-const snort::Parameter module_params[] = {
-    {"list", snort::Parameter::PT_LIST, config_list, nullptr,
-     "Alias configuration, let you define multiple instances of the logger, "
-     "with different parameters"},
-
-    {"output_ip", snort::Parameter::PT_IP4, nullptr, nullptr,
-     "the ip address data should be written to"},
-    {"output_port", snort::Parameter::PT_PORT, nullptr, nullptr,
-     "the port number data should be written to"},
-    {"output_ip_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the ip address data should be "
-     "written to"},
-    {"output_port_env", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "name of an environment variable containing the port number data should "
+     "Name of an environment variable containing the port number data should "
      "be written to"},
     {"queue_max", snort::Parameter::PT_INT, "1:10000", "1024",
      "Max number of trees that will be queued before discarding"},
@@ -449,9 +418,64 @@ class Module : public snort::Module {
     //    LioLi::LogDB::get<Logger>(s_name)->stop();
   }
 
-  bool begin(const char *, int, snort::SnortConfig *) override { return true; }
+  struct ConfigColector {
+    std::string name;
+    uint32_t ipv4 = 0;
+    uint16_t port = 0;
+    uint32_t queue_limit;
+    uint32_t restart_interval;
+    std::string serializer;
+  };
+
+  std::stack<ConfigColector> config_stack;
+
+  bool begin(const char *, int, snort::SnortConfig *) override {
+    //    std::cout << "MKRTEST: vvv begin Got '" << name << "' with index: " <<
+    //    index << std::endl;
+
+    // Make new element
+    config_stack.emplace();
+    return true;
+  }
 
   bool end(const char *, int, snort::SnortConfig *) override {
+    assert(!config_stack.empty());
+
+    //    std::cout << "MKRTEST: ^^^ end Got '" << name << "' with index: " <<
+    //    index << std::endl;
+
+    // Check validity
+    if (config_stack.top().name.empty()) {
+      if (config_stack.size() > 1) {
+        snort::ErrorMessage("ERROR: No alias given for entry\n");
+        config_stack.pop();
+        return false;
+      }
+
+      config_stack.top().name = s_name;
+    }
+
+    if (config_stack.top().ipv4 == 0) {
+      snort::ErrorMessage("ERROR: No ip address given\n");
+      config_stack.pop();
+      return false;
+    }
+
+    if (config_stack.top().port == 0) {
+      snort::ErrorMessage("ERROR: No valid port given\n");
+      config_stack.pop();
+      return false;
+    }
+
+    // Create entry in DB
+    if (!LioLi::LogDB::register_type<Logger>(config_stack.top().name.c_str())) {
+      snort::ErrorMessage("ERROR: Found duplicate name/alias '%s'\n",
+                          config_stack.top().name.c_str());
+      config_stack.pop();
+      return false;
+    }
+
+    config_stack.pop();
     return true;
     /*
         auto logger = LioLi::LogDB::get<Logger>(s_name);
@@ -465,7 +489,48 @@ class Module : public snort::Module {
     */
   }
 
-  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+  bool set(const char *name, snort::Value &val, snort::SnortConfig *) override {
+    assert(!config_stack.empty());
+
+    // TODO: Implement the _env versions
+
+    //    std::cout << "MKRTEST: set Got '" << name << "' name: '" <<
+    //    val.get_name() <<
+    //    "' value: '" << val.get_as_string() << "'" << std::endl;
+
+    if (val.is("alias")) {
+      std::string alias = val.get_as_string();
+
+      if (alias.empty()) {
+        snort::ErrorMessage("ERROR: Alias specified with empty name\n");
+        return false;
+      }
+
+      config_stack.top().name = alias;
+
+    } else if (val.is("output_ip")) {
+      config_stack.top().ipv4 = val.get_ip4();
+    } else if (val.is("output_port")) {
+      config_stack.top().port = val.get_uint16();
+    } else if (val.is("queue_max")) {
+      config_stack.top().queue_limit = val.get_uint32();
+    } else if (val.is("restart_interval_s")) {
+      config_stack.top().restart_interval = val.get_uint32();
+    } else if (val.is("serializer")) {
+      std::string serializer = val.get_as_string();
+
+      if (serializer.empty()) {
+        snort::ErrorMessage("ERROR: empty name given for serializer\n");
+        return false;
+      }
+
+      config_stack.top().serializer = serializer;
+    } else {
+      snort::ErrorMessage("ERROR: Parameter '%s' is not implemented\n",
+                          val.get_name());
+      return false;
+    }
+
     return true;
 #if 0
     auto logger = LioLi::LogDB::get<Logger>(s_name);

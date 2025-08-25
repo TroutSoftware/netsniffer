@@ -35,10 +35,10 @@ class LogDB {
   static bool register_obj(std::string, std::shared_ptr<LogBase>);
 
 public:
-  template <typename T> static void register_type(const char *name) {
+  template <typename T> static bool register_type(const char *name) {
     auto obj = std::make_shared<T>(name);
 
-    register_obj(obj->get_name(), obj);
+    return register_obj(obj->get_name(), obj);
   };
 
   template <typename T> static std::shared_ptr<T> get(const std::string &name) {
