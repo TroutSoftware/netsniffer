@@ -153,7 +153,9 @@ class Logger : public LioLi::Logger {
     auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
 
     while (serializer == serializer->get_null_obj() && !terminate) {
+      lock.unlock();
       std::this_thread::sleep_for(std::chrono::seconds(1));
+      lock.lock();
       serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
     }
 
