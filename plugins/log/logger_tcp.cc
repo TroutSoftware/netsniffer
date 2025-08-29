@@ -8,12 +8,10 @@
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
-#include <csignal>
-#include <cstdint>
-#include <deque>
-#include <fstream>
-#include <iostream>
 #include <mutex>
+#include <netinet/in.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
 #include <thread>
 
 // Local includes
@@ -22,9 +20,6 @@
 #include "logger_tcp.h"
 
 // Debug includes
-#include <iostream>
-
-// TODO: After initial version is made, add to build system and plugin structure
 
 namespace logger_tcp {
 namespace {
@@ -53,6 +48,9 @@ const snort::Parameter module_params[] = {
      "server"},
     {"serializer", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Serializer to use for generating output"},
+    {"retry_interval_ms", snort::Parameter::PT_INT, "10:10000", "100",
+     "ms between retries after a log output tcp connection has been rejected "
+     "or closed by the receiving side"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -64,6 +62,10 @@ const PegInfo s_pegs[] = {
      "Max number of items ever queued at one time"},
     {CountType::SUM, "write_errors", "Count of write errors detected"},
     {CountType::SUM, "restarts", "Count of (re)starts of the serializer"},
+    {CountType::SUM, "epoll_err", "Number of errors from epoll"},
+    {CountType::SUM, "would_block",
+     "Number of time we couldn't write to a socket that we were told was "
+     "writable"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -76,6 +78,8 @@ struct PegCounts {
   PegCount max_queued = 0;
   PegCount write_errors = 0;
   PegCount restarts = 0;
+  PegCount epoll_err = 0;
+  PegCount would_block = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -92,11 +96,13 @@ class Logger : public LioLi::Logger {
 
   // Configs
   std::string serializer_name;
-  // std::string pipe_name;
+  uint16_t port;
+  uint32_t ipv4;
   uint32_t max_queue_size = 1;
   uint32_t serializer_restart_interval_s = 0; // 0 = never
   uint64_t dropped_sequence_count =
       0; // Counts the number of packages dropped in this sequence
+  uint32_t retry_interval_ms = 100;
 
   std::deque<LioLi::Tree> queue;
 
@@ -106,88 +112,240 @@ class Logger : public LioLi::Logger {
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
   bool worker_done = false;   // Worker won't block anymore
+  bool data_loss = false;     // Set to true when we might have lost data
 
-  // TODO: Change to open a socket instead
-  /*
-    std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
-      assert(serializer_name.length() != 0 && pipe_name.length() != 0);
+  class Socket {
+    // NOTE: Calling functions in this class has a lot of sideeffects, use with
+    // caution
+    uint32_t ipv4;
+    uint16_t port;
 
-      if (terminate)
-        return std::ofstream();
+    int epfd = epoll_create1(EPOLL_CLOEXEC); // epoll socket
+    int osocket = -1;                        // Socket used for communication
+    std::string output_string; // What we are currently trying to write
+    ssize_t output_index = 0; // Place in output_string that we are writing from
+    std::string my_name;
 
-      std::ios_base::openmode openmode = std::ios::out;
+    bool add_socket_to_epoll() {
+      // Create epool struct corresponding to this socket
+      epoll_event ev;
 
-      if (LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_binary()) {
-        openmode |= std::ios::binary;
+      ev.events = EPOLLOUT;
+      ev.data.fd = osocket;
+
+      if (::epoll_ctl(epfd, EPOLL_CTL_ADD, osocket, &ev)) {
+        snort::ParseError("TCP Logger connection error (Could not add socket "
+                          "to epoll for: %s reason: %s)\n",
+                          my_name.c_str(), std::strerror(errno));
+        return false;
       }
-
-      std::string tmp_name = pipe_name;
-
-      // Release the lock while opening, as it will block until a reader is
-      // attached to the pipe
-      lock.unlock();
-      std::ofstream pipe = std::ofstream(tmp_name, openmode);
-      lock.lock();
-
-      if (!pipe.good() || !pipe.is_open()) {
-        snort::ParseAbort(
-            "ERROR: Could not open output pipe: %s with reason %s\n",
-            pipe_name.c_str(), std::strerror(errno));
-
-        // This is considered a non-recoverable error, e.g. pipe doesn't exists
-        terminate = true;
-      }
-
-      return pipe;
+      return true;
     }
-  */
+
+    bool remove_socket_from_epoll() {
+      // Create epool struct corresponding to this socket
+      epoll_event ev;
+
+      ev.events = EPOLLOUT;
+      ev.data.fd = osocket;
+
+      if (::epoll_ctl(epfd, EPOLL_CTL_DEL, osocket, &ev)) {
+        snort::ParseError("TCP Logger connection error (Could not remove "
+                          "socket from epoll for: %s reason: %s)\n",
+                          my_name.c_str(), std::strerror(errno));
+        return false;
+      }
+      return true;
+    }
+
+    void close_socket() {
+
+      if (-1 != osocket) {
+        remove_socket_from_epoll(); // Just to be nice, the ::close should also
+                                    // to this
+        ::close(osocket);
+      }
+
+      osocket = -1;
+
+      // We never split an output over multiple connections
+      output_string.clear();
+      output_index = 0;
+    }
+
+  public:
+    Socket(uint32_t ipv4, uint16_t port, std::string my_name)
+        : ipv4(ipv4), port(port), my_name(my_name) {
+      assert(-1 != epfd);
+    }
+
+    ~Socket() {
+      close_socket();
+      ::close(epfd);
+    }
+
+    bool connect() {
+      close_socket(); // Make sure we are in a known state
+
+      osocket = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+
+      sockaddr_in addr;
+      addr.sin_family = AF_INET;
+      addr.sin_port = htons(port);
+      addr.sin_addr.s_addr = ipv4;
+
+      if (::connect(osocket, (sockaddr *)&addr, sizeof(addr)) &&
+          errno != EAGAIN && errno != EINPROGRESS) {
+        snort::ParseError("TCP Logger connection error (Could not create "
+                          "connecting socket for: %s reason: %s)\n",
+                          my_name.c_str(), std::strerror(errno));
+        close_socket();
+        return false;
+      }
+
+      add_socket_to_epoll();
+
+      return true;
+    }
+
+    operator bool() const { return (-1 != osocket); }
+
+    // Returns -1 on fatal error, 0 on restart loop, 1 if socket writeable
+    int epoll_wait(uint32_t retry_interval_ms) {
+      // Wait for something to happen with the socket
+      epoll_event wait_ev;
+      int epwret = ::epoll_wait(epfd, &wait_ev, 1, 1000 /* max ms to wait */);
+
+      if (0 == epwret) {
+        return 0;
+      } else if (-1 == epwret) {
+        snort::ParseError("TCP Logger connection error (Epoll wait returned "
+                          "with error for: %s reason: %s)\n",
+                          my_name.c_str(), std::strerror(errno));
+
+        return -1;
+      }
+
+      assert(1 == epwret); // if anything excpet 1 is seen at this point we have
+                           // a programming or fatal error
+
+      if (wait_ev.events & (EPOLLHUP | EPOLLERR)) {
+        if (wait_ev.events & EPOLLERR) {
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.epoll_err++;
+        }
+        close_socket();
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(retry_interval_ms));
+        return 0;
+      }
+
+      assert(wait_ev.events & EPOLLOUT); // If this fires, there is some
+                                         // condition we aren't handling
+
+      return 1;
+    }
+
+    void queue(std::string &&input) {
+      assert(output_string.empty());
+      output_string = input;
+    }
+
+    // Returns true if flush was complete, false if loop should be restarted
+    // NOTE: Flush is only for our internal stuff, it's not a connection flush
+    bool flush(bool has_more) {
+      // Output what we are waiting to output
+      if (static_cast<ssize_t>(output_string.length()) > output_index) {
+        ssize_t remaining = output_string.length() - output_index;
+        ssize_t bytes = ::send(osocket, output_string.data() + output_index,
+                               remaining, (has_more) ? 0 : MSG_MORE);
+
+        if (bytes >= 0) {
+          assert(remaining <= bytes);
+
+          // All was not sent
+          if (remaining > bytes) {
+            output_index += bytes;
+            return false;
+          }
+
+          // All was sent
+          output_string.clear();
+          output_index = 0;
+          return true;
+        } else {                                // Some error
+          static_assert(EAGAIN == EWOULDBLOCK); // Holds true on Linux, fix if
+                                                // new platform is introduced
+          if (errno == EWOULDBLOCK) {
+            std::scoped_lock lock(peg_count_mutex);
+            s_peg_counts.would_block++;
+          } else {
+            close_socket();
+          }
+          return false;
+        }
+      }
+      return true;
+    }
+  };
+
   void worker_loop() {
-    // Stay protected
-    std::unique_lock lock(mutex);
+    std::shared_ptr<LioLi::Serializer> serializer;
 
-    // Keeps track of when we should restart serializer context
-    std::chrono::time_point<clock> next_timeout;
-
-    // Our serializer
-    auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
-
-    while (serializer == serializer->get_null_obj() && !terminate) {
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+    // Don't do anything until we have our serializer
+    while (!terminate) {
       serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+
+      if (serializer != serializer->get_null_obj())
+        break;
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    std::chrono::time_point<clock>
+        next_timeout; // Keeps track of when we should restart serializer
+                      // context
     std::shared_ptr<LioLi::Serializer::Context> context;
+    Socket socket(ipv4, port, get_name());
 
-    // TODO: change to socket
-    std::ofstream pipe;
-
+    // Main loop
     while (!terminate) {
-      if (!pipe.is_open()) {
-        // open_pipe will set terminate to true if something went wrong
-        // pipe = open_pipe(lock);
-        // We always start a new pipe with a fresh context
-        context.reset();
-        continue;
+      if (!socket) {
+        socket.connect();
+
+        // This might set the data_loss too frequently, but it's only a help,
+        // not a promise
+        std::scoped_lock lock(mutex);
+        data_loss = true;
       }
 
+      // Wait for something to happen with the socket
+      switch (socket.epoll_wait(retry_interval_ms)) {
+      case 0:
+        continue; // socket is not ready/might need to be recreated
+      case -1:
+        goto while_end; // unhandled error, exit loop
+      default:
+        break; // socket is ready for writing
+      }
+
+      // Flush what we have stored
+      bool has_more;
+      {
+        std::scoped_lock lock(mutex);
+        has_more = !queue.empty();
+      }
+
+      if (!socket.flush(has_more)) {
+        continue; // Couldn't write what was stored, socket might be closed
+      }
+
+      // Ensure we have a valid context
       if (next_timeout <= clock::now() || !context) {
         if (context) {
-          lock.unlock();
-          pipe << context->close();
-          pipe.flush();
-          lock.lock();
-
-          if (!pipe.good()) {
-            snort::LogMessage("LOG: %s unable to write end to pipe, retrying\n",
-                              s_name);
-            pipe.close();
-            {
-              std::scoped_lock lock(peg_count_mutex);
-              s_peg_counts.write_errors++;
-            }
-
-            continue;
-          }
+          socket.queue(context->close());
+          context.reset();
+          continue; // Will eventually reach the flush
         }
 
         context = serializer->create_context();
@@ -198,84 +356,50 @@ class Logger : public LioLi::Logger {
           next_timeout = std::chrono::time_point<clock>::max();
         }
 
-        {
-          std::scoped_lock lock(peg_count_mutex);
-          s_peg_counts.restarts++;
-        }
+        std::scoped_lock lock(peg_count_mutex);
+        s_peg_counts.restarts++;
       }
+
+      std::unique_lock lock(mutex);
 
       if (!queue.empty()) {
         if (dropped_sequence_count != 0) {
           snort::WarningMessage(
               "WARNING: %s droped %lu tree(s) from queue, resuming output\n",
-              s_name, dropped_sequence_count);
+              get_name(), dropped_sequence_count);
           dropped_sequence_count = 0;
         }
-        auto output = context->serialize(std::move(queue.front()));
+        socket.queue(context->serialize(std::move(queue.front())));
         queue.pop_front();
-
-        // We can't write while being locked, as the write might block
-        lock.unlock();
-        pipe << output;
-        lock.lock();
-
-        if (!pipe.good()) {
-          snort::LogMessage(
-              "LOG: %s unable to write tree to pipe, skipping and retrying\n",
-              s_name);
-          pipe.close();
-          {
-            std::scoped_lock lock(peg_count_mutex);
-            s_peg_counts.write_errors++;
-          }
-          continue;
-        } else {
-          std::scoped_lock lock(peg_count_mutex);
-          s_peg_counts.logs_out++;
-        }
+        continue; // Will eventually send
       }
 
-      if (!terminate && queue.empty()) {
-        cv.wait_until(lock, next_timeout);
-      }
+      cv.wait_until(lock, next_timeout,
+                    [this] { return terminate || !queue.empty(); });
     }
+  while_end:
 
-    if (pipe.good() && pipe.is_open() && context) {
-      lock.unlock();
-      pipe << context->close();
-      lock.lock();
-      pipe.close();
-    }
-
+  {
+    std::unique_lock lock(mutex);
     worker_done = true;
-    lock.unlock();
+  }
     cv.notify_all();
   }
 
 public:
   Logger(const char *name) : LioLi::Logger(name) {}
 
-  ~Logger() {}
-
-  bool is_valid() {
-    bool all_valid = true; // Assume all good
-
-    //    if (pipe_name.empty()) {
-    //      snort::ErrorMessage("ERROR: no pipe_name specified for %s\n",
-    //      get_name()); all_valid = false;
-    //    }
-    if (serializer_name.empty()) {
-      snort::ErrorMessage("ERROR: no serializer specified for %s\n",
-                          get_name());
-      all_valid = false;
-    }
-
-    return all_valid;
+  ~Logger() {
+    stop(); // Stops worker thread
   }
 
-  bool had_data_loss(bool) override {
-    // TODO: Implement this
-    return false;
+  bool had_data_loss(bool clear_flag) override {
+    std::scoped_lock lock(mutex);
+    bool old_value = data_loss;
+
+    data_loss &= !clear_flag;
+
+    return old_value;
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
@@ -291,6 +415,7 @@ public:
                                 s_name);
         }
         queue.pop_front();
+        data_loss = true;
         {
           std::scoped_lock lock(peg_count_mutex);
           s_peg_counts.overflows++;
@@ -325,19 +450,6 @@ public:
 
   const std::string &get_serializer() { return serializer_name; }
 
-  // Change to IP:PORT
-  /*
-    void set_pipe_name(std::string name) {
-      std::scoped_lock lock(mutex);
-
-      assert(pipe_name.empty() ||
-             name == pipe_name); // We do not handle changing of the pipe name
-
-      pipe_name = name;
-    }
-  */
-  //  const std::string &get_pipe_name() { return pipe_name; }
-
   void set_max_queue_size(uint32_t max) {
     std::scoped_lock lock(mutex);
 
@@ -366,6 +478,14 @@ public:
     cv.notify_all();
   }
 
+  void set_port(uint16_t port) { this->port = port; }
+
+  void set_ipv4(uint32_t ip) { ipv4 = ip; }
+
+  void set_retry_interval(uint32_t retry_interval) {
+    retry_interval_ms = retry_interval;
+  }
+
   // Call after all configuration is done
   void start() {
     terminate = false;
@@ -388,19 +508,13 @@ public:
         cv.notify_all();
 
         // Give worker a chance to go down gracefully
-        if (std::cv_status::timeout ==
-                cv.wait_for(lock, std::chrono::seconds(2)) &&
-            !worker_done) {
-          // TODO: How do we do this for a socket
-          // Faking a reader (most likely it is stuck in the open)
-          //          std::ifstream pipe = std::ifstream(pipe_name,
-          //          std::ios::in);
-          cv.wait_for(lock, std::chrono::seconds(2));
-          if (!worker_done) {
-            // Still not done, set it free
-            worker_thread.detach();
-            return;
-          }
+        cv.wait_for(lock, std::chrono::seconds(2),
+                    [this] { return worker_done; });
+
+        if (!worker_done) {
+          // Still not done, set it free
+          worker_thread.detach();
+          return;
         }
       }
       worker_thread.join();
@@ -409,14 +523,9 @@ public:
 };
 
 class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {
-    //    LioLi::LogDB::register_type<Logger>(s_name);
-  }
+  Module() : snort::Module(s_name, s_help, module_params) {}
 
-  ~Module() {
-    // Stop worker
-    //    LioLi::LogDB::get<Logger>(s_name)->stop();
-  }
+  ~Module() {}
 
   struct ConfigColector {
     std::string name;
@@ -424,15 +533,13 @@ class Module : public snort::Module {
     uint16_t port = 0;
     uint32_t queue_limit;
     uint32_t restart_interval;
+    uint32_t retry_interval;
     std::string serializer;
   };
 
   std::stack<ConfigColector> config_stack;
 
   bool begin(const char *, int, snort::SnortConfig *) override {
-    //    std::cout << "MKRTEST: vvv begin Got '" << name << "' with index: " <<
-    //    index << std::endl;
-
     // Make new element
     config_stack.emplace();
     return true;
@@ -440,9 +547,6 @@ class Module : public snort::Module {
 
   bool end(const char *, int, snort::SnortConfig *) override {
     assert(!config_stack.empty());
-
-    //    std::cout << "MKRTEST: ^^^ end Got '" << name << "' with index: " <<
-    //    index << std::endl;
 
     // Check validity
     if (config_stack.top().name.empty()) {
@@ -453,6 +557,12 @@ class Module : public snort::Module {
       }
 
       config_stack.top().name = s_name;
+    }
+
+    if (config_stack.top().serializer.empty()) {
+      snort::ErrorMessage("ERROR: No serializer given for entry\n");
+      config_stack.pop();
+      return false;
     }
 
     if (config_stack.top().ipv4 == 0) {
@@ -475,29 +585,34 @@ class Module : public snort::Module {
       return false;
     }
 
+    auto logger = LioLi::LogDB::get<Logger>(config_stack.top().name.c_str());
+
+    if (!logger) {
+      snort::ErrorMessage("ERROR: Unable to initialize logger\n");
+      config_stack.pop();
+      return false;
+    }
+
+    // Initialize specific logger
+    logger->set_serializer(config_stack.top().serializer.c_str());
+    logger->set_max_queue_size(config_stack.top().queue_limit);
+    logger->set_serializer_restart_interval_s(
+        config_stack.top().restart_interval);
+    logger->set_port(config_stack.top().port);
+    logger->set_ipv4(config_stack.top().ipv4);
+    logger->set_retry_interval(config_stack.top().retry_interval);
+
+    // Start the logger
+    logger->start();
+
     config_stack.pop();
     return true;
-    /*
-        auto logger = LioLi::LogDB::get<Logger>(s_name);
-        if (logger->is_valid()) {
-          // Start worker
-          logger->start();
-          return true;
-        }
-
-        return false;
-    */
   }
 
-  bool set(const char *name, snort::Value &val, snort::SnortConfig *) override {
+  bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     assert(!config_stack.empty());
 
     // TODO: Implement the _env versions
-
-    //    std::cout << "MKRTEST: set Got '" << name << "' name: '" <<
-    //    val.get_name() <<
-    //    "' value: '" << val.get_as_string() << "'" << std::endl;
-
     if (val.is("alias")) {
       std::string alias = val.get_as_string();
 
@@ -510,12 +625,28 @@ class Module : public snort::Module {
 
     } else if (val.is("output_ip")) {
       config_stack.top().ipv4 = val.get_ip4();
+      /*    } else if (val.is("output_ip_env")) {
+            std::string env_name = val.get_as_string();
+            const char *name = std::getenv(env_name.c_str());
+
+            if (name && *name) {
+              ...
+          }*/
     } else if (val.is("output_port")) {
       config_stack.top().port = val.get_uint16();
+      /*    } else if (val.is("output_port_env")) {
+            std::string env_name = val.get_as_string();
+            const char *name = std::getenv(env_name.c_str());
+
+            if (name && *name) {
+              ...
+          }*/
     } else if (val.is("queue_max")) {
       config_stack.top().queue_limit = val.get_uint32();
     } else if (val.is("restart_interval_s")) {
       config_stack.top().restart_interval = val.get_uint32();
+    } else if (val.is("retry_interval_ms")) {
+      config_stack.top().retry_interval = val.get_uint32();
     } else if (val.is("serializer")) {
       std::string serializer = val.get_as_string();
 
@@ -532,65 +663,6 @@ class Module : public snort::Module {
     }
 
     return true;
-#if 0
-    auto logger = LioLi::LogDB::get<Logger>(s_name);
-    // TODO: Change to correct parameters
-/*
-    if (val.is("pipe_name") && val.get_as_string().size() > 0) {
-
-      if (!logger->get_pipe_name().empty()) {
-        snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
-                            s_name);
-        return false;
-      }
-
-      LioLi::LogDB::get<Logger>(s_name)->set_pipe_name(val.get_string());
-
-      return true;
-    } else if (val.is("pipe_env")) {
-      std::string env_name = val.get_as_string();
-      const char *name = std::getenv(env_name.c_str());
-
-      if (name && *name) {
-        if (!logger->get_pipe_name().empty()) {
-          snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
-                              get_name());
-          return false;
-        }
-
-        logger->set_pipe_name(name);
-
-        return true;
-      }
-
-      snort::ErrorMessage(
-          "ERROR: Could not read log pipe name from environment: %s in %s\n",
-          env_name.c_str(), get_name());
-    } else */ if (val.is("serializer") && val.get_as_string().size() > 0) {
-
-      if (!logger->get_serializer().empty()) {
-        snort::ErrorMessage("ERROR: You can only set serializer once in %s\n",
-                            get_name());
-        return false;
-      }
-
-      logger->set_serializer(val.get_string());
-
-      return true;
-    } else if (val.is("queue_max")) {
-      // We can't do duplication check for queue_max as it has a default value
-      // (which will be set before an explicit value)
-
-      logger->set_max_queue_size(val.get_uint32());
-      return true;
-    } else if (val.is("restart_interval_s")) {
-      logger->set_serializer_restart_interval_s(val.get_uint32());
-      return true;
-    }
-
-    // fail if we didn't get something valid
-    return false;
-#endif
   }
 
   Usage get_usage() const override {
@@ -601,8 +673,7 @@ class Module : public snort::Module {
 
   PegCount *get_counts() const override {
     // TODO: This will mess when snort tries to clear the pegs, find a solution
-    // that
-    //       lets this work in a multithreaded environment
+    // that lets this work in a multithreaded environment
     // We need to return a copy of the peg counts as we don't know when snort
     // are done with them
     static PegCounts static_pegs;
