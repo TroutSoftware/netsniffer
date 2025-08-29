@@ -412,7 +412,7 @@ public:
       while (queue.size() > max_queue_size - 1) {
         if (dropped_sequence_count++ == 0) {
           snort::WarningMessage("WARNING: %s dropping tree(s) from queue\n",
-                                s_name);
+                                get_name());
         }
         queue.pop_front();
         data_loss = true;
