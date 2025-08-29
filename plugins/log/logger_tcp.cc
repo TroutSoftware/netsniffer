@@ -313,6 +313,9 @@ class Logger : public LioLi::Logger {
       if (!socket) {
         socket.connect();
 
+        // A new connection should always start a new context
+        context.reset();
+
         // This might set the data_loss too frequently, but it's only a help,
         // not a promise
         std::scoped_lock lock(mutex);
