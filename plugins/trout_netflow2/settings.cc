@@ -21,4 +21,8 @@ LioLi::Logger &Settings::get_logger() {
 
 bool Settings::get_testmode() { return testmode; }
 
+uint32_t Settings::get_max_cache_size() { return cache_size; }
+
+uint32_t Settings::get_flush_interval_ms() { return flush_interval_ms; }
+
 } // namespace trout_netflow2

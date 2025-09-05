@@ -23,10 +23,13 @@ struct Settings {
   std::shared_ptr<LioLi::Logger> logger;
   bool testmode;
   uint32_t cache_size;
+  uint32_t flush_interval_ms;
 
 public:
   LioLi::Logger &get_logger();
   bool get_testmode();
+  uint32_t get_max_cache_size();
+  uint32_t get_flush_interval_ms();
 };
 
 } // namespace trout_netflow2

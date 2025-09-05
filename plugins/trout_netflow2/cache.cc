@@ -3,6 +3,10 @@
 #include <protocols/eth.h>
 
 // System includes
+#include <arpa/inet.h>
+#include <endian.h>
+#include <string>
+#include <type_traits>
 
 // Global includes
 
@@ -12,6 +16,7 @@
 #include "settings.h"
 
 // Debug includes
+#include <iostream>
 
 namespace trout_netflow2 {
 
@@ -134,21 +139,58 @@ Cache::add_to_cache(snort::Packet *p) {
   // We don't need the lock until this point
   std::scoped_lock cache_lock(mutex);
 
-  // TODO: check size of cache vs settings->cache_size and make space if needed
-  auto itr = cache.try_emplace(key, nullptr).first;
+  auto itr = ((settings->get_max_cache_size() <= cache.size())
+                  ? cache.find(key)
+                  : cache.try_emplace(key, nullptr).first);
+
+  // TODO: If more than say 80% of the cache is full, schedule a cache dump,
+  // maybe make as watermark
+
+  if (itr == cache.end()) {
+    Pegs::s_peg_counts.overflow++;
+
+    // Remove a random element, so you can't "hide" in a deterministic way by
+    // creating a lot of connections
+    int index = random.random(0, cache.size());
+
+    if (!overflow_element) {
+      overflow_element = std::make_shared<CacheElement2::VolatileValues>();
+    }
+
+    // TODO: Look at this algorithm
+    for (auto r = cache.begin(); r != cache.end(); r++) {
+      if (index--)
+        continue;
+
+      overflow_element->in_pkts += r->second->in_pkts;
+      overflow_element->in_bytes += r->second->in_bytes;
+      overflow_element->out_pkts += r->second->out_pkts;
+      overflow_element->out_bytes += r->second->out_bytes;
+
+      cache.erase(r);
+      break;
+    }
+
+    itr = cache.try_emplace(key, nullptr).first;
+  }
+
+  std::shared_ptr<CacheElement2::VolatileValues> data;
 
   if (!itr->second) {
     itr->second = std::make_shared<CacheElement2::VolatileValues>();
+    data = itr->second;
+  } else { // variable part already exists
+    data = itr->second;
   }
 
-  std::scoped_lock value_lock(itr->second->mutex);
+  std::scoped_lock value_lock(data->mutex);
 
   if (p->is_from_client()) {
-    itr->second->in_pkts++;
-    itr->second->in_bytes += p->pktlen;
+    data->in_pkts++;
+    data->in_bytes += p->pktlen;
   } else {
-    itr->second->out_pkts++;
-    itr->second->out_bytes += p->pktlen;
+    data->out_pkts++;
+    data->out_bytes += p->pktlen;
   }
 
   // TODO: Figure out if this is ever relevant, or the service is always given
@@ -156,16 +198,190 @@ Cache::add_to_cache(snort::Packet *p) {
   if (p->flow && p->flow->service) {
     auto key = service_map.get_add(p->flow->service);
     Pegs::s_peg_counts.different_services = service_map.size();
-    if (itr->second->service_key != 0 && itr->second->service_key != key) {
+    if (data->service_key != 0 && data->service_key != key) {
       // Count if the service name changed from a different name
       Pegs::s_peg_counts.service_change++;
     }
-    itr->second->service_key = key;
+    data->service_key = key;
   }
 
-  itr->second->updated = true;
+  data->updated = true;
 
-  return itr->second;
+  // TODO: Remove after test
+  dump();
+
+  return data;
+}
+
+// TODO: Move these templates into a namespace {} at the beginning of this file
+
+// Template used to declare data entries for the binary netflow format
+// fixed_size denotes the size for the field in the binary data, even
+// the member (v) has a different size (Must be 0, 1, 2, 4 or 8, where 0
+// means use the real size of v)
+template <auto v, int key, uint16_t fixed_size = 0> class E {
+  static_assert(fixed_size == 0, "Fixed size not implemented yet");
+
+  // Definitions to extract types from v
+  template <typename T, typename C> static T get_type(T C::*);
+  template <typename T, typename C> static C get_class(T C::*);
+
+  using T = decltype(get_type(v));
+  using C = decltype(get_class(v));
+
+  // Helper templates to determine specific input types
+  template <typename TA> struct IsStdArray : std::false_type {};
+  template <typename TA, std::size_t N>
+  struct IsStdArray<std::array<TA, N>> : std::true_type {
+    constexpr const static std::size_t size = N * sizeof(TA);
+  };
+
+public:
+  constexpr static uint16_t field_type_in_h() { return key; }
+  //  constexpr static uint16_t field_type_in_n() const {return htons(key);}
+
+  constexpr static uint16_t size_in_hbytes() {
+    if constexpr (IsStdArray<T>::value) {
+      static_assert(fixed_size == 0); // We can not change size of arrays
+      return IsStdArray<T>::size;
+    } else if constexpr (fixed_size != 0) {
+      return fixed_size;
+    } else {
+      return sizeof(T);
+    }
+  }
+  // constexpr uint16_t size_in_nbytes() const {return htons(size_in_hbytes());}
+
+  constexpr static void append_value(std::u8string &output,
+                                     Cache::CacheMapType::iterator &itr) {
+    const C *p;
+
+    if constexpr (std::is_same_v<C, Cache::CacheElement2::ConstValues>) {
+      p = &(itr->first);
+    } else {
+      p = itr->second
+              .get(); // second is a shared_ptr to the one we really want to get
+    }
+
+    assert(p); // the caller needs to ensure we have valid input
+
+    T value = p->*v;
+
+    if constexpr (IsStdArray<T>::value) {
+      static_assert(
+          sizeof(typename T::value_type) ==
+          1); // We don't handle std::arrays not made up of byte sized elements
+
+      output.append(value.begin(), value.end());
+    } else {
+      // Not an array, we just convert blindly to network format
+      T nv;
+      if constexpr (sizeof(T) == 1) {
+        nv = value;
+      } else if constexpr (sizeof(T) == 2) {
+        nv = htons(value);
+      } else if constexpr (sizeof(T) == 4) {
+        nv = htonl(value);
+      } else if constexpr (sizeof(T) == 8) {
+        nv = htobe64(value); // Using unix converter as normal htonX doesn't
+                             // support 64-bit
+      } else {
+        static_assert(false); // We do not support the given length
+      }
+
+      output.append(
+          std::u8string(reinterpret_cast<const char8_t *>(&nv), sizeof(T)));
+    }
+  }
+};
+
+// Helper function
+uint16_t generate_template_data_flow_set_id() {
+  static uint16_t next_id = 256;
+  assert(next_id <= 65535 && next_id >= 256); // Limits from RFC3954
+  return next_id++;
+}
+
+// Class that contains the definition of a FlowSet
+template <class... list> class NFSerializer {
+  constexpr static uint16_t get_id() {
+    static uint16_t id = generate_template_data_flow_set_id();
+    return id;
+  }
+
+  // Converts value to network byte order and appends it to the string
+  constexpr static void append(std::u8string &s, uint16_t value) {
+    uint16_t nv = htons(value);
+    s.append(std::u8string(reinterpret_cast<const char8_t *>(&nv), sizeof(nv)));
+  }
+
+  template <class T, class... ttypes>
+  constexpr static void append_list(std::u8string &s) {
+    append(s, T::field_type_in_h());
+    append(s, T::size_in_hbytes());
+    if constexpr (sizeof...(ttypes) != 0) {
+      append_list<ttypes...>(s);
+    }
+  }
+
+public:
+  constexpr static uint16_t count_elements() { return sizeof...(list); }
+
+  constexpr static std::u8string generate_template() {
+    std::u8string s;
+    const uint16_t length = 4 * count_elements() + 8 /* Header size */;
+    s.reserve(length);
+
+    // See RFC3954 for format
+    append(s, 0);      // FlowSet ID 0 = Template format
+    append(s, length); // Total length of package
+    append(s, get_id());
+    append(s, count_elements());
+
+    append_list<list...>(s); // Add the template data from each element
+
+    return s;
+  }
+};
+
+void Cache::dump() {
+  // clang-format off
+    constexpr static const NFSerializer<
+      E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
+      E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
+      E<&CacheElement2::ConstValues::l4_src_port,     7 >,
+      E<&CacheElement2::ConstValues::l4_dst_port,     11>,
+      E<&CacheElement2::ConstValues::src_mac,         56>,
+      E<&CacheElement2::ConstValues::dst_mac,         57>,
+      E<&CacheElement2::VolatileValues::in_bytes,     1 >,
+      E<&CacheElement2::VolatileValues::in_pkts,      2 >,
+      E<&CacheElement2::VolatileValues::out_bytes,    23>,
+      E<&CacheElement2::VolatileValues::out_pkts,     24>,
+      E<&CacheElement2::VolatileValues::service_key,  25>
+    > serializer;
+  // clang-format on
+
+  if (settings->get_logger().had_data_loss()) {
+    LioLi::Tree root;
+
+    std::u8string st = serializer.generate_template();
+
+    // TODO - figure out if it should be std::string or std::u8string
+    // everywhere....
+
+    root << (LioLi::Tree("template") << "data");
+
+    settings->get_logger() << std::move(root);
+  }
+
+  std::cout << "MKRTEST - Serializer has " << serializer.count_elements()
+            << " elements" << std::endl;
+
+  // std::scoped_lock cache_lock(mutex);
+
+  // Send cached data
+
+  //
 }
 
 } // namespace trout_netflow2

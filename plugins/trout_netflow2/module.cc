@@ -25,6 +25,11 @@ const snort::Parameter module_params[] = {
     {"cache_size", snort::Parameter::PT_INT, "1:100000", "10000",
      "The max number of simultaneous conections that can be handled at any "
      "given time"},
+    {"flush_interval_ms", snort::Parameter::PT_INT, "10:100000", "100",
+     "Max target interval for flushing the cache to the logger, might "
+     "flush sooner if cache is getting full, and might be delayed on a loaded "
+     "system"},
+
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -45,6 +50,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->testmode = val.get_bool();
   } else if (val.is("cache_size")) {
     settings->cache_size = val.get_int32();
+  } else if (val.is("flush_interval_ms")) {
+    settings->flush_interval_ms = val.get_int32();
   } else {
     // fail if we didn't get something we knew about
     return false;

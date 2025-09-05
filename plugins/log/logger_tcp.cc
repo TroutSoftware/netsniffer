@@ -112,7 +112,9 @@ class Logger : public LioLi::Logger {
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
   bool worker_done = false;   // Worker won't block anymore
-  bool data_loss = false;     // Set to true when we might have lost data
+  bool data_loss =
+      true; // Set to true when we might have lost data, which is out initial
+            // condition as we don't know what happend before our launch
 
   class Socket {
     // NOTE: Calling functions in this class has a lot of sideeffects, use with
@@ -617,6 +619,7 @@ class Module : public snort::Module {
 
     // TODO: Implement the _env versions
     if (val.is("alias")) {
+      // TODO: Check for spaces in the name
       std::string alias = val.get_as_string();
 
       if (alias.empty()) {

@@ -15,16 +15,22 @@
 // Global includes
 
 // Local includes
+#include "trout_utils.h"
 
 // Debug includes
 
 namespace trout_netflow2 {
 
-class CacheElement;
 class Settings;
 
 class Cache : public std::enable_shared_from_this<Cache> {
+  // We don't want this template to take all the space in this header, so made
+  // as friend instead
+  template <auto v, int key, uint16_t max_size> friend class E;
+
+public: // TODO: Make private after experimentation is over
   std::shared_ptr<Settings> settings;
+  Common::Random random;
 
   class ServiceMap {
   public:
@@ -44,6 +50,8 @@ class Cache : public std::enable_shared_from_this<Cache> {
 
   struct CacheElement2 {
     struct ConstValues {
+      // TODO: Make IPv4 addr into arrays, so they aren't converted to network
+      // byte order
       uint32_t ipv4_src_addr = 0; // (8)  IPv4 source address
       uint32_t ipv4_dst_addr = 0; // (12) IPv4 destination address
 
@@ -79,18 +87,26 @@ class Cache : public std::enable_shared_from_this<Cache> {
   std::mutex
       mutex; // Protects the cache map, never take if you hold a value mutex
              // (it's ok to take a value mutex when holding the cache map thou)
+
+  using CacheMapType = std::map<CacheElement2::ConstValues,
+                                std::shared_ptr<CacheElement2::VolatileValues>,
+                                CacheElement2::ConstValuesComp>;
+
   // Cache map contains the current cache, elements are removed when they are
   // logged, unless the shared_ptr count of the element is greater than 1
   // (meaning a handle is pointing to it)
-  std::map<CacheElement2::ConstValues,
-           std::shared_ptr<CacheElement2::VolatileValues>,
-           CacheElement2::ConstValuesComp>
-      cache;
+  CacheMapType cache;
+
+  // In case the cache overflows, this element sums all overflowed packages
+  std::shared_ptr<CacheElement2::VolatileValues> overflow_element;
 
   Cache(std::shared_ptr<Settings> settings);
 
   // Adds content of p to the cache, a new element will be created if needed
   std::shared_ptr<CacheElement2::VolatileValues> add_to_cache(snort::Packet *p);
+
+  // Dumps the cache to the logger
+  void dump();
 
 public:
   // Using a Handle to add service names or packets to the cache is faster than
@@ -116,10 +132,10 @@ public:
     void add_service(const char *);   // Adds service to handle
   };
 
-  std::unique_ptr<Handle> create(
-      snort::Packet
-          *p); // Creates a Handle from a snort packet (only adds the "const"
-               // part of the packet ip, port, etc as they are part of the key)
+  std::unique_ptr<Handle>
+  create(snort::Packet *p);   // Creates a Handle from a snort packet (and adds
+                              // sizes and service), if an entry already exists,
+                              // it will be updated and returned
   void add(snort::Packet *p); // Adds values from snort packet to cache (for use
                               // when there isn't a snort flow associated)
 

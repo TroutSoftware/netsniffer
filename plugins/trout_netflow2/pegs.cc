@@ -23,6 +23,8 @@ PegInfo Pegs::s_pegs[] = {
      "Count of times a service was assigned to a flow"},
     {CountType::SUM, "different_services",
      "Number of different services that were seen"},
+    {CountType::SUM, "overflow",
+     "Number of connections that wasn't logged to prevent cache overflow"},
 
     {CountType::END, nullptr, nullptr}};
 

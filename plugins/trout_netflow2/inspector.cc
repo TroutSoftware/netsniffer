@@ -42,6 +42,12 @@ void Inspector::eval(snort::Packet *p) {
   assert(p);
   assert(cache);
 
+  LioLi::Tree root;
+
+  root << (LioLi::Tree("got_data") << "p");
+
+  settings->get_logger() << std::move(root);
+
   Pegs::s_peg_counts.pkts_seen++;
 
   if (p->flow) {
