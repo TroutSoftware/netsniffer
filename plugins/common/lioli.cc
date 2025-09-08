@@ -35,6 +35,20 @@ public:
 
 class LorthHelpers {
 public:
+  static std::string escape_hex(const std::string &&in) {
+    std::string output;
+    int lc = 0;
+    for (char c : in) {
+      output += std::format("{:02x} ", c);
+      if (++lc == 8) {
+        lc = 0;
+        output += '\n';
+      }
+    }
+
+    return output;
+  }
+
   static std::string escape2(const std::string &&in) {
     std::string output;
     for (char c : in) {
@@ -230,6 +244,22 @@ void Tree::Node::adjust(size_t delta) {
   for (auto &child : children) {
     child.adjust(delta);
   }
+}
+
+std::string Tree::Node::dump_hex(const std::string &raw, unsigned level) const {
+  std::string output;
+  output.insert(0, level, '-');
+
+  output += my_name + ": \n";
+
+  output += LorthHelpers::escape_hex(raw.substr(start, end - start));
+
+  output += "\n";
+
+  for (auto &child : children) {
+    output += child.dump_hex(raw, level + 1);
+  }
+  return output;
 }
 
 std::string Tree::Node::dump_string(const std::string &raw,
@@ -575,6 +605,8 @@ void Tree::merge(Tree &&tree, bool node_merge) {
 bool Tree::operator==(const Tree &tree) const {
   return 0 == tree.as_string().compare(as_string());
 }
+
+std::string Tree::as_hex() const { return me.dump_hex(raw); }
 
 std::string Tree::as_string() const { return me.dump_string(raw); }
 

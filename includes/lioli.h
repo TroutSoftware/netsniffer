@@ -62,6 +62,7 @@ class Tree {
     void set_name(const std::string &new_name) { my_name = new_name; }
     const std::string &get_name() const { return my_name; }
 
+    std::string dump_hex(const std::string &raw, unsigned level = 0) const;
     std::string dump_string(const std::string &raw, unsigned level = 0) const;
     std::string dump_lorth(const std::string &raw, unsigned level = 0) const;
     std::string dump_python(const std::string &raw, unsigned level = 0,
@@ -103,6 +104,7 @@ public:
 
   void set_root_name(const std::string &new_name) { me.set_name(new_name); }
   const std::string &get_root_name() const { return me.get_name(); }
+  std::string as_hex() const;
   std::string as_string() const;
   std::string as_lorth() const;
   std::string as_python() const;

@@ -26,6 +26,7 @@
 #include "log/logger_tcp.h"
 #include "log/serializer_bill.h"
 #include "log/serializer_csv.h"
+#include "log/serializer_hex.h"
 #include "log/serializer_lorth.h"
 #include "log/serializer_python.h"
 #include "log/serializer_raw.h"
@@ -55,6 +56,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &logger_tcp::inspect_api.base,
   &serializer_bill::inspect_api.base,
   &serializer_csv::inspect_api.base,
+  &serializer_hex::inspect_api.base,
   &serializer_lorth::inspect_api.base,
   &serializer_python::inspect_api.base,
   &serializer_raw::inspect_api.base,
