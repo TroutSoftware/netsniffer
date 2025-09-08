@@ -107,6 +107,9 @@ std::unique_ptr<Cache::Handle> Cache::create(snort::Packet *p) {
 
 std::shared_ptr<Cache::CacheElement2::VolatileValues>
 Cache::add_to_cache(snort::Packet *p) {
+  // TODO: Remove after test
+  dump();
+
   CacheElement2::ConstValues key;
 
   const snort::eth::EtherHdr *eh =
@@ -206,9 +209,6 @@ Cache::add_to_cache(snort::Packet *p) {
   }
 
   data->updated = true;
-
-  // TODO: Remove after test
-  dump();
 
   return data;
 }
@@ -310,22 +310,41 @@ template <class... list> class NFSerializer {
   }
 
   // Converts value to network byte order and appends it to the string
-  constexpr static void append(std::string &s, uint16_t value) {
+  constexpr static void append16(std::string &s, uint16_t value) {
     uint16_t nv = htons(value);
     s.append(std::string(reinterpret_cast<const char *>(&nv), sizeof(nv)));
   }
 
+  constexpr static void append32(std::string &s, uint32_t value) {
+    uint32_t nv = htonl(value);
+    s.append(std::string(reinterpret_cast<const char *>(&nv), sizeof(nv)));
+  }
+
   template <class T, class... ttypes>
-  constexpr static void append_list(std::string &s) {
-    append(s, T::field_type_in_h());
-    append(s, T::size_in_hbytes());
+  constexpr static void append_template_list(std::string &s) {
+    append16(s, T::field_type_in_h());
+    append16(s, T::size_in_hbytes());
     if constexpr (sizeof...(ttypes) != 0) {
-      append_list<ttypes...>(s);
+      append_template_list<ttypes...>(s);
     }
   }
 
 public:
   constexpr static uint16_t count_elements() { return sizeof...(list); }
+
+  constexpr static std::string generate_packet_header(uint32_t sequence_number,
+                                                      uint16_t flow_set_count) {
+    std::string s;
+    s.reserve(40);                // A header is alwasy 40 bytes
+    append16(s, 9);               // The version of binary netflow we adhere to
+    append16(s, flow_set_count);  // Number of flow sets in the packet
+    append32(s, 0);               // TODO: add up time (seconds since boot)
+    append32(s, 0);               // TODO: add unix time in seconds
+    append32(s, sequence_number);
+    append32(s, 0);               // TODO: add unique number identifying me
+
+    return s;
+  }
 
   constexpr static std::string generate_template() {
     std::string s;
@@ -333,12 +352,12 @@ public:
     s.reserve(length);
 
     // See RFC3954 for format
-    append(s, 0);      // FlowSet ID 0 = Template format
-    append(s, length); // Total length of package
-    append(s, get_id());
-    append(s, count_elements());
+    append16(s, 0);      // FlowSet ID 0 = Template format
+    append16(s, length); // Total length of package
+    append16(s, get_id());
+    append16(s, count_elements());
 
-    append_list<list...>(s); // Add the template data from each element
+    append_template_list<list...>(s); // Add the template data from each element
 
     return s;
   }
@@ -361,17 +380,50 @@ void Cache::dump() {
     >;
   // clang-format on
 
-  if (settings->get_logger().had_data_loss()) {
-    settings->get_logger() << std::move(LioLi::Tree("template")
-                                        << Serializer::generate_template());
+  std::scoped_lock cache_lock(mutex);
 
-    std::cout << "MKRTEST - Serializer has " << Serializer::count_elements()
-              << " elements" << std::endl;
+  // We need a prediciton of how much data we will send
+  size_t remaining_entries = cache.size();
+  Cache::CacheMapType::iterator itr = cache.begin();
+
+  // std::cout << "MKRTEST: remaining_entries: " << remaining_entries <<
+  // std::endl;
+
+  while (remaining_entries) {
+
+    uint16_t send_this_time =
+        ((remaining_entries > UINT16_MAX) ? UINT16_MAX
+                                          : (uint16_t)remaining_entries);
+
+    if (settings->get_logger().had_data_loss()) {
+      LioLi::Tree buf;
+
+      buf << std::move(LioLi::Tree("PacketHeader")
+                       << Serializer::generate_packet_header(
+                              sequence_number++, 1 /* packet count */));
+      buf << std::move(LioLi::Tree("TemplateFlowSet")
+                       << Serializer::generate_template());
+
+      settings->get_logger() << std::move(buf);
+
+      //    std::cout << "MKRTEST - Serializer has " <<
+      //    Serializer::count_elements()
+      //              << " elements" << std::endl;
+    } else {
+      // std::cout << "MKRTEST: No data loss" << std::endl;
+    }
+
+    LioLi::Tree buf;
+    buf << std::move(
+        LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
+            sequence_number++, send_this_time /* packet count */));
+
+    // Send cached data
+
+    // itr
+
+    remaining_entries -= send_this_time;
   }
-
-  // std::scoped_lock cache_lock(mutex);
-
-  // Send cached data
 
   //
 }

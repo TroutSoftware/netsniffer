@@ -28,7 +28,6 @@ class Cache : public std::enable_shared_from_this<Cache> {
   // as friend instead
   template <auto v, int key, uint16_t max_size> friend class E;
 
-public: // TODO: Make private after experimentation is over
   std::shared_ptr<Settings> settings;
   Common::Random random;
 
@@ -104,6 +103,9 @@ public: // TODO: Make private after experimentation is over
 
   // Adds content of p to the cache, a new element will be created if needed
   std::shared_ptr<CacheElement2::VolatileValues> add_to_cache(snort::Packet *p);
+
+  // Sequence number of data sent from this cache
+  uint32_t sequence_number = 0;
 
   // Dumps the cache to the logger
   void dump();
