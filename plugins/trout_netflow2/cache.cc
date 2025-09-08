@@ -252,7 +252,7 @@ public:
   }
   // constexpr uint16_t size_in_nbytes() const {return htons(size_in_hbytes());}
 
-  constexpr static void append_value(std::u8string &output,
+  constexpr static void append_value(std::string &output,
                                      Cache::CacheMapType::iterator &itr) {
     const C *p;
 
@@ -290,7 +290,7 @@ public:
       }
 
       output.append(
-          std::u8string(reinterpret_cast<const char8_t *>(&nv), sizeof(T)));
+          std::string(reinterpret_cast<const char8_t *>(&nv), sizeof(T)));
     }
   }
 };
@@ -310,13 +310,13 @@ template <class... list> class NFSerializer {
   }
 
   // Converts value to network byte order and appends it to the string
-  constexpr static void append(std::u8string &s, uint16_t value) {
+  constexpr static void append(std::string &s, uint16_t value) {
     uint16_t nv = htons(value);
-    s.append(std::u8string(reinterpret_cast<const char8_t *>(&nv), sizeof(nv)));
+    s.append(std::string(reinterpret_cast<const char *>(&nv), sizeof(nv)));
   }
 
   template <class T, class... ttypes>
-  constexpr static void append_list(std::u8string &s) {
+  constexpr static void append_list(std::string &s) {
     append(s, T::field_type_in_h());
     append(s, T::size_in_hbytes());
     if constexpr (sizeof...(ttypes) != 0) {
@@ -327,8 +327,8 @@ template <class... list> class NFSerializer {
 public:
   constexpr static uint16_t count_elements() { return sizeof...(list); }
 
-  constexpr static std::u8string generate_template() {
-    std::u8string s;
+  constexpr static std::string generate_template() {
+    std::string s;
     const uint16_t length = 4 * count_elements() + 8 /* Header size */;
     s.reserve(length);
 
@@ -346,7 +346,7 @@ public:
 
 void Cache::dump() {
   // clang-format off
-    constexpr static const NFSerializer<
+    using Serializer = NFSerializer<
       E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
       E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
       E<&CacheElement2::ConstValues::l4_src_port,     7 >,
@@ -358,24 +358,16 @@ void Cache::dump() {
       E<&CacheElement2::VolatileValues::out_bytes,    23>,
       E<&CacheElement2::VolatileValues::out_pkts,     24>,
       E<&CacheElement2::VolatileValues::service_key,  25>
-    > serializer;
+    >;
   // clang-format on
 
   if (settings->get_logger().had_data_loss()) {
-    LioLi::Tree root;
+    settings->get_logger() << std::move(LioLi::Tree("template")
+                                        << Serializer::generate_template());
 
-    std::u8string st = serializer.generate_template();
-
-    // TODO - figure out if it should be std::string or std::u8string
-    // everywhere....
-
-    root << (LioLi::Tree("template") << "data");
-
-    settings->get_logger() << std::move(root);
+    std::cout << "MKRTEST - Serializer has " << Serializer::count_elements()
+              << " elements" << std::endl;
   }
-
-  std::cout << "MKRTEST - Serializer has " << serializer.count_elements()
-            << " elements" << std::endl;
 
   // std::scoped_lock cache_lock(mutex);
 
