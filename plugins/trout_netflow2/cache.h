@@ -24,9 +24,10 @@ namespace trout_netflow2 {
 class Settings;
 
 class Cache : public std::enable_shared_from_this<Cache> {
-  // We don't want this template to take all the space in this header, so made
+  // We don't want these templates to take all the space in this header, so made
   // as friend instead
   template <auto v, int key, uint16_t max_size> friend class E;
+  template <class... list> friend class NFSerializer;
 
   std::shared_ptr<Settings> settings;
   Common::Random random;
