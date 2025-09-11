@@ -48,10 +48,10 @@ std::size_t Cache::ServiceMap::size() { return service_map.size() - 1; }
 bool Cache::CacheElement2::ConstValuesComp::operator()(
     const Cache::CacheElement2::ConstValues &lhs,
     const Cache::CacheElement2::ConstValues &rhs) const {
-  return lhs.ipv4_src_addr < rhs.ipv4_src_addr ||
-         (lhs.ipv4_src_addr == rhs.ipv4_src_addr &&
-          (lhs.ipv4_dst_addr < rhs.ipv4_dst_addr ||
-           (lhs.ipv4_dst_addr == rhs.ipv4_dst_addr &&
+  return (lhs.ipv4_src_addr <=> rhs.ipv4_src_addr) < 0 ||
+         ((lhs.ipv4_src_addr <=> rhs.ipv4_src_addr) == 0 &&
+          ((lhs.ipv4_dst_addr <=> rhs.ipv4_dst_addr) < 0 ||
+           ((lhs.ipv4_dst_addr <=> rhs.ipv4_dst_addr) == 0 &&
             (lhs.l4_src_port < rhs.l4_src_port ||
              (lhs.l4_src_port == rhs.l4_src_port &&
               (lhs.l4_dst_port < rhs.l4_dst_port ||
@@ -124,13 +124,15 @@ Cache::add_to_cache(snort::Packet *p) {
 
   if (p->has_ip()) {
     if (p->ptrs.ip_api.get_src()->is_ip4()) {
-      key.ipv4_src_addr = p->ptrs.ip_api.get_src()->get_ip4_value();
+      *reinterpret_cast<uint32_t *>(key.ipv4_src_addr.data()) =
+          p->ptrs.ip_api.get_src()->get_ip4_value();
     } else {
       // TODO: Handle IPv6 for src, for now just return dummy element
       return std::make_shared<CacheElement2::VolatileValues>();
     }
     if (p->ptrs.ip_api.get_dst()->is_ip4()) {
-      key.ipv4_dst_addr = p->ptrs.ip_api.get_dst()->get_ip4_value();
+      *reinterpret_cast<uint32_t *>(key.ipv4_dst_addr.data()) =
+          p->ptrs.ip_api.get_dst()->get_ip4_value();
     } else {
       // TODO: Handle IPv6 for dst, for now just return dummy element
       return std::make_shared<CacheElement2::VolatileValues>();
@@ -296,6 +298,16 @@ public:
           std::string(reinterpret_cast<const char *>(&nv), sizeof(T)));
     }
   }
+
+  constexpr static void clear_if_volatile(Cache::CacheMapType::iterator &itr) {
+    // We only clear if volatile
+    if constexpr (std::is_same_v<C, Cache::CacheElement2::VolatileValues>) {
+      static_assert(!IsStdArray<T>::value and !std::is_array_v<T>,
+                    "Arrays not implemented in volatile part");
+
+      itr->second.get()->*v = 0;
+    }
+  }
 };
 
 // Helper function
@@ -307,7 +319,8 @@ uint16_t generate_template_data_flow_set_id() {
 
 // Class that contains the definition of a FlowSet
 template <class... list> class NFSerializer {
-  static_assert(sizeof...(list) > 0, "You need to specify at least one element (E template)");
+  static_assert(sizeof...(list) > 0,
+                "You need to specify at least one element (E template)");
   constexpr static uint16_t get_id() {
     static uint16_t id = generate_template_data_flow_set_id();
     return id;
@@ -333,8 +346,7 @@ template <class... list> class NFSerializer {
     }
   }
 
-  template <class T, class... ttypes>
-  constexpr static uint16_t value_length() {
+  template <class T, class... ttypes> constexpr static uint16_t value_length() {
     if constexpr (sizeof...(ttypes) != 0) {
       return value_length<ttypes...>() + T::size_in_hbytes();
     }
@@ -342,16 +354,29 @@ template <class... list> class NFSerializer {
   }
 
   template <class T, class... ttypes>
-  constexpr static void build_data(std::string &s, Cache::CacheMapType::iterator &itr) {
+  constexpr static void build_data(std::string &s,
+                                   Cache::CacheMapType::iterator &itr) {
     T::append_value(s, itr);
     if constexpr (sizeof...(ttypes) != 0) {
       build_data<ttypes...>(s, itr);
     }
   }
 
+  template <class T, class... ttypes>
+  constexpr static void
+  clear_volatile_data(Cache::CacheMapType::iterator &itr) {
+    T::clear_if_volatile(itr);
+
+    if constexpr (sizeof...(ttypes) != 0) {
+      clear_volatile_data<ttypes...>(itr);
+    }
+  }
+
 public:
   constexpr static uint16_t count_elements() { return sizeof...(list); }
-  constexpr static uint16_t sum_value_lengths() { return value_length<list...>(); }
+  constexpr static uint16_t sum_value_lengths() {
+    return value_length<list...>();
+  }
 
   constexpr static uint16_t get_packet_header_length() {
     return 40; // See RFC3954
@@ -361,18 +386,17 @@ public:
                                                       uint16_t flow_set_count) {
     std::string s;
     s.reserve(get_packet_header_length());
-    append16(s, 9);               // The version of binary netflow we adhere to
-    append16(s, flow_set_count);  // Number of flow sets in the packet
-    append32(s, 0);               // TODO: add up time (seconds since boot)
-    append32(s, 0);               // TODO: add unix time in seconds
+    append16(s, 9);              // The version of binary netflow we adhere to
+    append16(s, flow_set_count); // Number of flow sets in the packet
+    append32(s, 0);              // TODO: add up time (seconds since boot)
+    append32(s, 0);              // TODO: add unix time in seconds
     append32(s, sequence_number);
-    append32(s, 0);               // TODO: add unique number identifying me
+    append32(s, 0); // TODO: add unique number identifying me
 
     assert(s.length() != get_packet_header_length());
 
     return s;
   }
-
 
   constexpr static std::string generate_template() {
     std::string s;
@@ -390,16 +414,20 @@ public:
     return s;
   }
 
-  constexpr static void generate_data_flow_set_header(std::string &s, uint16_t no_of_records) {
+  constexpr static void generate_data_flow_set_header(std::string &s,
+                                                      uint16_t no_of_records) {
     append16(s, get_id());
-    append16(s, 4 + (no_of_records*sum_value_lengths()));  // the +4 is for the ID and length fields
+    append16(
+        s, 4 + (no_of_records *
+                sum_value_lengths())); // the +4 is for the ID and length fields
   }
 
   constexpr static uint16_t get_data_flow_set_header_length() {
-    return 4;  // As per RFC3954
+    return 4; // As per RFC3954
   };
 
-  constexpr static std::string generate_data_flow_set_header(uint16_t no_of_records) {
+  constexpr static std::string
+  generate_data_flow_set_header(uint16_t no_of_records) {
     std::string s;
     s.reserve(get_data_flow_set_header_length());
     generate_data_flow_set_header(s, no_of_records);
@@ -407,15 +435,20 @@ public:
     return s;
   }
 
-  constexpr static void serialize(std::string &s, Cache::CacheMapType::iterator &itr) {
+  constexpr static void serialize(std::string &s,
+                                  Cache::CacheMapType::iterator &itr) {
     build_data<list...>(s, itr);
   }
 
   constexpr static std::string serialize(Cache::CacheMapType::iterator &itr) {
     std::string s;
-    s.reserve(sum_value_lengths());   // Reserve space for the entry
+    s.reserve(sum_value_lengths()); // Reserve space for the entry
     serialize(s, itr);
     return s;
+  }
+
+  constexpr static void clear_volatile(Cache::CacheMapType::iterator &itr) {
+    clear_volatile_data<list...>(itr);
   }
 };
 
@@ -438,69 +471,61 @@ void Cache::dump() {
 
   std::scoped_lock cache_lock(mutex);
 
-  // We need a prediciton of how much data we will send
-  size_t remaining_entries = cache.size();
+  constexpr const static uint16_t max_to_send =
+      (UINT16_MAX - Serializer::get_data_flow_set_header_length()) /
+      Serializer::sum_value_lengths();
+
   Cache::CacheMapType::iterator itr = cache.begin();
 
-  // std::cout << "MKRTEST: remaining_entries: " << remaining_entries <<
-  // std::endl;
+  while (itr != cache.end()) {
 
-  while (remaining_entries) {
+    uint16_t entries_prepared = 0;
+    std::string out_buffer;
+    out_buffer.reserve(
+        UINT16_MAX); // Note, a netflow FlowSet is limited to 64Kb
 
-    // TODO: Fix this calculation
-    constexpr const uint16_t max_to_send = (UINT16_MAX
-                           - Serializer::get_data_flow_set_header_length()
-                           - Serializer::get_packet_header_length()
-                           ) / Serializer::sum_value_lengths();
-
-    uint16_t send_this_time = ((remaining_entries > max_to_send) ? max_to_send : (uint16_t)remaining_entries);
-
-    if (settings->get_logger().had_data_loss()) {
-      LioLi::Tree buf;
-
-      buf << std::move(LioLi::Tree("PacketHeader")
-                       << Serializer::generate_packet_header(
-                              sequence_number++, 1 /* packet count */));
-      buf << std::move(LioLi::Tree("TemplateFlowSet")
-                       << Serializer::generate_template());
-
-      settings->get_logger() << std::move(buf);
-    }
-
-    LioLi::Tree buf;
-    buf << std::move(
-        LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
-            sequence_number++, send_this_time /* packet count */));
-
-    // Send cached data
-    std::string values = Serializer::generate_data_flow_set_header(send_this_time);
-    const uint16_t expected_length = Serializer::sum_value_lengths() * send_this_time + values.length();
-    values.reserve(expected_length);   // Reserve space
-
-    for(uint16_t i=0;i<send_this_time;i++) {
-      assert(itr != cache.end());
+    while (entries_prepared < max_to_send && itr != cache.end()) {
       assert(itr->second);
-      {
-        std::scoped_lock lock(itr->second->mutex);
-
-        Serializer::serialize(values, itr);
-        // TODO: Clear value part
+      std::scoped_lock lock(itr->second->mutex);
+      if (itr->second->updated) {
+        Serializer::serialize(out_buffer, itr);
+        Serializer::clear_volatile(itr);
+        itr->second->updated = false;
+        entries_prepared++;
       }
 
       auto old = itr++;
 
+      // Delete entries that no-one knows about
       if (old->second.use_count() == 1) {
         cache.erase(old);
       }
     }
 
-    assert(values.length() == expected_length);  // We didn't reserve the correct number of bytes
+    // Bail, if nothing to do
+    if (entries_prepared == 0)
+      break;
 
-    buf << std::move(LioLi::Tree("PacketData") << values);
+    LioLi::Tree buf;
+
+    if (settings->get_logger().had_data_loss()) {
+      buf << std::move(LioLi::Tree("PacketHeader")
+                       << Serializer::generate_packet_header(
+                              sequence_number++, 2 /* packet count */));
+      buf << std::move(LioLi::Tree("TemplateFlowSet")
+                       << Serializer::generate_template());
+    } else {
+      buf << std::move(LioLi::Tree("PacketHeader")
+                       << Serializer::generate_packet_header(
+                              sequence_number++, 1 /* packet count */));
+    }
+
+    buf << std::move(
+        LioLi::Tree("DataFlowSet")
+        << Serializer::generate_data_flow_set_header(entries_prepared)
+        << out_buffer);
 
     settings->get_logger() << std::move(buf);
-
-    remaining_entries -= send_this_time;
   }
 
   //

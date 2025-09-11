@@ -52,8 +52,10 @@ class Cache : public std::enable_shared_from_this<Cache> {
     struct ConstValues {
       // TODO: Make IPv4 addr into arrays, so they aren't converted to network
       // byte order
-      uint32_t ipv4_src_addr = 0; // (8)  IPv4 source address
-      uint32_t ipv4_dst_addr = 0; // (12) IPv4 destination address
+      std::array<uint8_t, 4> ipv4_src_addr = {0, 0, 0,
+                                              0}; // (8)  IPv4 source address
+      std::array<uint8_t, 4> ipv4_dst_addr = {
+          0, 0, 0, 0}; // (12) IPv4 destination address
 
       uint16_t l4_src_port = 0; // (7)  TCP/UDP source port
       uint16_t l4_dst_port = 0; // (11) TCP/UDP destination port
@@ -112,6 +114,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
   void dump();
 
 public:
+  ~Cache() { dump(); }
   // Using a Handle to add service names or packets to the cache is faster than
   // adding them without
   class Handle {
