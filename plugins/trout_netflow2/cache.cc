@@ -230,8 +230,6 @@ Cache::add_to_cache(snort::Packet *p) {
   return data;
 }
 
-// TODO: Move these templates into a namespace {} at the beginning of this file
-
 // Template used to declare data entries for the binary netflow format
 // fixed_size denotes the size for the field in the binary data, even
 // the member (v) has a different size (Must be 0, 1, 2, 4 or 8, where 0
@@ -551,7 +549,7 @@ void Cache::worker_loop() {
     dump(); // This might take some time, don't keep the worker mutex
     lock.lock();
 
-    cv.wait_for(lock, std::chrono::seconds(1),
+    cv.wait_for(lock, std::chrono::milliseconds(settings->get_flush_interval_ms()),
                 [this] { return terminate || worker_kicked; });
   }
 
