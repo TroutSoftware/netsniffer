@@ -4,11 +4,13 @@
 
 // System includes
 #include <arpa/inet.h>
+#include <chrono>
 #include <endian.h>
 #include <string>
 #include <type_traits>
 
 // Global includes
+#include "testable_time.h"
 
 // Local includes
 #include "cache.h"
@@ -391,13 +393,14 @@ public:
     return 40; // See RFC3954
   };
 
-  constexpr static std::string generate_packet_header(uint32_t sequence_number,
+  constexpr static std::string generate_packet_header(uint32_t now_in_s,
+                                                      uint32_t sequence_number,
                                                       uint16_t flow_set_count) {
     std::string s;
     s.reserve(get_packet_header_length());
     append16(s, 9);              // The version of binary netflow we adhere to
     append16(s, flow_set_count); // Number of flow sets in the packet
-    append32(s, 0);              // TODO: add up time (seconds since boot)
+    append32(s, now_in_s);       // TODO: add up time (seconds since boot)
     append32(s, 0);              // TODO: add unix time in seconds
     append32(s, sequence_number);
     append32(s, 0); // TODO: add unique number identifying me
@@ -517,16 +520,22 @@ void Cache::dump() {
 
     LioLi::Tree buf;
 
+    auto now = Common::TestableTime::now<std::chrono::system_clock>(
+        settings->get_testmode());
+    uint32_t now_in_s =
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
+            .count();
+
     if (settings->get_logger().had_data_loss()) {
-      buf << std::move(LioLi::Tree("PacketHeader")
-                       << Serializer::generate_packet_header(
-                              sequence_number++, 2 /* packet count */));
+      buf << std::move(
+          LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
+              now_in_s, sequence_number++, 2 /* packet count */));
       buf << std::move(LioLi::Tree("TemplateFlowSet")
                        << Serializer::generate_template());
     } else {
-      buf << std::move(LioLi::Tree("PacketHeader")
-                       << Serializer::generate_packet_header(
-                              sequence_number++, 1 /* packet count */));
+      buf << std::move(
+          LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
+              now_in_s, sequence_number++, 1 /* packet count */));
     }
 
     buf << std::move(
@@ -549,7 +558,8 @@ void Cache::worker_loop() {
     dump(); // This might take some time, don't keep the worker mutex
     lock.lock();
 
-    cv.wait_for(lock, std::chrono::milliseconds(settings->get_flush_interval_ms()),
+    cv.wait_for(lock,
+                std::chrono::milliseconds(settings->get_flush_interval_ms()),
                 [this] { return terminate || worker_kicked; });
   }
 
