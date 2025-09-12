@@ -6,9 +6,11 @@
 
 // System includes
 #include <array>
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -81,7 +83,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
           0; // (24) Outgoing counter for packets (reset on dump)
       ServiceMap::ServiceKey service_key =
           0; // (25) Propritary service name key (NOT reset on dump)
-      bool updated =
+      bool dirty =
           false; // Set to true when a field is updated, false when dumped
     };
   };
@@ -113,8 +115,24 @@ class Cache : public std::enable_shared_from_this<Cache> {
   // Dumps the cache to the logger
   void dump();
 
+  // Members related to controlling the worker thread
+  std::thread worker_thread;
+  std::mutex worker_mutex;    // Mutex protecting the worker members
+  std::condition_variable cv; // Used to enable worker to sleep when there
+                              // aren't anything for it to do
+  bool terminate = false;     // Set to true if worker loop should be terminated
+  bool worker_done = false;   // Worker won't block anymore
+  bool worker_kicked = false; // Set to true when the worker is kicked
+
+  void worker_loop();  // The function that does the work
+  void start_worker(); // Starts the worker thread
+  void stop_worker();  // Stops the worker thread (will block until it returns)
+
+  void kick_worker(); // Kick the worker loop (will flush the cache)
+
 public:
-  ~Cache() { dump(); }
+  ~Cache();
+
   // Using a Handle to add service names or packets to the cache is faster than
   // adding them without
   class Handle {

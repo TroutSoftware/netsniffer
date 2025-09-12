@@ -22,6 +22,13 @@ namespace trout_netflow2 {
 
 Cache::Cache(std::shared_ptr<Settings> settings) : settings(settings) {
   assert(settings);
+
+  start_worker();
+}
+
+Cache::~Cache() {
+  stop_worker();
+  dump();
 }
 
 std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings) {
@@ -79,6 +86,8 @@ void Cache::Handle::add_sizes(snort::Packet *p) {
     data->out_bytes += p->pktlen;
   }
 
+  data->dirty = true;
+
   Pegs::s_peg_counts.total_bytes += p->pktlen;
 }
 
@@ -96,6 +105,7 @@ void Cache::Handle::add_service(const char *s) {
   }
 
   data->service_key = key;
+  data->dirty = true;
 }
 
 void Cache::add(snort::Packet *p) { add_to_cache(p); }
@@ -109,7 +119,7 @@ std::shared_ptr<Cache::CacheElement2::VolatileValues>
 Cache::add_to_cache(snort::Packet *p) {
 
   // TODO: Remove after test
-  dump();
+  // dump();
 
   CacheElement2::ConstValues key;
 
@@ -151,8 +161,10 @@ Cache::add_to_cache(snort::Packet *p) {
                   ? cache.find(key)
                   : cache.try_emplace(key, nullptr).first);
 
-  // TODO: If more than say 80% of the cache is full, schedule a cache dump,
-  // maybe make as watermark
+  // Check if we are getting close to the max
+  if (settings->get_max_cache_size() < (cache.size() + (cache.size() >> 3))) {
+    kick_worker(); // Will start the process of flushing the cache
+  }
 
   if (itr == cache.end()) {
     Pegs::s_peg_counts.overflow++;
@@ -213,7 +225,7 @@ Cache::add_to_cache(snort::Packet *p) {
     data->service_key = key;
   }
 
-  data->updated = true;
+  data->dirty = true;
 
   return data;
 }
@@ -274,8 +286,8 @@ public:
 
     if constexpr (IsStdArray<T>::value) {
       static_assert(
-          sizeof(typename T::value_type) ==
-          1); // We don't handle std::arrays not made up of byte sized elements
+          sizeof(typename T::value_type) == 1,
+          "We don't handle std::arrays not made up of byte sized elements");
 
       output.append(value.begin(), value.end());
     } else {
@@ -291,7 +303,7 @@ public:
         nv = htobe64(value); // Using unix converter as normal htonX doesn't
                              // support 64-bit
       } else {
-        static_assert(false); // We do not support the given length
+        static_assert(false, "We do not support the given length of field");
       }
 
       output.append(
@@ -366,7 +378,6 @@ template <class... list> class NFSerializer {
   constexpr static void
   clear_volatile_data(Cache::CacheMapType::iterator &itr) {
     T::clear_if_volatile(itr);
-
     if constexpr (sizeof...(ttypes) != 0) {
       clear_volatile_data<ttypes...>(itr);
     }
@@ -487,10 +498,10 @@ void Cache::dump() {
     while (entries_prepared < max_to_send && itr != cache.end()) {
       assert(itr->second);
       std::scoped_lock lock(itr->second->mutex);
-      if (itr->second->updated) {
+      if (itr->second->dirty) {
         Serializer::serialize(out_buffer, itr);
         Serializer::clear_volatile(itr);
-        itr->second->updated = false;
+        itr->second->dirty = false;
         entries_prepared++;
       }
 
@@ -522,13 +533,71 @@ void Cache::dump() {
 
     buf << std::move(
         LioLi::Tree("DataFlowSet")
-        << Serializer::generate_data_flow_set_header(entries_prepared)
+        << Serializer::generate_data_flow_set_header(
+               entries_prepared) // TODO: Check if std::move is needed
         << out_buffer);
 
     settings->get_logger() << std::move(buf);
   }
+}
 
-  //
+void Cache::worker_loop() {
+  std::unique_lock lock(worker_mutex);
+  // Main loop
+  while (!terminate) {
+    worker_kicked = false;
+
+    lock.unlock();
+    dump(); // This might take some time, don't keep the worker mutex
+    lock.lock();
+
+    cv.wait_for(lock, std::chrono::seconds(1),
+                [this] { return terminate || worker_kicked; });
+  }
+
+  // We are done
+  worker_done = true;
+
+  cv.notify_all();
+}
+
+void Cache::kick_worker() {
+  std::unique_lock lock(worker_mutex);
+  worker_kicked = true;
+  cv.notify_all();
+}
+
+void Cache::start_worker() {
+  terminate = false;
+  worker_done = false;
+  worker_thread = std::thread{&Cache::worker_loop, this};
+}
+
+void Cache::stop_worker() {
+  // Check worker is running
+  if (worker_thread.joinable()) {
+    std::unique_lock lock(worker_mutex);
+
+    // If thread hasn't killed it self
+    if (!worker_done) {
+      terminate = true;
+
+      // Kick worker, we do not release the lock, as we need to reach
+      // wait_for(..) before the worker is allowed to continue
+      cv.notify_all();
+
+      // Give worker a chance to go down gracefully
+      cv.wait_for(lock, std::chrono::seconds(2),
+                  [this] { return worker_done; });
+
+      if (!worker_done) {
+        // Still not done, set it free
+        worker_thread.detach();
+        return;
+      }
+    }
+    worker_thread.join();
+  }
 }
 
 } // namespace trout_netflow2
