@@ -162,12 +162,14 @@ void Inspector::Worker::log(ReqEntry &req) {
   const auto src_mac = std::to_array<const uint8_t>(req.arp.arp_sha);
   const auto src_ip = std::to_array<const uint8_t>(req.arp.arp_spa);
   root << (LioLi::Tree("principal")
-           << LioLi::TreeGenerators::format_MAC(src_mac)
-           << LioLi::TreeGenerators::format_IPv4(src_ip));
+           << (LioLi::Tree("addr")
+               << LioLi::TreeGenerators::format_MAC(src_mac)
+               << LioLi::TreeGenerators::format_IPv4(src_ip)));
 
   const auto dst_ip = std::to_array<const uint8_t>(req.arp.arp_tpa);
-  root << (LioLi::Tree("looking_for")
-           << LioLi::TreeGenerators::format_IPv4(dst_ip));
+  root << (LioLi::Tree("endpoint")
+           << (LioLi::Tree("addr")
+               << LioLi::TreeGenerators::format_IPv4(dst_ip)));
 
   settings->get_logger() << std::move(root);
 }
