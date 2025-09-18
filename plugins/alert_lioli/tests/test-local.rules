@@ -10,6 +10,13 @@ alert ip any any -> any any (
   http_method;
   lioli_bind:$.principal.method;
 
-  lioli_tag: $.principal.tag "Rule 27";  
+  lioli_tag: $.principal.tag "Rule 27";
+
+  rem: reference test;
+  reference: url,www.my.domain;
+  reference: msb,"my id";
+
+  classtype: not-suspicious;
+  priority: 5;
 )
 

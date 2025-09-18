@@ -69,7 +69,7 @@ class Logger : public LioLi::Logger {
 
       if (!ofile.good()) {
         snort::ErrorMessage("ERROR: Could not open output file %s\n",
-                            serializer_name.c_str());
+                            file_name.c_str());
       }
     }
     return ofile;

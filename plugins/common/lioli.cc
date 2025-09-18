@@ -451,9 +451,6 @@ bool Tree::Node::lookup(std::string key, size_t &start, size_t &end,
   std::string child_key =
       (dot_pos != std::string::npos) ? key.substr(dot_pos + 1) : "";
 
-  // std::cout << "MKRTEST: At: " << my_name << " Looking for: " << key << "
-  // skip is: " << skip << std::endl;
-
   if (my_name != key.substr(0, dot_pos)) {
     return false;
   }
@@ -461,26 +458,16 @@ bool Tree::Node::lookup(std::string key, size_t &start, size_t &end,
   if (child_key.length() == 0) {
     if (skip > 0) {
       skip--;
-      // std::cout << "MKRTEST: skipping match" << std::endl;
       return false;
     }
 
-    //		std::cout << "MKRTEST: That was me" << std::endl;
     start = this->start;
     end = this->end;
 
-    // std::cout << "MKRTEST: MATCH!!!" << std::endl;
     return true;
   }
 
-  // std::cout << "MKRTEST: At: " << my_name << " Looking for: " << child_key <<
-  // " skip is: " << skip << std::endl;
-
-  //	std::cout << "MKRTEST: Searching for a child named: " << child_key <<
-  // std::endl;
   for (auto &child : children) {
-    // std::cout << "MKRTEST: At: " << my_name << " Looking at child: " <<
-    // child.my_name << std::endl;
     if (child.lookup(child_key, start, end, skip)) {
       return true;
     }
@@ -496,10 +483,7 @@ bool Tree::Node::regex_lookup(
 
   std::string my_path = rkey + my_name;
 
-  // std::cout << "MKRTEST: Now checking: " << my_path << std::endl;
-
   if (std::regex_match(my_path.c_str(), m, regex)) {
-    // std::cout << "MKRTEST: MATCH!!!" << std::endl;
     if (!lambda(start, end)) {
       return false;
     }
@@ -508,8 +492,6 @@ bool Tree::Node::regex_lookup(
   my_path += '.';
 
   for (auto &child : children) {
-    //    std::cout << "MKRTEST: At: " << my_path
-    //              << " Looking at child: " << child.my_name << std::endl;
     if (!child.regex_lookup(regex, lambda, my_path)) {
       return false;
     }
@@ -626,8 +608,6 @@ std::string Tree::lookup(std::string key) const {
   size_t start;
   size_t end;
   size_t skip = 0;
-
-  // std::cout << "MKRTEST: Tree::lookup(" << key << ")" << std::endl;
 
   if (me.lookup(key, start, end, skip)) {
     return raw.substr(start, end - start);

@@ -134,6 +134,44 @@ private:
       root << (LioLi::Tree("sid") << e->get_sid());
       root << (LioLi::Tree("gid") << e->get_gid());
       root << (LioLi::Tree("rev") << e->get_rev());
+
+      const char *class_type = e->get_class_type();
+      if (class_type) {
+        root << (LioLi::Tree("class_type") << class_type);
+      }
+      root << (LioLi::Tree("priority") << e->get_priority());
+
+      {
+        // root << (LioLi::Tree("ref_idx") << e->get_event_reference());
+        LioLi::Tree references("#reference");
+
+        unsigned idx = 0;
+        const char *name;
+        const char *id;
+        const char *url;
+
+        while (e->get_reference(idx, name, id, url)) {
+          LioLi::Tree item("item");
+          if (name) {
+            item << (LioLi::Tree("name") << name);
+          } else {
+            item << (LioLi::Tree("no-name"));
+          }
+          if (url) {
+            item << (LioLi::Tree("url") << url);
+          }
+          if (id) {
+            item << (LioLi::Tree("id") << id);
+          }
+
+          references << item;
+          idx++;
+        }
+
+        if (idx) {
+          root << references;
+        }
+      }
     }
 
     root << (LioLi::Tree(type) << msg);

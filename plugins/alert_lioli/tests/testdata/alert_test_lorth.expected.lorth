@@ -3,6 +3,7 @@ $ {
  sid "0" .
  gid "1" .
  rev "2" .
+ priority "0" .
  alert "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -27,6 +28,7 @@ $ {
  sid "0" .
  gid "1" .
  rev "2" .
+ priority "0" .
  log "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -51,6 +53,7 @@ $ {
  sid "0" .
  gid "1" .
  rev "2" .
+ priority "0" .
  alert "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
@@ -75,6 +78,7 @@ $ {
  sid "0" .
  gid "1" .
  rev "2" .
+ priority "0" .
  log "\"This is a log of an http header\"" .
  protocol "http" .
  endpoint {
