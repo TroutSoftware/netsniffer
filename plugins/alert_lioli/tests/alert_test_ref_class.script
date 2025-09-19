@@ -1,0 +1,70 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/google_http.pcap
+cmp output.txt testdata/alert_test_ref_class.expected.txt
+
+-- cfg.lua --
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+alert_lioli = { logger = 'logger_file',
+                testmode = true }
+
+alerts = { log_references = true }
+
+stream = {}
+stream_tcp = {}
+http_inspect = {}
+
+wizard = {
+    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
+}
+
+binder = {
+    { when = { service = 'http' }, use = { type = 'http_inspect' } },
+    { use = { type = 'wizard' } }
+}
+
+
+references = {
+    { name = 'ref1',   url = 'http://www.ref1.root1' },
+    { name = '2ref',   url = 'http://www.ref2.root1' },
+}
+
+classifications =
+{
+    { name = 'Pri3', priority = 3,
+      text = 'HIGH Priority!!!' },
+
+    { name = 'pri2', priority = 2,
+      text = 'middle priority' },
+
+    { name = 'lower', priority = 1,
+      text = 'Low priority' }
+}
+
+ips = {
+  include = 'lua.rules'
+}
+
+-- lua.rules --
+
+
+
+alert ip any any -> any any (
+  msg:"This is a log of an http header";
+
+  http_header:field host;
+
+  content:"google";
+
+  http_method;
+
+  reference: ref1,www.myref1.domain;
+  reference: 2ref,2ref;
+
+  classtype: pri2;
+
+  sid:3000;
+)

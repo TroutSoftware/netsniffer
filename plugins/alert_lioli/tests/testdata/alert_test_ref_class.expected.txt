@@ -1,0 +1,113 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z300010middle priority2ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref\"This is a log of an http header\"http209.85.202.100:8010.67.21.59:48872
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000
+-gid: 1
+-rev: 0
+-class_type: middle priority
+-priority: 2
+-#reference: ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref
+--item: ref1http://www.ref1.root1www.myref1.domain
+---name: ref1
+---url: http://www.ref1.root1
+---id: www.myref1.domain
+--item: 2refhttp://www.ref2.root12ref
+---name: 2ref
+---url: http://www.ref2.root1
+---id: 2ref
+-alert: \"This is a log of an http header\"
+-protocol: http
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-principal: 10.67.21.59:48872
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z300010middle priority2ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref\"This is a log of an http header\"http209.85.202.100:8010.67.21.59:48872
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000
+-gid: 1
+-rev: 0
+-class_type: middle priority
+-priority: 2
+-#reference: ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref
+--item: ref1http://www.ref1.root1www.myref1.domain
+---name: ref1
+---url: http://www.ref1.root1
+---id: www.myref1.domain
+--item: 2refhttp://www.ref2.root12ref
+---name: 2ref
+---url: http://www.ref2.root1
+---id: 2ref
+-log: \"This is a log of an http header\"
+-protocol: http
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-principal: 10.67.21.59:48872
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z300010middle priority2ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref\"This is a log of an http header\"http172.253.116.147:8010.67.21.59:55904
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000
+-gid: 1
+-rev: 0
+-class_type: middle priority
+-priority: 2
+-#reference: ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref
+--item: ref1http://www.ref1.root1www.myref1.domain
+---name: ref1
+---url: http://www.ref1.root1
+---id: www.myref1.domain
+--item: 2refhttp://www.ref2.root12ref
+---name: 2ref
+---url: http://www.ref2.root1
+---id: 2ref
+-alert: \"This is a log of an http header\"
+-protocol: http
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-principal: 10.67.21.59:55904
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z300010middle priority2ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref\"This is a log of an http header\"http172.253.116.147:8010.67.21.59:55904
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000
+-gid: 1
+-rev: 0
+-class_type: middle priority
+-priority: 2
+-#reference: ref1http://www.ref1.root1www.myref1.domain2refhttp://www.ref2.root12ref
+--item: ref1http://www.ref1.root1www.myref1.domain
+---name: ref1
+---url: http://www.ref1.root1
+---id: www.myref1.domain
+--item: 2refhttp://www.ref2.root12ref
+---name: 2ref
+---url: http://www.ref2.root1
+---id: 2ref
+-log: \"This is a log of an http header\"
+-protocol: http
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-principal: 10.67.21.59:55904
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
