@@ -43,7 +43,7 @@ class Logger : public LioLi::Logger {
   std::shared_ptr<LioLi::Serializer::Context> context;
   std::ofstream ofile;
 
-  bool data_loss = false;
+  bool data_loss = true;
 
   LioLi::Serializer::Context &get_context() {
     if (!context) {
