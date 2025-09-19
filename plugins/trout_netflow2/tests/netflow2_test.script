@@ -1,29 +1,24 @@
 # Inspectors and spells are in place to attribute the correct flow
 pcap testdata/google_http.pcap
-#cmp output.lorth testdata/netflow_test.expected.lorth
+cmp output.hex testdata/netflow2_test.expected.hex
 
 -- cfg.lua --
 
-serializer_raw = { secret_sequence = "0022445566AABBCCDD"}
-logger_tcp = {  output_ip = '127.0.0.1',
-                output_port = 12345,
-                serializer = 'serializer_raw', }
 
-logger_file = { file_name = 'output.lorth',
-                serializer = 'serializer_lorth' }
-
-trout_netflow2 = { logger = 'logger_file',
-                  testmode = true }
 stream = {}
 stream_tcp = {}
 stream_udp = {}
-http_inspect = {}
 
-wizard = {
-    spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = {'HTTP/'} } }
-}
+serializer_hex = {}
+serializer_raw = { secret_sequence = "0022445566AABBCCDD" }
 
-binder = {
-    { when = { service = 'http' }, use = { type = 'http_inspect' } },
-    { use = { type = 'wizard' } }
-}
+logger_file = { serializer = 'serializer_hex',
+                file_name = 'output.hex'}
+
+trout_netflow2 = { logger = 'logger_file',
+                   testmode = true }
+
+
+
+
+
