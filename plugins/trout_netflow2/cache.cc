@@ -119,10 +119,6 @@ std::unique_ptr<Cache::Handle> Cache::create(snort::Packet *p) {
 
 std::shared_ptr<Cache::CacheElement2::VolatileValues>
 Cache::add_to_cache(snort::Packet *p) {
-
-  // TODO: Remove after test
-  // dump();
-
   CacheElement2::ConstValues key;
 
   const snort::eth::EtherHdr *eh =
@@ -322,6 +318,13 @@ public:
   }
 };
 
+// C is same as E, except it treats the element as Constant, i.e. it won't be cleared
+template <auto v, int key, uint16_t fixed_size = 0> class C : public E<v, key, fixed_size> {
+public:
+  constexpr static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
+};
+
+
 // Helper function
 uint16_t generate_template_data_flow_set_id() {
   static uint16_t next_id = 256;
@@ -477,7 +480,7 @@ void Cache::dump() {
       E<&CacheElement2::VolatileValues::in_pkts,      2 >,
       E<&CacheElement2::VolatileValues::out_bytes,    23>,
       E<&CacheElement2::VolatileValues::out_pkts,     24>,
-      E<&CacheElement2::VolatileValues::service_key,  25>
+      C<&CacheElement2::VolatileValues::service_key,  25>  // Treat the service key as if it is a constant
     >;
   // clang-format on
 
