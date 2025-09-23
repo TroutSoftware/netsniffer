@@ -10,6 +10,7 @@
 
 // System includes
 #include <cassert>
+#include <map>
 #include <mutex>
 #include <shared_mutex>
 

@@ -2,7 +2,7 @@
 
 redo-ifchange libdaq
 
-tag=3.7.2.0
+tag=3.9.5.0
 
 curl -sL "https://github.com/snort3/snort3/archive/refs/tags/$tag.tar.gz" | tar -C "$BUILD_DIR" -xzf -
 
