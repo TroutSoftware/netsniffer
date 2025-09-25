@@ -400,8 +400,8 @@ public:
     s.reserve(get_packet_header_length());
     append16(s, 9);              // The version of binary netflow we adhere to
     append16(s, flow_set_count); // Number of flow sets in the packet
-    append32(s, now_in_s);       // TODO: add up time (seconds since boot)
-    append32(s, 0);              // TODO: add unix time in seconds
+    append32(s, 0);              // TODO: add up time (seconds since boot)
+    append32(s, now_in_s);       // Unix time in seconds
     append32(s, sequence_number);
     append32(s, 0); // TODO: add unique number identifying me
 
