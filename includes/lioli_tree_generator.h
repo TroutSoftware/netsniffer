@@ -39,11 +39,7 @@ class TreeGenerators {
 
     sfip_ntop(sf_ip, ip_str, sizeof(ip_str));
 
-    if (sf_ip->is_ip6()) {
-      ss << '[' << ip_str << ']';
-    } else {
-      ss << ip_str;
-    }
+    ss << ip_str;
   }
 
 public:
@@ -81,7 +77,12 @@ public:
 
       append_sf_ip(ss, sf_ip);
 
-      addr << (Tree("ip") << ss.str());
+      if (sf_ip->is_ip6()) {
+        addr << "[" << (Tree("ip") <<  ss.str()) << "]";
+      } else {
+        addr << (Tree("ip") <<  ss.str());
+      }
+
 
       if (p->is_tcp() || p->is_udp()) {
         addr << ":" << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));
