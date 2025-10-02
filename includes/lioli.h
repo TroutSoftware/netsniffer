@@ -119,6 +119,8 @@ public:
     return raw.length();
   } // Very fast and simple hash function
 
+  bool has_data() const {return raw.size() != 0;}
+
   // For Debug
   bool is_valid() const; // Checks if the tree is valid
 
