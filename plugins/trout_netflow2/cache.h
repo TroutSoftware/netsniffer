@@ -15,6 +15,7 @@
 #include <vector>
 
 // Global includes
+#include <log_framework.h>
 
 // Local includes
 #include "trout_utils.h"
@@ -31,24 +32,32 @@ class Cache : public std::enable_shared_from_this<Cache> {
   template <auto v, int key, uint16_t max_size> friend class E;
   template <auto v, int key, uint16_t max_size> friend class C;
   template <class... list> friend class NFSerializer;
+  template <uint16_t fixed_string_size, int key> friend class ServiceMapE;
 
   std::shared_ptr<Settings> settings;
   Common::Random random;
 
   class ServiceMap {
+    // template <uint16_t fixed_string_size, int key> friend class ServiceMapE;
   public:
-    using ServiceKey = uint32_t;
+    using ServiceKeyT = uint32_t;
+    using ServiceMapT = std::unordered_map<std::string, ServiceKeyT>;
 
   private:
     std::mutex mutex; // Protects the service_map
-    std::unordered_map<std::string, ServiceKey> service_map;
+    ServiceMapT service_map;
+
+    size_t size_at_last_dump = 0;
 
   public:
     ServiceMap();
     // Returns the ServiceKey corresponding to service_name
-    ServiceKey get_add(const char *service_name);
-    ServiceKey get_add(const std::string &service_name);
+    ServiceKeyT get_add(const char *service_name);
+    ServiceKeyT get_add(const std::string &service_name);
     std::size_t size();
+    bool is_fully_flushed();
+    uint32_t dump(LioLi::Tree &tree); // Appends its data to tree, returns
+                                      // number of netflow packets added
   } service_map;
 
   struct CacheElement2 {
@@ -82,7 +91,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
       uint64_t out_bytes = 0; // (23) Outgoing counter of bytes (reset on dump)
       uint64_t out_pkts =
           0; // (24) Outgoing counter for packets (reset on dump)
-      ServiceMap::ServiceKey service_key =
+      ServiceMap::ServiceKeyT service_key =
           0; // (25) Propritary service name key (NOT reset on dump)
       bool dirty =
           false; // Set to true when a field is updated, false when dumped

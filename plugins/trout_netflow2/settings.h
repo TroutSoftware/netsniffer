@@ -22,12 +22,14 @@ struct Settings {
   std::string logger_name;
   std::shared_ptr<LioLi::Logger> logger;
   bool testmode;
+  bool generate_service_map;
   uint32_t cache_size;
   uint32_t flush_interval_ms;
 
 public:
   LioLi::Logger &get_logger();
   bool get_testmode();
+  bool get_generate_service_map();
   uint32_t get_max_cache_size();
   uint32_t get_flush_interval_ms();
 };

@@ -29,6 +29,8 @@ const snort::Parameter module_params[] = {
      "Max target interval for flushing the cache to the logger, might "
      "flush sooner if cache is getting full, and might be delayed on a loaded "
      "system"},
+    {"generate_service_map", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Will add service map generation to the output"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -48,6 +50,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->logger_name = val.get_as_string();
   } else if (val.is("testmode")) {
     settings->testmode = val.get_bool();
+  } else if (val.is("generate_service_map")) {
+    settings->generate_service_map = val.get_bool();
   } else if (val.is("cache_size")) {
     settings->cache_size = val.get_int32();
   } else if (val.is("flush_interval_ms")) {

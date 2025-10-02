@@ -41,18 +41,24 @@ std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings) {
 
 Cache::ServiceMap::ServiceMap() { get_add("[unknown]"); }
 
-Cache::ServiceMap::ServiceKey
+Cache::ServiceMap::ServiceKeyT
 Cache::ServiceMap::get_add(const char *service_name) {
   std::scoped_lock lock(mutex);
   return (service_map.emplace(service_name, service_map.size()).first)->second;
 }
 
-Cache::ServiceMap::ServiceKey
+Cache::ServiceMap::ServiceKeyT
 Cache::ServiceMap::get_add(const std::string &service_name) {
   return get_add(service_name.c_str());
 }
 
 std::size_t Cache::ServiceMap::size() { return service_map.size() - 1; }
+
+bool Cache::ServiceMap::is_fully_flushed() {
+  std::scoped_lock lock(mutex);
+
+  return service_map.size() == size_at_last_dump;
+}
 
 bool Cache::CacheElement2::ConstValuesComp::operator()(
     const Cache::CacheElement2::ConstValues &lhs,
@@ -95,7 +101,7 @@ void Cache::Handle::add_sizes(snort::Packet *p) {
 
 void Cache::Handle::add_service(const char *s) {
   assert(data);
-  ServiceMap::ServiceKey key = cache->service_map.get_add(s);
+  ServiceMap::ServiceKeyT key = cache->service_map.get_add(s);
 
   Pegs::s_peg_counts.different_services = cache->service_map.size();
 
@@ -228,11 +234,69 @@ Cache::add_to_cache(snort::Packet *p) {
   return data;
 }
 
+// Classes inheriting from this are streamable
+class IsStreamable {};
+
+// Class inheriting from this is the mutex
+class IsMutex {};
+
+template <auto v> class MUTEX : public IsMutex {
+public:
+  static std::mutex &get_mutex(auto &itr) { return v(itr); }
+};
+
+// Class inheriting from this is a dirty flag
+class IsDirty {};
+
+template <auto v> class DIRTY : public IsDirty {
+public:
+  static bool &get_dirty(auto &itr) { return v(itr); }
+};
+
+template <uint16_t fixed_string_size, int key>
+class ServiceMapE : public IsStreamable {
+  static_assert((fixed_string_size % 4) == 0,
+                "For alignment the string size must be a multiplum of 4 bytes");
+
+public:
+  constexpr static uint16_t field_type_in_h() { return key; }
+
+  constexpr static uint16_t size_in_hbytes() {
+    return sizeof(Cache::ServiceMap::ServiceKeyT) + fixed_string_size;
+  }
+
+  constexpr static void
+  append_value(std::string &output,
+               Cache::ServiceMap::ServiceMapT::iterator &itr) {
+    // itr->first is the string, itr->second is the key
+
+    // NOTE: If the service key size is changed, ensure we still have alignment
+    // of complete entry (i.e. string + key sizes)
+    static_assert(sizeof(Cache::ServiceMap::ServiceKeyT) == 4,
+                  "Converting to network byte order must fit size of key");
+    Cache::ServiceMap::ServiceKeyT nkey = htonl(itr->second);
+
+    output.append(
+        std::string(reinterpret_cast<const char *>(&nkey), sizeof(nkey)));
+
+    output.append(itr->first.substr(0, fixed_string_size));
+
+    if (fixed_string_size > itr->first.size()) {
+      output.append(0, fixed_string_size - itr->first.size());
+    }
+  }
+
+  constexpr static void clear_if_volatile(auto &) {
+    // We never clear anything in the service map
+  }
+};
+
 // Template used to declare data entries for the binary netflow format
 // fixed_size denotes the size for the field in the binary data, even
 // the member (v) has a different size (Must be 0, 1, 2, 4 or 8, where 0
 // means use the real size of v)
-template <auto v, int key, uint16_t fixed_size = 0> class E {
+template <auto v, int key, uint16_t fixed_size = 0>
+class E : public IsStreamable {
   static_assert(fixed_size == 0, "Fixed size not implemented yet");
 
   // Definitions to extract types from v
@@ -318,12 +382,13 @@ public:
   }
 };
 
-// C is same as E, except it treats the element as Constant, i.e. it won't be cleared
-template <auto v, int key, uint16_t fixed_size = 0> class C : public E<v, key, fixed_size> {
+// C is same as E, except it treats the element as Constant, i.e. it won't be
+// cleared
+template <auto v, int key, uint16_t fixed_size = 0>
+class C : public E<v, key, fixed_size> {
 public:
   constexpr static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
 };
-
 
 // Helper function
 uint16_t generate_template_data_flow_set_id() {
@@ -354,40 +419,138 @@ template <class... list> class NFSerializer {
 
   template <class T, class... ttypes>
   constexpr static void append_template_list(std::string &s) {
-    append16(s, T::field_type_in_h());
-    append16(s, T::size_in_hbytes());
+    if constexpr (std::is_base_of_v<IsStreamable, T>) {
+      append16(s, T::field_type_in_h());
+      append16(s, T::size_in_hbytes());
+    }
     if constexpr (sizeof...(ttypes) != 0) {
       append_template_list<ttypes...>(s);
     }
   }
 
   template <class T, class... ttypes> constexpr static uint16_t value_length() {
-    if constexpr (sizeof...(ttypes) != 0) {
-      return value_length<ttypes...>() + T::size_in_hbytes();
+    uint16_t size_of_me = 0;
+    uint16_t size_of_rest = 0;
+
+    if constexpr (std::is_base_of_v<IsStreamable, T>) {
+      size_of_me = T::size_in_hbytes();
     }
-    return T::size_in_hbytes();
+
+    if constexpr (sizeof...(ttypes) != 0) {
+      size_of_rest = value_length<ttypes...>();
+    }
+
+    return size_of_me + size_of_rest;
   }
 
   template <class T, class... ttypes>
-  constexpr static void build_data(std::string &s,
-                                   Cache::CacheMapType::iterator &itr) {
-    T::append_value(s, itr);
+  constexpr static void build_data(std::string &s, auto &itr) {
+    if constexpr (std::is_base_of_v<IsStreamable, T>) {
+      auto bs = s.size();
+      T::append_value(s, itr);
+      assert(s.size() - bs ==
+             T::size_in_hbytes()); // Check the expected size was added
+    }
+
     if constexpr (sizeof...(ttypes) != 0) {
       build_data<ttypes...>(s, itr);
     }
   }
 
   template <class T, class... ttypes>
-  constexpr static void
-  clear_volatile_data(Cache::CacheMapType::iterator &itr) {
-    T::clear_if_volatile(itr);
+  constexpr static void clear_volatile_data(auto &itr) {
+    if constexpr (std::is_base_of_v<IsStreamable, T>) {
+      T::clear_if_volatile(itr);
+    }
     if constexpr (sizeof...(ttypes) != 0) {
       clear_volatile_data<ttypes...>(itr);
     }
   }
 
+  template <class T, class... ttypes>
+  constexpr static uint16_t count_streamable() {
+    uint16_t sum = 0;
+    if constexpr (std::is_base_of_v<IsStreamable, T>) {
+      sum = 1;
+    }
+    if constexpr (sizeof...(ttypes) != 0) {
+      sum += count_streamable<ttypes...>();
+    }
+    return sum;
+  }
+
+  // TODO: Merge the x_mutex_x and x_dirty_x functions to common base
+  template <class T, class... ttypes>
+  constexpr static void ensure_no_mutex_object() {
+    static_assert(!std::is_base_of_v<IsMutex, T>,
+                  "You can only have one MUTEX entry in the definition");
+    if constexpr (sizeof...(ttypes) != 0) {
+      ensure_no_mutex_object<ttypes...>();
+    }
+  }
+
+  template <class T, class... ttypes> constexpr static bool has_mutex_object() {
+    if constexpr (std::is_base_of_v<IsMutex, T>) {
+      if constexpr (sizeof...(ttypes) != 0) {
+        ensure_no_mutex_object<ttypes...>();
+      }
+      return true;
+    }
+    if constexpr (sizeof...(ttypes) != 0) {
+      return has_mutex_object<ttypes...>();
+    } else {
+      return false;
+    }
+  }
+
+  template <class T, class... ttypes>
+  constexpr static std::mutex &get_mutex_object(auto &itr) {
+    static_assert(has_mutex_object<T, ttypes...>(), "Missing MUTEX entry");
+
+    if constexpr (std::is_base_of_v<IsMutex, T>) {
+      return T::get_mutex(itr);
+    } else {
+      return get_mutex_object<ttypes...>(itr);
+    }
+  }
+
+  template <class T, class... ttypes>
+  constexpr static void ensure_no_dirty_object() {
+    static_assert(!std::is_base_of_v<IsDirty, T>,
+                  "You can only have one DIRTY entry in the definition");
+    if constexpr (sizeof...(ttypes) != 0) {
+      ensure_no_dirty_object<ttypes...>();
+    }
+  }
+
+  template <class T, class... ttypes> constexpr static bool has_dirty_object() {
+    if constexpr (std::is_base_of_v<IsDirty, T>) {
+      if constexpr (sizeof...(ttypes) != 0) {
+        ensure_no_dirty_object<ttypes...>();
+      }
+      return true;
+    }
+    if constexpr (sizeof...(ttypes) != 0) {
+      return has_dirty_object<ttypes...>();
+    } else {
+      return false;
+    }
+  }
+
+  template <class T, class... ttypes>
+  constexpr static bool &get_dirty_object(auto &itr) {
+    static_assert(has_dirty_object<T, ttypes...>(), "Missing DIRTY entry");
+
+    if constexpr (std::is_base_of_v<IsDirty, T>) {
+      return T::get_dirty(itr);
+    } else {
+      return get_dirty_object<ttypes...>(itr);
+    }
+  }
+
 public:
   constexpr static uint16_t count_elements() { return sizeof...(list); }
+
   constexpr static uint16_t sum_value_lengths() {
     return value_length<list...>();
   }
@@ -403,8 +566,8 @@ public:
     s.reserve(get_packet_header_length());
     append16(s, 9);              // The version of binary netflow we adhere to
     append16(s, flow_set_count); // Number of flow sets in the packet
-    append32(s, now_in_s);       // TODO: add up time (seconds since boot)
-    append32(s, 0);              // TODO: add unix time in seconds
+    append32(s, 0);              // TODO: add up time (seconds since boot)
+    append32(s, now_in_s);       // Unix time
     append32(s, sequence_number);
     append32(s, 0); // TODO: add unique number identifying me
 
@@ -413,102 +576,174 @@ public:
     return s;
   }
 
-  constexpr static std::string generate_template() {
+  constexpr static std::string generate_template(uint32_t flow_set_id) {
+    assert(flow_set_id == 0 ||
+           flow_set_id == 1); // Only two values allowed, see RFC3954
     std::string s;
-    const uint16_t length = 4 * count_elements() + 8 /* Header size */;
+    const uint16_t length =
+        4 * count_streamable<list...>() + 8 /* Header size */;
     s.reserve(length);
 
     // See RFC3954 for format
-    append16(s, 0);      // FlowSet ID 0 = Template format
-    append16(s, length); // Total length of package
+    append16(s, flow_set_id); // FlowSet ID 0 = Template format
+    append16(s, length);      // Total length of package
     append16(s, get_id());
-    append16(s, count_elements());
+    append16(s, count_streamable<list...>());
 
     append_template_list<list...>(s); // Add the template data from each element
 
     return s;
   }
 
-  constexpr static void generate_data_flow_set_header(std::string &s,
-                                                      uint16_t no_of_records) {
+  constexpr static void generate_flow_set_header(std::string &s,
+                                                 uint16_t no_of_records) {
     append16(s, get_id());
     append16(
         s, 4 + (no_of_records *
                 sum_value_lengths())); // the +4 is for the ID and length fields
   }
 
-  constexpr static uint16_t get_data_flow_set_header_length() {
+  constexpr static uint16_t get_flow_set_header_length() {
     return 4; // As per RFC3954
   };
 
   constexpr static std::string
-  generate_data_flow_set_header(uint16_t no_of_records) {
+  generate_flow_set_header(uint16_t no_of_records) {
     std::string s;
-    s.reserve(get_data_flow_set_header_length());
-    generate_data_flow_set_header(s, no_of_records);
+    s.reserve(get_flow_set_header_length());
+    generate_flow_set_header(s, no_of_records);
 
     return s;
   }
 
-  constexpr static void serialize(std::string &s,
-                                  Cache::CacheMapType::iterator &itr) {
+  constexpr static void serialize(std::string &s, auto &itr) {
     build_data<list...>(s, itr);
   }
 
-  constexpr static std::string serialize(Cache::CacheMapType::iterator &itr) {
+  constexpr static std::string serialize(auto &itr) {
     std::string s;
     s.reserve(sum_value_lengths()); // Reserve space for the entry
     serialize(s, itr);
     return s;
   }
 
-  constexpr static void clear_volatile(Cache::CacheMapType::iterator &itr) {
+  constexpr static void clear_volatile(auto &itr) {
     clear_volatile_data<list...>(itr);
   }
-};
 
-void Cache::dump() {
-  // clang-format off
-    using Serializer = NFSerializer<
-      E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
-      E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
-      E<&CacheElement2::ConstValues::l4_src_port,     7 >,
-      E<&CacheElement2::ConstValues::l4_dst_port,     11>,
-      E<&CacheElement2::ConstValues::src_mac,         56>,
-      E<&CacheElement2::ConstValues::dst_mac,         57>,
-      E<&CacheElement2::VolatileValues::in_bytes,     1 >,
-      E<&CacheElement2::VolatileValues::in_pkts,      2 >,
-      E<&CacheElement2::VolatileValues::out_bytes,    23>,
-      E<&CacheElement2::VolatileValues::out_pkts,     24>,
-      C<&CacheElement2::VolatileValues::service_key,  25>  // Treat the service key as if it is a constant
-    >;
-  // clang-format on
+  template <class C>
+  constexpr static uint32_t dump(LioLi::Tree &tree, C &container) {
+    // Find max number of Flow Records in each FlowSet
+    constexpr const static uint16_t max_to_send =
+        (UINT16_MAX - get_flow_set_header_length()) / sum_value_lengths();
 
-  std::scoped_lock cache_lock(mutex);
+    static_assert(max_to_send >= 1, "Data too big for dumping");
 
-  constexpr const static uint16_t max_to_send =
-      (UINT16_MAX - Serializer::get_data_flow_set_header_length()) /
-      Serializer::sum_value_lengths();
+    uint16_t record_counter = 0;  // How many records have we serialized so far
+    uint16_t flowset_counter = 0; // How many flow sets we have serizlized
 
-  Cache::CacheMapType::iterator itr = cache.begin();
-
-  while (itr != cache.end()) {
-
-    uint16_t entries_prepared = 0;
     std::string out_buffer;
     out_buffer.reserve(
         UINT16_MAX); // Note, a netflow FlowSet is limited to 64Kb
 
-    while (entries_prepared < max_to_send && itr != cache.end()) {
-      assert(itr->second);
-      std::scoped_lock lock(itr->second->mutex);
-      if (itr->second->dirty) {
-        Serializer::serialize(out_buffer, itr);
-        Serializer::clear_volatile(itr);
-        itr->second->dirty = false;
-        entries_prepared++;
+    // Iterate over the container
+    auto itr = container.begin();
+
+    while (itr != container.end()) {
+
+      // We intentionally do manually locking and unlocking due to lifetime
+      // contraints
+      if constexpr (has_mutex_object<list...>()) {
+        get_mutex_object<list...>(itr).lock();
       }
 
+      bool isDirty = true; // We assume dirty unless we know it isn't
+
+      if constexpr (has_dirty_object<list...>()) {
+        isDirty = get_dirty_object<list...>(itr);
+        get_dirty_object<list...>(itr) = false;
+      }
+
+      if (isDirty) {
+        serialize(out_buffer, itr);
+        clear_volatile(itr);
+        record_counter++;
+      }
+
+      if constexpr (has_mutex_object<list...>()) {
+        get_mutex_object<list...>(itr).unlock();
+      }
+
+      itr++;
+      if (record_counter >= max_to_send || itr == container.end()) {
+        tree << (LioLi::Tree("DataFlowSet")
+                 << generate_flow_set_header(
+                        record_counter) // TODO: Check if std::move is needed
+                 << out_buffer);
+        // Reset the out_buffer
+        out_buffer.clear();
+        out_buffer.reserve(UINT16_MAX);
+        // We start over on the counter
+        record_counter = 0;
+        flowset_counter++;
+      }
+    }
+
+    return flowset_counter;
+  }
+};
+
+// clang-format off
+using ServiceMapOptionsFlowSet = NFSerializer<
+  ServiceMapE<16 /* String size */, 25>
+>;
+// clang-format on
+
+uint32_t Cache::ServiceMap::dump(LioLi::Tree &/*tree*/) {
+  /* This code is WIP, and is curretnly crashing and rightfully leading to compiler warnings
+  std::scoped_lock lock(mutex);
+
+  size_at_last_dump = service_map.size();
+
+  return ServiceMapOptionsFlowSet::dump(tree, service_map);
+  */
+  return 0;
+}
+
+void Cache::dump() {
+  // clang-format off
+  using DataFlowSet = NFSerializer<
+  // Set access protection mutex
+  MUTEX<[](CacheMapType::iterator &itr) -> std::mutex & {return itr->second->mutex;}>,
+  // Set dirty flag
+  DIRTY<[](CacheMapType::iterator &itr) -> bool & {return itr->second->dirty;}>,
+  // Add elements
+  E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
+  E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
+  E<&CacheElement2::ConstValues::l4_src_port,     7 >,
+  E<&CacheElement2::ConstValues::l4_dst_port,     11>,
+  E<&CacheElement2::ConstValues::src_mac,         56>,
+  E<&CacheElement2::ConstValues::dst_mac,         57>,
+  E<&CacheElement2::VolatileValues::in_bytes,     1 >,
+  E<&CacheElement2::VolatileValues::in_pkts,      2 >,
+  E<&CacheElement2::VolatileValues::out_bytes,    23>,
+  E<&CacheElement2::VolatileValues::out_pkts,     24>,
+  C<&CacheElement2::VolatileValues::service_key,  25>  // Treat the service key as if it is a constant
+  >;
+  // clang-format on
+
+  LioLi::Tree buf;
+  uint32_t sum_flow_sets;
+  bool resend = settings->get_logger().had_data_loss();
+
+  // Generate data carrying flow sets
+  {
+    std::scoped_lock lock(mutex);
+
+    sum_flow_sets = DataFlowSet::dump(buf, cache);
+
+    // Discard any entries that are no longer referenced
+    for (auto itr = cache.begin(); itr != cache.end();) {
       auto old = itr++;
 
       // Delete entries that no-one knows about
@@ -516,38 +751,56 @@ void Cache::dump() {
         cache.erase(old);
       }
     }
+  }
+  if (settings->get_generate_service_map() &&
+      (!service_map.is_fully_flushed() || resend)) {
+    uint32_t sm_flow_sets = service_map.dump(buf);
 
-    // Bail, if nothing to do
-    if (entries_prepared == 0)
-      break;
+    sum_flow_sets += sm_flow_sets;
 
-    LioLi::Tree buf;
+    assert(sum_flow_sets >=
+           sm_flow_sets); // TODO: Handle overflow instead of crashing on it
+  }
 
-    auto now = Common::TestableTime::now<std::chrono::system_clock>(
-        settings->get_testmode());
-    uint32_t now_in_s =
-        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
-            .count();
+  auto now = Common::TestableTime::now<std::chrono::system_clock>(
+      settings->get_testmode());
+  uint32_t now_in_s =
+      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
+          .count();
 
-    if (settings->get_logger().had_data_loss()) {
-      buf << std::move(
-          LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
-              now_in_s, sequence_number++, 2 /* packet count */));
-      buf << std::move(LioLi::Tree("TemplateFlowSet")
-                       << Serializer::generate_template());
+  auto &logger = settings->get_logger();
+
+
+  // Transmit templates if anything happened to the connection
+  if (resend) {
+    LioLi::Tree out_tree;
+    if (settings->get_generate_service_map()) {
+      out_tree << (LioLi::Tree("PacketHeader")
+                   << DataFlowSet::generate_packet_header(now_in_s,
+                                                          sequence_number++, 2))
+               << (LioLi::Tree("TemplateFlowSet")
+                   << DataFlowSet::generate_template(0))
+               << (LioLi::Tree("TemplateFlowSet")
+                   << ServiceMapOptionsFlowSet::generate_template(1));
     } else {
-      buf << std::move(
-          LioLi::Tree("PacketHeader") << Serializer::generate_packet_header(
-              now_in_s, sequence_number++, 1 /* packet count */));
+      out_tree << (LioLi::Tree("PacketHeader")
+                   << DataFlowSet::generate_packet_header(now_in_s,
+                                                          sequence_number++, 1))
+               << (LioLi::Tree("TemplateFlowSet")
+                   << DataFlowSet::generate_template(0));
     }
+    logger << std::move(out_tree);
+  }
 
-    buf << std::move(
-        LioLi::Tree("DataFlowSet")
-        << Serializer::generate_data_flow_set_header(
-               entries_prepared) // TODO: Check if std::move is needed
-        << out_buffer);
-
-    settings->get_logger() << std::move(buf);
+  if (buf.has_data()) {
+    LioLi::Tree out_tree;
+    out_tree << (LioLi::Tree("PacketHeader")
+                 << DataFlowSet::generate_packet_header(
+                        now_in_s, sequence_number++, sum_flow_sets));
+    // The buf tree is root based, using "<<" would give the data path
+    // root-root-data
+    out_tree.merge(std::move(buf));
+    logger << std::move(out_tree);
   }
 }
 
