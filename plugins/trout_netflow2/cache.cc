@@ -699,9 +699,9 @@ using ServiceMapOptionsFlowSet = NFSerializer<
 >;
 // clang-format on
 
-uint32_t Cache::ServiceMap::dump(LioLi::Tree &/*tree*/) {
-  /* This code is WIP, and is curretnly crashing and rightfully leading to compiler warnings
-  std::scoped_lock lock(mutex);
+uint32_t Cache::ServiceMap::dump(LioLi::Tree & /*tree*/) {
+  /* This code is WIP, and is currently crashing and rightfully leading to
+  compiler warnings std::scoped_lock lock(mutex);
 
   size_at_last_dump = service_map.size();
 
@@ -769,7 +769,6 @@ void Cache::dump() {
           .count();
 
   auto &logger = settings->get_logger();
-
 
   // Transmit templates if anything happened to the connection
   if (resend) {

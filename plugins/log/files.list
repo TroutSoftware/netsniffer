@@ -7,6 +7,7 @@ logger_stdout.cc
 logger_tcp.cc
 serializer_bill.cc
 serializer_csv.cc
+serializer_filter.cc
 serializer_hex.cc
 serializer_lorth.cc
 serializer_python.cc
