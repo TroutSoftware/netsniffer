@@ -1,0 +1,32 @@
+
+
+stream = {}
+stream_udp = {}
+
+serializer_raw = { secret_sequence = '0022445566AABBCCDD' }
+
+logger_file = {serializer = 'serializer_raw',
+               file_name = 'output.raw'}
+
+alert_lioli = { testmode = true,
+                logger = 'logger_file'}
+
+
+local_rules =
+[[
+log udp any any -> any any (
+  msg: "This is a UDP stream";
+
+  sid: 3002;
+)
+]]
+
+
+ips = {
+ rules = local_rules,
+}
+
+
+
+
+

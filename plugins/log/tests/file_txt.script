@@ -1,0 +1,29 @@
+pcap testdata/udp_stream.pcap
+cmp output.txt testdata/file_txt_expected.txt
+
+-- cfg.lua --
+
+
+stream = {}
+stream_udp = {}
+
+serializer_txt = {}
+logger_file = {serializer = 'serializer_txt',
+               file_name = 'output.txt'}
+
+alert_lioli = { testmode = true,
+                logger = 'logger_file'}
+
+local_rules =
+[[
+log udp any any -> any any (
+  msg: "This is a UDP stream";
+
+  sid: 3002;
+)
+]]
+
+
+ips = {
+  rules = local_rules,
+}

@@ -1,0 +1,45 @@
+pcap testdata/udp_stream.pcap
+
+stdout 'vvvvvvvvvvvvvvvvvvvvvvvv'
+stdout '-timestamp: 1970-01-01T00:00:00.000000000Z'
+stdout '-sid: 3002'
+stdout '-gid: 1'
+stdout '-rev: 0'
+stdout '-priority: 0'
+stdout '-log: \\"This is a UDP stream\\"'
+stdout '-endpoint: 2.0.0.2:20'
+stdout '--addr: 2.0.0.2:20'
+stdout '---ip: 2.0.0.2'
+stdout '---port: 20'
+stdout '-principal: 2.2.0.0:10'
+stdout '--addr: 2.2.0.0:10'
+stdout '---ip: 2.2.0.0'
+stdout '---port: 10'
+stdout '^^^^^^^^^^^^^^^^^^^^^^^^'
+
+
+-- cfg.lua --
+
+
+stream = {}
+stream_udp = {}
+
+serializer_txt = {}
+logger_stdout = {serializer = 'serializer_txt'}
+
+alert_lioli = { testmode = true,
+                logger = 'logger_stdout'}
+
+local_rules =
+[[
+log udp any any -> any any (
+  msg: "This is a UDP stream";
+
+  sid: 3002;
+)
+]]
+
+
+ips = {
+  rules = local_rules,
+}

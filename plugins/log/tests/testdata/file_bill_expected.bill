@@ -1,0 +1,52 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3002100\"This is a UDP stream\"2.0.0.2:202.2.0.0:10
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3002
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"This is a UDP stream\"
+-endpoint: 2.0.0.2:20
+--addr: 2.0.0.2:20
+---ip: 2.0.0.2
+---port: 20
+-principal: 2.2.0.0:10
+--addr: 2.2.0.0:10
+---ip: 2.2.0.0
+---port: 10
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3002100\"This is a UDP stream\"2.0.0.2:202.2.0.0:10
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3002
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"This is a UDP stream\"
+-endpoint: 2.0.0.2:20
+--addr: 2.0.0.2:20
+---ip: 2.0.0.2
+---port: 20
+-principal: 2.2.0.0:10
+--addr: 2.2.0.0:10
+---ip: 2.2.0.0
+---port: 10
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3002100\"This is a UDP stream\"2.0.0.2:202.2.0.0:10
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3002
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"This is a UDP stream\"
+-endpoint: 2.0.0.2:20
+--addr: 2.0.0.2:20
+---ip: 2.0.0.2
+---port: 20
+-principal: 2.2.0.0:10
+--addr: 2.2.0.0:10
+---ip: 2.2.0.0
+---port: 10
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
