@@ -12,6 +12,9 @@ std::shared_ptr<Serializer> &Serializer::get_null_obj() {
   class NullSerializer : public Serializer {
 
     bool is_binary() override { return false; }
+    bool is_ready() override {
+      return false;
+    } // A null serializer is never ready
 
     class Context : public Serializer::Context {
       bool closed = false;
@@ -44,6 +47,7 @@ std::shared_ptr<Serializer> &Serializer::get_null_obj() {
 std::shared_ptr<Logger> &Logger::get_null_obj() {
   class NullLogger : public Logger {
     bool had_data_loss(bool) override { return false; }
+    bool is_ready() override { return false; } // A null logger is never ready
     void operator<<(const Tree &&) override {}
 
   public:

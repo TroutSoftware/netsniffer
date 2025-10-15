@@ -27,6 +27,7 @@ public:
   virtual ~LogBase() = default;
 
   const char *get_name() { return my_name.c_str(); }
+  virtual bool is_ready() { return false; }    // Returns true when component and dependencies are initialized
 };
 
 class LogDB {
@@ -35,8 +36,9 @@ class LogDB {
   static bool register_obj(std::string, std::shared_ptr<LogBase>);
 
 public:
-  template <typename T> static bool register_type(const char *name) {
-    auto obj = std::make_shared<T>(name);
+
+  template <typename T, typename... Argtypes> static bool register_type(const char *name, Argtypes... args) {
+    auto obj = std::make_shared<T>(name, args...);
 
     return register_obj(obj->get_name(), obj);
   };
@@ -56,8 +58,8 @@ public:
       }
     }
 
-    snort::ErrorMessage("ERROR: (LogDB) No registered log element of correct "
-                        "type with name: %s\n",
+    snort::WarningMessage("INFO: (LogDB) No registered log element of correct "
+                        "type with name: >%s<\n",
                         name);
 
     return dynamic_pointer_cast<T>(T::get_null_obj());

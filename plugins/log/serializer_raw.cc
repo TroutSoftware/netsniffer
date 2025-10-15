@@ -51,6 +51,7 @@ static_assert(
 // Settings for this module
 struct Settings {
   std::vector<uint8_t> secret;
+  bool config_complete = false;
 } settings;
 
 // MAIN object of this file
@@ -122,6 +123,8 @@ public:
   // Return TRUE if the serialized output is binary, FALSE if it is text based
   bool is_binary() override { return true; };
 
+  bool is_ready() override { return settings.config_complete; }
+
   std::shared_ptr<LioLi::Serializer::Context> create_context() override {
     std::shared_ptr<Context> context = std::make_shared<Context>();
     return context;
@@ -134,6 +137,7 @@ class Module : public snort::Module {
   }
 
   bool begin(const char *, int, snort::SnortConfig *) override {
+    settings.config_complete = false;
     settings.secret.clear();
     return true;
   }
@@ -143,6 +147,7 @@ class Module : public snort::Module {
       snort::ErrorMessage("ERROR: RAW secret not set in configuration\n");
       return false;
     }
+    settings.config_complete = true;
     return true;
   }
 

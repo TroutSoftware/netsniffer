@@ -1,0 +1,41 @@
+pcap testdata/udp_stream.pcap
+cmp output.raw testdata/file_filter_raw_expected.raw
+
+-- cfg.lua --
+
+
+stream = {}
+stream_udp = {}
+
+serializer_raw = { secret_sequence = '282A3C3C2D3E3E2A29' }
+
+serializer_filter = { serializer = 'serializer_raw',
+                      stream_prefix = "raw data begin >",
+                      stream_postfix = "<end of raw data\13\10",
+                      tree_delimiter = "< >",}
+
+logger_file = {serializer = 'serializer_filter',
+               file_name = 'output.raw'}
+
+alert_lioli = { testmode = true,
+                logger = 'logger_file'}
+
+
+local_rules =
+[[
+log udp any any -> any any (
+  msg: "This is a UDP stream";
+
+  sid: 3002;
+)
+]]
+
+
+ips = {
+  rules = local_rules,
+}
+
+
+
+
+

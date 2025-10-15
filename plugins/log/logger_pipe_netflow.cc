@@ -108,6 +108,12 @@ class Logger : public LioLi::Logger {
                    // feature
   }
 
+  bool is_ready() override {
+    assert(false); // pipe_netflow is deprecated, and don't have the is_ready
+                   // feature
+    return false;
+  }
+
   std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
     assert(serializer_name.length() != 0 && pipe_name.length() != 0);
 

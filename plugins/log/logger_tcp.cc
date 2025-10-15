@@ -111,7 +111,7 @@ class Logger : public LioLi::Logger {
   std::condition_variable cv; // Used to enable worker to sleep when there
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
-  bool worker_done = false;   // Worker won't block anymore
+  bool worker_running = false;
   bool data_loss =
       true; // Set to true when we might have lost data, which is out initial
             // condition as we don't know what happend before our launch
@@ -236,6 +236,7 @@ class Logger : public LioLi::Logger {
           std::scoped_lock lock(peg_count_mutex);
           s_peg_counts.epoll_err++;
         }
+
         close_socket();
         std::this_thread::sleep_for(
             std::chrono::milliseconds(retry_interval_ms));
@@ -294,14 +295,17 @@ class Logger : public LioLi::Logger {
   void worker_loop() {
     std::shared_ptr<LioLi::Serializer> serializer;
 
+    std::unique_lock lock(mutex);
+
     // Don't do anything until we have our serializer
     while (!terminate) {
       serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
 
-      if (serializer != serializer->get_null_obj())
+      if (serializer->is_ready())
         break;
-
+      lock.unlock();
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      lock.lock();
     }
 
     std::chrono::time_point<clock>
@@ -320,12 +324,14 @@ class Logger : public LioLi::Logger {
 
         // This might set the data_loss too frequently, but it's only a help,
         // not a promise
-        std::scoped_lock lock(mutex);
         data_loss = true;
       }
 
+      lock.unlock();
+      auto epoll_result = socket.epoll_wait(retry_interval_ms);
+      lock.lock();
       // Wait for something to happen with the socket
-      switch (socket.epoll_wait(retry_interval_ms)) {
+      switch (epoll_result) {
       case 0:
         continue; // socket is not ready/might need to be recreated
       case -1:
@@ -335,11 +341,7 @@ class Logger : public LioLi::Logger {
       }
 
       // Flush what we have stored
-      bool has_more;
-      {
-        std::scoped_lock lock(mutex);
-        has_more = !queue.empty();
-      }
+      bool has_more = !queue.empty();
 
       if (!socket.flush(has_more)) {
         continue; // Couldn't write what was stored, socket might be closed
@@ -365,8 +367,6 @@ class Logger : public LioLi::Logger {
         s_peg_counts.restarts++;
       }
 
-      std::unique_lock lock(mutex);
-
       if (!queue.empty()) {
         if (dropped_sequence_count != 0) {
           snort::WarningMessage(
@@ -383,11 +383,12 @@ class Logger : public LioLi::Logger {
                     [this] { return terminate || !queue.empty(); });
     }
   while_end:
+    if (!terminate) {
+      snort::ParseError(
+          "TCP Logger exited worker loop due to an unhandled error\n");
+    }
 
-  {
-    std::unique_lock lock(mutex);
-    worker_done = true;
-  }
+    worker_running = false;
     cv.notify_all();
   }
 
@@ -396,6 +397,13 @@ public:
 
   ~Logger() {
     stop(); // Stops worker thread
+  }
+
+  bool is_ready() override {
+    std::scoped_lock lock(mutex);
+
+    return worker_running &&
+           LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_ready();
   }
 
   bool had_data_loss(bool clear_flag) override {
@@ -494,7 +502,7 @@ public:
   // Call after all configuration is done
   void start() {
     terminate = false;
-    worker_done = false;
+    worker_running = true;
     worker_thread = std::thread{&Logger::worker_loop, this};
   }
 
@@ -505,7 +513,8 @@ public:
       std::unique_lock lock(mutex);
 
       // If thread hasn't killed it self
-      if (!worker_done) {
+      // if (!worker_done) {
+      if (worker_running) {
         terminate = true;
 
         // Kick worker, we do not release the lock, as we need to reach
@@ -514,9 +523,9 @@ public:
 
         // Give worker a chance to go down gracefully
         cv.wait_for(lock, std::chrono::seconds(2),
-                    [this] { return worker_done; });
-
-        if (!worker_done) {
+                    //[this] { return worker_done; });
+                    [this] { return !worker_running; });
+        if (worker_running) {
           // Still not done, set it free
           worker_thread.detach();
           return;

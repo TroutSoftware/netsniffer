@@ -98,7 +98,7 @@ class Logger : public LioLi::Logger {
   std::condition_variable cv; // Used to enable worker to sleep when there
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
-  bool worker_done = false;   // Worker won't block anymore
+  bool worker_running = false; // Worker won't block anymore
 
   bool had_data_loss(bool clear_flag) override {
     std::scoped_lock lock(mutex);
@@ -152,9 +152,9 @@ class Logger : public LioLi::Logger {
     // Our serializer
     auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
 
-    while (serializer == serializer->get_null_obj() && !terminate) {
+    while (!serializer->is_ready() && !terminate) {
       lock.unlock();
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       lock.lock();
       serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
     }
@@ -251,7 +251,7 @@ class Logger : public LioLi::Logger {
       pipe.close();
     }
 
-    worker_done = true;
+    worker_running = false;
     lock.unlock();
     cv.notify_all();
   }
@@ -280,6 +280,13 @@ public:
     }
 
     return all_valid;
+  }
+
+  bool is_ready() override {
+    std::scoped_lock lock(mutex);
+
+    return worker_running &&
+           LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_ready();
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
@@ -372,7 +379,7 @@ public:
   // Call after all configuration is done
   void start() {
     terminate = false;
-    worker_done = false;
+    worker_running = true;
     worker_thread = std::thread{&Logger::worker_loop, this};
   }
 
@@ -383,7 +390,7 @@ public:
       std::unique_lock lock(mutex);
 
       // If thread hasn't killed it self
-      if (!worker_done) {
+      if (worker_running) {
         terminate = true;
 
         // Kick worker, we do not release the lock, as we need to reach
@@ -393,11 +400,11 @@ public:
         // Give worker a chance to go down gracefully
         if (std::cv_status::timeout ==
                 cv.wait_for(lock, std::chrono::seconds(2)) &&
-            !worker_done) {
+            worker_running) {
           // Faking a reader (most likely it is stuck in the open)
           std::ifstream pipe = std::ifstream(pipe_name, std::ios::in);
           cv.wait_for(lock, std::chrono::seconds(2));
-          if (!worker_done) {
+          if (worker_running) {
             // Still not done, set it free
             worker_thread.detach();
             return;

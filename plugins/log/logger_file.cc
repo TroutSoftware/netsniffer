@@ -33,12 +33,16 @@ static const snort::Parameter module_params[] = {
      "Serializer to use for generating output"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
+struct Settings {
+  std::string serializer_name;
+  std::string file_name;
+};
+
 // MAIN object of this file
 class Logger : public LioLi::Logger {
   std::mutex mutex; // Protects members
 
-  std::string serializer_name;
-  std::string file_name;
+  const std::shared_ptr<Settings> settings;
 
   std::shared_ptr<LioLi::Serializer::Context> context;
   std::ofstream ofile;
@@ -47,7 +51,8 @@ class Logger : public LioLi::Logger {
 
   LioLi::Serializer::Context &get_context() {
     if (!context) {
-      auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+      auto serializer =
+          LioLi::LogDB::get<LioLi::Serializer>(settings->serializer_name);
 
       context = serializer->create_context();
     }
@@ -59,47 +64,33 @@ class Logger : public LioLi::Logger {
     if (!ofile.is_open()) {
       std::ios_base::openmode open_mode = std::ios_base::out;
 
-      auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+      auto serializer =
+          LioLi::LogDB::get<LioLi::Serializer>(settings->serializer_name);
 
       if (serializer->is_binary()) {
         open_mode |= std::ios_base::binary;
       }
 
-      ofile.open(file_name, open_mode);
+      ofile.open(settings->file_name, open_mode);
 
       if (!ofile.good()) {
-        snort::ErrorMessage("ERROR: Could not open output file %s\n",
-                            file_name.c_str());
+        snort::ErrorMessage("ERROR: Could not open output file >%s<\n",
+                            settings->file_name.c_str());
       }
     }
     return ofile;
   }
 
 public:
-  Logger(const char *name) : LioLi::Logger(name) {}
+  Logger(const char *name, std::shared_ptr<Settings> &settings)
+      : LioLi::Logger(name), settings(settings) {
+    assert(settings); // Settings need to point to something valid
+  }
 
   ~Logger() {
     // We can't request a context here, as it isn't safe during shutdown
     if (context)
       get_ofile() << context->close();
-  }
-
-  void set_serializer(const char *name) {
-    std::scoped_lock lock(mutex);
-
-    assert(!context ||
-           serializer_name == name); // If we have a context when a new name is
-                                     // set, it is the wrong context
-
-    serializer_name = name;
-  }
-
-  // Returns true if filename is ok
-  bool set_file_name(std::string name) {
-    std::scoped_lock lock(mutex);
-
-    file_name = name;
-    return true;
   }
 
   bool had_data_loss(bool clear_flag) override {
@@ -110,6 +101,12 @@ public:
     data_loss &= !clear_flag;
 
     return old_value;
+  }
+
+  bool is_ready() override {
+    return get_ofile().good() &&
+           LioLi::LogDB::get<LioLi::Serializer>(settings->serializer_name)
+               ->is_ready();
   }
 
   void operator<<(const LioLi::Tree &&tree) override {
@@ -125,47 +122,56 @@ public:
 };
 
 class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Logger>(s_name);
-  }
+  Module() : snort::Module(s_name, s_help, module_params) {}
 
-  bool file_name_set = false;
-  bool serializer_set = false;
+  std::shared_ptr<Settings> settings;
 
   bool begin(const char *, int, snort::SnortConfig *) override {
-    file_name_set = false;
-    serializer_set = false;
+    if (settings) {
+      // We can't handle multiple settings
+      snort::ErrorMessage(
+          "ERROR: %s can't handle reconfiguration/multiple configs\n", s_name);
+      return false;
+    }
+    settings = std::make_shared<Settings>();
     return true;
   }
 
   bool end(const char *, int, snort::SnortConfig *) override {
-    if (!file_name_set) {
+    assert(settings); // We didn't have a sucesful begin
+
+    if (settings->file_name.empty()) {
       snort::ErrorMessage("ERROR: no file_name specified for %s\n", s_name);
+      return false;
     }
-    if (!serializer_set) {
+
+    if (settings->serializer_name.empty()) {
       snort::ErrorMessage("ERROR: serializer not specified for %s\n", s_name);
+      return false;
     }
-    return file_name_set && serializer_set;
+
+    // Only register if we are correctly set up
+    LioLi::LogDB::register_type<Logger>(s_name, settings);
+
+    return true;
   }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
 
-    auto logger = LioLi::LogDB::get<Logger>(s_name);
-    assert(logger); // Something went very wrong, if we can't find our self
+    assert(settings); // We didn't have a begin
 
     if (val.is("serializer") && val.get_as_string().size() > 0) {
-      logger->set_serializer(val.get_string());
-      serializer_set = true;
+      settings->serializer_name = val.get_string();
 
       return true;
     } else if (val.is("file_name") && val.get_as_string().size() > 0) {
-      if (file_name_set) {
+      if (!settings->file_name.empty()) {
         snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
                             s_name);
         return false;
       }
 
-      file_name_set = logger->set_file_name(val.get_string());
+      settings->file_name = val.get_string();
 
       return true;
     } else if (val.is("file_env")) {
@@ -173,14 +179,13 @@ class Module : public snort::Module {
       const char *name = std::getenv(env_name.c_str());
 
       if (name && *name) {
-        if (file_name_set) {
+        if (!settings->file_name.empty()) {
           snort::ErrorMessage("ERROR: You can only set name/env once in %s\n",
                               s_name);
           return false;
         }
 
-        logger->set_file_name(name);
-        file_name_set = true;
+        settings->file_name = name;
 
         return true;
       }

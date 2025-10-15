@@ -52,6 +52,7 @@ struct Settings {
   std::string tag;
   std::string data_name;
   bool add_print;
+  bool config_complete = false;
 } settings;
 
 // MAIN object of this file
@@ -104,7 +105,9 @@ public:
   };
 
   // Return TRUE if the serialized output is binary, FALSE if it is text based
-  bool is_binary() override { return false; };
+  bool is_binary() override { return false; }
+
+  bool is_ready() override { return settings.config_complete; }
 
   std::shared_ptr<LioLi::Serializer::Context> create_context() override {
     std::shared_ptr<Context> context = std::make_shared<Context>();
@@ -122,7 +125,10 @@ class Module : public snort::Module {
     return true;
   }
 
-  bool end(const char *, int, snort::SnortConfig *) override { return true; }
+  bool end(const char *, int, snort::SnortConfig *) override {
+    settings.config_complete = true;
+    return true;
+  }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("log_tag")) {

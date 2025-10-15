@@ -54,6 +54,8 @@ public:
   // Return TRUE if the serialized output is binary, FALSE if it is text based
   bool is_binary() override { return false; };
 
+  bool is_ready() override { return true; }; // We are always ready
+
   std::shared_ptr<LioLi::Serializer::Context> create_context() override {
     return std::make_shared<Context>();
   };

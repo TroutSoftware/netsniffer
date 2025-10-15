@@ -58,30 +58,35 @@ static_assert(
 struct Settings {
   bool option_no_root_node = false;
   std::vector<uint8_t> secret;
-} settings;
+};
 
 // MAIN object of this file
 class Serializer : public LioLi::Serializer {
+  const std::shared_ptr<Settings> settings;
 
 public:
-  Serializer(const char *name) : LioLi::Serializer(name) {}
+  Serializer(const char *name, std::shared_ptr<Settings> &settings)
+      : LioLi::Serializer(name), settings(settings) {}
 
   ~Serializer() = default;
 
   class Context : public LioLi::Serializer::Context {
+    const std::shared_ptr<Settings> settings;
     std::mutex mutex;
     LioLi::LioLi lioli;
     bool first_write = true;
     bool closed = false;
 
   public:
+    Context(const std::shared_ptr<Settings> &settings) : settings(settings) {}
+
     std::string serialize(const LioLi::Tree &&tree) override {
       std::scoped_lock lock(mutex);
       if (first_write) {
-        if (settings.option_no_root_node) {
+        if (settings->option_no_root_node) {
           lioli.set_no_root_node();
         }
-        if (settings.secret.size() != 9) {
+        if (settings->secret.size() != 9) {
           snort::ErrorMessage("ERROR: BILL secret not set to a valid value\n");
           {
             std::scoped_lock lock(peg_count_mutex);
@@ -90,7 +95,7 @@ public:
 
           return "";
         }
-        lioli.set_secret(settings.secret);
+        lioli.set_secret(settings->secret);
         lioli.insert_header();
         first_write = false;
       }
@@ -128,40 +133,45 @@ public:
     bool is_closed() override { return closed; }
   };
 
+  bool is_ready() override { return true; }
+
   // Return TRUE if the serialized output is binary, FALSE if it is text based
-  bool is_binary() override { return true; };
+  bool is_binary() override { return true; }
 
   std::shared_ptr<LioLi::Serializer::Context> create_context() override {
-    std::shared_ptr<Context> context = std::make_shared<Context>();
+    std::shared_ptr<Context> context = std::make_shared<Context>(settings);
     return context;
-  };
+  }
 };
 
 class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Serializer>(s_name);
-  }
+  std::shared_ptr<Settings> settings;
+  Module() : snort::Module(s_name, s_help, module_params) {}
 
   bool begin(const char *, int, snort::SnortConfig *) override {
-    settings.option_no_root_node = false;
-    settings.secret.clear();
+    settings = std::make_shared<Settings>();
+    settings->option_no_root_node = false;
+    settings->secret.clear();
     return true;
   }
 
   bool end(const char *, int, snort::SnortConfig *) override {
-    if (settings.secret.size() != 9) {
+    assert(settings);
+    if (settings->secret.size() != 9) {
       snort::ErrorMessage("ERROR: BILL secret not set in configuration\n");
       return false;
     }
+    LioLi::LogDB::register_type<Serializer>(s_name, settings);
     return true;
   }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
+    assert(settings);
     if (val.is("option_no_root_node")) {
-      settings.option_no_root_node = val.get_bool();
+      settings->option_no_root_node = val.get_bool();
       return true;
     } else if (val.is("bill_secret_sequence") || val.is("secret_sequence")) {
-      if (settings.secret.size() != 0) {
+      if (settings->secret.size() != 0) {
         snort::ErrorMessage("ERROR: You can only set secret/env once in %s\n",
                             s_name);
         return false;
@@ -189,11 +199,11 @@ class Module : public snort::Module {
         return false;
       }
 
-      settings.secret.swap(secret);
+      settings->secret.swap(secret);
 
       return true;
     } else if (val.is("bill_secret_env") || val.is("secret_env")) {
-      if (settings.secret.size() != 0) {
+      if (settings->secret.size() != 0) {
         snort::ErrorMessage("ERROR: You can only set secret/env once in %s\n",
                             s_name);
         return false;
@@ -215,7 +225,7 @@ class Module : public snort::Module {
           return false;
         }
 
-        settings.secret.swap(secret);
+        settings->secret.swap(secret);
 
         return true;
       }

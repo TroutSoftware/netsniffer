@@ -179,6 +179,8 @@ public:
     bool is_closed() override { return closed; }
   };
 
+  bool is_ready() override { return true; }
+
   // Return TRUE if the serialized output is binary, FALSE if it is text based
   bool is_binary() override { return false; };
 
@@ -188,13 +190,14 @@ public:
 };
 
 class Module : public snort::Module {
-  Module() : snort::Module(s_name, s_help, module_params) {
-    LioLi::LogDB::register_type<Serializer>(s_name);
-  }
+  Module() : snort::Module(s_name, s_help, module_params) {}
 
   bool begin(const char *, int, snort::SnortConfig *) override { return true; }
 
-  bool end(const char *, int, snort::SnortConfig *) override { return true; }
+  bool end(const char *, int, snort::SnortConfig *) override {
+    LioLi::LogDB::register_type<Serializer>(s_name);
+    return true;
+  }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("item_separator")) {

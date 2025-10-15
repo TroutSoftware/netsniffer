@@ -44,8 +44,8 @@ logger_tcp =  { serializer = 'filter_txt' ,
                 },
               }
 
-alert_lioli = { logger = 'logger_tcp' }
-trout_netflow2 = { logger = 'logger_tcp_hex',
+alert_lioli = { logger = 'logger_file' }
+trout_netflow2 = { logger = 'logger_file',
                    flush_interval_ms = 500 }
 
 

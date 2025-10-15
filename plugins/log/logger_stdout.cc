@@ -34,10 +34,11 @@ class Logger : public LioLi::Logger {
 
   std::string serializer_name;
 
+  bool context_is_good = false;
   std::shared_ptr<LioLi::Serializer::Context> context;
 
   LioLi::Serializer::Context &get_context() {
-    if (!context) {
+    if (!context || !context_is_good) {
       auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
 
       if (serializer->is_binary()) {
@@ -49,6 +50,7 @@ class Logger : public LioLi::Logger {
         serializer = LioLi::Serializer::get_null_obj();
       }
 
+      context_is_good = serializer->is_ready();
       context = serializer->create_context();
     }
 
@@ -74,6 +76,11 @@ public:
                                      // set, it is the wrong context
 
     serializer_name = name;
+  }
+
+  bool is_ready() override {
+    std::scoped_lock lock(mutex);
+    return LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_ready();
   }
 
   bool had_data_loss(bool clear_flag) override {

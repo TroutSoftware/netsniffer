@@ -61,7 +61,8 @@ static_assert(
     "Entries in s_pegs doesn't match number of entries in s_peg_counts");
 
 class Serializer : public LioLi::Serializer {
-  struct Settings {
+
+  class Settings {
     std::shared_ptr<LioLi::Serializer>
         serializer; // Don't access directly, use get_serializer()
   public:
@@ -72,15 +73,15 @@ class Serializer : public LioLi::Serializer {
 
     LioLi::Serializer &get_serializer() {
       // Only do a lookup if needed
-      if (!serializer || serializer == get_null_obj()) {
+      if (!serializer || serializer == LioLi::Serializer::get_null_obj()) {
         serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
       }
 
       return *serializer;
     }
   };
-
   std::shared_ptr<Settings> settings = std::make_shared<Settings>();
+  bool settings_configured = false;
 
 public:
   Serializer(const char *my_name) : LioLi::Serializer(my_name) {}
@@ -140,6 +141,11 @@ public:
   }
   void set_serializer(std::string &&serializer_name) {
     settings->serializer_name = std::move(serializer_name);
+  }
+  void set_settings_configured() { settings_configured = true; }
+
+  bool is_ready() override {
+    return settings_configured && settings->get_serializer().is_ready();
   }
 };
 
@@ -208,6 +214,7 @@ class Module : public snort::Module {
     serializer->set_postfix(std::move(config_stack.top().postfix));
     serializer->set_delimiter(std::move(config_stack.top().delimiter));
     serializer->set_serializer(std::move(config_stack.top().serializer));
+    serializer->set_settings_configured();
 
     config_stack.pop();
     return true;
