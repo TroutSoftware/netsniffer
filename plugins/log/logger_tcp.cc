@@ -275,6 +275,11 @@ class Logger : public LioLi::Logger {
           // All was sent
           output_string.clear();
           output_index = 0;
+
+          // Count a package as sent
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.logs_out++;
+
           return true;
         } else {                                // Some error
           static_assert(EAGAIN == EWOULDBLOCK); // Holds true on Linux, fix if
@@ -283,6 +288,9 @@ class Logger : public LioLi::Logger {
             std::scoped_lock lock(peg_count_mutex);
             s_peg_counts.would_block++;
           } else {
+            std::scoped_lock lock(peg_count_mutex);
+            s_peg_counts.write_errors++;
+
             close_socket();
           }
           return false;
@@ -375,7 +383,9 @@ class Logger : public LioLi::Logger {
           dropped_sequence_count = 0;
         }
         socket.queue(context->serialize(std::move(queue.front())));
+
         queue.pop_front();
+
         continue; // Will eventually send
       }
 
