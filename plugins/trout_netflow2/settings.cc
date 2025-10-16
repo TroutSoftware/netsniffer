@@ -27,4 +27,6 @@ uint32_t Settings::get_max_cache_size() { return cache_size; }
 
 uint32_t Settings::get_flush_interval_ms() { return flush_interval_ms; }
 
+uint32_t Settings::get_source_id() { return source_id; }
+
 } // namespace trout_netflow2

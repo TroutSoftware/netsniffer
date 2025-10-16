@@ -31,6 +31,8 @@ const snort::Parameter module_params[] = {
      "system"},
     {"generate_service_map", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will add service map generation to the output"},
+    {"source_id", snort::Parameter::PT_INT, "0:4294967295", "0",
+     "Set the Source ID transmitted in the Packet Header"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -53,9 +55,11 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
   } else if (val.is("generate_service_map")) {
     settings->generate_service_map = val.get_bool();
   } else if (val.is("cache_size")) {
-    settings->cache_size = val.get_int32();
+    settings->cache_size = val.get_uint32();
   } else if (val.is("flush_interval_ms")) {
-    settings->flush_interval_ms = val.get_int32();
+    settings->flush_interval_ms = val.get_uint32();
+  } else if (val.is("source_id")) {
+    settings->source_id = val.get_uint32();
   } else {
     // fail if we didn't get something we knew about
     return false;

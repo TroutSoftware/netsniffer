@@ -282,7 +282,7 @@ public:
     output.append(itr->first.substr(0, fixed_string_size));
 
     if (fixed_string_size > itr->first.size()) {
-      output.append(0, fixed_string_size - itr->first.size());
+      output.append(fixed_string_size - itr->first.size(), '\0');
     }
   }
 
@@ -561,6 +561,7 @@ public:
 
   constexpr static std::string generate_packet_header(uint32_t now_in_s,
                                                       uint32_t sequence_number,
+                                                      uint32_t source_id,
                                                       uint16_t flow_set_count) {
     std::string s;
     s.reserve(get_packet_header_length());
@@ -569,7 +570,7 @@ public:
     append32(s, 0);              // TODO: add up time (seconds since boot)
     append32(s, now_in_s);       // Unix time
     append32(s, sequence_number);
-    append32(s, 0); // TODO: add unique number identifying me
+    append32(s, source_id); // Unique number identifying me
 
     assert(s.length() != get_packet_header_length());
 
@@ -577,8 +578,7 @@ public:
   }
 
   constexpr static std::string generate_template(uint32_t flow_set_id) {
-    assert(flow_set_id == 0 ||
-           flow_set_id == 1); // Only two values allowed, see RFC3954
+    assert(flow_set_id == 0); // We only support 0 for now (Template FlowSet)
     std::string s;
     const uint16_t length =
         4 * count_streamable<list...>() + 8 /* Header size */;
@@ -695,18 +695,18 @@ public:
 
 // clang-format off
 using ServiceMapOptionsFlowSet = NFSerializer<
-  ServiceMapE<16 /* String size */, 25>
+  ServiceMapE<16 /* String size */, 26>
 >;
 // clang-format on
 
-uint32_t Cache::ServiceMap::dump(LioLi::Tree & /*tree*/) {
+uint32_t Cache::ServiceMap::dump(LioLi::Tree &tree) {
   /* This code is WIP, and is currently crashing and rightfully leading to
   compiler warnings std::scoped_lock lock(mutex);
-
+  */
   size_at_last_dump = service_map.size();
 
   return ServiceMapOptionsFlowSet::dump(tree, service_map);
-  */
+
   return 0;
 }
 
@@ -775,16 +775,18 @@ void Cache::dump() {
     LioLi::Tree out_tree;
     if (settings->get_generate_service_map()) {
       out_tree << (LioLi::Tree("PacketHeader")
-                   << DataFlowSet::generate_packet_header(now_in_s,
-                                                          sequence_number++, 2))
+                   << DataFlowSet::generate_packet_header(
+                          now_in_s, sequence_number++,
+                          settings->get_source_id(), 2))
                << (LioLi::Tree("TemplateFlowSet")
                    << DataFlowSet::generate_template(0))
-               << (LioLi::Tree("TemplateFlowSet")
-                   << ServiceMapOptionsFlowSet::generate_template(1));
+               << (LioLi::Tree("TemplateFlowSet2")
+                   << ServiceMapOptionsFlowSet::generate_template(0));
     } else {
       out_tree << (LioLi::Tree("PacketHeader")
-                   << DataFlowSet::generate_packet_header(now_in_s,
-                                                          sequence_number++, 1))
+                   << DataFlowSet::generate_packet_header(
+                          now_in_s, sequence_number++,
+                          settings->get_source_id(), 1))
                << (LioLi::Tree("TemplateFlowSet")
                    << DataFlowSet::generate_template(0));
     }
@@ -795,7 +797,8 @@ void Cache::dump() {
     LioLi::Tree out_tree;
     out_tree << (LioLi::Tree("PacketHeader")
                  << DataFlowSet::generate_packet_header(
-                        now_in_s, sequence_number++, sum_flow_sets));
+                        now_in_s, sequence_number++, settings->get_source_id(),
+                        sum_flow_sets));
     // The buf tree is root based, using "<<" would give the data path
     // root-root-data
     out_tree.merge(std::move(buf));

@@ -25,6 +25,7 @@ struct Settings {
   bool generate_service_map;
   uint32_t cache_size;
   uint32_t flush_interval_ms;
+  uint32_t source_id;
 
 public:
   LioLi::Logger &get_logger();
@@ -32,6 +33,7 @@ public:
   bool get_generate_service_map();
   uint32_t get_max_cache_size();
   uint32_t get_flush_interval_ms();
+  uint32_t get_source_id();
 };
 
 } // namespace trout_netflow2
