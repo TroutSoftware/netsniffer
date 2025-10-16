@@ -1,0 +1,29 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/google_http.pcap
+cmp output.hex testdata/netflow2_service_test.expected.hex
+
+-- cfg.lua --
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+
+serializer_hex = {}
+
+logger_file = { serializer = 'serializer_hex',
+                file_name = 'output.hex'}
+
+trout_netflow2 = { logger = 'logger_file',
+                   generate_service_map = true,
+                   source_id = 1985229328,
+                   testmode = true }
+
+wizard = {
+   spells = { { service = 'http', proto = 'tcp', to_server = {'GET'}, to_client = { 'HTTP' } } },
+   hexes = { { service = 'test_service', proto = 'udp', to_server = { '|aa 68 01 00|' } },
+             { service = 'another_test_service', proto = 'udp', to_server = { '|65 84 01 00|' } } }
+}
+
+binder = {
+  {use = { type = 'wizard' }},
+}
