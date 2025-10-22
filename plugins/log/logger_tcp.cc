@@ -66,6 +66,7 @@ const PegInfo s_pegs[] = {
     {CountType::SUM, "would_block",
      "Number of time we couldn't write to a socket that we were told was "
      "writable"},
+    {CountType::SUM, "hangup", "Count of hangups from the other side"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -80,6 +81,7 @@ struct PegCounts {
   PegCount restarts = 0;
   PegCount epoll_err = 0;
   PegCount would_block = 0;
+  PegCount hangup = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -136,7 +138,7 @@ class Logger : public LioLi::Logger {
       ev.data.fd = osocket;
 
       if (::epoll_ctl(epfd, EPOLL_CTL_ADD, osocket, &ev)) {
-        snort::ParseError("TCP Logger connection error (Could not add socket "
+        snort::LogMessage("TCP Logger connection error (Could not add socket "
                           "to epoll for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         return false;
@@ -152,7 +154,7 @@ class Logger : public LioLi::Logger {
       ev.data.fd = osocket;
 
       if (::epoll_ctl(epfd, EPOLL_CTL_DEL, osocket, &ev)) {
-        snort::ParseError("TCP Logger connection error (Could not remove "
+        snort::LogMessage("TCP Logger connection error (Could not remove "
                           "socket from epoll for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         return false;
@@ -198,7 +200,7 @@ class Logger : public LioLi::Logger {
 
       if (::connect(osocket, (sockaddr *)&addr, sizeof(addr)) &&
           errno != EAGAIN && errno != EINPROGRESS) {
-        snort::ParseError("TCP Logger connection error (Could not create "
+        snort::LogMessage("TCP Logger connection error (Could not create "
                           "connecting socket for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         close_socket();
@@ -212,6 +214,7 @@ class Logger : public LioLi::Logger {
 
     operator bool() const { return (-1 != osocket); }
 
+    int last_epoll_err = 0;
     // Returns -1 on fatal error, 0 on restart loop, 1 if socket writeable
     int epoll_wait(uint32_t retry_interval_ms) {
       // Wait for something to happen with the socket
@@ -221,7 +224,7 @@ class Logger : public LioLi::Logger {
       if (0 == epwret) {
         return 0;
       } else if (-1 == epwret) {
-        snort::ParseError("TCP Logger connection error (Epoll wait returned "
+        snort::LogMessage("TCP Logger connection error (Epoll wait returned "
                           "with error for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
 
@@ -231,17 +234,57 @@ class Logger : public LioLi::Logger {
       assert(1 == epwret); // if anything excpet 1 is seen at this point we have
                            // a programming or fatal error
 
-      if (wait_ev.events & (EPOLLHUP | EPOLLERR)) {
+      if (wait_ev.events & (EPOLLERR | EPOLLHUP)) {
         if (wait_ev.events & EPOLLERR) {
           std::scoped_lock lock(peg_count_mutex);
           s_peg_counts.epoll_err++;
+
+          // Check the error
+          int err = 0;
+          socklen_t err_len = sizeof(err);
+          int state = ::getsockopt(osocket,    // Socket fd
+                                   SOL_SOCKET, // level
+                                   SO_ERROR,   // name
+                                   &err, &err_len);
+          if (state == 0) {
+            assert(
+                err_len ==
+                sizeof(err)); // getsockopt is behaving in a way we don't handle
+
+            if (err != last_epoll_err) {
+              last_epoll_err = err;
+              snort::LogMessage(
+                  "TCP Logger: error output socket for "
+                  ">%s< failed with reason: '%s' (%i)) retrying... (There "
+                  "might be multiple instances of this error)\n",
+                  my_name.c_str(), std::strerror(err), err);
+            }
+          }
+
+          if (wait_ev.events & EPOLLHUP) {
+            s_peg_counts.hangup++;
+          }
+        } else { // if (wait_ev.events & EPOLLHUP)
+          std::scoped_lock lock(peg_count_mutex);
+          s_peg_counts.hangup++;
+
+          // Other side closed connection
+          snort::LogMessage(
+              "TCP Logger: other side closed connection without error for "
+              ">%s< retrying...\n",
+              my_name.c_str());
         }
 
         close_socket();
+
+        // Wait the retry time before continuing
         std::this_thread::sleep_for(
             std::chrono::milliseconds(retry_interval_ms));
+
         return 0;
       }
+
+      last_epoll_err = 0;
 
       assert(wait_ev.events & EPOLLOUT); // If this fires, there is some
                                          // condition we aren't handling
@@ -329,6 +372,9 @@ class Logger : public LioLi::Logger {
 
         // A new connection should always start a new context
         context.reset();
+
+        // Wipe what we have so far
+        queue.clear();
 
         // This might set the data_loss too frequently, but it's only a help,
         // not a promise
