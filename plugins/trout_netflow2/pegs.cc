@@ -25,7 +25,8 @@ PegInfo Pegs::s_pegs[] = {
      "Number of different services that were seen"},
     {CountType::SUM, "overflow",
      "Number of connections that wasn't logged to prevent cache overflow"},
-
+    {CountType::MAX, "max_cache_entries",
+     "highest number of cache entries in use at any given time"},
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;

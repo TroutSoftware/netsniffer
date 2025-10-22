@@ -21,7 +21,8 @@ const snort::Parameter module_params[] = {
     {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Set logger output should be sent to"},
     {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
-     "Testmode will make deterministic (fake) timestamps"},
+     "Testmode will aim for deterministic output, including (fake) "
+     "timestamps "},
     {"cache_size", snort::Parameter::PT_INT, "1:100000", "10000",
      "The max number of simultaneous conections that can be handled at any "
      "given time"},

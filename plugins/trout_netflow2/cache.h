@@ -135,6 +135,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
   bool worker_kicked = false; // Set to true when the worker is kicked
 
   void worker_loop();  // The function that does the work
+  void test_loop();    // Worker loop when running in test mode
   void start_worker(); // Starts the worker thread
   void stop_worker();  // Stops the worker thread (will block until it returns)
 

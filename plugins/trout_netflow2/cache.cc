@@ -18,7 +18,6 @@
 #include "settings.h"
 
 // Debug includes
-#include <iostream>
 
 namespace trout_netflow2 {
 
@@ -598,9 +597,9 @@ public:
   constexpr static void generate_flow_set_header(std::string &s,
                                                  uint16_t no_of_records) {
     append16(s, get_id());
-    append16(
-        s, 4 + (no_of_records *
-                sum_value_lengths())); // the +4 is for the ID and length fields
+    append16(s, get_flow_set_header_length() +
+                    (no_of_records *
+                     sum_value_lengths())); // Total length of package
   }
 
   constexpr static uint16_t get_flow_set_header_length() {
@@ -675,7 +674,8 @@ public:
       }
 
       itr++;
-      if (record_counter >= max_to_send || itr == container.end()) {
+      if (record_counter >= max_to_send ||
+          (itr == container.end() && record_counter > 0)) {
         tree << (LioLi::Tree("DataFlowSet")
                  << generate_flow_set_header(
                         record_counter) // TODO: Check if std::move is needed
@@ -713,11 +713,8 @@ uint32_t Cache::ServiceMap::dump(LioLi::Tree &tree) {
 void Cache::dump() {
   // clang-format off
   using DataFlowSet = NFSerializer<
-  // Set access protection mutex
   MUTEX<[](CacheMapType::iterator &itr) -> std::mutex & {return itr->second->mutex;}>,
-  // Set dirty flag
   DIRTY<[](CacheMapType::iterator &itr) -> bool & {return itr->second->dirty;}>,
-  // Add elements
   E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
   E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
   E<&CacheElement2::ConstValues::l4_src_port,     7 >,
@@ -734,13 +731,24 @@ void Cache::dump() {
 
   LioLi::Tree buf;
   uint32_t sum_flow_sets;
-  bool resend = settings->get_logger().had_data_loss();
+  auto &logger = settings->get_logger();
+
+  if (!logger.is_ready())
+    return;
+
+  bool resend = logger.had_data_loss();
 
   // Generate data carrying flow sets
   {
     std::scoped_lock lock(mutex);
 
     sum_flow_sets = DataFlowSet::dump(buf, cache);
+
+    auto curent_cache_size = cache.size();
+
+    if (Pegs::s_peg_counts.max_cache_entries < curent_cache_size) {
+      Pegs::s_peg_counts.max_cache_entries = curent_cache_size;
+    }
 
     // Discard any entries that are no longer referenced
     for (auto itr = cache.begin(); itr != cache.end();) {
@@ -768,8 +776,6 @@ void Cache::dump() {
       std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
           .count();
 
-  auto &logger = settings->get_logger();
-
   // Transmit templates if anything happened to the connection
   if (resend) {
     LioLi::Tree out_tree;
@@ -778,16 +784,16 @@ void Cache::dump() {
                    << DataFlowSet::generate_packet_header(
                           now_in_s, sequence_number++,
                           settings->get_source_id(), 2))
-               << (LioLi::Tree("TemplateFlowSet")
+               << (LioLi::Tree("TemplateFlowSet_DataFlowSet")
                    << DataFlowSet::generate_template(0))
-               << (LioLi::Tree("TemplateFlowSet2")
+               << (LioLi::Tree("TemplateFlowSet_ServiceMap")
                    << ServiceMapOptionsFlowSet::generate_template(0));
     } else {
       out_tree << (LioLi::Tree("PacketHeader")
                    << DataFlowSet::generate_packet_header(
                           now_in_s, sequence_number++,
                           settings->get_source_id(), 1))
-               << (LioLi::Tree("TemplateFlowSet")
+               << (LioLi::Tree("TemplateFlowSet_DataFlowSet")
                    << DataFlowSet::generate_template(0));
     }
     logger << std::move(out_tree);
@@ -806,8 +812,28 @@ void Cache::dump() {
   }
 }
 
+void Cache::test_loop() {
+  std::unique_lock lock(worker_mutex);
+
+  // In testmode we don't do anything until terminating
+  while (!terminate) {
+    cv.wait_for(lock,
+                std::chrono::milliseconds(settings->get_flush_interval_ms()),
+                [this] { return terminate; });
+  }
+
+  lock.unlock();
+  dump(); // This might take some time, don't keep the worker mutex
+  lock.lock();
+
+  worker_done = true;
+
+  cv.notify_all();
+}
+
 void Cache::worker_loop() {
   std::unique_lock lock(worker_mutex);
+
   // Main loop
   while (!terminate) {
     worker_kicked = false;
@@ -836,7 +862,11 @@ void Cache::kick_worker() {
 void Cache::start_worker() {
   terminate = false;
   worker_done = false;
-  worker_thread = std::thread{&Cache::worker_loop, this};
+  if (settings->get_testmode()) {
+    worker_thread = std::thread{&Cache::test_loop, this};
+  } else {
+    worker_thread = std::thread{&Cache::worker_loop, this};
+  }
 }
 
 void Cache::stop_worker() {
