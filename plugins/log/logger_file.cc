@@ -38,6 +38,25 @@ struct Settings {
   std::string file_name;
 };
 
+const PegInfo s_pegs[] = {
+    {CountType::SUM, "logs_in", "Count of logs we were asked to write"},
+    {CountType::SUM, "logs_out", "Count of logs we have written to the file"},
+    {CountType::SUM, "write_errors", "Count of write errors detected"},
+    {CountType::END, nullptr, nullptr}};
+
+// This must match the s_pegs[] array
+THREAD_LOCAL struct PegCounts {
+  PegCount logs_in = 0;
+  PegCount logs_out = 0;
+  PegCount write_errors = 0;
+} s_peg_counts;
+
+// Compile time sanity check of number of entries in s_pegs and s_peg_counts
+static_assert(
+    (sizeof(s_pegs) / sizeof(PegInfo)) - 1 ==
+        sizeof(PegCounts) / sizeof(PegCount),
+    "Entries in s_pegs doesn't match number of entries in s_peg_counts");
+
 // MAIN object of this file
 class Logger : public LioLi::Logger {
   std::mutex mutex; // Protects members
@@ -89,8 +108,13 @@ public:
 
   ~Logger() {
     // We can't request a context here, as it isn't safe during shutdown
-    if (context)
+    if (context) {
       get_ofile() << context->close();
+    }
+
+    if (ofile.good()) {
+      ofile.close();
+    }
   }
 
   bool had_data_loss(bool clear_flag) override {
@@ -111,12 +135,16 @@ public:
 
   void operator<<(const LioLi::Tree &&tree) override {
     std::scoped_lock lock(mutex);
+    s_peg_counts.logs_in++;
 
     auto &ofile = get_ofile();
     ofile << get_context().serialize(std::move(tree));
 
     if (!ofile.good()) {
       data_loss = true;
+      s_peg_counts.write_errors++;
+    } else {
+      s_peg_counts.logs_out++;
     }
   }
 };
@@ -202,6 +230,12 @@ class Module : public snort::Module {
   Usage get_usage() const override {
     return GLOBAL;
   } // TODO(mkr): Figure out what the usage type means
+
+  const PegInfo *get_pegs() const override { return s_pegs; }
+
+  PegCount *get_counts() const override {
+    return reinterpret_cast<PegCount *>(&s_peg_counts);
+  }
 
 public:
   static snort::Module *ctor() { return new Module(); }
