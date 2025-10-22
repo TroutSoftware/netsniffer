@@ -37,10 +37,12 @@ class LorthHelpers {
 public:
   static std::string escape_hex(const std::string &&in) {
     std::string output;
+    auto remaining = in.size();
     int lc = 0;
     for (char c : in) {
+      remaining--;
       output += std::format("{:02x} ", c);
-      if (++lc == 8) {
+      if (++lc == 8 && remaining) {
         lc = 0;
         output += '\n';
       }
