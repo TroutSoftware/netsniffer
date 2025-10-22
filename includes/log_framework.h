@@ -98,6 +98,10 @@ public:
   virtual std::shared_ptr<Context> create_context() = 0;
 
   static std::shared_ptr<Serializer> &get_null_obj();
+
+  operator bool() {
+    return this != get_null_obj().get();
+  }
 };
 
 class Logger : public LogBase {
@@ -108,9 +112,16 @@ public:
   // Must be non-blocking
   virtual void operator<<(const Tree &&tree) = 0;
 
+  // Called by the framework at shutdown, ensures all data is flushed before shutdown
+  virtual void flush() {};
+
   virtual bool had_data_loss(bool clear_flag = true) = 0;
 
   static std::shared_ptr<Logger> &get_null_obj();
+
+  operator bool() {
+    return this != get_null_obj().get();
+  }
 };
 
 } // namespace LioLi
