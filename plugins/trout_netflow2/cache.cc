@@ -733,8 +733,9 @@ void Cache::dump() {
   uint32_t sum_flow_sets;
   auto &logger = settings->get_logger();
 
-  if (!logger.is_ready())
+  if (!logger.is_ready()) {
     return;
+  }
 
   bool resend = logger.had_data_loss();
 

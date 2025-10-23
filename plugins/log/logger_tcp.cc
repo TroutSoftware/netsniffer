@@ -304,7 +304,7 @@ class Logger : public LioLi::Logger {
       if (static_cast<ssize_t>(output_string.length()) > output_index) {
         ssize_t remaining = output_string.length() - output_index;
         ssize_t bytes = ::send(osocket, output_string.data() + output_index,
-                               remaining, (has_more) ? 0 : MSG_MORE);
+                               remaining, (has_more) ? MSG_MORE : 0);
 
         if (bytes >= 0) {
           assert(remaining <= bytes);
