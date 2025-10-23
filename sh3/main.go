@@ -33,7 +33,7 @@ Each script consists of a txtar archive with the files required to run the test.
 All archives are extracted to a temporary folder (given a temporary directory T,
 a file rule/lua.rule in the archive will be copied at T/rule/lua.rule).
 Furthermore:
- - the "p/install/{bin,lib,include}" directory is symlinked at T/{bin,lib,include} 
+ - the "p/install/{bin,lib,include}" directory is symlinked at T/{bin,lib,include}
    (snort and dependencies are available in PATH and LDPATH).
  - the "p/release/tm.so" is copied to "T/p/tm.so" (unless --debug is given)
  - the "pcaps" directory is symlinked at T/pcaps, and can be referred in scripts.
@@ -198,6 +198,7 @@ func main() {
 				fmt.Fprintln(os.Stderr, fail.Render("FAIL"))
 				fmt.Fprintf(os.Stderr, "%s\n", err)
 				io.Copy(os.Stderr, &buf)
+				fmt.Fprintf(os.Stderr, "Test output dir: %s\n", test_dir)
 
 				tests_failed++
 				if *break_on_err {
