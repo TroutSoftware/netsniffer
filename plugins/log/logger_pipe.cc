@@ -398,9 +398,8 @@ public:
         cv.notify_all();
 
         // Give worker a chance to go down gracefully
-        if (std::cv_status::timeout ==
-                cv.wait_for(lock, std::chrono::seconds(2)) &&
-            worker_running) {
+        cv.wait_for(lock, std::chrono::seconds(2));
+        if (worker_running) {
           // Faking a reader (most likely it is stuck in the open)
           std::ifstream pipe = std::ifstream(pipe_name, std::ios::in);
           cv.wait_for(lock, std::chrono::seconds(2));
