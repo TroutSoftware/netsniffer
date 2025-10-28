@@ -21,8 +21,9 @@ struct Settings {
 
   std::string logger_name;
   std::shared_ptr<LioLi::Logger> logger;
-  bool testmode;
-  bool generate_service_map;
+  bool testmode = false;
+  bool do_ping = false;
+  bool generate_service_map = false;
   uint32_t cache_size;
   uint32_t flush_interval_ms;
   uint32_t source_id;
@@ -30,10 +31,12 @@ struct Settings {
 public:
   LioLi::Logger &get_logger();
   bool get_testmode();
+  bool get_do_ping();
   bool get_generate_service_map();
   uint32_t get_max_cache_size();
   uint32_t get_flush_interval_ms();
   uint32_t get_source_id();
+  std::string get_logger_name();
 };
 
 } // namespace trout_netflow2

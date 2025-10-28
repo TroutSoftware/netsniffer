@@ -122,6 +122,10 @@ class Cache : public std::enable_shared_from_this<Cache> {
   // Sequence number of data sent from this cache
   uint32_t sequence_number = 0;
 
+  // Used for keeping track of pings
+  uint32_t next_screen_ping_at_s = 0;
+  uint32_t ping_count = 0;
+
   // Dumps the cache to the logger
   void dump();
 

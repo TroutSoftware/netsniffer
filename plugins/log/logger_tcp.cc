@@ -51,6 +51,8 @@ const snort::Parameter module_params[] = {
     {"retry_interval_ms", snort::Parameter::PT_INT, "10:10000", "100",
      "ms between retries after a log output tcp connection has been rejected "
      "or closed by the receiving side"},
+    {"extended_console_logging", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Will enable more logs to the console of what is happening in the logger"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -105,6 +107,7 @@ class Logger : public LioLi::Logger {
   uint64_t dropped_sequence_count =
       0; // Counts the number of packages dropped in this sequence
   uint32_t retry_interval_ms = 100;
+  bool extended_console_logging = false;
 
   std::deque<LioLi::Tree> queue;
 
@@ -138,7 +141,7 @@ class Logger : public LioLi::Logger {
       ev.data.fd = osocket;
 
       if (::epoll_ctl(epfd, EPOLL_CTL_ADD, osocket, &ev)) {
-        snort::LogMessage("TCP Logger connection error (Could not add socket "
+        snort::LogMessage("TCP Logger: connection error (Could not add socket "
                           "to epoll for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         return false;
@@ -154,7 +157,7 @@ class Logger : public LioLi::Logger {
       ev.data.fd = osocket;
 
       if (::epoll_ctl(epfd, EPOLL_CTL_DEL, osocket, &ev)) {
-        snort::LogMessage("TCP Logger connection error (Could not remove "
+        snort::LogMessage("TCP Logger: connection error (Could not remove "
                           "socket from epoll for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         return false;
@@ -200,7 +203,7 @@ class Logger : public LioLi::Logger {
 
       if (::connect(osocket, (sockaddr *)&addr, sizeof(addr)) &&
           errno != EAGAIN && errno != EINPROGRESS) {
-        snort::LogMessage("TCP Logger connection error (Could not create "
+        snort::LogMessage("TCP Logger: connection error (Could not create "
                           "connecting socket for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
         close_socket();
@@ -224,7 +227,7 @@ class Logger : public LioLi::Logger {
       if (0 == epwret) {
         return 0;
       } else if (-1 == epwret) {
-        snort::LogMessage("TCP Logger connection error (Epoll wait returned "
+        snort::LogMessage("TCP Logger: connection error (Epoll wait returned "
                           "with error for: %s reason: %s)\n",
                           my_name.c_str(), std::strerror(errno));
 
@@ -344,6 +347,11 @@ class Logger : public LioLi::Logger {
   };
 
   void worker_loop() {
+
+    if (extended_console_logging) {
+      snort::LogMessage("TCP Logger: >%s< Worker loop running\n", get_name());
+    }
+
     std::shared_ptr<LioLi::Serializer> serializer;
 
     std::unique_lock lock(mutex);
@@ -373,6 +381,12 @@ class Logger : public LioLi::Logger {
         // A new connection should always start a new context
         context.reset();
 
+        if (extended_console_logging && !queue.empty()) {
+          snort::LogMessage("TCP Logger: >%s< worker loop discarding queue due "
+                            "to socket restart\n",
+                            get_name());
+        }
+
         // Wipe what we have so far
         queue.clear();
 
@@ -394,19 +408,41 @@ class Logger : public LioLi::Logger {
         break; // socket is ready for writing
       }
 
+      if (extended_console_logging && !queue.empty()) {
+        snort::LogMessage("TCP Logger: >%s< worker loop socket writeable\n",
+                          get_name());
+      }
+
       // Flush what we have stored
       bool has_more = !queue.empty();
 
       if (!socket.flush(has_more)) {
+        if (extended_console_logging && !queue.empty()) {
+          snort::LogMessage(
+              "TCP Logger: >%s< worker loop couldn't write all data at once\n",
+              get_name());
+        }
+
         continue; // Couldn't write what was stored, socket might be closed
       }
 
       // Ensure we have a valid context
       if (next_timeout <= clock::now() || !context) {
+
         if (context) {
+          if (extended_console_logging && !queue.empty()) {
+            snort::LogMessage("TCP Logger: >%s< worker loop context reset\n",
+                              get_name());
+          }
+
           socket.queue(context->close());
           context.reset();
           continue; // Will eventually reach the flush
+        }
+
+        if (extended_console_logging && !queue.empty()) {
+          snort::LogMessage("TCP Logger: >%s< worker loop context create\n",
+                            get_name());
         }
 
         context = serializer->create_context();
@@ -428,6 +464,12 @@ class Logger : public LioLi::Logger {
               get_name(), dropped_sequence_count);
           dropped_sequence_count = 0;
         }
+
+        if (extended_console_logging && !queue.empty()) {
+          snort::LogMessage(
+              "TCP Logger: >%s< worker loop queueing new output\n", get_name());
+        }
+
         socket.queue(context->serialize(std::move(queue.front())));
 
         queue.pop_front();
@@ -435,17 +477,35 @@ class Logger : public LioLi::Logger {
         continue; // Will eventually send
       }
 
+      if (extended_console_logging && !queue.empty()) {
+        snort::LogMessage(
+            "TCP Logger: >%s< worker loop has empty queue, wating...\n",
+            get_name());
+      }
+
       cv.wait_until(lock, next_timeout,
                     [this] { return terminate || !queue.empty(); });
+
+      if (extended_console_logging) {
+        snort::LogMessage("TCP Logger: >%s< Worker loop waking up\n",
+                          get_name());
+      }
     }
   while_end:
     if (!terminate) {
-      snort::ParseError(
-          "TCP Logger exited worker loop due to an unhandled error\n");
+      snort::ErrorMessage(
+          "TCP Logger: exited worker loop due to an unhandled error\n");
+    } else {
+      snort::LogMessage("TCP Logger: exited worker loop normally\n");
     }
 
     worker_running = false;
     cv.notify_all();
+
+    if (extended_console_logging) {
+      snort::LogMessage("TCP Logger: >%s< Worker loop terminated\n",
+                        get_name());
+    }
   }
 
 public:
@@ -473,6 +533,10 @@ public:
 
   void operator<<(const LioLi::Tree &&tree) override {
     {
+      if (extended_console_logging) {
+        snort::LogMessage("TCP Logger: >%s< data added to queue\n", get_name());
+      }
+
       std::scoped_lock lock(mutex);
 
       assert(max_queue_size > 0);
@@ -555,8 +619,14 @@ public:
     retry_interval_ms = retry_interval;
   }
 
+  void set_extended_console_logging(bool b) { extended_console_logging = b; }
+
   // Call after all configuration is done
   void start() {
+    if (extended_console_logging) {
+      snort::LogMessage("TCP Logger: >%s< is starting\n", get_name());
+    }
+    assert(!worker_running);
     terminate = false;
     worker_running = true;
     worker_thread = std::thread{&Logger::worker_loop, this};
@@ -564,6 +634,10 @@ public:
 
   // Call to terminate
   void stop() {
+    if (extended_console_logging) {
+      snort::LogMessage("TCP Logger: >%s< is stopping\n", get_name());
+    }
+
     // Check worker is running
     if (worker_thread.joinable()) {
       std::unique_lock lock(mutex);
@@ -589,6 +663,10 @@ public:
       }
       worker_thread.join();
     }
+
+    if (extended_console_logging) {
+      snort::LogMessage("TCP Logger: >%s< has stopped\n", get_name());
+    }
   }
 };
 
@@ -605,6 +683,7 @@ class Module : public snort::Module {
     uint32_t restart_interval;
     uint32_t retry_interval;
     std::string serializer;
+    bool extended_console_logging = false;
   };
 
   std::stack<ConfigColector> config_stack;
@@ -671,6 +750,8 @@ class Module : public snort::Module {
     logger->set_port(config_stack.top().port);
     logger->set_ipv4(config_stack.top().ipv4);
     logger->set_retry_interval(config_stack.top().retry_interval);
+    logger->set_extended_console_logging(
+        config_stack.top().extended_console_logging);
 
     // Start the logger
     logger->start();
@@ -727,6 +808,8 @@ class Module : public snort::Module {
       }
 
       config_stack.top().serializer = serializer;
+    } else if (val.is("extended_console_logging")) {
+      config_stack.top().extended_console_logging = val.get_bool();
     } else {
       snort::ErrorMessage("ERROR: Parameter '%s' is not implemented\n",
                           val.get_name());
@@ -762,6 +845,9 @@ public:
 
 class Inspector : public snort::Inspector {
   void eval(snort::Packet *) override {};
+  void show(const snort::SnortConfig *) const override {
+    snort::ConfigLogger::log_value("r_spec", "v1");
+  }
 
 public:
   static snort::Inspector *ctor(snort::Module *) { return new Inspector(); }

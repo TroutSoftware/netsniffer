@@ -34,6 +34,8 @@ const snort::Parameter module_params[] = {
      "Will add service map generation to the output"},
     {"source_id", snort::Parameter::PT_INT, "0:4294967295", "0",
      "Set the Source ID transmitted in the Packet Header"},
+    {"do_ping", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Will generate empty packages at least every flush_interval"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -61,6 +63,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->flush_interval_ms = val.get_uint32();
   } else if (val.is("source_id")) {
     settings->source_id = val.get_uint32();
+  } else if (val.is("do_ping")) {
+    settings->do_ping = val.get_bool();
   } else {
     // fail if we didn't get something we knew about
     return false;

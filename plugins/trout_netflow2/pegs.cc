@@ -27,6 +27,8 @@ PegInfo Pegs::s_pegs[] = {
      "Number of connections that wasn't logged to prevent cache overflow"},
     {CountType::MAX, "max_cache_entries",
      "highest number of cache entries in use at any given time"},
+    {CountType::SUM, "logs_written",
+     "Number of logs that was sent to the logger"},
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;

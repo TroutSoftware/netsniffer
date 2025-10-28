@@ -27,6 +27,8 @@ private:
 
   bool configure(snort::SnortConfig *);
 
+  void show(const snort::SnortConfig *) const;
+
 public:
   Inspector(Module *module);
   ~Inspector();

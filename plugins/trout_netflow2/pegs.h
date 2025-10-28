@@ -27,6 +27,7 @@ struct Pegs {
     PegCount different_services = 0; // Updated by cache
     PegCount overflow = 0;           // Updated by cache
     PegCount max_cache_entries = 0;  // Updated by cache
+    PegCount logs_written = 0;       // Updated by cache
   };
 
   static PegInfo s_pegs[];

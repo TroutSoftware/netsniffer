@@ -80,6 +80,14 @@ bool Inspector::configure(snort::SnortConfig *) {
   return true;
 }
 
+void Inspector::show(const snort::SnortConfig *) const {
+  snort::ConfigLogger::log_value("flush_interval_ms",
+                                 settings->get_flush_interval_ms());
+  snort::ConfigLogger::log_flag("ping_mode", settings->get_do_ping());
+  snort::ConfigLogger::log_value("logger_name",
+                                 settings->get_logger_name().c_str());
+}
+
 Inspector::Inspector(Module *module)
     : settings(module->get_settings()), cache(Cache::create_cache(settings)) {}
 

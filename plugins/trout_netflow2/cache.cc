@@ -798,6 +798,24 @@ void Cache::dump() {
                    << DataFlowSet::generate_template(0));
     }
     logger << std::move(out_tree);
+    Pegs::s_peg_counts.logs_written++;
+  }
+
+  if (settings->get_do_ping()) {
+    LioLi::Tree out_tree;
+    out_tree << (LioLi::Tree("PacketHeader_ping")
+                 << DataFlowSet::generate_packet_header(
+                        now_in_s, sequence_number++, settings->get_source_id(),
+                        0));
+    logger << std::move(out_tree);
+
+    ping_count++;
+
+    if (next_screen_ping_at_s <= now_in_s) {
+      snort::LogMessage("Netflow2 ping %u at %u\n", ping_count, now_in_s);
+
+      next_screen_ping_at_s = now_in_s + 10;
+    }
   }
 
   if (buf.has_data()) {
@@ -810,6 +828,7 @@ void Cache::dump() {
     // root-root-data
     out_tree.merge(std::move(buf));
     logger << std::move(out_tree);
+    Pegs::s_peg_counts.logs_written++;
   }
 }
 
@@ -846,6 +865,12 @@ void Cache::worker_loop() {
     cv.wait_for(lock,
                 std::chrono::milliseconds(settings->get_flush_interval_ms()),
                 [this] { return terminate || worker_kicked; });
+
+    if (worker_kicked) {
+      snort::LogMessage("Netflow2 worker kicked\n");
+    } else {
+      snort::LogMessage("Netflow2 worker not kicked\n");
+    }
   }
 
   // We are done
