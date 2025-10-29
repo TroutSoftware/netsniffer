@@ -32,7 +32,7 @@ void dump(std::string &line16) {
     if (line16.size() > i) {
       char cur = line16[i];
       hex_part += std::format("{:02x} ", cur);
-      if ( cur > ' ' && cur < '~' ) {
+      if ( cur >= ' ' && cur <= '~' ) {
         ascii_part += cur;
       } else {
         ascii_part += '.';
@@ -134,6 +134,7 @@ public:
   }
 
   void read(bool loop = false) {
+    bool hexmode = false;
     do {
       char c;
 
@@ -145,7 +146,15 @@ public:
         break;
       }
 
-      dump(c);
+      if (!hexmode && (c == '\n' || c == '\r' || (c >= ' ' && c <= '~'))) {
+        std::cout << c << std::flush;
+      } else {
+        if (!hexmode) {
+          std::cout << "\n";
+          hexmode = true;
+        }
+        dump(c);
+      }
       //std::cout << c << std::flush;
 
     } while(loop);
@@ -157,7 +166,7 @@ public:
 
 
 int main(int argc, char *argv[]) {
-  std::cout << "socket_read v 0.0\n";
+  std::cout << "socket_read v 0.1\n";
   if (argc != 2) {
     std::cout << "Usage " << argv[0] << " [port]" << std::endl;
     return -1;
