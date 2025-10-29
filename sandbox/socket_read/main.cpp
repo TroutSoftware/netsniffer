@@ -1,11 +1,67 @@
 
 #include <errno.h>
 #include <cstring>
+#include <format>
 #include <iostream>
 #include <netinet/in.h>
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
+
+/*
+std::string escape_hex(const std::string &&in) {
+  std::string output;
+  auto remaining = in.size();
+  int lc = 0;
+  for (char c : in) {
+    remaining--;
+    output += std::format("{:02x} ", c);
+    if (++lc == 8 && remaining) {
+      lc = 0;
+      output += '\n';
+    }
+  }
+
+  return output;
+}
+*/
+
+void dump(std::string &line16) {
+  std::string hex_part, ascii_part;
+  for(int i=0;i<16;i++) {
+    if (line16.size() > i) {
+      char cur = line16[i];
+      hex_part += std::format("{:02x} ", cur);
+      if ( cur > ' ' && cur < '~' ) {
+        ascii_part += cur;
+      } else {
+        ascii_part += '.';
+      }
+      if (i == 7) {
+        hex_part += "- ";
+        ascii_part += " - ";
+      }
+    } else {
+      hex_part += "   ";
+      if (i == 7) {
+        hex_part += "  ";
+      }
+    }
+  }
+  std::cout << hex_part << "    " << ascii_part << std::endl;
+}
+
+std::string line;
+
+void dump(char c) {
+  line += c;
+
+  if (line.size() == 16) {
+    dump(line);
+    line.clear();
+  }
+}
+
 
 void display_errno(const char *s) {
   std::cout << s << " (errno: " << errno << " - " << strerror(errno) << ")" << std::endl;
@@ -31,16 +87,17 @@ public:
     fd = -1;
   }
 
-  void listen(unsigned port) {
+  bool listen(unsigned port) {
     if (-1 != fd) {
       close();
     }
 
+    // TODO: set SO_REUSEADDR so address can be reused imidiately
     fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (-1 == fd) {
       display_errno("Unable to create socket");
-      return;
+      return false;
     }
 
     struct sockaddr_in sa;
@@ -51,16 +108,17 @@ public:
     if(-1 == bind(fd, (struct sockaddr*)&sa, sizeof(sa))) {
       display_errno("Unable to bind socket");
       close();
-      return;
+      return false;
     }
 
     if(-1 == ::listen(fd, 1)) {
       display_errno("Unable to listen");
       close();
-      return;
+      return false;
     }
 
     std::cout << "Socket is listening" << std::endl;
+    return true;
   }
 
   int accept() {
@@ -82,11 +140,13 @@ public:
       auto s = recv(fd, &c, 1, 0);
 
       if (1 != s) {
+        dump(line);
         display_errno("Couln't read");
         break;
       }
 
-      std::cout << c << std::flush;
+      dump(c);
+      //std::cout << c << std::flush;
 
     } while(loop);
 
@@ -115,11 +175,14 @@ int main(int argc, char *argv[]) {
 
   Socket socket;
 
-  socket.listen(port_number);
-
-  Socket client(socket.accept());
-
-  client.read(true);
+  if (socket.listen(port_number)) {
+    while(true) {
+      Socket client(socket.accept());
+      std::cout << "------[[ TCP TRANSMISSION BEGIN ]]------" << std::endl;
+      client.read(true);
+      std::cout << "------[[  TCP TRANSMISSION END  ]]------" << std::endl;
+    }
+  }
 
   return 0;
 }
