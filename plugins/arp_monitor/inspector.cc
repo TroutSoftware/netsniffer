@@ -198,23 +198,30 @@ void Inspector::Worker::worker_loop() {
     // modifying the lists inline
     for (auto reply = reply_list.begin(); reply != reply_list.end(); reply++) {
       for (auto request = req_list.rbegin(); request != req_list.rend();) {
-        if (match(*request, *reply)) {
+
+        while (match(*request, *reply)) {
           Pegs::s_peg_counts.arp_matches++;
           Pegs::s_peg_counts.arp_late_match++;
 
-          auto request_to_delete =
-              (++request).base(); // request is a reverse iterator
           auto reply_to_delete = reply++;
 
-          req_list.erase(request_to_delete);
+          req_list.erase((++request).base());
           reply_list.erase(reply_to_delete);
 
-          if (reply == reply_list.end())
+          if (reply == reply_list.end()) {
             goto bail_double_for_loop;
-        } else {
-          request++;
+          }
+
+          request = req_list.rbegin();
+
+          if (request == req_list.rend()) {
+            goto bail_inner_for_loop;
+          }
         }
+
+        request++;
       }
+    bail_inner_for_loop:
     }
   bail_double_for_loop:
 
