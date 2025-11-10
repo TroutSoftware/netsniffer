@@ -89,8 +89,9 @@ void PcapDumper::worker_loop() {
                 // code if it happens)
 
   std::unique_lock lock(mutex);
-  while (!terminate) {
-    while (!queue.empty() && !terminate) {
+  // NOTE: The loops ignores terminate flag when in testmode
+  while (!terminate || settings->testmode) {
+    while (!queue.empty() && (!terminate || settings->testmode)) {
       PackageBufferElement &front = queue.front();
       lock.unlock(); // We don't want to block while we deal with the filesystem
                      // and we are the only thread removing elements, so our
@@ -124,7 +125,14 @@ void PcapDumper::worker_loop() {
       lock.lock(); // Retake the lock as we are going to manipulate queue
       queue.pop();
     }
-    cv.wait(lock, [this] { return (terminate || !queue.empty()); });
+    cv.wait(lock, [this] {
+      return (terminate || !queue.empty() || !settings->testmode);
+    });
+
+    // In case we are in testmode, this is the place we exit the loop
+    if (settings->testmode && terminate && queue.empty()) {
+      break;
+    }
   };
 
   if (dumper) {
