@@ -25,6 +25,10 @@ bool Settings::get_generate_service_map() { return generate_service_map; }
 
 bool Settings::get_do_ping() { return do_ping; }
 
+bool Settings::get_extended_console_logging() {
+  return extended_console_logging;
+}
+
 uint32_t Settings::get_max_cache_size() { return cache_size; }
 
 uint32_t Settings::get_flush_interval_ms() { return flush_interval_ms; }

@@ -700,9 +700,7 @@ using ServiceMapOptionsFlowSet = NFSerializer<
 // clang-format on
 
 uint32_t Cache::ServiceMap::dump(LioLi::Tree &tree) {
-  /* This code is WIP, and is currently crashing and rightfully leading to
-  compiler warnings std::scoped_lock lock(mutex);
-  */
+
   size_at_last_dump = service_map.size();
 
   return ServiceMapOptionsFlowSet::dump(tree, service_map);
@@ -729,11 +727,18 @@ void Cache::dump() {
   >;
   // clang-format on
 
+  if (settings->get_extended_console_logging()) {
+    snort::LogMessage("Netflow2 dump entered");
+  }
+
   LioLi::Tree buf;
   uint32_t sum_flow_sets;
   auto &logger = settings->get_logger();
 
   if (!logger.is_ready()) {
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 aborting dump, logger not ready\n");
+    }
     return;
   }
 
@@ -751,6 +756,10 @@ void Cache::dump() {
       Pegs::s_peg_counts.max_cache_entries = curent_cache_size;
     }
 
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 cleanup of abandoned cache entries");
+    }
+
     // Discard any entries that are no longer referenced
     for (auto itr = cache.begin(); itr != cache.end();) {
       auto old = itr++;
@@ -760,9 +769,18 @@ void Cache::dump() {
         cache.erase(old);
       }
     }
+
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 done cleanup of abandoned cache entries");
+    }
   }
   if (settings->get_generate_service_map() &&
       (!service_map.is_fully_flushed() || resend)) {
+
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 dumping service maps");
+    }
+
     uint32_t sm_flow_sets = service_map.dump(buf);
 
     sum_flow_sets += sm_flow_sets;
@@ -779,6 +797,10 @@ void Cache::dump() {
 
   // Transmit templates if anything happened to the connection
   if (resend) {
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 generating packet headers");
+    }
+
     LioLi::Tree out_tree;
     if (settings->get_generate_service_map()) {
       out_tree << (LioLi::Tree("PacketHeader")
@@ -799,6 +821,10 @@ void Cache::dump() {
     }
     logger << std::move(out_tree);
     Pegs::s_peg_counts.logs_written++;
+
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 done generating packet headers");
+    }
   }
 
   if (settings->get_do_ping()) {
@@ -811,7 +837,8 @@ void Cache::dump() {
 
     ping_count++;
 
-    if (next_screen_ping_at_s <= now_in_s) {
+    if (settings->get_extended_console_logging() &&
+        next_screen_ping_at_s <= now_in_s) {
       snort::LogMessage("Netflow2 ping %u at %u\n", ping_count, now_in_s);
 
       next_screen_ping_at_s = now_in_s + 10;
@@ -819,8 +846,12 @@ void Cache::dump() {
   }
 
   if (buf.has_data()) {
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 moving dump data to logger");
+    }
+
     LioLi::Tree out_tree;
-    out_tree << (LioLi::Tree("PacketHeader")
+    out_tree << (LioLi::Tree("PacketHeader_data")
                  << DataFlowSet::generate_packet_header(
                         now_in_s, sequence_number++, settings->get_source_id(),
                         sum_flow_sets));
@@ -829,10 +860,19 @@ void Cache::dump() {
     out_tree.merge(std::move(buf));
     logger << std::move(out_tree);
     Pegs::s_peg_counts.logs_written++;
+
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 done moving dump data to logger");
+    }
+  }
+
+  if (settings->get_extended_console_logging()) {
+    snort::LogMessage("Netflow2 leaving dump with normal exit");
   }
 }
 
 void Cache::test_loop() {
+  snort::LogMessage("Netflow2 using test loop\n");
   std::unique_lock lock(worker_mutex);
 
   // In testmode we don't do anything until terminating
@@ -852,25 +892,36 @@ void Cache::test_loop() {
 }
 
 void Cache::worker_loop() {
+  if (settings->get_extended_console_logging()) {
+    snort::LogMessage("Netflow2 using normal worker_loop loop\n");
+  }
   std::unique_lock lock(worker_mutex);
 
   // Main loop
   while (!terminate) {
     worker_kicked = false;
 
-    lock.unlock();
-    dump(); // This might take some time, don't keep the worker mutex
+    lock.unlock(); // The dump can take time, don't block others
+    dump();
     lock.lock();
 
     cv.wait_for(lock,
                 std::chrono::milliseconds(settings->get_flush_interval_ms()),
                 [this] { return terminate || worker_kicked; });
 
-    if (worker_kicked) {
-      snort::LogMessage("Netflow2 worker kicked\n");
-    } else {
-      snort::LogMessage("Netflow2 worker not kicked\n");
+    if (settings->get_extended_console_logging()) {
+      if (worker_kicked) {
+        snort::LogMessage("Netflow2 worker kicked (%i)\n",
+                          settings->get_flush_interval_ms());
+      } else {
+        snort::LogMessage("Netflow2 worker not kicked (%i)\n",
+                          settings->get_flush_interval_ms());
+      }
     }
+  }
+
+  if (settings->get_extended_console_logging()) {
+    snort::LogMessage("Netflow2 worker terminating\n");
   }
 
   // We are done

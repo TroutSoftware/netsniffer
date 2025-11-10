@@ -36,7 +36,8 @@ const snort::Parameter module_params[] = {
      "Set the Source ID transmitted in the Packet Header"},
     {"do_ping", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will generate empty packages at least every flush_interval"},
-
+    {"extended_console_logging", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Will enable more logs to the console of what is happening in the module"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -65,6 +66,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->source_id = val.get_uint32();
   } else if (val.is("do_ping")) {
     settings->do_ping = val.get_bool();
+  } else if (val.is("extended_console_logging")) {
+    settings->extended_console_logging = val.get_bool();
   } else {
     // fail if we didn't get something we knew about
     return false;

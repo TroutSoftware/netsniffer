@@ -24,6 +24,7 @@ struct Settings {
   bool testmode = false;
   bool do_ping = false;
   bool generate_service_map = false;
+  bool extended_console_logging = false;
   uint32_t cache_size;
   uint32_t flush_interval_ms;
   uint32_t source_id;
@@ -33,6 +34,7 @@ public:
   bool get_testmode();
   bool get_do_ping();
   bool get_generate_service_map();
+  bool get_extended_console_logging();
   uint32_t get_max_cache_size();
   uint32_t get_flush_interval_ms();
   uint32_t get_source_id();
