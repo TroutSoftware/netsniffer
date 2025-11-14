@@ -240,7 +240,11 @@ class Logger : public LioLi::Logger {
       }
 
       if (!terminate && queue.empty()) {
-        cv.wait_until(lock, next_timeout);
+        if (next_timeout == std::chrono::time_point<clock>::max()) {
+          cv.wait(lock);
+        } else {
+          cv.wait_until(lock, next_timeout);
+        }
       }
     }
 

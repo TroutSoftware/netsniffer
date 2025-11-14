@@ -483,8 +483,14 @@ class Logger : public LioLi::Logger {
             get_name());
       }
 
-      cv.wait_until(lock, next_timeout,
-                    [this] { return terminate || !queue.empty(); });
+      // There is a bug in some implementations that makes wait_until fail, if
+      // the timeout is max()
+      if (next_timeout == std::chrono::time_point<clock>::max()) {
+        cv.wait(lock, [this] { return terminate || !queue.empty(); });
+      } else {
+        cv.wait_until(lock, next_timeout,
+                      [this] { return terminate || !queue.empty(); });
+      }
 
       if (extended_console_logging) {
         snort::LogMessage("TCP Logger: >%s< Worker loop waking up\n",
@@ -846,7 +852,7 @@ public:
 class Inspector : public snort::Inspector {
   void eval(snort::Packet *) override {};
   void show(const snort::SnortConfig *) const override {
-    snort::ConfigLogger::log_value("r_spec", "v1");
+    snort::ConfigLogger::log_value("r_spec", "v2");
   }
 
 public:
