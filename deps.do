@@ -7,4 +7,4 @@ redo-ifchange envrc
 . ./envrc
 
 mkdir -p $BUILD_DIR
-redo-ifchange bootstrap/deps bootstrap/snort
+redo-ifchange bootstrap/deps bootstrap/snort_build
