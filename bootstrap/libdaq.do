@@ -1,5 +1,8 @@
 redo-ifchange ../envrc version_tags
 
+exec >libdaq.log
+exec 2>>libdaq.log
+
 . ../envrc
 . ./version_tags
 
@@ -7,9 +10,8 @@ curl -sL https://github.com/snort3/libdaq/archive/refs/tags/v$libdaq_tag.tar.gz 
 
 redo-ifchange $(find -type f $BUILD_DIR/libdaq-$libdaq_tag)
 
-exec >libdaq_install_log
-exec 2>libdaq_install_log
-(cd "$BUILD_DIR/libdaq-$libdaq_tag" || exit;
+
+(cd "$BUILD_DIR/libdaq-$libdaq_tag" || exit 1;
 	./bootstrap;
 	./configure --prefix="$INSTALL_DIR" ;
 	make;	make install)

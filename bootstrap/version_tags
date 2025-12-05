@@ -1,5 +1,5 @@
 
-
-libdaq_tag=3.0.21
-snort_tag=3.9.5.0
+libml_tag=2.0.0
+libdaq_tag=3.0.23
+snort_tag=3.10.0.0
 

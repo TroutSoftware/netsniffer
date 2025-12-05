@@ -5,8 +5,8 @@ redo-ifchange ../envrc snort_deps
 . ../envrc
 . ./version_tags
 
-exec >snort_install_log
-exec 2>snort_install_log
+exec >snort_build.log
+exec 2>>snort_build.log
 
 (cd "$BUILD_DIR/snort3-${snort_tag}-build_debug" || exit 1; ninja install)
 (cd "$BUILD_DIR/snort3-${snort_tag}-build" || exit 1; ninja install)
