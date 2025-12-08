@@ -1,8 +1,11 @@
 cat <<- EOF
+	# To modify this file edit envrc.do
 	BASE_DIR=$(pwd)
-	BUILD_DIR=$(pwd)/p
-	INSTALL_DIR=${INSTALL_DIR:-"$(pwd)/p/install"}
-	INSTALL_DEBUG_DIR=${INSTALL_DEBUG_DIR:-"$(pwd)/p/install_debug"}
-	PD=$(pwd)/plugins
-	ID=$(pwd)/includes
+	BUILD_DIR=\$BASE_DIR/p
+	DOWNLOAD_DIR=\$BUILD_DIR/download_cache
+	INSTALL_DIR=\$BUILD_DIR/install
+	INSTALL_DEBUG_DIR=\$BUILD_DIR/install_debug
+	TMP_FOLDER=\$BUILD_DIR/tmp
+	PD=\$BASE_DIR/plugins
+	ID=\$BASE_DIR/includes
 EOF
