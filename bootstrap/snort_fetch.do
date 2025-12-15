@@ -1,11 +1,9 @@
-redo-ifchange ../envrc version_tags
+redo-ifchange ../envrc version_tags.rc
 
 . ../envrc
-. ./version_tags
+. ./version_tags.rc
 
-
-exec >snort_fetch.log
-exec 2>>snort_fetch.log
+exec >&2
 
 [ -d $BUILD_DIR ] || mkdir -p $BUILD_DIR
 

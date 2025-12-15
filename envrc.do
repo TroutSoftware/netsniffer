@@ -1,5 +1,5 @@
 cat <<- EOF
-	# To modify this file edit envrc.do
+	# To modify this file edit $(pwd)/envrc.do
 	BASE_DIR=$(pwd)
 	BUILD_DIR=\$BASE_DIR/p
 	DOWNLOAD_DIR=\$BUILD_DIR/download_cache

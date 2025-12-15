@@ -28,7 +28,7 @@ REDO_FILE_PATH=redo-${REDO_FILE_PREFIX}
   curl -sSL $REDO_URL/$REDO_FILE_NAME > $TEST_DIR_ALPN_DOWNLOAD/$REDO_FILE_NAME || \
   (rm $TEST_DIR_ALPN_DOWNLOAD/$REDO_FILE_NAME; exit 3)
 
-[ -d REDO_SRC_PATH ] || (mkdir -p $REDO_SRC_PATH && (\
+[ -d $REDO_SRC_PATH ] || (mkdir -p $REDO_SRC_PATH && (\
   tar -C $REDO_SRC_PATH -xzf $TEST_DIR_ALPN_DOWNLOAD/$REDO_FILE_NAME --strip-components=1 || \
   (rm -r $REDO_SRC_PATH; exit 4)))
 

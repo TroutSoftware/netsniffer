@@ -1,14 +1,13 @@
-redo-ifchange ../envrc version_tags
+redo-ifchange ../envrc version_tags.rc
 
 . ../envrc
-. ./version_tags
+. ./version_tags.rc
 
-exec >snort_deps.log
-exec 2>>snort_deps.log
+exec >&2
 
 [ -d $BUILD_DIR ] || mkdir -p $BUILD_DIR
 
-redo-ifchange libdaq libml snort_fetch
+redo-ifchange libdaq_install libml_install snort_fetch
 
 (cd "$BUILD_DIR/snort3-$snort_tag" || exit 1;
  PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig" ./configure_cmake.sh \

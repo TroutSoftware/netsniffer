@@ -1,3 +1,6 @@
+
+
+
 _bwrap() {
 bwrap --tmpfs / \
         --clearenv \
@@ -10,6 +13,7 @@ bwrap --tmpfs / \
         --ro-bind "$(go env GOROOT)" "$(go env GOROOT)" \
         --dir /tmp --proc proc --dev dev --dir /run \
         --bind $BASE_DIR $BASE_DIR --chdir $BASE_DIR \
+        --bind $REDO_CACHE_ALPN_FOLDER $BASE_DIR/.redo \
         --bind $TEST_DIR_BUILD $BASE_DIR/p \
         --setenv GOPROXY https://proxy.devit.trout.software,https://proxy.golang.org \
         --setenv GONOSUMDB trout.software \
