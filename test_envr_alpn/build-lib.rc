@@ -19,6 +19,9 @@ bwrap --tmpfs / \
         --setenv GONOSUMDB trout.software \
         --setenv GOMODCACHE /go/mods \
         --setenv GOCACHE /go/cache \
+        --setenv CC clang \
+        --setenv CXX clang++ \
+        --setenv LDFLAGS -fuse-ld=lld \
         --bind "$TEST_DIR_ALPN_OS"/srv /srv \
     "$@"
 }

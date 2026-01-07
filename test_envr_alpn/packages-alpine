@@ -9,7 +9,7 @@ dash
 ca-certificates
 
 # common build deps
-cmake g++ flex-dev bison autoconf automake make flex libtool linux-headers pkgconf curl samurai
+cmake flex-dev bison autoconf automake make flex libtool linux-headers pkgconf curl samurai
 
 # netfilter
 libdnet-dev libmnl-dev libnetfilter_queue-dev libnetfilter_conntrack-dev nftables-dev nettle-dev libnfnetlink-dev
@@ -32,4 +32,4 @@ luajit-dev hwloc-dev pcre-dev libtirpc-dev jemalloc-dev lua5.4-dev pcre2-dev lib
 readline-dev
 
 # linux-tools/perf
-clang python3-dev py3-setuptools perl-dev slang-dev llvm-dev numactl-dev capstone-dev libtraceevent-dev
+clang lld python3-dev py3-setuptools perl-dev slang-dev llvm-dev numactl-dev capstone-dev libtraceevent-dev

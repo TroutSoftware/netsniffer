@@ -5,8 +5,10 @@ redo-ifchange envrc
 
 [ -d $TEST_DIR_ALPN_DOWNLOAD ] || mkdir -p $TEST_DIR_ALPN_DOWNLOAD
 
-ALPN_URL=https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64
-ALPN_VERSION=3.22.2
+#ALPN_URL=https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/x86_64
+ALPN_URL=https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64
+#ALPN_VERSION=3.22.2
+ALPN_VERSION=3.23.2
 ALPN_FILE_NAME=alpine-minirootfs-${ALPN_VERSION}-x86_64.tar.gz
 
 # If archive doesn't exist, download it, if that fails, delete inclomplete download

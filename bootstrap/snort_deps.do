@@ -23,4 +23,4 @@ redo-ifchange libdaq_install snort_fetch
  --enable-luajit-static --enable-static-daq --build-type=Release \
  --builddir="$BUILD_DIR/snort3-${snort_tag}-build")
 
-redo-ifchange $(find -type f $BUILD_DIR/snort3-$snort_tag)
+redo-ifchange $(find $BUILD_DIR/snort3-$snort_tag -type f )

@@ -12,7 +12,6 @@ cat <<- EOF
 	# Make sure some folders are existing
 	[ -d \$REDO_CACHE_ALPN_FOLDER ] || mkdir -p \$REDO_CACHE_ALPN_FOLDER
 	[ -d \$TEST_DIR_ALPN_DOWNLOAD ] || mkdir -p \$TEST_DIR_ALPN_DOWNLOAD
-	[ -d \$TEST_DIR_ALPN_OS ] || mkdir -p \$TEST_DIR_ALPN_OS
 	[ -d \$TEST_DIR_BUILD ] || mkdir -p \$TEST_DIR_BUILD
 	[ -d \$REDO_CACHE_ALPN_FOLDER ] || mkdir -p \$REDO_CACHE_ALPN_FOLDER
 
