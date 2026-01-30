@@ -90,9 +90,7 @@ void Inspector::eval(snort::Packet *p) {
 }
 
 Inspector::Inspector(Module &module)
-    : settings(module.get_settings()), pegs(module.get_peg_counts()){
-
-                                       };
+    : settings(module.get_settings()), pegs(module.get_peg_counts()) {};
 
 Inspector::~Inspector() {}
 

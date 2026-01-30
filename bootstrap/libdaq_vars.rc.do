@@ -7,7 +7,7 @@ redo-ifchange ../envrc version_tags.rc
 exec > $TMP_FOLDER/$1
 
 cat <<- EOF
-	# To modify content of this file, edit $(pwd)/libml_vars.do
+	# To modify content of this file, edit $(pwd)/libdaq_vars.rc.do
 	LIBDAQ_SERVER_FILE_NAME=v$libdaq_tag.tar.gz
 	LIBDAQ_LOCAL_TAR_GZ_FILE_NAME=libdaq-$libdaq_tag.tar.gz
 	# Currently libdaq doesn't support seperate build dirs (without patching it)

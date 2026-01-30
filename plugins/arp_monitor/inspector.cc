@@ -18,15 +18,8 @@
 #include "pegs.h"
 
 // Debug includes
-#include <iostream>
 
 namespace arp_monitor {
-
-namespace {
-const uint8_t null_hw_adr[6] = {0, 0, 0, 0, 0, 0};
-const uint8_t broadcast_hw_adr[6]{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-} // namespace
 
 using TP = std::chrono::time_point<std::chrono::steady_clock>;
 

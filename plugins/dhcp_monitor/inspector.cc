@@ -261,7 +261,8 @@ public:
 
 class EventHandler : public snort::DataHandler {
   DHCPMonitorInspector *inspector;
-  unsigned event_type;
+
+  [[maybe_unused]] unsigned event_type;
 
 public:
   EventHandler(DHCPMonitorInspector *inspector, unsigned event_type)

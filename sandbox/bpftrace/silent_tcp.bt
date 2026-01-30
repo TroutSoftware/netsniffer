@@ -1,0 +1,38 @@
+#!/usr/bin/env bpftrace
+
+// string func() - Name of current function  (kprobes, uprobes, fentry)
+// kstack_t kstack(...) - stack map
+
+BEGIN
+{
+  printf("This script needs to be running when snort is launched, it samples the worker threads of the trout provided snort plugins\n");
+}
+
+uprobe:../../p/debug/tm.so*:*worker_loop*,
+uprobe:../../p/release/tm.so*:*worker_loop*,
+{
+  if ( @has_entry[tid] != 5 )
+  {
+    printf("Found worker in thread: ");
+    print(tid);
+    printf(" called : %s\n", func);
+
+    @has_entry[tid] = 5;
+    @trace[tid] = func;
+  }
+}
+
+profile:ms:1
+{
+  if ( @has_entry[tid] == 5 )
+  {
+    @[@trace[tid], ustack()] = count();
+  }
+}
+
+END
+{
+  clear(@trace);
+  printf("\nDone...\n");
+}
+

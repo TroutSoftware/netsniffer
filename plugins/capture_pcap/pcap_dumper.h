@@ -9,6 +9,7 @@
 #include <pcap/pcap.h>
 #include <queue>
 #include <string>
+#include <thread>
 
 // Global includes
 

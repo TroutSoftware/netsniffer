@@ -32,4 +32,9 @@ luajit-dev hwloc-dev pcre-dev libtirpc-dev jemalloc-dev lua5.4-dev pcre2-dev lib
 readline-dev
 
 # linux-tools/perf
-clang lld python3-dev py3-setuptools perl-dev slang-dev llvm-dev numactl-dev capstone-dev libtraceevent-dev
+
+#llvm21 lldb llvm21-linker-tools musl-dev libc++-dev llvm-libunwind-dev compiler-rt clang21-dev lld python3-dev py3-setuptools perl-dev slang-dev llvm21-dev numactl-dev capstone-dev libtraceevent-dev
+
+lldb libc++-dev llvm-libunwind-dev compiler-rt clang21-dev lld python3-dev py3-setuptools perl-dev slang-dev llvm21-dev numactl-dev capstone-dev libtraceevent-dev
+
+apenwarr-redo patch strace

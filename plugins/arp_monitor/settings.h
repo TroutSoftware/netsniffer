@@ -16,10 +16,10 @@
 
 namespace arp_monitor {
 
-class module;
+class Module;
 
-struct Settings {
-  friend module;
+class Settings {
+  friend Module;
 
   std::string logger_name;
   std::string missing_reply_alert_tag;

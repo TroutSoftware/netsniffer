@@ -20,12 +20,6 @@
 
 namespace icmp_logger {
 
-namespace {
-const uint8_t null_hw_adr[6] = {0, 0, 0, 0, 0, 0};
-const uint8_t broadcast_hw_adr[6]{0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-
-} // namespace
-
 void Inspector::eval(snort::Packet *p) {
   // If we don't get arp, then something is wrong
   assert(p && p->is_icmp());

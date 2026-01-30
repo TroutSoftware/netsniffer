@@ -63,8 +63,20 @@ std::mutex LogDB::mutex;
 std::map<std::string, std::shared_ptr<LogBase>> LogDB::db;
 
 bool LogDB::register_obj(std::string name, std::shared_ptr<LogBase> sptr) {
+  static std::once_flag register_flag;
+  std::call_once(register_flag, []() { std::atexit(LogDB::shutdown_handler); });
+
   std::scoped_lock lock(mutex);
   return db.emplace(name, sptr).second;
+}
+
+void LogDB::shutdown_handler() {
+  std::scoped_lock lock(mutex);
+
+  for (auto &[name, logger] : db) {
+    if (logger)
+      logger->shutdown();
+  }
 }
 
 } // namespace LioLi

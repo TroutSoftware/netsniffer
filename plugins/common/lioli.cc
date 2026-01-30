@@ -6,6 +6,7 @@
 #include <format>
 #include <iostream>
 #include <regex>
+#include <utility>
 
 // Local includes
 #include <lioli.h>
@@ -202,7 +203,7 @@ void Tree::Node::append(Node &&node) {
   node.end = 0;
 }
 
-Tree::Node::Node(){};
+Tree::Node::Node() {};
 
 Tree::Node::Node(const Node &p)
     : my_name(p.my_name), start(p.start), end(p.end), children(p.children) {
@@ -229,7 +230,7 @@ Tree::Node::Node(Node &&src) {
   // iterators to elements that are moved, points to the moved elements
   if (src.last_child_added != src.children.before_begin()) {
     last_child_added = src.last_child_added;
-    src.last_child_added = children.before_begin();
+    src.last_child_added = src.children.before_begin();
   } else {
     last_child_added = children.before_begin();
   }
@@ -237,6 +238,24 @@ Tree::Node::Node(Node &&src) {
 
 Tree::Node::Node(std::string name) : my_name(name) {
   assert(Path::is_valid_node_name(name));
+}
+
+Tree::Node &Tree::Node::operator=(Node &&other) {
+  if (this != &other) {
+    Node temp(std::move(other));
+    swap(*this, temp);
+  }
+
+  return *this;
+}
+
+Tree::Node &Tree::Node::operator=(const Node &other) {
+  if (this != &other) {
+    Node temp(other);
+    swap(*this, temp);
+  }
+
+  return *this;
 }
 
 void Tree::Node::adjust(size_t delta) {

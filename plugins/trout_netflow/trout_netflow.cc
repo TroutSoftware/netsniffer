@@ -133,7 +133,7 @@ class Inspector : public snort::Inspector {
     }
   };
 
-  bool configure(snort::SnortConfig *) {
+  bool configure(snort::SnortConfig *) override {
     snort::DataBus::subscribe_network(
         snort::intrinsic_pub_key, snort::IntrinsicEventIds::FLOW_SERVICE_CHANGE,
         new ServiceEventHandler(settings));

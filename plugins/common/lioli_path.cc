@@ -47,7 +47,7 @@ Path &Path::operator=(Path &&src) {
 Path::Path(std::string path_name) {
   auto &map = (is_absolute(path_name) ? absolute : relative);
 
-  auto r = map.emplace(std::move(path_name), std::move(Tree()));
+  auto r = map.emplace(path_name, Tree());
 
   assert(r.second);
 

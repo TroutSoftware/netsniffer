@@ -46,11 +46,20 @@ class Tree {
     }
 
   public:
+    friend void swap(Node& first, Node& second) noexcept {
+      std::swap(first.my_name, second.my_name);
+      std::swap(first.start, second.start);
+      std::swap(first.end, second.end);
+      first.children.swap(second.children);
+      std::swap(first.last_child_added, second.last_child_added);
+    }
+
     Node();
     Node(std::string name);
     Node(const Node &);
     Node(Node &&src);
-    Node &operator=(Node &&other) = default;
+    Node &operator=(Node &&other);
+    Node &operator=(const Node &other);
     virtual ~Node() = default;
 
     void set_end(size_t new_end);
@@ -89,6 +98,7 @@ public:
   Tree(const std::string &name);
   Tree(const Tree &) = default;
   Tree(Tree &&src) = default;
+  Tree &operator=(const Tree &other) = default;
   Tree &operator=(Tree &&other) = default;
 
   Tree &operator<<(const std::string &text);

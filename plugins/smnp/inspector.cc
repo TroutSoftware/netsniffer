@@ -71,7 +71,7 @@ public:
 
 class Inspector : public snort::Inspector {
 
-  Module &module;
+  [[maybe_unused]] Module &module;
 
   Inspector(Module &module) : module(module) {}
 

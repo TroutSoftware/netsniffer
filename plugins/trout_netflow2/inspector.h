@@ -25,9 +25,9 @@ private:
 
   void eval(snort::Packet *) override;
 
-  bool configure(snort::SnortConfig *);
+  bool configure(snort::SnortConfig *) override;
 
-  void show(const snort::SnortConfig *) const;
+  void show(const snort::SnortConfig *) const override;
 
 public:
   Inspector(Module *module);

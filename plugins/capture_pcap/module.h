@@ -16,7 +16,7 @@
 
 namespace capture_pcap {
 
-class Settings;
+struct Settings;
 
 // This must match the s_pegs[] array
 struct PegCounts {

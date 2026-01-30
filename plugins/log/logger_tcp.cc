@@ -10,9 +10,11 @@
 #include <condition_variable>
 #include <mutex>
 #include <netinet/in.h>
+#include <stack>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <thread>
+#include <unistd.h>
 
 // Local includes
 #include "lioli.h"
@@ -518,6 +520,10 @@ public:
   Logger(const char *name) : LioLi::Logger(name) {}
 
   ~Logger() {
+    stop(); // Stops worker thread
+  }
+
+  void shutdown() override {
     stop(); // Stops worker thread
   }
 

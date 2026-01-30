@@ -23,7 +23,6 @@ public:
   using index_t = uint16_t;
 
 private:
-  bool full = false;
   index_t max_entries;
   std::map<std::string, index_t> map;
 

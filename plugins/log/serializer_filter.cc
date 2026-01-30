@@ -5,6 +5,7 @@
 
 // System includes
 #include <memory>
+#include <stack>
 
 // Local includes
 #include "lioli.h"

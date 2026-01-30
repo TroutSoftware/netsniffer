@@ -6,6 +6,7 @@
 
 // System includes
 #include <atomic>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -26,6 +27,7 @@ public:
   LogBase(const char *my_name) : my_name(my_name){};
   virtual ~LogBase() = default;
 
+  virtual void shutdown() {}  // Do cleanup, will be called once
   const char *get_name() { return my_name.c_str(); }
   virtual bool is_ready() { return false; }    // Returns true when component and dependencies are initialized
 };
@@ -34,6 +36,7 @@ class LogDB {
   static std::mutex mutex;
   static std::map<std::string, std::shared_ptr<LogBase>> db;
   static bool register_obj(std::string, std::shared_ptr<LogBase>);
+  static void shutdown_handler();
 
 public:
 

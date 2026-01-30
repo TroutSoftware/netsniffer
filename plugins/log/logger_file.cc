@@ -107,12 +107,11 @@ public:
   }
 
   ~Logger() {
-    // We can't request a context here, as it isn't safe during shutdown
-    if (context) {
-      get_ofile() << context->close();
-    }
+    if (ofile.good() && ofile.is_open()) {
+      if (context) {
+        ofile << context->close();
+      }
 
-    if (ofile.good()) {
       ofile.close();
     }
   }

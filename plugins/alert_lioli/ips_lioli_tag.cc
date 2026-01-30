@@ -60,7 +60,7 @@ class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {}
 
   bool begin(const char *, int, snort::SnortConfig *) override {
-    tag = std::move(LioLi::Path());
+    tag = LioLi::Path();
     tag_valid = false;
     return true;
   }

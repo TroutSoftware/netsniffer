@@ -1,5 +1,10 @@
-redo-ifchange deps sh3_tests.list release envrc || exit -1
+#!/bin/sh
+
+# Usage: ./test.sh module_name (e.g. ./test.sh arp_monitor)
+
+redo-ifchange bootstrap/deps bootstrap/snort_build || exit 1
+redo-ifchange deps release envrc || exit 1
 . ./envrc
 
-go test ./...
-grep -v '^#' sh3_tests.list | sed s#^#$PD/# |  xargs go tool sh3 $*
+
+go tool sh3 "$PD/$@"

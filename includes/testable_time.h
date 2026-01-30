@@ -17,12 +17,14 @@ namespace Common {
 class TestableTime {
 
 public:
-  template <class T> static std::chrono::time_point<T> now(bool testmode) {
+  using Precision = std::chrono::nanoseconds;
+
+  template <class T> static std::chrono::time_point<T, Precision> now(bool testmode) {
     if (testmode) {
-      return std::chrono::time_point<T>();
+      return std::chrono::floor<Precision>(std::chrono::time_point<T>());
     }
 
-    return T::now();
+    return std::chrono::floor<Precision>(T::now());
   }
 };
 } // namespace Common

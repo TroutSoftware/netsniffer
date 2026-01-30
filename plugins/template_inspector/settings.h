@@ -14,10 +14,10 @@
 
 namespace my_plugin_name {
 
-class module;
+class Module;
 
-struct Settings {
-  friend module;
+class Settings {
+  friend Module;
 
   std::string logger_name;
   std::shared_ptr<LioLi::Logger> logger;

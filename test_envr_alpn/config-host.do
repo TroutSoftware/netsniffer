@@ -6,8 +6,8 @@ redo-ifchange envrc packages-host
 
 . ./envrc
 
-[ -f /etc/apparmor.d/bwrap ]  || (\
-  echo "Please copy the file 'bwrap' from $TEST_DIR_ALPN to /etc/apparmor.d and restart apparmor 'sudo /etc/init.d/apparmor restart'" >&2 \
+[ -f /etc/apparmor.d/usr.bin.bwrap ]  || (\
+  echo "Please copy the file 'bwrap' from $TEST_DIR_ALPN to /etc/apparmor.d/usr.bin.bwrap and restart apparmor 'sudo /etc/init.d/apparmor restart'" >&2 \
   && exit 1)
 
 [ -f /etc/apparmor.d/usr.bin.unshare ]  || (\
