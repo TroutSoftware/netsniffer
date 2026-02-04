@@ -23,35 +23,19 @@ else
   LDFLAGS="-fuse-ld=lld -rdynamic"
 fi
 
-
-	#if [ "\$USE_LLVM_CXX_LIB" = "1" ]; then
-	#  LD_LIBRARY_PATH="\$INSTALL_DIR/lib:\$INSTALL_DIR/lib64:/usr/lib/llvm21/lib:$LD_LIBRARY_PATH"
-	#else
-	#  LD_LIBRARY_PATH="\$INSTALL_DIR/lib:\$INSTALL_DIR/lib64:$LD_LIBRARY_PATH"
-	#fi
-	#if [ "\$USE_LLVM_CXX_LIB" = "1" ]; then
-	#  # We want to be sure to use the llvm21 versions of tools
-	#  PATH="/usr/lib/llvm21/bin:$PATH"
-	#fi
-	#if [ "\$USE_LLVM_CXX_LIB" = "1" ]; then
-	#  CXXFLAGS="\$CFLAGS -stdlib=libc++ -fvisibility=default -fexceptions -frtti"
-	#else
-	#  CXXFLAGS="\$CFLAGS -stdlib=libstdc++ -fvisibility=default -fexceptions -frtti"
-	#fi
-	#if [ "\$USE_LLVM_CXX_LIB" = "1" ]; then
-	#else
-	#  LIBDAQ_CONFIG_CFLAGS=""
-	#  LIBDAQ_CONFIG_CXXFLAGS=""
-	#fi
-	#if [ "\$USE_LLVM_CXX_LIB" = "1" ]; then
-	#  LDFLAGS="-fuse-ld=lld -nodefaultlibs --rtlib=compiler-rt --unwindlib=libunwind -L/usr/lib/llvm21/lib -lc++ -lc++abi -lunwind -lm -lc -rdynamic"
-  #else
-	#  LDFLAGS="-fuse-ld=lld -rdynamic"
-	#fi
+if [ ! -f /etc/alpine-release ]; then
+  echo "ERROR: netsniffer can only be build and run under Alpine, change to ./test_envr_alpn and run ./bshell.sh to get an Alpine prompt" >&2
+  exit 1
+fi
 
 
 cat > $3 <<- EOF
 	# To modify this file edit $(pwd)/envrc.do
+
+	if [ ! -f /etc/alpine-release ]; then
+		echo "ERROR: netsniffer can only be build and run under Alpine, change to ./test_envr_alpn and run ./bshell.sh to get an Alpine prompt" >&2
+		exit 1
+	fi
 
 
 	# Export all variables to the environment
