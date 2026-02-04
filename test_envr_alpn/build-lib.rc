@@ -4,11 +4,11 @@ _bwrap() {
     bwrap --tmpfs / \
         --clearenv \
         --setenv PATH "$PATH:$(go env GOROOT)/bin" \
-        --ro-bind "$TEST_DIR_ALPN_OS"/bin /bin \
-        --ro-bind "$TEST_DIR_ALPN_OS"/etc /etc \
-        --ro-bind "$TEST_DIR_ALPN_OS"/lib /lib \
-        --ro-bind "$TEST_DIR_ALPN_OS"/sbin /sbin \
-        --bind "$TEST_DIR_ALPN_OS"/usr /usr \
+        --ro-bind "$TEST_DIR_ALPN_OS/bin" /bin \
+        --ro-bind "$TEST_DIR_ALPN_OS/etc" /etc \
+        --ro-bind "$TEST_DIR_ALPN_OS/lib" /lib \
+        --ro-bind "$TEST_DIR_ALPN_OS/sbin" /sbin \
+        --bind "$TEST_DIR_ALPN_OS/usr" /usr \
         --ro-bind "$(go env GOROOT)" "$(go env GOROOT)" \
         --dir /tmp --proc proc --dev dev --dir /run \
         --bind "$BASE_DIR" "$BASE_DIR" --chdir "$BASE_DIR" \
@@ -18,16 +18,9 @@ _bwrap() {
         --setenv GONOSUMDB "trout.software" \
         --setenv GOMODCACHE "/go/mods" \
         --setenv GOCACHE "/go/cache" \
-        --bind "$TEST_DIR_ALPN_OS"/srv /srv \
+        --bind "$TEST_DIR_ALPN_OS/srv" /srv \
         "$@"
 }
-
-#        --setenv CC "clang" \
-#        --setenv CXX "clang++" \
-#        --setenv CFLAGS "-fPIC -O3 -march=x86-64-v3" \
-#        --setenv CXXFLAGS "-stdlib=libc++ -fPIC -O3 -march=x86-64-v3" \
-#        --setenv LDFLAGS "-fuse-ld=lld -stdlib=libc++ -L/usr/lib -Wl,-dynamic-linker,/lib/ld-musl-x86_64.so.1 -Wl,--export-dynamic -Wl,-z,relro,-z,now" \
-
 
 _build_port() {
   _bwrap --bind "$local" /usr/local \

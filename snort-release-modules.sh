@@ -1,6 +1,6 @@
 #!/bin/sh
 
-redo-ifchange envrc bootstrap/deps bootstrap/snort_build release || exit 1
+redo-ifchange envrc bootstrap/deps bootstrap/snort_install release || exit 1
 
 . ./envrc
 

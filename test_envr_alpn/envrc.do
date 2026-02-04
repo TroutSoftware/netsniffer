@@ -1,12 +1,19 @@
-cat <<- EOF
-	redo-ifchange ../envrc
-	. ../envrc
+
+# we have some ugly things going on as ../envrc has different content
+# under alpine and on the host, so make sure to regenerate
+rm ../envrc
+redo ../envrc
+. ../envrc
+rm ../envrc
+
+cat > $3 <<- EOF
 	# To modify content of this file, edit envrc.do
-	TEST_DIR_ALPN=\$BUILD_DIR/alpine_build
+	BASE_DIR="$BASE_DIR"
+	TEST_DIR_ALPN=$BUILD_DIR/alpine_build
 	TEST_DIR_ALPN_DOWNLOAD=\$TEST_DIR_ALPN/download
 	TEST_DIR_ALPN_OS=\$TEST_DIR_ALPN/os
 	TEST_DIR_BUILD=\$TEST_DIR_ALPN/p
-	REDO_SRC_PATH=\${TEST_DIR_ALPN_OS}/srv/redo_src
+	#REDO_SRC_PATH=\$TEST_DIR_ALPN_OS/srv/redo_src
 	REDO_CACHE_ALPN_FOLDER=\$TEST_DIR_ALPN/alpine_redo_db
 
 	# Make sure some folders are existing
@@ -16,3 +23,7 @@ cat <<- EOF
 	[ -d \$REDO_CACHE_ALPN_FOLDER ] || mkdir -p \$REDO_CACHE_ALPN_FOLDER
 
 EOF
+
+# Look at the actuall content of the generated file to see if it changed
+redo-always
+redo-stamp <$3

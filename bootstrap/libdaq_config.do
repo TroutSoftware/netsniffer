@@ -11,8 +11,8 @@ cd "$LIBDAQ_SRC_DIR" || exit 1;
 
 # Inject the runtime flags directly into the compiler variable
 # This prevents libtool from stripping them out
-CC="$CC --rtlib=compiler-rt --unwindlib=libunwind" \
-CXX="$CXX --rtlib=compiler-rt --unwindlib=libunwind" \
+CC="$CC $LIBDAQ_CONFIG_CFLAGS" \
+CXX="$CXX $LIBDAQ_CONFIG_CXXFLAGS" \
 CFLAGS="$CFLAGS" \
 CXXFLAGS="$CXXFLAGS" \
 LDFLAGS="$LDFLAGS" \
