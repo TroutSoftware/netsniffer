@@ -267,6 +267,15 @@ void Tree::Node::adjust(size_t delta) {
   }
 }
 
+std::string Tree::Node::dump_bin(const std::string &raw,
+                                 unsigned /*level*/) const {
+  std::string output;
+
+  output = raw.substr(start, end - start);
+
+  return output;
+}
+
 std::string Tree::Node::dump_hex(const std::string &raw, unsigned level) const {
   std::string output;
   output.insert(0, level, '-');
@@ -608,6 +617,8 @@ void Tree::merge(Tree &&tree, bool node_merge) {
 bool Tree::operator==(const Tree &tree) const {
   return 0 == tree.as_string().compare(as_string());
 }
+
+std::string Tree::as_bin() const { return me.dump_bin(raw); }
 
 std::string Tree::as_hex() const { return me.dump_hex(raw); }
 

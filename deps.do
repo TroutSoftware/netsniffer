@@ -1,10 +1,12 @@
 
+# TODO: Update this file, it is related to building under Ubuntu
+
 # TODO: We can detect which packages are installed without sudo, so we could
 #       do the check and stop the build if some module is missing
-echo "You may need to install dependencies by running ./install_deps " >&2
+#echo "You may need to install dependencies by running ./install_deps " >&2
 
-redo-ifchange envrc
-. ./envrc
+#redo-ifchange envrc
+#. ./envrc
 
-mkdir -p $BUILD_DIR
-redo-ifchange bootstrap/deps bootstrap/snort_install
+#mkdir -p $BUILD_DIR
+#redo-ifchange bootstrap/deps bootstrap/snort_install
