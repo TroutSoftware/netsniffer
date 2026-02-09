@@ -188,6 +188,7 @@ int main(int argc, char *argv[]) {
     while(true) {
       Socket client(socket.accept());
       std::cout << "------[[ TCP TRANSMISSION BEGIN ]]------" << std::endl;
+      line.clear();
       client.read(true);
       std::cout << "------[[  TCP TRANSMISSION END  ]]------" << std::endl;
     }
