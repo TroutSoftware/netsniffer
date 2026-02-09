@@ -26,7 +26,6 @@ PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
   -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
   -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
   -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
-  -DCMAKE_CXX_STANDARD_LIBRARIES="-lc++ -lc++abi -lunwind" \
   -DCMAKE_LINKER="$LD" )
 
 (cd "$BUILD_DIR/snort3-$snort_tag" || exit 1;
@@ -46,7 +45,6 @@ PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
   -DCMAKE_CXX_FLAGS="$CXXFLAGS" \
   -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \
   -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
-  -DCMAKE_CXX_STANDARD_LIBRARIES="-lc++ -lc++abi -lunwind" \
   -DCMAKE_LINKER="$LD" )
 
 redo-ifchange $(find $BUILD_DIR/snort3-$snort_tag -type f )
