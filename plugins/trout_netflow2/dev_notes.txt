@@ -1,0 +1,46 @@
+###################################
+# Trout Netflow2 plugin           #
+###################################
+
+The Trout Netflow2 plugin monitors the data captured by snort, and
+outputs a Neflow v9 compatible stream of data (RFC 3954).
+
+The output is streamed through the normal netsniffer logging framework.
+
+For a binary compatible netflow output a configuration like the below
+should be used, as that doesn't pack the data in any way:
+
+--- sample.lua
+  stream = {}
+  stream_tcp = {}
+  stream_udp = {}
+
+  serializer_bin = {}
+
+  logger_tcp = { serializer = 'serializer_bin',
+                 output_port = 1234,
+                 output_ip = "127.0.0.1" }
+
+  trout_netflow2 = { logger = 'logger_tcp' }
+---
+
+The socket_read program in the sandbox folder can be used as a target
+for the stream.  Build it by typing "make" in the folder with the source
+file and a "main" executable will be created, launch this with
+"./main 1234"
+
+Wireshark can decode the stream going out of netsniffer if the bin
+serializer is used with the tcp logger.
+
+You might need to manually set the Wireshak decoder as CFLOW or NetFlow
+depending on the Wireshark version, right click a package choose
+"Decode As..." and set the following:
+
+Field: TCP port
+Value: 1234 (or what ever port you choose to send the data to)
+Current: TCP
+Decode As: CFLOW or Netflow (depending on your Wireshark version)
+
+Alternatively a captured pcap of the flow can be decoded with this CLI
+command:  tshark -r captured.pcapng -d tcp.port=1234,cflow -V
+
