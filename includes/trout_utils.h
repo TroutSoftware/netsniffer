@@ -15,10 +15,12 @@ namespace Common {
 // Might be a pseudo-random on some systems
 class Random {
   std::random_device rd;
+
 public:
-  // Returns random number between min and max (both min and max can be returned)
+  // Returns random number between min and max (both min and max can be
+  // returned)
   int random(int min, int max) {
-    assert(min<=max);
+    assert(min <= max);
     std::uniform_int_distribution<> distrib(min, max);
     return distrib(rd);
   }

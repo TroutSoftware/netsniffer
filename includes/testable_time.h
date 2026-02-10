@@ -19,7 +19,8 @@ class TestableTime {
 public:
   using Precision = std::chrono::nanoseconds;
 
-  template <class T> static std::chrono::time_point<T, Precision> now(bool testmode) {
+  template <class T>
+  static std::chrono::time_point<T, Precision> now(bool testmode) {
     if (testmode) {
       return std::chrono::floor<Precision>(std::chrono::time_point<T>());
     }

@@ -23,7 +23,6 @@ namespace Common {
 
 template <class T> class FlowData : public snort::FlowData, public T {
 private:
-
   unsigned static get_id() {
     static unsigned flow_data_id = snort::FlowData::create_flow_data_id();
     return flow_data_id;
@@ -32,9 +31,10 @@ private:
   FlowData() : snort::FlowData(get_id()) {}
 
 public:
-
-  // Gets or create and asign T to the snort flow, init is optional init function called if T is created
-  static FlowData *get_from_flow(snort::Flow *flow, std::function<void(T&)> init = [](T&){}) {
+  // Gets or create and asign T to the snort flow, init is optional init
+  // function called if T is created
+  static FlowData *
+  get_from_flow(snort::Flow *flow, std::function<void(T &)> init = [](T &) {}) {
     assert(flow);
 
     FlowData *flow_data =
@@ -48,7 +48,6 @@ public:
 
     return flow_data;
   }
-
 };
 
 } // namespace Common

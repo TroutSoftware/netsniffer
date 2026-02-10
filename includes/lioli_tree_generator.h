@@ -58,7 +58,8 @@ public:
   }
 
   static Tree format_IPv4(const std::array<uint8_t, 4> &ip) {
-    return Tree("ip") << std::format("{}.{}.{}.{}", ip.at(0),ip.at(1),ip.at(2),ip.at(3));
+    return Tree("ip") << std::format("{}.{}.{}.{}", ip.at(0), ip.at(1),
+                                     ip.at(2), ip.at(3));
   }
 
   static Tree format_IP_MAC(const snort::Packet *p, const snort::Flow *flow,
@@ -78,11 +79,10 @@ public:
       append_sf_ip(ss, sf_ip);
 
       if (sf_ip->is_ip6()) {
-        addr << "[" << (Tree("ip") <<  ss.str()) << "]";
+        addr << "[" << (Tree("ip") << ss.str()) << "]";
       } else {
-        addr << (Tree("ip") <<  ss.str());
+        addr << (Tree("ip") << ss.str());
       }
-
 
       if (p->is_tcp() || p->is_udp()) {
         addr << ":" << (Tree("port") << (is_src ? p->ptrs.sp : p->ptrs.dp));

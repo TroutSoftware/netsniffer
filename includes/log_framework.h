@@ -24,12 +24,14 @@ private:
   std::string my_name = "unknown";
 
 public:
-  LogBase(const char *my_name) : my_name(my_name){};
+  LogBase(const char *my_name) : my_name(my_name) {};
   virtual ~LogBase() = default;
 
-  virtual void shutdown() {}  // Do cleanup, will be called once
+  virtual void shutdown() {} // Do cleanup, will be called once
   const char *get_name() { return my_name.c_str(); }
-  virtual bool is_ready() { return false; }    // Returns true when component and dependencies are initialized
+  virtual bool is_ready() {
+    return false;
+  } // Returns true when component and dependencies are initialized
 };
 
 class LogDB {
@@ -39,8 +41,8 @@ class LogDB {
   static void shutdown_handler();
 
 public:
-
-  template <typename T, typename... Argtypes> static bool register_type(const char *name, Argtypes... args) {
+  template <typename T, typename... Argtypes>
+  static bool register_type(const char *name, Argtypes... args) {
     auto obj = std::make_shared<T>(name, args...);
 
     return register_obj(obj->get_name(), obj);
@@ -59,11 +61,14 @@ public:
       if (sobj) {
         return sobj;
       }
-    }
 
-    snort::WarningMessage("INFO: (LogDB) No registered log element of correct "
-                        "type with name: >%s<\n",
-                        name);
+      snort::ErrorMessage(
+          "ERR: (LogDB) log element >%s< requested with wrong type", name);
+    } else {
+      snort::WarningMessage("INFO: (LogDB) No registered log element of "
+                            "correct type with name: >%s<\n",
+                            name);
+    }
 
     return dynamic_pointer_cast<T>(T::get_null_obj());
   }
@@ -102,9 +107,7 @@ public:
 
   static std::shared_ptr<Serializer> &get_null_obj();
 
-  operator bool() {
-    return this != get_null_obj().get();
-  }
+  operator bool() { return this != get_null_obj().get(); }
 };
 
 class Logger : public LogBase {
@@ -115,16 +118,15 @@ public:
   // Must be non-blocking
   virtual void operator<<(const Tree &&tree) = 0;
 
-  // Called by the framework at shutdown, ensures all data is flushed before shutdown
+  // Called by the framework at shutdown, ensures all data is flushed before
+  // shutdown
   virtual void flush() {};
 
   virtual bool had_data_loss(bool clear_flag = true) = 0;
 
   static std::shared_ptr<Logger> &get_null_obj();
 
-  operator bool() {
-    return this != get_null_obj().get();
-  }
+  operator bool() { return this != get_null_obj().get(); }
 };
 
 } // namespace LioLi

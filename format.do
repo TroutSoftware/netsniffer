@@ -1,9 +1,17 @@
+set -e
+
 redo-ifchange envrc
 
 . ./envrc
 
-mkdir -p $BUILD_DIR/tmp
+SRC_DIRS="plugins includes"
 
-find plugins -regex ".*\.cc\|.*\.h" > $BUILD_DIR/tmp/format.files
+redo-ifchange $SRC_DIRS
 
-xargs clang-format -i < $BUILD_DIR/tmp/format.files
+FIND_CMD="find $SRC_DIRS -type f \( -name '*.cc' -o -name '*.h' \) -print0"
+
+eval "$FIND_CMD" | xargs -0 clang-format -i
+
+STAMP=$(eval "$FIND_CMD" | xargs -0 cksum | cksum)
+
+echo $STAMP | redo-stamp

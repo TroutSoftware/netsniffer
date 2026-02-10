@@ -46,7 +46,7 @@ class Tree {
     }
 
   public:
-    friend void swap(Node& first, Node& second) noexcept {
+    friend void swap(Node &first, Node &second) noexcept {
       std::swap(first.my_name, second.my_name);
       std::swap(first.start, second.start);
       std::swap(first.end, second.end);
@@ -131,7 +131,7 @@ public:
     return raw.length();
   } // Very fast and simple hash function
 
-  bool has_data() const {return raw.size() != 0;}
+  bool has_data() const { return raw.size() != 0; }
 
   // For Debug
   bool is_valid() const; // Checks if the tree is valid
@@ -150,10 +150,10 @@ class LioLi {
 
 public:
   LioLi();
-  void set_raw_mode();    // Puts LioLi in raw mode, ie. will only output the raw part of the tree
+  void set_raw_mode(); // Puts LioLi in raw mode, ie. will only output the raw
+                       // part of the tree
   void insert_header();
   void insert_terminator();
-
 
   size_t length(); // Get the currently stored length
   std::string move_binary();
