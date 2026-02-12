@@ -38,6 +38,9 @@ const snort::Parameter module_params[] = {
      "Will generate empty packages at least every flush_interval"},
     {"extended_console_logging", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will enable more logs to the console of what is happening in the module"},
+    {"undefined_ip_protocol_number", snort::Parameter::PT_INT, "0:255", "0",
+     "Set the value exported in the PROTOCOL (4) field, when the flow is not "
+     "ip packet based"},
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -68,6 +71,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->do_ping = val.get_bool();
   } else if (val.is("extended_console_logging")) {
     settings->extended_console_logging = val.get_bool();
+  } else if (val.is("undefined_ip_protocol_number")) {
+    settings->undefined_ip_protocol_number = val.get_uint8();
   } else {
     // fail if we didn't get something we knew about
     return false;

@@ -1,0 +1,19 @@
+# Inspectors and spells are in place to attribute the correct flow
+pcap testdata/netflow2_pkt_types.pcap
+cmp output.hex testdata/netflow2_protocol_test.expected.hex
+stdout 'ipv6_flows_ignored: 2'
+
+-- cfg.lua --
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+
+serializer_hex = {}
+
+logger_file = { serializer = 'serializer_hex',
+                file_name = 'output.hex'}
+
+trout_netflow2 = { logger = 'logger_file',
+                   testmode = true }
+

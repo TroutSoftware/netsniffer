@@ -29,6 +29,8 @@ PegInfo Pegs::s_pegs[] = {
      "highest number of cache entries in use at any given time"},
     {CountType::SUM, "logs_written",
      "Number of logs that was sent to the logger"},
+    {CountType::SUM, "ipv6_flows_ignored",
+     "Number of IPv6 flows that were seen (and hence ignored)"},
     {CountType::END, nullptr, nullptr}};
 
 Pegs::PegCounts Pegs::s_peg_counts;

@@ -29,6 +29,10 @@ bool Settings::get_extended_console_logging() {
   return extended_console_logging;
 }
 
+uint8_t Settings::get_undefined_ip_protocol_number() {
+  return undefined_ip_protocol_number;
+}
+
 uint32_t Settings::get_max_cache_size() { return cache_size; }
 
 uint32_t Settings::get_flush_interval_ms() { return flush_interval_ms; }

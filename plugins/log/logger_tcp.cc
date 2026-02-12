@@ -502,9 +502,8 @@ class Logger : public LioLi::Logger {
   while_end:
     if (!terminate) {
       snort::ErrorMessage(
-          "TCP Logger: exited worker loop due to an unhandled error\n");
-    } else {
-      snort::LogMessage("TCP Logger: exited worker loop normally\n");
+          "TCP Logger: >%s< Exited worker loop due to an unhandled error\n",
+          get_name());
     }
 
     worker_running = false;

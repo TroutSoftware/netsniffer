@@ -61,6 +61,8 @@ class Cache : public std::enable_shared_from_this<Cache> {
   } service_map;
 
   struct CacheElement2 {
+    // NOTE: If new values are added to ConstValues, they must also be added to
+    //       ConstValuesComp
     struct ConstValues {
       // TODO: Make IPv4 addr into arrays, so they aren't converted to network
       // byte order
@@ -76,6 +78,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
                                         0, 0, 0}; // (56) Source MAC address
       std::array<uint8_t, 6> dst_mac = {0, 0, 0, 0,
                                         0, 0}; // (57) Destination MAC address
+      uint8_t protocolIdentifier = 0;
     };
 
     class ConstValuesComp {
@@ -144,6 +147,9 @@ class Cache : public std::enable_shared_from_this<Cache> {
   void stop_worker();  // Stops the worker thread (will block until it returns)
 
   void kick_worker(); // Kick the worker loop (will flush the cache)
+
+  // Helpers
+  uint8_t protocol_from_package(snort::Packet *p);
 
 public:
   ~Cache();

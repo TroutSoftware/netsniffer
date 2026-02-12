@@ -44,3 +44,24 @@ Decode As: CFLOW or Netflow (depending on your Wireshark version)
 Alternatively a captured pcap of the flow can be decoded with this CLI
 command:  tshark -r captured.pcapng -d tcp.port=1234,cflow -V
 
+************************************************************************
+* Notes                                                                *
+************************************************************************
+
+For testing, a dedicated network can be configured by:
+
+$ sudo modprobe dummy
+$ sudo ip link add snw type dummy
+$ sudo ip link set snw up
+
+Snort can then be asked to listen on this interface by:
+
+# ./snort.sh -c sample.lua -i snw
+
+(Note that snort will per default not exit after receving a Ctrl+C until
+it has recevied a packet on the network interface)
+
+To play a previously captured my.pcap back on the snw interface:
+
+# tcpreplay -i snw my.pcap
+

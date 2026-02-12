@@ -1,11 +1,17 @@
 
 // Snort includes
+#include <flow/flow_key.h>
+
 #include <protocols/eth.h>
+// #include <protocols/ipv4.h>
+// #include <protocols/ipv6.h>
 
 // System includes
 #include <arpa/inet.h>
 #include <chrono>
 #include <endian.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
 #include <string>
 #include <type_traits>
 
@@ -62,6 +68,8 @@ bool Cache::ServiceMap::is_fully_flushed() {
 bool Cache::CacheElement2::ConstValuesComp::operator()(
     const Cache::CacheElement2::ConstValues &lhs,
     const Cache::CacheElement2::ConstValues &rhs) const {
+  // TODO: Rethink how this is written, could probably be done more
+  //       readable with a template or something...
   return (lhs.ipv4_src_addr <=> rhs.ipv4_src_addr) < 0 ||
          ((lhs.ipv4_src_addr <=> rhs.ipv4_src_addr) == 0 &&
           ((lhs.ipv4_dst_addr <=> rhs.ipv4_dst_addr) < 0 ||
@@ -72,7 +80,10 @@ bool Cache::CacheElement2::ConstValuesComp::operator()(
                (lhs.l4_dst_port == rhs.l4_dst_port &&
                 ((lhs.src_mac <=> rhs.src_mac) < 0 ||
                  ((lhs.src_mac <=> rhs.src_mac) == 0 &&
-                  ((lhs.dst_mac <=> rhs.dst_mac) < 0))))))))));
+                  ((lhs.dst_mac <=> rhs.dst_mac) < 0 ||
+                   ((lhs.dst_mac <=> rhs.dst_mac) == 0 &&
+                    (lhs.protocolIdentifier <
+                     rhs.protocolIdentifier))))))))))));
 };
 
 Cache::Handle::Handle(std::shared_ptr<Cache> cache,
@@ -141,6 +152,7 @@ Cache::add_to_cache(snort::Packet *p) {
           p->ptrs.ip_api.get_src()->get_ip4_value();
     } else {
       // TODO: Handle IPv6 for src, for now just return dummy element
+      Pegs::s_peg_counts.ipv6_flows_ignored++;
       return std::make_shared<CacheElement2::VolatileValues>();
     }
     if (p->ptrs.ip_api.get_dst()->is_ip4()) {
@@ -148,6 +160,7 @@ Cache::add_to_cache(snort::Packet *p) {
           p->ptrs.ip_api.get_dst()->get_ip4_value();
     } else {
       // TODO: Handle IPv6 for dst, for now just return dummy element
+      Pegs::s_peg_counts.ipv6_flows_ignored++;
       return std::make_shared<CacheElement2::VolatileValues>();
     }
 
@@ -156,6 +169,8 @@ Cache::add_to_cache(snort::Packet *p) {
       key.l4_dst_port = p->ptrs.dp;
     }
   }
+
+  key.protocolIdentifier = protocol_from_package(p);
 
   // We don't need the lock until this point
   std::scoped_lock cache_lock(mutex);
@@ -713,17 +728,19 @@ void Cache::dump() {
   using DataFlowSet = NFSerializer<
   MUTEX<[](CacheMapType::iterator &itr) -> std::mutex & {return itr->second->mutex;}>,
   DIRTY<[](CacheMapType::iterator &itr) -> bool & {return itr->second->dirty;}>,
-  E<&CacheElement2::ConstValues::ipv4_src_addr,   8 >,
-  E<&CacheElement2::ConstValues::ipv4_dst_addr,   12>,
-  E<&CacheElement2::ConstValues::l4_src_port,     7 >,
-  E<&CacheElement2::ConstValues::l4_dst_port,     11>,
-  E<&CacheElement2::ConstValues::src_mac,         56>,
-  E<&CacheElement2::ConstValues::dst_mac,         57>,
-  E<&CacheElement2::VolatileValues::in_bytes,     1 >,
-  E<&CacheElement2::VolatileValues::in_pkts,      2 >,
-  E<&CacheElement2::VolatileValues::out_bytes,    23>,
-  E<&CacheElement2::VolatileValues::out_pkts,     24>,
-  C<&CacheElement2::VolatileValues::service_key,  25>  // Treat the service key as if it is a constant
+  E<&CacheElement2::ConstValues::ipv4_src_addr,       8 >,
+  E<&CacheElement2::ConstValues::ipv4_dst_addr,       12>,
+  E<&CacheElement2::ConstValues::l4_src_port,         7 >,
+  E<&CacheElement2::ConstValues::l4_dst_port,         11>,
+  E<&CacheElement2::ConstValues::src_mac,             56>,
+  E<&CacheElement2::ConstValues::dst_mac,             57>,
+  E<&CacheElement2::ConstValues::protocolIdentifier,  4 >,
+  E<&CacheElement2::VolatileValues::in_bytes,         1 >,
+  E<&CacheElement2::VolatileValues::in_pkts,          2 >,
+// TODO: Add type 51, 96
+  E<&CacheElement2::VolatileValues::out_bytes,        23>,
+  E<&CacheElement2::VolatileValues::out_pkts,         24>,
+  C<&CacheElement2::VolatileValues::service_key,      25>  // Treat the service key as if it is a constant
   >;
   // clang-format on
 
@@ -971,6 +988,52 @@ void Cache::stop_worker() {
     }
     worker_thread.join();
   }
+}
+
+uint8_t Cache::protocol_from_package(snort::Packet *p) {
+  assert(p);
+
+  if (!p->has_ip()) {
+    return settings->get_undefined_ip_protocol_number();
+  }
+
+  if (p->flow && p->flow->key) {
+    return p->flow->key->ip_protocol;
+  }
+
+  if (!p->layers || p->num_layers == 0) {
+    return settings->get_undefined_ip_protocol_number();
+  }
+
+  if (p->is_ip4()) {
+    for (uint8_t i = 0; i < p->num_layers; i++) {
+
+      const auto &layer = p->layers[i];
+
+      if (layer.length >= sizeof(struct iphdr)) {
+        const auto *h = reinterpret_cast<const struct iphdr *>(layer.start);
+
+        if (h && h->version == 4) {
+          return h->protocol;
+        }
+      }
+    }
+  } else if (p->is_ip6()) {
+    static_assert(sizeof(uint8_t) == sizeof(p->num_layers));
+    for (uint8_t i = 0; i < p->num_layers; i++) {
+      const auto &layer = p->layers[i];
+
+      if (layer.length >= sizeof(struct ip6_hdr)) {
+        const auto *h = reinterpret_cast<const struct ip6_hdr *>(layer.start);
+
+        if (h && (h->ip6_vfc & 0xF0) == 0x60) {
+          return h->ip6_nxt;
+        }
+      }
+    }
+  }
+
+  return settings->get_undefined_ip_protocol_number();
 }
 
 } // namespace trout_netflow2
