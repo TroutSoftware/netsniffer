@@ -20,7 +20,7 @@ uint32_t Settings::get_max_req_queue() { return max_req_queue; }
 bool Settings::get_announcement_is_reply() { return announcement_is_reply; }
 
 LioLi::Logger &Settings::get_logger() {
-  if (!logger) {
+  if (!logger || !logger->is_ready()) {
     logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
   }
   return *logger;

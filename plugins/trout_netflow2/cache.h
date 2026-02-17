@@ -64,8 +64,6 @@ class Cache : public std::enable_shared_from_this<Cache> {
     // NOTE: If new values are added to ConstValues, they must also be added to
     //       ConstValuesComp
     struct ConstValues {
-      // TODO: Make IPv4 addr into arrays, so they aren't converted to network
-      // byte order
       std::array<uint8_t, 4> ipv4_src_addr = {0, 0, 0,
                                               0}; // (8)  IPv4 source address
       std::array<uint8_t, 4> ipv4_dst_addr = {

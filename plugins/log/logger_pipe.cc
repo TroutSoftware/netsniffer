@@ -149,14 +149,22 @@ class Logger : public LioLi::Logger {
     // Keeps track of when we should restart serializer context
     std::chrono::time_point<clock> next_timeout;
 
-    // Our serializer
+    // Wait for serializer to be registered
+    while (!LioLi::LogDB::has_registration(serializer_name) && !terminate) {
+      lock.unlock();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      lock.lock();
+    }
+
+    // Grap the serializer (if it isn't registred we get a dummy back, and
+    // the LogDB informs the user)
     auto serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
 
+    // Wait for serializer to become ready
     while (!serializer->is_ready() && !terminate) {
       lock.unlock();
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       lock.lock();
-      serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
     }
 
     std::shared_ptr<LioLi::Serializer::Context> context;

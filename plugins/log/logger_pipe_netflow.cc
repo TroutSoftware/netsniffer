@@ -410,6 +410,7 @@ public:
 
 class Module : public snort::Module {
   Module() : snort::Module(s_name, s_help, module_params) {
+    snort::WarningMessage("WARNING: The use of %s is deprecated\n", s_name);
     LioLi::LogDB::register_type<Logger>(s_name);
   }
 

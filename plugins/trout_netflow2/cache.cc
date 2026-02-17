@@ -737,7 +737,6 @@ void Cache::dump() {
   E<&CacheElement2::ConstValues::protocolIdentifier,  4 >,
   E<&CacheElement2::VolatileValues::in_bytes,         1 >,
   E<&CacheElement2::VolatileValues::in_pkts,          2 >,
-// TODO: Add type 51, 96
   E<&CacheElement2::VolatileValues::out_bytes,        23>,
   E<&CacheElement2::VolatileValues::out_pkts,         24>,
   C<&CacheElement2::VolatileValues::service_key,      25>  // Treat the service key as if it is a constant

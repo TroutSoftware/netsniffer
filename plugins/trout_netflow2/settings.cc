@@ -13,7 +13,7 @@
 namespace trout_netflow2 {
 
 LioLi::Logger &Settings::get_logger() {
-  if (!logger || !(*logger)) {
+  if (!logger || !logger->is_ready()) {
     logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
   }
   return *logger;

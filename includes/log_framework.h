@@ -52,6 +52,15 @@ public:
     return get<T>(name.c_str());
   }
 
+  static bool has_registration(const std::string &name) {
+    return has_registration(name.c_str());
+  }
+
+  static bool has_registration(const char *name) {
+    std::scoped_lock lock(mutex);
+    return db.end() != db.find(name);
+  }
+
   template <typename T> static std::shared_ptr<T> get(const char *name) {
     std::scoped_lock lock(mutex);
     auto lookup = db.find(name);

@@ -13,7 +13,7 @@
 namespace my_plugin_name {
 
 LioLi::Logger &Settings::get_logger() {
-  if (!logger) {
+  if (!logger || !logger->is_ready()) {
     logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
   }
   return *logger;

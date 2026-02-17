@@ -358,12 +358,17 @@ class Logger : public LioLi::Logger {
 
     std::unique_lock lock(mutex);
 
-    // Don't do anything until we have our serializer
-    while (!terminate) {
-      serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+    // Wait for serializer to be registered
+    while (!LioLi::LogDB::has_registration(serializer_name) && !terminate) {
+      lock.unlock();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      lock.lock();
+    }
 
-      if (serializer->is_ready())
-        break;
+    serializer = LioLi::LogDB::get<LioLi::Serializer>(serializer_name);
+
+    // Don't do anything until serializer is ready (or we terminate)
+    while (!terminate && !serializer->is_ready()) {
       lock.unlock();
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       lock.lock();

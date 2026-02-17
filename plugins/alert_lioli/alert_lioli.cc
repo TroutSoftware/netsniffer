@@ -95,7 +95,8 @@ class Logger : public snort::Logger {
   std::shared_ptr<LioLi::Logger> logger;
 
   LioLi::Logger &get_logger() {
-    if (!logger) {
+    // The default logger will never be ready
+    if (!logger || !logger->is_ready()) {
       logger =
           LioLi::LogDB::get<LioLi::Logger>(module.get_logger_name().c_str());
     }

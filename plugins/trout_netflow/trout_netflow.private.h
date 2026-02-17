@@ -34,7 +34,7 @@ public:
   bool testmode = false;
 
   LioLi::Logger &get_logger() {
-    if (!logger) {
+    if (!logger || !logger->is_ready()) {
       logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
     }
     return *logger;
