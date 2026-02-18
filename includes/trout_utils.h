@@ -4,6 +4,7 @@
 // Snort includes
 
 // System includes
+#include <bit>
 #include <random>
 
 // Local includes
@@ -25,6 +26,16 @@ public:
     return distrib(rd);
   }
 };
+
+template <class T> constexpr T to_network_order(T v) {
+  if constexpr (std::endian::native == std::endian::big) {
+    return v;
+  } else if constexpr (std::endian::native == std::endian::little) {
+    return std::byteswap(v);
+  } else {
+    static_assert(false, "Host endianess is not supported");
+  }
+}
 
 } // namespace Common
 #endif // #ifndef trout_utils_baffe25a

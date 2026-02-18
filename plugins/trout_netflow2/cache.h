@@ -94,6 +94,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
           0; // (24) Outgoing counter for packets (reset on dump)
       ServiceMap::ServiceKeyT service_key =
           0; // (25) Propritary service name key (NOT reset on dump)
+      std::string service_name; // (96) Cisco extension "ApplicationName"
       bool dirty =
           false; // Set to true when a field is updated, false when dumped
     };
