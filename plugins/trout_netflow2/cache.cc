@@ -355,6 +355,12 @@ void Cache::dump() {
       snort::LogMessage("Netflow2 generating packet headers");
     }
 
+    // Generate the templates once, and reuse...
+    static const std::string data_flow_set_template =
+        DataFlowSet::generate_template(0);
+    static const std::string service_map_template =
+        ServiceMapOptionsFlowSet::generate_template(0);
+
     LioLi::Tree out_tree;
     if (settings->get_generate_service_map()) {
       out_tree << (LioLi::Tree("PacketHeader")
@@ -362,16 +368,16 @@ void Cache::dump() {
                           now_in_s, sequence_number++,
                           settings->get_source_id(), 2))
                << (LioLi::Tree("TemplateFlowSet_DataFlowSet")
-                   << DataFlowSet::generate_template(0))
+                   << data_flow_set_template)
                << (LioLi::Tree("TemplateFlowSet_ServiceMap")
-                   << ServiceMapOptionsFlowSet::generate_template(0));
+                   << service_map_template);
     } else {
       out_tree << (LioLi::Tree("PacketHeader")
                    << DataFlowSet::generate_packet_header(
                           now_in_s, sequence_number++,
                           settings->get_source_id(), 1))
                << (LioLi::Tree("TemplateFlowSet_DataFlowSet")
-                   << DataFlowSet::generate_template(0));
+                   << data_flow_set_template);
     }
     logger << std::move(out_tree);
     Pegs::s_peg_counts.logs_written++;

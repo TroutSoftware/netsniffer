@@ -30,6 +30,8 @@ class Cache : public std::enable_shared_from_this<Cache> {
   // We don't want these templates to take all the space in this header, so made
   // as friend instead
   template <auto v, int key, uint16_t max_size> friend class E;
+  template <auto v, int key, uint16_t max_size, uint16_t min_size>
+  friend class EVS;
   template <auto v, int key, uint16_t max_size> friend class C;
   template <class... list> friend class NFSerializer;
   template <uint16_t fixed_string_size, int key> friend class ServiceMapE;
