@@ -6,63 +6,41 @@
 
 // System includes
 #include <array>
+#include <concepts>
 #include <memory>
 #include <mutex>
 #include <type_traits>
 
 // Global includes
 #include <log_framework.h>
+#include <trout_utils.h>
 
 // Local includes
-#include "trout_utils.h"
+#include "cache_concepts.h"
 
 // Debug includes
 
 namespace trout_netflow2 {
 
-// Classes inheriting from this are streamable/serializable
-// A streamable class must have at least these functions:
-//   constexpr static uint16_t field_type_in_h()
-//     -- Returns the type of the field in the RFC rfc3954 sense
-//   constexpr static uint16_t size_in_hbytes()
-//     -- Size of the serialized chunk
-//   static void append_value(std::string &output, <iterator> &itr)
-//     -- Function taking an iterator and serializing what it references to a
-//     bytestream
-//   static void clear_if_volatile(<iterator> &)
-//     -- Function that clears variables (if needed) after serialization
-class IsStreamable {};
-
-// Classes inheriting from this is the mutex
-// A mutex class, is one that lets the framework get the mutex of a specific
-// element. The mutex will be taken by the framework before append_value and
-// clear_if_volatile are called on the streamable class A mutex class must at
-// last contain this function:
-//   static std::mutex &get_mutex(<iterator> &itr)
-//     -- returns a referenct to a standard mutex object for object the iterator
-//     points to
-class IsMutex {};
+////////////////////////////////////////////////////////////////////////
+// Concrete implementaitions
+////////////////////////////////////////////////////////////////////////
 
 // Implementation of a MUTEX element, taking a lambda in its definition
 template <auto v> class MUTEX : public IsMutex {
 public:
   static std::mutex &get_mutex(auto &itr) { return v(itr); }
 };
-
-// Class inheriting from this is a dirty flag
-// A dirty class, is one that lets the framework check the dirty state of a
-// specific element If a dirty definition is pressent, it won't be serialized
-// unless the dirty state is true A dirty calss must at least contain this
-// function:
-//   static bool &get_dirty(auto &itr)
-//     -- returns true if the iterator points to a dirty value, false otherwise
-class IsDirty {};
+static_assert(ConceptIsMutex<MUTEX<1>>,
+              "MUTEX need to comply with ConceptIsMutex");
 
 // Implementation of a DIRTY element, taking a lambda in its definition
 template <auto v> class DIRTY : public IsDirty {
 public:
   static bool &get_dirty(auto &itr) { return v(itr); }
 };
+static_assert(ConceptIsDirty<DIRTY<1>>,
+              "DIRTY needs to comply with ConceptIsDirty");
 
 // Serializable implementation for service maps (trout specific structure)
 // A servicemap is collection of service names and numeric ID's
@@ -78,8 +56,7 @@ public:
     return sizeof(Cache::ServiceMap::ServiceKeyT) + fixed_string_size;
   }
 
-  static void append_value(std::string &output,
-                           Cache::ServiceMap::ServiceMapT::iterator &itr) {
+  static void append_value(std::string &output, auto &itr) {
     // itr->first is the string, itr->second is the key
 
     // NOTE: If the service key size is changed, ensure we still have alignment
@@ -102,6 +79,8 @@ public:
     // We never clear anything in the service map
   }
 };
+static_assert(ConceptIsStreamableFixedSize<ServiceMapE<0, 0>>,
+              "ServiceMapE must comply with ConceptIsStreamableFixedSize");
 
 // Template used to declare data entries for the binary netflow format
 // fixed_size denotes the size for the field in the binary data, even
@@ -140,8 +119,10 @@ public:
     }
   }
 
-  static void append_value(std::string &output,
-                           Cache::CacheMapType::iterator &itr) {
+  static void append_value(std::string &output, auto &itr) {
+
+    static_assert(std::same_as<decltype(itr), Cache::CacheMapType::iterator &>,
+                  "We are hardcoded to Cache::CacheMapType::iterator");
     const C *p;
 
     if constexpr (std::is_same_v<C, Cache::CacheElement2::ConstValues>) {
@@ -241,19 +222,12 @@ public:
 
   consteval static uint16_t get_max_size() { return max_size; }
 
-  /*
-    consteval static uint16_t get_size_in_bytes() {
-      if constexpr (isFixedSize()) {
-        return max_size;
-      } else {
-        static_assert(false, "size_in_bytes can't be called a variable lenght
-    data");
-      }
-    }
-  */
+  static uint16_t append_value(std::string &output, auto &itr) {
+    // We can't have the specific type in the signature as we use concepts for
+    // checking, and the concept doesn't know about the type
+    static_assert(std::same_as<decltype(itr), Cache::CacheMapType::iterator &>,
+                  "We only support Cache::CacheMapType::iterator");
 
-  static uint16_t append_value(std::string &output,
-                               Cache::CacheMapType::iterator &itr) {
     const C *p;
 
     if constexpr (std::is_same_v<C, Cache::CacheElement2::ConstValues>) {
@@ -328,26 +302,57 @@ uint16_t generate_template_data_flow_set_id() {
 
 // The main engine class, taking the defintion of the content as template
 // parameters
-template <class... list> class NFSerializer {
-  static_assert(sizeof...(list) > 0,
-                "You need to specify at least one element (E template)");
+template <ConceptNetflowDefinition... list> class NFSerializer {
+  // Count some elemement types
+  [[maybe_unused]] static const auto count_of_all_elements = sizeof...(list);
+  static const auto count_of_dirty_elements = (0 + ... + ConceptIsDirty<list>);
+  static const auto count_of_mutex_elements = (0 + ... + ConceptIsMutex<list>);
+  static const auto count_of_streamable_elements =
+      (0 + ... + ConceptIsStreamable<list>);
+
+  // Check validity of list
+  static_assert(count_of_streamable_elements > 0,
+                "You need to specify at least one streamable element in the "
+                "template list");
+  static_assert(count_of_dirty_elements <= 1,
+                "You can only have one dirty object in the template list");
+  static_assert(count_of_mutex_elements <= 1,
+                "You can only have one mutex obejct in the template list");
+
+  // Templates for finding specific element type
+  template <template <typename> class Predicate, typename... Ts>
+  struct FindMatch;
+
+  template <template <typename> class Predicate, typename T, typename... Rest>
+  struct FindMatch<Predicate, T, Rest...>
+      : std::conditional_t<Predicate<T>::value, std::type_identity<T>,
+                           FindMatch<Predicate, Rest...>> {};
+
+  template <template <typename> class Predicate>
+  using FindType = typename FindMatch<Predicate, list...>::type;
+
+  // Template that calls f (e.g. a lambda) on all types in the template argument
+  // list
+  template <class T> static constexpr void call_on_all(T &&f) {
+    // Fold expression
+    (std::forward<T>(f).template operator()<list>(), ...);
+  }
+
+  // Template that calls f (e.g. a lambda) on all types in the template argument
+  // list and sums their return values
+  template <class T> static constexpr auto sum_of_all(T &&f) {
+    // Fold expression
+    if constexpr (sizeof...(list) > 0) {
+      return (... + std::forward<T>(f).template operator()<list>());
+    } else {
+      return 0;
+    }
+  }
+
   static uint16_t get_id() {
     static uint16_t id = generate_template_data_flow_set_id();
     return id;
   }
-
-  // Converts value to network byte order and appends it to the string
-  /*
-    static void append16(std::string &s, uint16_t value) {
-      uint16_t nv = Common::to_network_order(value);
-      s.append(std::string(reinterpret_cast<const char *>(&nv), sizeof(nv)));
-    }
-
-    static void append32(std::string &s, uint32_t value) {
-      uint32_t nv = Common::to_network_order(value);
-      s.append(std::string(reinterpret_cast<const char *>(&nv), sizeof(nv)));
-    }
-  */
 
   template <std::integral T> static void appendX(std::string &s, T value) {
     T nv = Common::to_network_order(value);
@@ -362,162 +367,101 @@ template <class... list> class NFSerializer {
     appendX<uint32_t>(s, value);
   }
 
-  template <class T, class... ttypes>
   static void append_template_list(std::string &s) {
-    if constexpr (std::is_base_of_v<IsStreamable, T>) {
-      append16(s, T::field_type_in_h());
+    auto lambda = [&s]<class T>() {
+      if constexpr (ConceptIsStreamable<T>) {
+        append16(s, T::field_type_in_h());
 
-      // A temporary trick while we both have E and EVS
-      constexpr bool is_fixed_size = []<typename U = T>() consteval {
-        if constexpr (requires {
-                        { U::is_fixed_size() } -> std::same_as<bool>;
-                      }) {
-          return U::is_fixed_size();
+        if constexpr (ConceptIsStreamableFixedSize<T>) {
+          append16(s, T::size_in_hbytes());
+        } else if constexpr (T::is_fixed_size()) {
+          append16(s, T::get_max_size());
         } else {
-          return true;
+          append16(s, 0xFFFF); // -> Size stored in value field
         }
-      }();
-
-      if constexpr (is_fixed_size) {
-        append16(s, T::size_in_hbytes());
-      } else {
-        append16(s, 0xFFFF); // -> Size stored in value field
       }
-    }
-    if constexpr (sizeof...(ttypes) != 0) {
-      append_template_list<ttypes...>(s);
-    }
-  }
+    };
 
-  template <class T, class... ttypes> consteval static uint16_t value_length() {
-    uint16_t size_of_me = 0;
-    uint16_t size_of_rest = 0;
-
-    if constexpr (std::is_base_of_v<IsStreamable, T>) {
-      size_of_me = T::size_in_hbytes();
-    }
-
-    if constexpr (sizeof...(ttypes) != 0) {
-      size_of_rest = value_length<ttypes...>();
-    }
-
-    return size_of_me + size_of_rest;
-  }
-
-  template <class T, class... ttypes>
-  static void build_data(std::string &s, auto &itr) {
-    if constexpr (std::is_base_of_v<IsStreamable, T>) {
-      auto bs = s.size();
-      T::append_value(s, itr);
-      assert(s.size() - bs ==
-             T::size_in_hbytes()); // Check the expected size was added
-    }
-
-    if constexpr (sizeof...(ttypes) != 0) {
-      build_data<ttypes...>(s, itr);
-    }
-  }
-
-  template <class T, class... ttypes>
-  static void clear_volatile_data(auto &itr) {
-    if constexpr (std::is_base_of_v<IsStreamable, T>) {
-      T::clear_if_volatile(itr);
-    }
-    if constexpr (sizeof...(ttypes) != 0) {
-      clear_volatile_data<ttypes...>(itr);
-    }
-  }
-
-  template <class T, class... ttypes>
-  consteval static uint16_t count_streamable() {
-    uint16_t sum = 0;
-    if constexpr (std::is_base_of_v<IsStreamable, T>) {
-      sum = 1;
-    }
-    if constexpr (sizeof...(ttypes) != 0) {
-      sum += count_streamable<ttypes...>();
-    }
-    return sum;
-  }
-
-  // TODO: Merge the x_mutex_x and x_dirty_x functions to common base
-  template <class T, class... ttypes>
-  consteval static void ensure_no_mutex_object() {
-    static_assert(!std::is_base_of_v<IsMutex, T>,
-                  "You can only have one MUTEX entry in the definition");
-    if constexpr (sizeof...(ttypes) != 0) {
-      ensure_no_mutex_object<ttypes...>();
-    }
-  }
-
-  template <class T, class... ttypes> consteval static bool has_mutex_object() {
-    if constexpr (std::is_base_of_v<IsMutex, T>) {
-      if constexpr (sizeof...(ttypes) != 0) {
-        ensure_no_mutex_object<ttypes...>();
-      }
-      return true;
-    }
-    if constexpr (sizeof...(ttypes) != 0) {
-      return has_mutex_object<ttypes...>();
-    } else {
-      return false;
-    }
-  }
-
-  template <class T, class... ttypes>
-  static std::mutex &get_mutex_object(auto &itr) {
-    if constexpr (std::is_base_of_v<IsMutex, T>) {
-      return T::get_mutex(itr);
-    } else {
-      static_assert(sizeof...(ttypes) != 0, "Missing MUTEX entry");
-      return get_mutex_object<ttypes...>(itr);
-    }
-  }
-
-  template <class T, class... ttypes>
-  consteval static void ensure_no_dirty_object() {
-    static_assert(!std::is_base_of_v<IsDirty, T>,
-                  "You can only have one DIRTY entry in the definition");
-    if constexpr (sizeof...(ttypes) != 0) {
-      ensure_no_dirty_object<ttypes...>();
-    }
-  }
-
-  template <class T, class... ttypes> consteval static bool has_dirty_object() {
-    if constexpr (std::is_base_of_v<IsDirty, T>) {
-      if constexpr (sizeof...(ttypes) != 0) {
-        ensure_no_dirty_object<ttypes...>();
-      }
-      return true;
-    }
-    if constexpr (sizeof...(ttypes) != 0) {
-      return has_dirty_object<ttypes...>();
-    } else {
-      return false;
-    }
-  }
-
-  template <class T, class... ttypes> static bool &get_dirty_object(auto &itr) {
-    static_assert(has_dirty_object<T, ttypes...>(), "Missing DIRTY entry");
-
-    if constexpr (std::is_base_of_v<IsDirty, T>) {
-      return T::get_dirty(itr);
-    } else {
-      return get_dirty_object<ttypes...>(itr);
-    }
-  }
-
-public:
-  consteval static uint16_t count_elements() { return sizeof...(list); }
-
-  consteval static uint16_t sum_value_lengths() {
-    return value_length<list...>();
+    call_on_all(lambda);
   }
 
   consteval static uint16_t get_packet_header_length() {
     return 40; // See RFC3954
   };
 
+  consteval static uint16_t get_flow_set_header_length() {
+    return 4; // As per RFC3954
+  };
+
+  consteval static bool has_mutex_object() { return count_of_mutex_elements; }
+  consteval static bool has_dirty_object() { return count_of_dirty_elements; }
+
+  // Returns the maximum size a data packet can have
+  consteval static uint16_t max_sum_value_lengths() {
+    auto lambda = []<class T>() -> size_t {
+      if constexpr (ConceptIsStreamableFixedSize<T>) {
+        return T::size_in_hbytes();
+      }
+      if constexpr (ConceptIsStreamableVarSize<T>) {
+        return T::get_max_size();
+      }
+      return 0;
+    };
+
+    // The generated output needs to be 4-byte alligned, so correct the
+    // calculation
+    constexpr size_t sum =
+        sum_of_all(lambda) + ((4 - (sum_of_all(lambda) % 4)) % 4);
+
+    // We can't pack it in a header, unless the header + max size fits in 16-bit
+    static_assert((sum + get_flow_set_header_length()) <= 0xFFFF,
+                  "Worst case data too big to fit in a Netflow package");
+
+    return static_cast<uint16_t>(sum);
+  }
+
+  static void generate_flow_set_header(std::string &s, uint16_t size_of_data) {
+    // Padding needs to happen outside of this function
+    assert(size_of_data % 4 == 0);
+
+    // We only have 16-bits for the size
+    assert((size_of_data + get_flow_set_header_length()) < 0xFFFF);
+
+    append16(s, get_id());
+    append16(s, get_flow_set_header_length() + size_of_data);
+  }
+
+  static std::string generate_flow_set_header(uint16_t size_of_data) {
+    std::string s;
+    s.reserve(get_flow_set_header_length());
+    generate_flow_set_header(s, size_of_data);
+
+    return s;
+  }
+
+  static void serialize(std::string &s, auto &itr) {
+    // Increase size of string to fit output
+    s.reserve(s.size() + max_sum_value_lengths());
+    auto lambda = [&s, &itr]<class T>() {
+      if constexpr (ConceptIsStreamable<T>) {
+        T::append_value(s, itr);
+      }
+    };
+
+    call_on_all(lambda);
+  }
+
+  static void clear_volatile(auto &itr) {
+    auto lambda = [&itr]<class T> {
+      if constexpr (std::is_base_of_v<IsStreamable, T>) {
+        T::clear_if_volatile(itr);
+      }
+    };
+
+    call_on_all(lambda);
+  }
+
+public:
   static std::string generate_packet_header(uint32_t now_in_s,
                                             uint32_t sequence_number,
                                             uint32_t source_id,
@@ -540,111 +484,90 @@ public:
     assert(flow_set_id == 0); // We only support 0 for now (Template FlowSet)
     std::string s;
     const uint16_t length =
-        4 * count_streamable<list...>() + 8 /* Header size */;
+        4 * count_of_streamable_elements + 8 /* Header size */;
     s.reserve(length);
 
     // See RFC3954 for format
     append16(s, flow_set_id); // FlowSet ID 0 = Template format
     append16(s, length);      // Total length of package
     append16(s, get_id());
-    append16(s, count_streamable<list...>());
+    append16(s, count_of_streamable_elements);
 
-    append_template_list<list...>(s); // Add the template data from each element
-
-    return s;
-  }
-
-  static void generate_flow_set_header(std::string &s, uint16_t no_of_records) {
-    append16(s, get_id());
-    append16(s, get_flow_set_header_length() +
-                    (no_of_records *
-                     sum_value_lengths())); // Total length of package
-  }
-
-  consteval static uint16_t get_flow_set_header_length() {
-    return 4; // As per RFC3954
-  };
-
-  static std::string generate_flow_set_header(uint16_t no_of_records) {
-    std::string s;
-    s.reserve(get_flow_set_header_length());
-    generate_flow_set_header(s, no_of_records);
+    append_template_list(s); // Add the template data from each element
 
     return s;
   }
 
-  static void serialize(std::string &s, auto &itr) {
-    build_data<list...>(s, itr);
-  }
-
-  static std::string serialize(auto &itr) {
-    std::string s;
-    s.reserve(sum_value_lengths()); // Reserve space for the entry
-    serialize(s, itr);
-    return s;
-  }
-
-  static void clear_volatile(auto &itr) { clear_volatile_data<list...>(itr); }
-
+  // Returns number of flow sets written
   template <class C> static uint32_t dump(LioLi::Tree &tree, C &container) {
-    // Find max number of Flow Records in each FlowSet
-    constexpr const static uint16_t max_to_send =
-        (UINT16_MAX - get_flow_set_header_length()) / sum_value_lengths();
-
-    static_assert(max_to_send >= 1, "Data too big for dumping");
-
-    uint16_t record_counter = 0;  // How many records have we serialized so far
-    uint16_t flowset_counter = 0; // How many flow sets we have serizlized
-
     std::string out_buffer;
     out_buffer.reserve(
         UINT16_MAX); // Note, a netflow FlowSet is limited to 64Kb
 
-    // Iterate over the container
+    const size_t data_size = UINT16_MAX - get_flow_set_header_length();
+
+    static_assert(data_size >= max_sum_value_lengths(),
+                  "We don't have enough space with 16-bit sizes to serialize");
+
+    uint32_t flowsets_written = 0;
+
     auto itr = container.begin();
 
     while (itr != container.end()) {
+      // Serialize what the itr points to:
+      bool isDirty = true; // We assume dirty unless we know it isn't
 
       // We intentionally do manually locking and unlocking due to lifetime
       // contraints
-      if constexpr (has_mutex_object<list...>()) {
-        get_mutex_object<list...>(itr).lock();
+      if constexpr (has_mutex_object()) {
+        FindType<CheckIsMutex>::get_mutex(itr).lock();
       }
 
-      bool isDirty = true; // We assume dirty unless we know it isn't
-
-      if constexpr (has_dirty_object<list...>()) {
-        isDirty = get_dirty_object<list...>(itr);
-        get_dirty_object<list...>(itr) = false;
+      if constexpr (has_dirty_object()) {
+        isDirty = FindType<CheckIsDirty>::get_dirty(itr);
+        FindType<CheckIsDirty>::get_dirty(itr) = false;
       }
 
       if (isDirty) {
         serialize(out_buffer, itr);
         clear_volatile(itr);
-        record_counter++;
       }
 
-      if constexpr (has_mutex_object<list...>()) {
-        get_mutex_object<list...>(itr).unlock();
+      if constexpr (has_mutex_object()) {
+        FindType<CheckIsMutex>::get_mutex(itr).unlock();
       }
 
+      // We increment itr here, so we know if we are about to be at the end and
+      // should flush
       itr++;
-      if (record_counter >= max_to_send ||
-          (itr == container.end() && record_counter > 0)) {
+
+      // If we don't have enough space to add more or have come to the end, then
+      // send what we have if any
+      if ((data_size - out_buffer.size() < max_sum_value_lengths() ||
+           itr == container.end()) &&
+          out_buffer.size() > 0) {
+
+        // Check if we need to pad what we have
+        size_t padding = (4 - (out_buffer.size() % 4)) % 4;
+
+        if (padding) {
+          out_buffer.append(padding, '\0');
+        }
+
         tree << (LioLi::Tree("DataFlowSet")
                  << generate_flow_set_header(
-                        record_counter) // TODO: Check if std::move is needed
+                        out_buffer.size()) // TODO: Check if std::move is needed
                  << out_buffer);
+
+        // Count the flowset
+        flowsets_written++;
+
         // Reset the out_buffer
         out_buffer.clear();
-        out_buffer.reserve(UINT16_MAX);
-        // We start over on the counter
-        record_counter = 0;
-        flowset_counter++;
       }
-    }
+    }; // while (itr != container.end())
 
-    return flowset_counter;
+    return flowsets_written;
   }
 };
 

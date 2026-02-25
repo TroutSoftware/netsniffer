@@ -18,6 +18,7 @@
 #include <log_framework.h>
 
 // Local includes
+#include "cache_concepts.h"
 #include "trout_utils.h"
 
 // Debug includes
@@ -33,7 +34,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
   template <auto v, int key, uint16_t max_size, uint16_t min_size>
   friend class EVS;
   template <auto v, int key, uint16_t max_size> friend class C;
-  template <class... list> friend class NFSerializer;
+  template <ConceptNetflowDefinition... list> friend class NFSerializer;
   template <uint16_t fixed_string_size, int key> friend class ServiceMapE;
 
   std::shared_ptr<Settings> settings;
