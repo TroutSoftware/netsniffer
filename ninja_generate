@@ -13,7 +13,7 @@
 
 cat << EOF
 pd = $PD
-cxxflags = $CXXFLAGS -Wall -Wextra -std=c++2b -fPIC -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security
+cxxflags = $CXXFLAGS -Wall -Wextra -std=c++23 -fPIC -D_FORTIFY_SOURCE=2 -fstack-protector-strong -Werror=format-security
 rule cc
   command = $CXX \$cxxflags -MD -MF \$out.d  -I $ID -isystem $INSTALL_DIR/include -isystem $INSTALL_DIR/include/snort -c \$in -o \$out
   deps = gcc
