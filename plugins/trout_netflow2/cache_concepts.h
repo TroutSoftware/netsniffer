@@ -35,16 +35,6 @@ struct ConceptITR {};
 //   static void clear_if_volatile(<iterator> &)
 //     -- Function that clears variables (if needed) after serialization
 class IsStreamable {};
-template <class T, class ITR = ConceptITR>
-concept ConceptIsStreamableFixedSize =
-    std::derived_from<T, IsStreamable> &&
-    requires(std::string &output, ITR &itr) {
-      { T::field_type_in_h() } -> std::same_as<uint16_t>;
-      { T::size_in_hbytes() } -> std::same_as<uint16_t>;
-      { T::append_value(output, itr) } -> std::same_as<void>;
-    } && requires {
-      [] { [[maybe_unused]] constexpr uint16_t x = T::field_type_in_h(); }();
-    };
 
 template <class T, class ITR = ConceptITR>
 concept ConceptIsStreamableVarSize = std::derived_from<T, IsStreamable> &&
@@ -56,7 +46,7 @@ concept ConceptIsStreamableVarSize = std::derived_from<T, IsStreamable> &&
                                          T::is_fixed_size()
                                        } -> std::same_as<bool>;
                                        {
-                                         T::get_max_size()
+                                         T::get_max_encoded_size()
                                        } -> std::same_as<uint16_t>;
                                        {
                                          T::append_value(output, itr)
@@ -65,8 +55,7 @@ concept ConceptIsStreamableVarSize = std::derived_from<T, IsStreamable> &&
 
 // Will be extended with the variable size later
 template <class T>
-concept ConceptIsStreamable =
-    ConceptIsStreamableFixedSize<T> || ConceptIsStreamableVarSize<T>;
+concept ConceptIsStreamable = ConceptIsStreamableVarSize<T>;
 
 // Classes inheriting from this is the mutex
 // A mutex class, is one that lets the framework get the mutex of a specific

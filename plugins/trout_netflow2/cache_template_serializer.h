@@ -52,11 +52,13 @@ class ServiceMapE : public IsStreamable {
 public:
   consteval static uint16_t field_type_in_h() { return key; }
 
-  consteval static uint16_t size_in_hbytes() {
+  consteval static bool is_fixed_size() { return true; }
+
+  consteval static uint16_t get_max_encoded_size() {
     return sizeof(Cache::ServiceMap::ServiceKeyT) + fixed_string_size;
   }
 
-  static void append_value(std::string &output, auto &itr) {
+  static uint16_t append_value(std::string &output, auto &itr) {
     // itr->first is the string, itr->second is the key
 
     // NOTE: If the service key size is changed, ensure we still have alignment
@@ -73,137 +75,62 @@ public:
     if (fixed_string_size > itr->first.size()) {
       output.append(fixed_string_size - itr->first.size(), '\0');
     }
+
+    return fixed_string_size + sizeof(Cache::ServiceMap::ServiceKeyT);
   }
 
   static void clear_if_volatile(auto &) {
     // We never clear anything in the service map
   }
 };
-static_assert(ConceptIsStreamableFixedSize<ServiceMapE<0, 0>>,
-              "ServiceMapE must comply with ConceptIsStreamableFixedSize");
+static_assert(ConceptIsStreamable<ServiceMapE<0, 0>>,
+              "ServiceMapE must comply with ConceptIsStreamable");
 
-// Template used to declare data entries for the binary netflow format
-// fixed_size denotes the size for the field in the binary data, even
-// the member (v) has a different size (Must be 0, 1, 2, 4 or 8, where 0
-// means use the real size of v)
-template <auto v, int key, uint16_t fixed_size = 0>
-class E : public IsStreamable {
-protected:
-  static_assert(fixed_size == 0, "Fixed size not implemented yet");
+namespace TH {
+// Helper templates to determine specific input types
 
-  // Definitions to extract types from v
-  template <typename T, typename C> static T get_type(T C::*);
-  template <typename T, typename C> static C get_class(T C::*);
+template <typename T, typename C> static T get_type(T C::*);
+template <typename T, typename C> static C get_class(T C::*);
 
-  using T = decltype(get_type(v));
-  using C = decltype(get_class(v));
-
-  // Helper templates to determine specific input types
-  template <typename TA> struct IsStdArray : std::false_type {};
-  template <typename TA, std::size_t N>
-  struct IsStdArray<std::array<TA, N>> : std::true_type {
-    constexpr const static std::size_t size = N * sizeof(TA);
-  };
-
-public:
-  consteval static uint16_t field_type_in_h() { return key; }
-
-  consteval static uint16_t size_in_hbytes() {
-    if constexpr (IsStdArray<T>::value) {
-      static_assert(fixed_size == 0); // We can not change size of arrays
-      return IsStdArray<T>::size;
-    } else if constexpr (fixed_size != 0) {
-      return fixed_size;
-    } else {
-      return sizeof(T);
-    }
-  }
-
-  static void append_value(std::string &output, auto &itr) {
-
-    static_assert(std::same_as<decltype(itr), Cache::CacheMapType::iterator &>,
-                  "We are hardcoded to Cache::CacheMapType::iterator");
-    const C *p;
-
-    if constexpr (std::is_same_v<C, Cache::CacheElement2::ConstValues>) {
-      p = &(itr->first);
-    } else {
-      p = itr->second
-              .get(); // second is a shared_ptr to the one we really want to get
-    }
-
-    assert(p); // the caller needs to ensure we have valid input
-
-    T value = p->*v;
-
-    if constexpr (IsStdArray<T>::value) {
-      static_assert(
-          sizeof(typename T::value_type) == 1,
-          "We don't handle std::arrays not made up of byte sized elements");
-
-      output.append(value.begin(), value.end());
-    } else if constexpr (std::is_integral_v<T>) {
-      // Not an array, we just convert blindly to network format
-      T nv = Common::to_network_order(value);
-
-      output.append(reinterpret_cast<const char *>(&nv), sizeof(T));
-    } else {
-      static_assert(false, "I don't know how to serialize the argument");
-    }
-  }
-
-  static void clear_if_volatile(Cache::CacheMapType::iterator &itr) {
-    // We only clear if volatile
-    if constexpr (std::is_same_v<C, Cache::CacheElement2::VolatileValues>) {
-      static_assert(!IsStdArray<T>::value and !std::is_array_v<T>,
-                    "Arrays not implemented in volatile part");
-
-      itr->second.get()->*v = 0;
-    }
-  }
+template <typename TA> struct IsStdArray : std::false_type {};
+template <typename TA, std::size_t N>
+struct IsStdArray<std::array<TA, N>> : std::true_type {
+  constexpr const static std::size_t size = N * sizeof(TA);
 };
 
-// C is same as E, except it treats the element as Constant, i.e. it won't be
-// cleared after serialization
-template <auto v, int key, uint16_t fixed_size = 0>
-class C : public E<v, key, fixed_size> {
-public:
-  static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
-};
+template <typename T> struct Is8bitString : std::false_type {};
+static_assert(sizeof(char) == 1, "We only support 8-bit chars");
+template <> struct Is8bitString<std::string> : std::true_type {};
+template <> struct Is8bitString<std::u8string> : std::true_type {};
+}; // namespace TH
 
-// Variable length field (RFC 5101)
+// Variable length field (RFC 5101) if max_size == min_size, compatible with RFC
+// 3954
 template <auto v, int key, uint16_t max_size, uint16_t min_size = 1>
 class EVS : public IsStreamable {
+
   // Definitions to extract types from v
-  template <typename T, typename C> static T get_type(T C::*);
-  template <typename T, typename C> static C get_class(T C::*);
-
-  using T = decltype(get_type(v));
-  using C = decltype(get_class(v));
-
-  // Helper templates to determine specific input types
-  template <typename TA> struct IsStdArray : std::false_type {};
-  template <typename TA, std::size_t N>
-  struct IsStdArray<std::array<TA, N>> : std::true_type {
-    constexpr const static std::size_t size = N * sizeof(TA);
-  };
-
-  template <typename T> struct Is8bitString : std::false_type {};
-  static_assert(sizeof(char) == 1, "We only support 8-bit chars");
-  template <> struct Is8bitString<std::string> : std::true_type {};
-  template <> struct Is8bitString<std::u8string> : std::true_type {};
+  using T = decltype(TH::get_type(v));
+  using C = decltype(TH::get_class(v));
 
   // Validation we can handle the input
   static_assert(max_size > 0, "Max size can't be 0");
+
   static_assert(max_size <= 0xFFFF, "Max size can't be over 16-bit");
   static_assert(min_size <= max_size,
                 "max_size can't be greater than min_size");
-  static_assert(std::is_integral_v<T> && max_size != min_size &&
-                    sizeof(T) != max_size,
+  static_assert(!std::is_integral_v<T> ||
+                    (max_size == min_size && sizeof(T) == max_size),
                 "We don't support truncation of integers");
-  static_assert(IsStdArray<T>::value && max_size != min_size &&
-                    IsStdArray<T>::size != max_size,
-                "We only support arrays of exact size");
+
+  static_assert(
+      [] {
+        if constexpr (TH::IsStdArray<T>::value) {
+          return (max_size == min_size && TH::IsStdArray<T>::size == max_size);
+        }
+        return true;
+      }(),
+      "We only support arrays of exact size");
 
 public:
   consteval static uint16_t field_type_in_h() { return key; }
@@ -213,14 +140,30 @@ public:
     // for it to hold true for std::array
     if constexpr (max_size == min_size) {
       return true;
-    } else if constexpr (Is8bitString<T>::value) {
+    } else if constexpr (TH::Is8bitString<T>::value) {
       return false;
     } else {
       static_assert(false, "The type can't be streamed with EVS");
     }
   }
 
-  consteval static uint16_t get_max_size() { return max_size; }
+  consteval static uint16_t get_max_encoded_size() {
+    if constexpr (is_fixed_size()) {
+      return max_size;
+    }
+
+    // If we are variable size (ie. not fixed size), we need to add the variable
+    // lenght fields to the max size
+    if constexpr (max_size <= 255) {
+      return max_size + 1;
+    }
+
+    static_assert(
+        max_size < (0xFFFF - 3),
+        "We don't have space for the 3-bit sizing for long variable data");
+
+    return max_size + 3;
+  }
 
   static uint16_t append_value(std::string &output, auto &itr) {
     // We can't have the specific type in the signature as we use concepts for
@@ -241,7 +184,7 @@ public:
 
     T value = p->*v;
 
-    if constexpr (IsStdArray<T>::value) {
+    if constexpr (TH::IsStdArray<T>::value) {
       static_assert(is_fixed_size(),
                     "Arrays are only implemented for fixed size transfers");
 
@@ -260,7 +203,7 @@ public:
       output.append(reinterpret_cast<const char *>(&nv), sizeof(T));
 
       return sizeof(T);
-    } else if constexpr (Is8bitString<T>::value) {
+    } else if constexpr (TH::Is8bitString<T>::value) {
       auto size_to_copy = std::min(value.size(), max_size);
       auto actual_length = std::max(size_to_copy, min_size);
       auto prefix_size = 0;
@@ -291,7 +234,30 @@ public:
       static_assert(false, "We don't know how to serialize the argument");
     }
   }
+
+  static void clear_if_volatile(Cache::CacheMapType::iterator &itr) {
+    // We only clear if volatile
+    if constexpr (std::is_same_v<C, Cache::CacheElement2::VolatileValues>) {
+      static_assert(std::is_integral_v<T>, "We can only clear numbers");
+
+      itr->second.get()->*v = 0;
+    }
+  }
 };
+
+template <auto v, int key>
+using E = EVS<v, key, sizeof(TH::get_type(v)), sizeof(TH::get_type(v))>;
+
+// CVS is same as EVS, except it treats the element as Constant, i.e. it won't
+// be cleared after serialization
+template <auto v, int key, uint16_t min_size, uint16_t max_size>
+class CVS : public EVS<v, key, min_size, max_size> {
+public:
+  static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
+};
+
+template <auto v, int key>
+using C = CVS<v, key, sizeof(TH::get_type(v)), sizeof(TH::get_type(v))>;
 
 // Helper function to generate data flow set id's
 uint16_t generate_template_data_flow_set_id() {
@@ -372,10 +338,8 @@ template <ConceptNetflowDefinition... list> class NFSerializer {
       if constexpr (ConceptIsStreamable<T>) {
         append16(s, T::field_type_in_h());
 
-        if constexpr (ConceptIsStreamableFixedSize<T>) {
-          append16(s, T::size_in_hbytes());
-        } else if constexpr (T::is_fixed_size()) {
-          append16(s, T::get_max_size());
+        if constexpr (T::is_fixed_size()) {
+          append16(s, T::get_max_encoded_size());
         } else {
           append16(s, 0xFFFF); // -> Size stored in value field
         }
@@ -399,11 +363,8 @@ template <ConceptNetflowDefinition... list> class NFSerializer {
   // Returns the maximum size a data packet can have
   consteval static uint16_t max_sum_value_lengths() {
     auto lambda = []<class T>() -> size_t {
-      if constexpr (ConceptIsStreamableFixedSize<T>) {
-        return T::size_in_hbytes();
-      }
       if constexpr (ConceptIsStreamableVarSize<T>) {
-        return T::get_max_size();
+        return T::get_max_encoded_size();
       }
       return 0;
     };
@@ -414,7 +375,8 @@ template <ConceptNetflowDefinition... list> class NFSerializer {
         sum_of_all(lambda) + ((4 - (sum_of_all(lambda) % 4)) % 4);
 
     // We can't pack it in a header, unless the header + max size fits in 16-bit
-    static_assert((sum + get_flow_set_header_length()) <= 0xFFFF,
+    // The (-3) is to ensure the result can be alligned to a 32-bit boundary
+    static_assert((sum + get_flow_set_header_length()) <= (0xFFFF - 3),
                   "Worst case data too big to fit in a Netflow package");
 
     return static_cast<uint16_t>(sum);

@@ -266,8 +266,7 @@ void Cache::dump() {
   using DataFlowSet = NFSerializer<
   MUTEX<[](CacheMapType::iterator &itr) -> std::mutex & {return itr->second->mutex;}>,
   DIRTY<[](CacheMapType::iterator &itr) -> bool & {return itr->second->dirty;}>,
-  //EVS<&CacheElement2::ConstValues::ipv4_src_addr, 8, 4, 4 >,
-  E<&CacheElement2::ConstValues::ipv4_src_addr,       8 >,
+  E<&CacheElement2::ConstValues::ipv4_src_addr,       8>,
   E<&CacheElement2::ConstValues::ipv4_dst_addr,       12>,
   E<&CacheElement2::ConstValues::l4_src_port,         7 >,
   E<&CacheElement2::ConstValues::l4_dst_port,         11>,
