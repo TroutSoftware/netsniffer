@@ -278,6 +278,7 @@ void Cache::dump() {
   E<&CacheElement2::VolatileValues::out_bytes,        23>,
   E<&CacheElement2::VolatileValues::out_pkts,         24>,
   C<&CacheElement2::VolatileValues::service_key,      25>  // Treat the service key as if it is a constant (i.e. it won't be cleared when sending)
+  //CVS<&CacheElement2::VolatileValues::service_name,   96, 30 /* Max number of chars to transmit */>   // Treat the service name as a constant, so it isn't cleared
   >;
   // clang-format on
 

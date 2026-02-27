@@ -5,6 +5,7 @@
 // #include <protocols/packet.h>
 
 // System includes
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <memory>
@@ -106,7 +107,7 @@ template <> struct Is8bitString<std::u8string> : std::true_type {};
 
 // Variable length field (RFC 5101) if max_size == min_size, compatible with RFC
 // 3954
-template <auto v, int key, uint16_t max_size, uint16_t min_size = 1>
+template <auto v, int key, uint16_t max_size, uint16_t min_size = 0>
 class EVS : public IsStreamable {
 
   // Definitions to extract types from v
@@ -204,8 +205,10 @@ public:
 
       return sizeof(T);
     } else if constexpr (TH::Is8bitString<T>::value) {
-      auto size_to_copy = std::min(value.size(), max_size);
-      auto actual_length = std::max(size_to_copy, min_size);
+      auto size_to_copy =
+          std::min(value.size(), static_cast<T::size_type>(max_size));
+      auto actual_length =
+          std::max(size_to_copy, static_cast<T::size_type>(min_size));
       auto prefix_size = 0;
 
       // If variable length, we need to prefix with 1 to 3 length bytes
@@ -213,7 +216,7 @@ public:
         // Note: 0xFF is reserved for long data
         if (actual_length < 0xFF) {
           prefix_size = 1;
-          output.push_back(static_cast<char>(actual_length && 0xFF));
+          output.push_back(static_cast<char>(actual_length & 0xFF));
         } else {
           output.append({static_cast<char>(0xFF),
                          static_cast<char>((actual_length >> 8) & 0xFF),
@@ -250,8 +253,8 @@ using E = EVS<v, key, sizeof(TH::get_type(v)), sizeof(TH::get_type(v))>;
 
 // CVS is same as EVS, except it treats the element as Constant, i.e. it won't
 // be cleared after serialization
-template <auto v, int key, uint16_t min_size, uint16_t max_size>
-class CVS : public EVS<v, key, min_size, max_size> {
+template <auto v, int key, uint16_t max_size, uint16_t min_size = 0>
+class CVS : public EVS<v, key, max_size, min_size> {
 public:
   static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
 };
