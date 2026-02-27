@@ -9,7 +9,7 @@ mkdir -p $BUILD_DIR/debug
 mkdir -p $BUILD_DIR/release
 
 # Making the build serious about warnings
-CXXFLAGS="$CXXFLAGS -Wall -Wextra -Werror -Wpedantic"
+CXXFLAGS="$CXXFLAGS -Wall -Wextra -Werror -Wpedantic -pedantic-errors"
 
 CXXFLAGS="$CXXFLAGS -Og -g" ./ninja_generate > $BUILD_DIR/debug/build.ninja
 CXXFLAGS="$CXXFLAGS -O2" ./ninja_generate > $BUILD_DIR/release/build.ninja
