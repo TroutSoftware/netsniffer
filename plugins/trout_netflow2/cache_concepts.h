@@ -25,13 +25,15 @@ struct ConceptITR {};
 
 // Classes inheriting from this are streamable/serializable
 // A streamable class must have at least these functions:
-//   constexpr static uint16_t field_type_in_h()
+//   consteval static uint16_t field_type_in_h()
 //     -- Returns the type of the field in the RFC rfc3954 sense
-//   constexpr static uint16_t size_in_hbytes()
-//     -- Size of the serialized chunk
-//   static void append_value(std::string &output, <iterator> &itr)
+//   consteval static bool is_fixed_size()
+//     -- Returns true if the value should always be encoded with the same size
+//   consteval static uint16_t get_max_encoded_size()
+//     -- The max size (or only size for fixed size entries) of the entry
+//   static uint16_t append_value(std::string &output, <iterator> &itr)
 //     -- Function taking an iterator and serializing what it references to a
-//     bytestream
+//     bytestream, returns size of what it added
 //   static void clear_if_volatile(<iterator> &)
 //     -- Function that clears variables (if needed) after serialization
 class IsStreamable {};
@@ -51,9 +53,12 @@ concept ConceptIsStreamableVarSize = std::derived_from<T, IsStreamable> &&
                                        {
                                          T::append_value(output, itr)
                                        } -> std::same_as<uint16_t>;
+                                       {
+                                         T::clear_if_volatile(itr)
+                                       } -> std::same_as<void>;
                                      };
 
-// Will be extended with the variable size later
+// Genric concept for streamble entries
 template <class T>
 concept ConceptIsStreamable = ConceptIsStreamableVarSize<T>;
 

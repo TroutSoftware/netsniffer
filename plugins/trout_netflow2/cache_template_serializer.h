@@ -238,7 +238,9 @@ public:
     }
   }
 
-  static void clear_if_volatile(Cache::CacheMapType::iterator &itr) {
+  static void clear_if_volatile(auto &itr) {
+    static_assert(std::same_as<decltype(itr), Cache::CacheMapType::iterator &>,
+                  "We only support Cache::CacheMapType::iterator");
     // We only clear if volatile
     if constexpr (std::is_same_v<C, Cache::CacheElement2::VolatileValues>) {
       static_assert(std::is_integral_v<T>, "We can only clear numbers");
@@ -256,7 +258,7 @@ using E = EVS<v, key, sizeof(TH::get_type(v)), sizeof(TH::get_type(v))>;
 template <auto v, int key, uint16_t max_size, uint16_t min_size = 0>
 class CVS : public EVS<v, key, max_size, min_size> {
 public:
-  static void clear_if_volatile(Cache::CacheMapType::iterator &) {}
+  static void clear_if_volatile(auto &) {}
 };
 
 template <auto v, int key>
