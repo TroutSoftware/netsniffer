@@ -120,11 +120,15 @@ class Module : public snort::Module {
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("serializer") && val.get_as_string().size() > 0) {
 
-      LioLi::LogDB::get<Logger>(s_name)->set_serializer(val.get_string());
+      auto p = LioLi::LogDB::get_unsafe<Logger>(s_name);
 
-      serializer_set = true;
+      if (p) {
+        p->set_serializer(val.get_string());
+        serializer_set = true;
+        return true;
+      }
 
-      return true;
+      snort::ErrorMessage("ERROR: not able to initialize %s\n", s_name);
     }
 
     // fail if we didn't get something valid

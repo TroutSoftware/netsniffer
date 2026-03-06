@@ -23,19 +23,23 @@
 
 namespace trout_netflow2 {
 
-Cache::Cache(std::shared_ptr<Settings> settings) : settings(settings) {
+Cache::Cache(const char *name, std::shared_ptr<Settings> settings)
+    : LioLi::ModuleWorker(name), settings(settings) {
   assert(settings);
 
   start_worker();
 }
 
-Cache::~Cache() {
-  stop_worker();
-  dump();
-}
+Cache::~Cache() {}
 
-std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings) {
-  std::shared_ptr<Cache> cache(new Cache(settings));
+void Cache::shutdown() { stop_worker(); }
+
+std::shared_ptr<Cache> Cache::create_cache(std::shared_ptr<Settings> settings,
+                                           const char *my_name) {
+  std::shared_ptr<Cache> cache(new Cache(my_name, settings));
+
+  // Register in logframework for controlled shutdown
+  LioLi::LogDB::register_instance(cache);
 
   return cache;
 }
@@ -283,7 +287,7 @@ void Cache::dump() {
   // clang-format on
 
   if (settings->get_extended_console_logging()) {
-    snort::LogMessage("Netflow2 dump entered");
+    snort::LogMessage("Netflow2 dump entered\n");
   }
 
   LioLi::Tree buf;
@@ -312,7 +316,7 @@ void Cache::dump() {
     }
 
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 cleanup of abandoned cache entries");
+      snort::LogMessage("Netflow2 cleanup of abandoned cache entries\n");
     }
 
     // Discard any entries that are no longer referenced
@@ -326,14 +330,14 @@ void Cache::dump() {
     }
 
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 done cleanup of abandoned cache entries");
+      snort::LogMessage("Netflow2 done cleanup of abandoned cache entries\n");
     }
   }
   if (settings->get_generate_service_map() &&
       (!service_map.is_fully_flushed() || resend)) {
 
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 dumping service maps");
+      snort::LogMessage("Netflow2 dumping service maps\n");
     }
 
     uint32_t sm_flow_sets = service_map.dump(buf);
@@ -353,7 +357,7 @@ void Cache::dump() {
   // Transmit templates if anything happened to the connection
   if (resend) {
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 generating packet headers");
+      snort::LogMessage("Netflow2 generating packet headers\n");
     }
 
     // Generate the templates once, and reuse...
@@ -384,7 +388,7 @@ void Cache::dump() {
     Pegs::s_peg_counts.logs_written++;
 
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 done generating packet headers");
+      snort::LogMessage("Netflow2 done generating packet headers\n");
     }
   }
 
@@ -408,7 +412,7 @@ void Cache::dump() {
 
   if (buf.has_data()) {
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 moving dump data to logger");
+      snort::LogMessage("Netflow2 moving dump data to logger\n");
     }
 
     LioLi::Tree out_tree;
@@ -423,12 +427,12 @@ void Cache::dump() {
     Pegs::s_peg_counts.logs_written++;
 
     if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 done moving dump data to logger");
+      snort::LogMessage("Netflow2 done moving dump data to logger\n");
     }
   }
 
   if (settings->get_extended_console_logging()) {
-    snort::LogMessage("Netflow2 leaving dump with normal exit");
+    snort::LogMessage("Netflow2 leaving dump with normal exit\n");
   }
 }
 
@@ -459,12 +463,18 @@ void Cache::worker_loop() {
   std::unique_lock lock(worker_mutex);
 
   // Main loop
-  while (!terminate) {
+  while (true) {
     worker_kicked = false;
+
+    // Remember the state of pre-dump to avoid races
+    bool terminate_pre_dump = terminate;
 
     lock.unlock(); // The dump can take time, don't block others
     dump();
     lock.lock();
+
+    if (terminate_pre_dump)
+      break;
 
     cv.wait_for(lock,
                 std::chrono::milliseconds(settings->get_flush_interval_ms()),

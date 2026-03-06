@@ -2,9 +2,13 @@
 // Snort includes
 
 // System includes
+#include <map>
+#include <ranges>
 
 // Local includes
 #include "log_framework.h"
+
+// Debug includes
 
 namespace LioLi {
 
@@ -60,6 +64,7 @@ std::shared_ptr<Logger> &Logger::get_null_obj() {
 }
 
 std::mutex LogDB::mutex;
+
 std::map<std::string, std::shared_ptr<LogBase>> LogDB::db;
 
 bool LogDB::register_obj(std::string name, std::shared_ptr<LogBase> sptr) {
@@ -71,12 +76,30 @@ bool LogDB::register_obj(std::string name, std::shared_ptr<LogBase> sptr) {
 }
 
 void LogDB::shutdown_handler() {
+  std::multimap<LogBase::Priority, std::shared_ptr<LogBase>> shutdown_queue;
+
+  // Make a sorted version of the map we can walk without having the mutex
+  // locked
+  {
+    std::scoped_lock lock(mutex);
+    for (const auto &ptr : db | std::views::values) {
+      shutdown_queue.insert({ptr->get_shutdown_priority(), ptr});
+    }
+  }
+
+  // Tell everything to shutdown, mutex free and in priority orders)
+  for (auto &ptr : shutdown_queue | std::views::values) {
+    if (ptr)
+      ptr->shutdown();
+  }
+
   std::scoped_lock lock(mutex);
 
-  for (auto &[name, logger] : db) {
-    if (logger)
-      logger->shutdown();
-  }
+  // If the size changed during the shutdown, we have an issue
+  assert(shutdown_queue.size() == db.size());
+
+  // Empty the list so no one can retrieve shutdown elements anymore
+  db.clear();
 }
 
 } // namespace LioLi

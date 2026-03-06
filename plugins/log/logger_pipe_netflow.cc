@@ -416,14 +416,18 @@ class Module : public snort::Module {
 
   ~Module() {
     // Stop worker
-    LioLi::LogDB::get<Logger>(s_name)->stop();
+    auto p = LioLi::LogDB::get_unsafe<Logger>(s_name);
+
+    assert(p);
+
+    p->stop();
   }
 
   bool begin(const char *, int, snort::SnortConfig *) override { return true; }
 
   bool end(const char *, int, snort::SnortConfig *) override {
-    auto logger = LioLi::LogDB::get<Logger>(s_name);
-    if (logger->is_valid()) {
+    auto logger = LioLi::LogDB::get_unsafe<Logger>(s_name);
+    if (logger && logger->is_valid()) {
       // Start worker
       logger->start();
       return true;
@@ -433,7 +437,11 @@ class Module : public snort::Module {
   }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
-    auto logger = LioLi::LogDB::get<Logger>(s_name);
+    auto logger = LioLi::LogDB::get_unsafe<Logger>(s_name);
+    if (!logger) {
+      snort::ErrorMessage("ERROR: internal logic error in %s\n", s_name);
+      return false;
+    }
     if (val.is("pipe_name") && val.get_as_string().size() > 0) {
 
       if (!logger->get_pipe_name().empty()) {
@@ -442,7 +450,7 @@ class Module : public snort::Module {
         return false;
       }
 
-      LioLi::LogDB::get<Logger>(s_name)->set_pipe_name(val.get_string());
+      logger->set_pipe_name(val.get_string());
 
       return true;
     } else if (val.is("pipe_env")) {

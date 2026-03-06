@@ -8,6 +8,7 @@
 #include <cerrno>
 #include <chrono>
 #include <condition_variable>
+#include <iostream>
 #include <mutex>
 #include <netinet/in.h>
 #include <stack>
@@ -55,6 +56,9 @@ const snort::Parameter module_params[] = {
      "or closed by the receiving side"},
     {"extended_console_logging", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will enable more logs to the console of what is happening in the logger"},
+    {"output_stats_on_shutdown", snort::Parameter::PT_BOOL, nullptr, "false",
+     "Outputs stats to cerr on shutdown, which will be more acurate than what "
+     "is reported in pegs"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -71,6 +75,7 @@ const PegInfo s_pegs[] = {
      "Number of time we couldn't write to a socket that we were told was "
      "writable"},
     {CountType::SUM, "hangup", "Count of hangups from the other side"},
+    {CountType::SUM, "bytes_sent", "Number of bytes sent over TCP"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -86,6 +91,7 @@ struct PegCounts {
   PegCount epoll_err = 0;
   PegCount would_block = 0;
   PegCount hangup = 0;
+  PegCount bytes_sent = 0;
 } s_peg_counts;
 
 // Compile time sanity check of number of entries in s_pegs and s_peg_counts
@@ -110,6 +116,7 @@ class Logger : public LioLi::Logger {
       0; // Counts the number of packages dropped in this sequence
   uint32_t retry_interval_ms = 100;
   bool extended_console_logging = false;
+  bool output_stats_on_shutdown = false;
 
   std::deque<LioLi::Tree> queue;
 
@@ -302,6 +309,8 @@ class Logger : public LioLi::Logger {
       output_string = input;
     }
 
+    bool has_data_in_queue() { return !output_string.empty(); }
+
     // Returns true if flush was complete, false if loop should be restarted
     // NOTE: Flush is only for our internal stuff, it's not a connection flush
     bool flush(bool has_more) {
@@ -313,6 +322,8 @@ class Logger : public LioLi::Logger {
 
         if (bytes >= 0) {
           assert(remaining <= bytes);
+
+          s_peg_counts.bytes_sent += bytes;
 
           // All was not sent
           if (remaining > bytes) {
@@ -380,8 +391,8 @@ class Logger : public LioLi::Logger {
     std::shared_ptr<LioLi::Serializer::Context> context;
     Socket socket(ipv4, port, get_name());
 
-    // Main loop
-    while (!terminate) {
+    // Main loop, we want to flush in the end
+    while (!queue.empty() || socket.has_data_in_queue() || !terminate) {
       if (!socket) {
         socket.connect();
 
@@ -408,6 +419,12 @@ class Logger : public LioLi::Logger {
       // Wait for something to happen with the socket
       switch (epoll_result) {
       case 0:
+        if (terminate) {
+          snort::ErrorMessage("TCP Logger: >%s< Couldn't flush as it couldn't "
+                              "connect to target or lost connection\n",
+                              get_name());
+          goto while_end;
+        }
         continue; // socket is not ready/might need to be recreated
       case -1:
         goto while_end; // unhandled error, exit loop
@@ -430,7 +447,8 @@ class Logger : public LioLi::Logger {
               get_name());
         }
 
-        continue; // Couldn't write what was stored, socket might be closed
+        continue; // Couldn't write all of what was stored, socket might be
+                  // closed or network queue full
       }
 
       // Ensure we have a valid context
@@ -525,6 +543,20 @@ public:
 
   ~Logger() {
     stop(); // Stops worker thread
+
+    if (output_stats_on_shutdown) {
+      std::cerr << get_name() << " final pegs:"
+                << "\n\tlogs_in: " << s_peg_counts.logs_in
+                << "\n\tlogs_out: " << s_peg_counts.logs_out
+                << "\n\toverflows: " << s_peg_counts.overflows
+                << "\n\tmax_queued: " << s_peg_counts.max_queued
+                << "\n\twrite_errros: " << s_peg_counts.write_errors
+                << "\n\trestarts: " << s_peg_counts.restarts
+                << "\n\tepoll_err: " << s_peg_counts.epoll_err
+                << "\n\twould_block: " << s_peg_counts.would_block
+                << "\n\thangup: " << s_peg_counts.hangup
+                << "\n\tbytes_sent: " << s_peg_counts.bytes_sent << std::endl;
+    }
   }
 
   void shutdown() override {
@@ -637,6 +669,8 @@ public:
 
   void set_extended_console_logging(bool b) { extended_console_logging = b; }
 
+  void set_output_stats_on_shutdown(bool b) { output_stats_on_shutdown = b; }
+
   // Call after all configuration is done
   void start() {
     if (extended_console_logging) {
@@ -650,6 +684,15 @@ public:
 
   // Call to terminate
   void stop() {
+    if (!worker_running) {
+      if (extended_console_logging) {
+        snort::LogMessage(
+            "TCP Logger: >%s< asked to stop, worker already stopped\n",
+            get_name());
+      }
+      return;
+    }
+
     if (extended_console_logging) {
       snort::LogMessage("TCP Logger: >%s< is stopping\n", get_name());
     }
@@ -700,6 +743,7 @@ class Module : public snort::Module {
     uint32_t retry_interval;
     std::string serializer;
     bool extended_console_logging = false;
+    bool output_stats_on_shutdown = false;
   };
 
   std::stack<ConfigColector> config_stack;
@@ -750,7 +794,8 @@ class Module : public snort::Module {
       return false;
     }
 
-    auto logger = LioLi::LogDB::get<Logger>(config_stack.top().name.c_str());
+    auto logger =
+        LioLi::LogDB::get_unsafe<Logger>(config_stack.top().name.c_str());
 
     if (!logger) {
       snort::ErrorMessage("ERROR: Unable to initialize logger\n");
@@ -768,6 +813,8 @@ class Module : public snort::Module {
     logger->set_retry_interval(config_stack.top().retry_interval);
     logger->set_extended_console_logging(
         config_stack.top().extended_console_logging);
+    logger->set_output_stats_on_shutdown(
+        config_stack.top().output_stats_on_shutdown);
 
     // Start the logger
     logger->start();
@@ -826,6 +873,8 @@ class Module : public snort::Module {
       config_stack.top().serializer = serializer;
     } else if (val.is("extended_console_logging")) {
       config_stack.top().extended_console_logging = val.get_bool();
+    } else if (val.is("output_stats_on_shutdown")) {
+      config_stack.top().output_stats_on_shutdown = val.get_bool();
     } else {
       snort::ErrorMessage("ERROR: Parameter '%s' is not implemented\n",
                           val.get_name());

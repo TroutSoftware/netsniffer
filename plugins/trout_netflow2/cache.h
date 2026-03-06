@@ -27,7 +27,8 @@ namespace trout_netflow2 {
 
 class Settings;
 
-class Cache : public std::enable_shared_from_this<Cache> {
+class Cache : public std::enable_shared_from_this<Cache>,
+              public LioLi::ModuleWorker {
   // We don't want these templates to take all the space in this header, so made
   // as friend instead
   template <auto v, int key, uint16_t max_size, uint16_t min_size>
@@ -119,7 +120,7 @@ class Cache : public std::enable_shared_from_this<Cache> {
   // In case the cache overflows, this element sums all overflowed packages
   std::shared_ptr<CacheElement2::VolatileValues> overflow_element;
 
-  Cache(std::shared_ptr<Settings> settings);
+  Cache(const char *name, std::shared_ptr<Settings> settings);
 
   // Adds content of p to the cache, a new element will be created if needed
   std::shared_ptr<CacheElement2::VolatileValues> add_to_cache(snort::Packet *p);
@@ -152,6 +153,9 @@ class Cache : public std::enable_shared_from_this<Cache> {
 
   // Helpers
   uint8_t protocol_from_package(snort::Packet *p);
+
+  // Called on logging framework shutdown
+  void shutdown() override;
 
 public:
   ~Cache();
@@ -186,7 +190,8 @@ public:
   void add(snort::Packet *p); // Adds values from snort packet to cache (for use
                               // when there isn't a snort flow associated)
 
-  static std::shared_ptr<Cache> create_cache(std::shared_ptr<Settings>);
+  static std::shared_ptr<Cache> create_cache(std::shared_ptr<Settings>,
+                                             const char *my_name);
 };
 
 } // namespace trout_netflow2

@@ -32,7 +32,19 @@ public:
   virtual bool is_ready() {
     return false;
   } // Returns true when component and dependencies are initialized
+
+  enum class Priority {
+    // Items listed first will be shutdown first
+    ModuleWorker, // Module worker threads (depending on logger)
+    Logger,       // Loggers (depending on Serializers)
+    Serializer,   // Serialisers (doesn't depend on anything)
+  };
+  virtual Priority get_shutdown_priority() = 0;
 };
+
+// Concept to check something is publicly inheriting from LogBase
+template <typename T>
+concept BasedOn_LogBase = std::derived_from<T, LogBase>;
 
 class LogDB {
   static std::mutex mutex;
@@ -41,11 +53,13 @@ class LogDB {
   static void shutdown_handler();
 
 public:
-  template <typename T, typename... Argtypes>
-  static bool register_type(const char *name, Argtypes... args) {
-    auto obj = std::make_shared<T>(name, args...);
-
+  static bool register_instance(std::shared_ptr<LogBase> obj) {
     return register_obj(obj->get_name(), obj);
+  }
+
+  template <BasedOn_LogBase T, typename... Argtypes>
+  static bool register_type(const char *name, Argtypes... args) {
+    return register_instance(std::make_shared<T>(name, args...));
   };
 
   template <typename T> static std::shared_ptr<T> get(const std::string &name) {
@@ -61,7 +75,8 @@ public:
     return db.end() != db.find(name);
   }
 
-  template <typename T> static std::shared_ptr<T> get(const char *name) {
+  // get_unsafe might return a null shared_ptr
+  template <typename T> static std::shared_ptr<T> get_unsafe(const char *name) {
     std::scoped_lock lock(mutex);
     auto lookup = db.find(name);
 
@@ -79,7 +94,24 @@ public:
                             name);
     }
 
-    return dynamic_pointer_cast<T>(T::get_null_obj());
+    return nullptr;
+  }
+
+  // Get will always return a shared ptr to an object you can call
+  template <typename T> static std::shared_ptr<T> get(const char *name) {
+    auto r = get_unsafe<T>(name);
+
+    if (r) {
+      return r;
+    }
+
+    static_assert(
+        requires {
+          { T::get_null_obj() } -> std::same_as<std::shared_ptr<T> &>;
+        }, "T needs a static get_null_obj() function returning a shared "
+           "pointer to the T nullobj");
+
+    return T::get_null_obj();
   }
 };
 
@@ -117,6 +149,8 @@ public:
   static std::shared_ptr<Serializer> &get_null_obj();
 
   operator bool() { return this != get_null_obj().get(); }
+
+  Priority get_shutdown_priority() override { return Priority::Serializer; }
 };
 
 class Logger : public LogBase {
@@ -136,6 +170,18 @@ public:
   static std::shared_ptr<Logger> &get_null_obj();
 
   operator bool() { return this != get_null_obj().get(); }
+
+  Priority get_shutdown_priority() override { return Priority::Logger; }
+};
+
+// Class a module can inherit e.g. a worker class from to get notified about
+// being shutdown
+class ModuleWorker : public LogBase {
+public:
+  ModuleWorker(const char *my_name) : LogBase(my_name) {}
+  bool is_ready() override { return true; }
+
+  Priority get_shutdown_priority() override { return Priority::ModuleWorker; }
 };
 
 } // namespace LioLi

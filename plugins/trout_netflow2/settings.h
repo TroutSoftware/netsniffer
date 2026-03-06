@@ -20,7 +20,7 @@ class Settings {
   friend Module;
 
   std::string logger_name;
-  std::shared_ptr<LioLi::Logger> logger;
+  std::shared_ptr<LioLi::Logger> logger = LioLi::Logger::get_null_obj();
   bool testmode = false;
   bool do_ping = false;
   bool generate_service_map = false;

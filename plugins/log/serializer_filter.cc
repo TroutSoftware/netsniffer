@@ -202,7 +202,7 @@ class Module : public snort::Module {
     }
 
     auto serializer =
-        LioLi::LogDB::get<Serializer>(config_stack.top().name.c_str());
+        LioLi::LogDB::get_unsafe<Serializer>(config_stack.top().name.c_str());
 
     if (!serializer) {
       snort::ErrorMessage("ERROR: Unable to initialize filter serializer\n");

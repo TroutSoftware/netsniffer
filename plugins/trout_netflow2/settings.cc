@@ -13,7 +13,10 @@
 namespace trout_netflow2 {
 
 LioLi::Logger &Settings::get_logger() {
-  if (!logger || !logger->is_ready()) {
+  assert(logger); // Must always hold a valid object
+
+  // Note, the null-object will evaluate to false
+  if (!(*logger) && LioLi::LogDB::has_registration(logger_name.c_str())) {
     logger = LioLi::LogDB::get<LioLi::Logger>(logger_name.c_str());
   }
   return *logger;

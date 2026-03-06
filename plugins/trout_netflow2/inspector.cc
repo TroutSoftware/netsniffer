@@ -89,9 +89,16 @@ void Inspector::show(const snort::SnortConfig *) const {
 }
 
 Inspector::Inspector(Module *module)
-    : settings(module->get_settings()), cache(Cache::create_cache(settings)) {}
+    : settings(module->get_settings()),
+      cache(Cache::create_cache(settings, module->get_name())) {}
 
-Inspector::~Inspector() {}
+Inspector::~Inspector() {
+  if (!settings->get_logger()) {
+    snort::ErrorMessage("ERROR: Netflow2 asked to use \"%s\" as logger, but it "
+                        "never became available\n",
+                        settings->get_logger_name().c_str());
+  }
+}
 
 snort::Inspector *Inspector::ctor(snort::Module *module) {
   return new Inspector(dynamic_cast<Module *>(module));
