@@ -57,7 +57,7 @@ const snort::Parameter module_params[] = {
     {"extended_console_logging", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will enable more logs to the console of what is happening in the logger"},
     {"output_stats_on_shutdown", snort::Parameter::PT_BOOL, nullptr, "false",
-     "Outputs stats to cerr on shutdown, which will be more acurate than what "
+     "Outputs stats to stderr on shutdown, which will be more acurate than what "
      "is reported in pegs"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
@@ -502,7 +502,7 @@ class Logger : public LioLi::Logger {
         continue; // Will eventually send
       }
 
-      if (extended_console_logging && !queue.empty()) {
+      if (extended_console_logging && queue.empty()) {
         snort::LogMessage(
             "TCP Logger: >%s< worker loop has empty queue, wating...\n",
             get_name());
