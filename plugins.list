@@ -4,6 +4,7 @@ capture_pcap
 common
 dhcp_monitor
 dhcp_option
+discovery
 icmp_logger
 log
 smnp

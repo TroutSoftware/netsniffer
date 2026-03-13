@@ -17,6 +17,7 @@
 #include "dhcp_option/inspector.h"
 #include "dhcp_option/ips_option.h"
 #include "dhcp_option/ips_option_ip_filter.h"
+#include "discovery/plugin_def.h"
 #include "icmp_logger/plugin_def.h"
 #include "log/logger_file.h"
 #include "log/logger_null.h"
@@ -66,6 +67,7 @@ SO_PUBLIC const snort::BaseApi *snort_plugins[] = {
   &serializer_raw::inspect_api.base,
   &serializer_txt::inspect_api.base,
   &smnp::inspect_api.base,
+  &trout::discovery::inspect_api.base,
   &trout_netflow::inspect_api.base,
   &trout_netflow2::inspect_api.base,
   &trout_wizard::inspect_api.base,
