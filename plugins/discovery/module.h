@@ -7,6 +7,7 @@
 // System includes
 
 // Global includes
+#include <memory>
 
 // Local includes
 #include "settings.h"

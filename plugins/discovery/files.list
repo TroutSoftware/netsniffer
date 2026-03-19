@@ -2,4 +2,3 @@ inspector.cc
 module.cc
 pegs.cc
 plugin_def.cc
-settings.cc

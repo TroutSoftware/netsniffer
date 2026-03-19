@@ -10,12 +10,12 @@
 // Global includes
 
 // Local includes
+#include "settings.h"
 
 // Debug includes
 
 namespace trout::discovery {
 class Module;
-class Settings;
 
 class Inspector : public snort::Inspector {
 private:

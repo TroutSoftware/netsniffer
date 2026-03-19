@@ -6,28 +6,27 @@
 // System includes
 
 // Global includes
-#include <log_framework.h>
+
+// TMP template includes, move to global
+#include "parameter_param.h"
+#include "parameter_param_list.h"
 
 // Local includes
 
 // Debug includes
 
 namespace trout::discovery {
-
-class Module;
-
-class Settings {
-  friend Module;
-
-  std::string logger_name;
-  std::shared_ptr<LioLi::Logger> logger;
-  bool testmode;
-
-public:
-  LioLi::Logger &get_logger();
-  bool get_testmode();
-};
-
-} // namespace trout_discovery
+using namespace trout::templates;
+// clang-format off
+using Settings = ParamList< Param<  Name<"first_parameter">,
+                                    Type<ParameterType::Bool>,
+                                    DefaultValue<"true">,
+                                    HelpText<"The first parameter">>,
+                            Param<  Name<"second_parameter">,
+                                    Type<ParameterType::Int>,
+                                    SimpleRange<"1:100">,
+                                    HelpText<"My second parameter">>>;
+// clang-format on
+} // namespace trout::discovery
 
 #endif // #ifndef settings_B8E4C71F

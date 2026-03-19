@@ -14,6 +14,6 @@ namespace trout::discovery {
 
 extern const snort::InspectApi inspect_api;
 
-} // namespace my_plugin_name
+} // namespace trout::discovery
 
 #endif // #ifndef plugin_def_F2D9B4E1
