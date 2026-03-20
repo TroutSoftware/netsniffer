@@ -21,7 +21,7 @@
 // outside of this file)
 namespace {
 
-const char *s_name = "discovery"; 
+const char *s_name = "discovery";
 const char *s_help =
     "Help text for plugin"; // TODO: Replace with help text for your plugin
 
