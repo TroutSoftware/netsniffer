@@ -89,8 +89,6 @@ class Logger : public LioLi::Logger {
   uint64_t dropped_sequence_count =
       0; // Counts the number of packages dropped in this sequence
 
-  bool data_loss = false; // Set to true when we somehow discards data, or are
-                          // unsure if we did
   std::deque<LioLi::Tree> queue;
 
   // Worker thread controls
@@ -99,16 +97,6 @@ class Logger : public LioLi::Logger {
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
   bool worker_running = false; // Worker won't block anymore
-
-  bool had_data_loss(bool clear_flag) override {
-    std::scoped_lock lock(mutex);
-
-    bool old_value = data_loss;
-
-    data_loss &= !clear_flag;
-
-    return old_value;
-  }
 
   std::ofstream open_pipe(std::unique_lock<std::mutex> &lock) {
     assert(serializer_name.length() != 0 && pipe_name.length() != 0);
@@ -190,7 +178,7 @@ class Logger : public LioLi::Logger {
           if (!pipe.good()) {
             snort::LogMessage("LOG: %s unable to write end to pipe, retrying\n",
                               s_name);
-            data_loss = true;
+            data_loss_tracker.rearm();
             pipe.close();
             {
               std::scoped_lock lock(peg_count_mutex);
@@ -215,6 +203,8 @@ class Logger : public LioLi::Logger {
         }
       }
 
+      data_loss_tracker.trigger();
+
       if (!queue.empty()) {
         if (dropped_sequence_count != 0) {
           snort::WarningMessage(
@@ -234,7 +224,7 @@ class Logger : public LioLi::Logger {
           snort::LogMessage(
               "LOG: %s unable to write tree to pipe, skipping and retrying\n",
               s_name);
-          data_loss = true;
+          data_loss_tracker.rearm();
           pipe.close();
           {
             std::scoped_lock lock(peg_count_mutex);
@@ -317,7 +307,7 @@ public:
         {
           std::scoped_lock lock(peg_count_mutex);
           s_peg_counts.overflows++;
-          data_loss = true;
+          data_loss_tracker.rearm();
         }
       }
 

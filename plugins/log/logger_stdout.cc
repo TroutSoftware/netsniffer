@@ -57,8 +57,6 @@ class Logger : public LioLi::Logger {
     return *context.get();
   }
 
-  bool data_loss = true;
-
 public:
   Logger(const char *name) : LioLi::Logger(name) {}
 
@@ -81,14 +79,6 @@ public:
   bool is_ready() override {
     std::scoped_lock lock(mutex);
     return LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_ready();
-  }
-
-  bool had_data_loss(bool clear_flag) override {
-    bool old = data_loss;
-
-    data_loss &= !clear_flag;
-
-    return old;
   }
 
   void operator<<(const LioLi::Tree &&tree) override {

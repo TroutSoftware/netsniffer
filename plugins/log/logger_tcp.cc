@@ -127,9 +127,6 @@ class Logger : public LioLi::Logger {
                               // aren't anything for it to do
   bool terminate = false;     // Set to true if worker loop should be terminated
   bool worker_running = false;
-  bool data_loss =
-      true; // Set to true when we might have lost data, which is out initial
-            // condition as we don't know what happend before our launch
 
   class Socket {
     // NOTE: Calling functions in this class has a lot of sideeffects, use with
@@ -175,21 +172,6 @@ class Logger : public LioLi::Logger {
       return true;
     }
 
-    void close_socket() {
-
-      if (-1 != osocket) {
-        remove_socket_from_epoll(); // Just to be nice, the ::close should also
-                                    // to this
-        ::close(osocket);
-      }
-
-      osocket = -1;
-
-      // We never split an output over multiple connections
-      output_string.clear();
-      output_index = 0;
-    }
-
   public:
     Socket(uint32_t ipv4, uint16_t port, std::string my_name)
         : ipv4(ipv4), port(port), my_name(my_name) {
@@ -223,6 +205,21 @@ class Logger : public LioLi::Logger {
       add_socket_to_epoll();
 
       return true;
+    }
+
+    void close_socket() {
+
+      if (-1 != osocket) {
+        remove_socket_from_epoll(); // Just to be nice, the ::close should also
+                                    // to this
+        ::close(osocket);
+      }
+
+      osocket = -1;
+
+      // We never split an output over multiple connections
+      output_string.clear();
+      output_index = 0;
     }
 
     operator bool() const { return (-1 != osocket); }
@@ -386,9 +383,9 @@ class Logger : public LioLi::Logger {
       lock.lock();
     }
 
-    std::chrono::time_point<clock>
-        next_timeout; // Keeps track of when we should restart serializer
-                      // context
+    std::chrono::time_point<clock> next_timeout =
+        std::chrono::time_point<clock>::max(); // Keeps track of when we should
+                                               // restart serializer context
     std::shared_ptr<LioLi::Serializer::Context> context;
     Socket socket(ipv4, port, get_name());
 
@@ -400,18 +397,13 @@ class Logger : public LioLi::Logger {
         // A new connection should always start a new context
         context.reset();
 
-        if (extended_console_logging && !queue.empty()) {
-          snort::LogMessage("TCP Logger: >%s< worker loop discarding queue due "
-                            "to socket restart\n",
-                            get_name());
-        }
-
-        // Wipe what we have so far
-        queue.clear();
-
-        // This might set the data_loss too frequently, but it's only a help,
-        // not a promise
-        data_loss = true;
+        // We have lost the context, and might have data loss here.
+		//
+        // We use the trigger mechanism of the dirty flag to ensure we only
+        // have one dirty event for each established connection
+        // (e.g. multiple failures without a success, shouldn't generate
+        // multiple data loss events
+        data_loss_tracker.rearm();
       }
 
       lock.unlock();
@@ -426,6 +418,11 @@ class Logger : public LioLi::Logger {
                               get_name());
           goto while_end;
         }
+        // If we are at a timeout, and socket isn't writeable, discard
+        // connection
+        if (next_timeout <= clock::now()) {
+          socket.close_socket();
+        }
         continue; // socket is not ready/might need to be recreated
       case -1:
         goto while_end; // unhandled error, exit loop
@@ -437,6 +434,10 @@ class Logger : public LioLi::Logger {
         snort::LogMessage("TCP Logger: >%s< worker loop socket writeable\n",
                           get_name());
       }
+
+      // If the socket was armed, now is the time to indicate data loss
+      // as we have a writeable socket ready
+      data_loss_tracker.trigger();
 
       // Flush what we have stored
       bool has_more = !queue.empty();
@@ -452,20 +453,26 @@ class Logger : public LioLi::Logger {
                   // closed or network queue full
       }
 
-      // Ensure we have a valid context
-      if (next_timeout <= clock::now() || !context) {
+      // If we come here we know the socket send buffer is empty
 
-        if (context) {
-          if (extended_console_logging && !queue.empty()) {
-            snort::LogMessage("TCP Logger: >%s< worker loop context reset\n",
-                              get_name());
-          }
-
+      // Check if we are doing a restart
+      if (next_timeout <= clock::now() && context) {
+        // In first step of the restart the context isn't closed
+        if (!context->is_closed()) {
+          // Try to send the close
           socket.queue(context->close());
-          context.reset();
-          continue; // Will eventually reach the flush
-        }
 
+        } else {
+          // In second step of the restart we close the socket, so a new
+          // connection can be made, a side effect of this is that the context
+          // will be removed
+          socket.close_socket();
+        }
+        continue; // Loop again
+      }
+
+      // Ensure we have a valid context
+      if (!context) {
         if (extended_console_logging && !queue.empty()) {
           snort::LogMessage("TCP Logger: >%s< worker loop context create\n",
                             get_name());
@@ -571,15 +578,6 @@ public:
            LioLi::LogDB::get<LioLi::Serializer>(serializer_name)->is_ready();
   }
 
-  bool had_data_loss(bool clear_flag) override {
-    std::scoped_lock lock(mutex);
-    bool old_value = data_loss;
-
-    data_loss &= !clear_flag;
-
-    return old_value;
-  }
-
   void operator<<(const LioLi::Tree &&tree) override {
     {
       if (extended_console_logging) {
@@ -597,7 +595,8 @@ public:
                                 get_name());
         }
         queue.pop_front();
-        data_loss = true;
+        data_loss_tracker
+            .rearm(); // Indicate data was lost next time we can write
         {
           std::scoped_lock lock(peg_count_mutex);
           s_peg_counts.overflows++;

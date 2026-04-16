@@ -291,7 +291,7 @@ void Cache::dump() {
   }
 
   LioLi::Tree buf;
-  uint32_t sum_flow_sets;
+  uint32_t sum_flow_sets = 0;
   auto &logger = settings->get_logger();
 
   if (!logger.is_ready()) {
@@ -301,13 +301,36 @@ void Cache::dump() {
     return;
   }
 
-  bool resend = logger.had_data_loss();
+  bool resend =
+      logger_loss_tracker || logger.has_lost_data(logger_loss_tracker);
+  logger_loss_tracker.clear_dirty();
+
+  // Potentially send service map
+  if (settings->get_generate_service_map() &&
+      (!service_map.is_fully_flushed() || resend)) {
+
+    if (settings->get_extended_console_logging()) {
+      snort::LogMessage("Netflow2 dumping service maps\n");
+    }
+
+    uint32_t sm_flow_sets = service_map.dump(buf);
+
+    sum_flow_sets += sm_flow_sets;
+
+    assert(sum_flow_sets >=
+           sm_flow_sets); // TODO: Handle overflow instead of crashing on it
+  }
 
   // Generate data carrying flow sets
   {
     std::scoped_lock lock(mutex);
 
-    sum_flow_sets = DataFlowSet::dump(buf, cache);
+    uint32_t data_flow_sets = DataFlowSet::dump(buf, cache);
+
+    sum_flow_sets += data_flow_sets;
+
+    assert(sum_flow_sets >=
+           data_flow_sets); // TODO: Handle overflow instead of crashing on it
 
     auto curent_cache_size = cache.size();
 
@@ -332,20 +355,6 @@ void Cache::dump() {
     if (settings->get_extended_console_logging()) {
       snort::LogMessage("Netflow2 done cleanup of abandoned cache entries\n");
     }
-  }
-  if (settings->get_generate_service_map() &&
-      (!service_map.is_fully_flushed() || resend)) {
-
-    if (settings->get_extended_console_logging()) {
-      snort::LogMessage("Netflow2 dumping service maps\n");
-    }
-
-    uint32_t sm_flow_sets = service_map.dump(buf);
-
-    sum_flow_sets += sm_flow_sets;
-
-    assert(sum_flow_sets >=
-           sm_flow_sets); // TODO: Handle overflow instead of crashing on it
   }
 
   auto now = Common::TestableTime::now<std::chrono::system_clock>(

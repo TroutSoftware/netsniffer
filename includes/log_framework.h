@@ -12,6 +12,9 @@
 #include <mutex>
 #include <string>
 
+// Global includes
+#include <trout_utils.h>
+
 // Local includes
 #include "lioli.h"
 
@@ -154,6 +157,10 @@ public:
 };
 
 class Logger : public LogBase {
+protected:
+  // All loggers that might have dataloss, e.i. might drop data given to
+  // it, either directly or indirectly must use the data loss tracker
+  Common::DirtyTracker data_loss_tracker;
 
 public:
   Logger(const char *my_name) : LogBase(my_name) {}
@@ -165,7 +172,13 @@ public:
   // shutdown
   virtual void flush() {};
 
-  virtual bool had_data_loss(bool clear_flag = true) = 0;
+  //  Do not rely on actuall functions of the DataLossTracker
+  using DataLossTracker = Common::DirtyTracker;
+  bool has_lost_data(DataLossTracker &df) {
+    df.clear_dirty();
+    df.sync_to(data_loss_tracker);
+    return df;
+  }
 
   static std::shared_ptr<Logger> &get_null_obj();
 

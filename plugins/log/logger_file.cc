@@ -66,8 +66,6 @@ class Logger : public LioLi::Logger {
   std::shared_ptr<LioLi::Serializer::Context> context;
   std::ofstream ofile;
 
-  bool data_loss = true;
-
   LioLi::Serializer::Context &get_context() {
     if (!context) {
       auto serializer =
@@ -116,16 +114,6 @@ public:
     }
   }
 
-  bool had_data_loss(bool clear_flag) override {
-    std::scoped_lock lock(mutex);
-
-    bool old_value = data_loss;
-
-    data_loss &= !clear_flag;
-
-    return old_value;
-  }
-
   bool is_ready() override {
     return get_ofile().good() &&
            LioLi::LogDB::get<LioLi::Serializer>(settings->serializer_name)
@@ -140,10 +128,12 @@ public:
     ofile << get_context().serialize(std::move(tree));
 
     if (!ofile.good()) {
-      data_loss = true;
+      data_loss_tracker.rearm();
+      // data_loss = true;
       s_peg_counts.write_errors++;
     } else {
       s_peg_counts.logs_out++;
+      data_loss_tracker.trigger();
     }
   }
 };

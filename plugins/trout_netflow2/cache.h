@@ -39,6 +39,8 @@ class Cache : public std::enable_shared_from_this<Cache>,
   template <uint16_t fixed_string_size, int key> friend class ServiceMapE;
 
   std::shared_ptr<Settings> settings;
+  LioLi::Logger::DataLossTracker
+      logger_loss_tracker; // Object tracking if the logger has discarded data
   Common::Random random;
 
   class ServiceMap {

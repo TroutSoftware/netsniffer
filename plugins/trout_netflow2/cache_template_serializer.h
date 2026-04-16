@@ -529,6 +529,12 @@ public:
         // Count the flowset
         flowsets_written++;
 
+        // Break if we have more flowsets than what fits, the rest will be
+        // written in the next iteration
+        if (flowsets_written == UINT32_MAX) {
+          break;
+        }
+
         // Reset the out_buffer
         out_buffer.clear();
       }

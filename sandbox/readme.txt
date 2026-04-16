@@ -2,6 +2,8 @@ This folder contains various sandbox projects.
 
 A sandbox project, in this context, is something that is quickly thrown together to try stuff out.
 
+NOTE: For the programs without a make file (ie just a .cpp file), it should be sufficient to just type "make [name of .cpp file]"
+
 Contents:
 
 Programs for testing/learning about pipes:

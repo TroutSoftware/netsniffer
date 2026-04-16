@@ -32,8 +32,6 @@ public:
 
   ~Logger() {}
 
-  bool had_data_loss(bool) override { return false; }
-
   bool is_ready() override { return true; } // Null logger is always ready
 
   void operator<<(const LioLi::Tree &&) override {}
