@@ -40,6 +40,10 @@ uint32_t Settings::get_max_cache_size() { return cache_size; }
 
 uint32_t Settings::get_flush_interval_ms() { return flush_interval_ms; }
 
+uint32_t Settings::get_template_resend_interval_s() {
+  return template_resend_interval_s;
+}
+
 uint32_t Settings::get_source_id() { return source_id; }
 
 std::string Settings::get_logger_name() { return logger_name; }

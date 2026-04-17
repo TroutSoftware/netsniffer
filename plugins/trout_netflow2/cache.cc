@@ -301,9 +301,31 @@ void Cache::dump() {
     return;
   }
 
+  // Get the current time
+  auto now = Common::TestableTime::now<std::chrono::system_clock>(
+      settings->get_testmode());
+  uint32_t now_in_s =
+      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
+          .count();
+
+  auto now_steady = Common::TestableTime::now<std::chrono::steady_clock>(
+      settings->get_testmode());
+  uint32_t now_in_s_steady = std::chrono::duration_cast<std::chrono::seconds>(
+                                 now_steady.time_since_epoch())
+                                 .count();
+
   bool resend =
       logger_loss_tracker || logger.has_lost_data(logger_loss_tracker);
   logger_loss_tracker.clear_dirty();
+
+  if (settings->get_template_resend_interval_s() != 0) {
+    resend |= next_template_at_s < now_in_s_steady;
+
+    if (resend) {
+      next_template_at_s =
+          now_in_s_steady + settings->get_template_resend_interval_s();
+    }
+  }
 
   // Potentially send service map
   if (settings->get_generate_service_map() &&
@@ -357,12 +379,6 @@ void Cache::dump() {
     }
   }
 
-  auto now = Common::TestableTime::now<std::chrono::system_clock>(
-      settings->get_testmode());
-  uint32_t now_in_s =
-      std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch())
-          .count();
-
   // Transmit templates if anything happened to the connection
   if (resend) {
     if (settings->get_extended_console_logging()) {
@@ -412,10 +428,11 @@ void Cache::dump() {
     ping_count++;
 
     if (settings->get_extended_console_logging() &&
-        next_screen_ping_at_s <= now_in_s) {
+        next_screen_ping_at_s <= now_in_s_steady) {
+      // Note, we use system_clock for the timestamp
       snort::LogMessage("Netflow2 ping %u at %u\n", ping_count, now_in_s);
 
-      next_screen_ping_at_s = now_in_s + 10;
+      next_screen_ping_at_s = now_in_s_steady + 10;
     }
   }
 

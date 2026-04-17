@@ -398,7 +398,7 @@ class Logger : public LioLi::Logger {
         context.reset();
 
         // We have lost the context, and might have data loss here.
-		//
+        //
         // We use the trigger mechanism of the dirty flag to ensure we only
         // have one dirty event for each established connection
         // (e.g. multiple failures without a success, shouldn't generate

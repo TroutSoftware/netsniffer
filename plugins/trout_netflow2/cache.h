@@ -134,6 +134,9 @@ class Cache : public std::enable_shared_from_this<Cache>,
   uint32_t next_screen_ping_at_s = 0;
   uint32_t ping_count = 0;
 
+  // Used to keep track of template resends
+  uint32_t next_template_at_s = 0;
+
   // Dumps the cache to the logger
   void dump();
 

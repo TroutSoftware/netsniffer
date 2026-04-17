@@ -28,6 +28,7 @@ class Settings {
   uint8_t undefined_ip_protocol_number;
   uint32_t cache_size;
   uint32_t flush_interval_ms;
+  uint32_t template_resend_interval_s;
   uint32_t source_id;
 
 public:
@@ -39,6 +40,7 @@ public:
   uint8_t get_undefined_ip_protocol_number();
   uint32_t get_max_cache_size();
   uint32_t get_flush_interval_ms();
+  uint32_t get_template_resend_interval_s();
   uint32_t get_source_id();
   std::string get_logger_name();
 };

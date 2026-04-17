@@ -27,9 +27,13 @@ const snort::Parameter module_params[] = {
      "The max number of simultaneous conections that can be handled at any "
      "given time"},
     {"flush_interval_ms", snort::Parameter::PT_INT, "10:100000", "100",
-     "Max target interval for flushing the cache to the logger, might "
-     "flush sooner if cache is getting full, and might be delayed on a loaded "
-     "system"},
+     "Max target interval in ms for flushing the cache to the logger after "
+     "last flush, might flush sooner if cache is getting full, and might be "
+     "delayed on a loaded system"},
+    {"template_resend_interval_s", snort::Parameter::PT_INT, "0:86400", "5",
+     "How often templates are resend in s.  The templates will be generated "
+     "with the following cache flush.  Templates won't be generated at regular "
+     "intervals if value is set to 0"},
     {"generate_service_map", snort::Parameter::PT_BOOL, nullptr, "false",
      "Will add service map generation to the output"},
     {"source_id", snort::Parameter::PT_INT, "0:4294967295", "0",
@@ -65,6 +69,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->cache_size = val.get_uint32();
   } else if (val.is("flush_interval_ms")) {
     settings->flush_interval_ms = val.get_uint32();
+  } else if (val.is("template_resend_interval_s")) {
+    settings->template_resend_interval_s = val.get_uint32();
   } else if (val.is("source_id")) {
     settings->source_id = val.get_uint32();
   } else if (val.is("do_ping")) {
