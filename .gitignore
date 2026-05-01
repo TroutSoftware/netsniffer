@@ -1,11 +1,15 @@
 p/
-.redo/
+.redo/*
 *.did
 .do_built
 .do_built.dir/
 envrc
 snort-modules.tar.gz
+.lldb
 
 # packaging info
 *.deb
 deb/snort-trout_*
+
+# Things we want to keep
+!.redo/.anchor

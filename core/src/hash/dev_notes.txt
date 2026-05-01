@@ -1,0 +1,47 @@
+Message digests and hash maps/table implementations:
+
+* md5: open source implementation based on Colin Plumb's code.
+
+* sha2:  open source implementation by Aaron Gifford.
+
+* ghash: Generic hash table
+
+* xhash: Hash table with supports memcap and automatic memory recovery
+  when out of memory.
+
+* zhash: zero runtime allocations/preallocated hash table.
+
+Use of the above hashing utilities is primarily for use by pre-existing code.
+For new code, use standard template library and C++11 features.
+
+For thread-safe shared caches:
+
+* lru_cache_shared: A thread-safe LRU map.
+
+09/25/2023
+
+A vector of pointers to HashLruCache objects, `vector<HashLruCache*>`, 
+has been introduced to manage multiple types of LRUs within xhash. 
+This enhancement facilitates more sophisticated handling of varied 
+data types within the same xhash. With this advancement, greater 
+control over data pruning in the LRU is achieved, depending on the 
+type of data. This feature is valuable when there's a necessity to 
+retain certain data in the LRU for durations longer or shorter than 
+other data. The utilization of this feature is optional. 
+During initialization, the number of LRUs to be created can be specified. 
+If not specified, a single LRU will be created by default.
+
+Segmented Shared LRU Cache
+The SegmentedLruCache class is a layer built atop the existing 
+LruCacheShared class, designed to mitigate bottlenecks in 
+multi-threaded environments, thereby bolstering scalability. 
+Without altering the core caching logic, it divides the cache 
+into multiple segments, defaulting to four. This structure drastically 
+reduces contention among threads, allowing for improved performance. 
+The segmented approach is generic and configurable, enabling easy 
+adaptation for different modules while preserving the fundamental 
+LRU cache behavior. Through this strategic modification, 
+the pathway for enhanced scalability and future advancements is 
+significantly broadened, making the caching mechanism more robust 
+and adaptable to evolving computational demands.
+check host_attributes.cc for example usage.

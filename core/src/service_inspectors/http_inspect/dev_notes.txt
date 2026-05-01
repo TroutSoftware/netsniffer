@@ -1,0 +1,67 @@
+The HTTP inspector (HI) is divided into two major parts. The HttpStreamSplitter (splitter) accepts
+TCP payload data from Stream and subdivides it into message sections. HttpInspect (inspector)
+processes individual message sections.
+
+Splitter finish() is called by Stream when the TCP connection closes (including pruning).
+It serves several specialized purposes in cases where the HTTP message is truncated (ends
+unexpectedly).
+
+The nature of splitting allows packets to be forwarded before they are aggregated into a message
+section and inspected. This may lead to problems when the target consumes a partial message
+body even though the end of the message body was never received because Snort blocked it.
+Partial inspection was developed to solve this problem.
+
+HttpFlowData is a data class representing all HI information relating to a flow. It serves as
+persistent memory between invocations of HI by the framework. It also glues together the inspector,
+the client-to-server splitter, and the server-to-client splitter which pass information through the
+flow data.
+
+An HttpTransaction is a container that keeps all the sections of a message together and associates
+the request message with the response message. Transactions may be organized into pipelines when an
+HTTP pipeline is present. The current transaction and any pipeline live in the flow data. A
+transaction may have only a request because the response is not (yet) received or only a response
+because the corresponding request is unknown or unavailable.
+
+The attach_my_transaction() factory method contains all the logic that makes this work. There are
+many corner cases. Don't mess with it until you fully understand it.
+
+HI implements flow depth using the request_depth and response_depth parameters. HI seeks to provide
+a consistent experience to detection by making flow depth independent of factors that a sender
+could easily manipulate, such as header length, chunking, compression, and encodings. The maximum
+depth is computed against normalized message body data.
+
+==== Partial inspection
+
+include::dev_notes_partial_inspection.txt[]
+
+==== Message section
+
+include::dev_notes_message_section.txt[]
+
+==== Field class
+
+include::dev_notes_field_class.txt[]
+
+==== Support for custom xff type headers
+
+include::dev_notes_hff_headers.txt[]
+
+==== URI normalization
+
+include::dev_notes_uri_norm.txt[]
+
+==== JS normalization
+
+include::dev_notes_js_norm.txt[]
+
+==== Reassembling chunked message
+
+include::dev_notes_chunked_processing.txt[]
+
+==== MIME inspection
+
+include::dev_notes_mime_inspection.txt[]
+
+==== HI test tool usage
+
+include::dev_notes_test_tool.txt[]

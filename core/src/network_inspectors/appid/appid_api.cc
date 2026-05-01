@@ -1,0 +1,287 @@
+//--------------------------------------------------------------------------
+// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2005-2013 Sourcefire, Inc.
+//
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of the GNU General Public License Version 2 as published
+// by the Free Software Foundation.  You may not use, modify or distribute
+// this program under any other version of the GNU General Public License.
+//
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+//--------------------------------------------------------------------------
+
+// appid_api.cc author Sourcefire Inc.
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "appid_api.h"
+
+#include "detection/detection_engine.h"
+#include "framework/inspector.h"
+#include "managers/inspector_manager.h"
+#include "utils/util.h"
+
+#include "appid_inspector.h"
+#include "appid_module.h"
+#include "appid_session.h"
+#include "appid_session_api.h"
+#include "app_info_table.h"
+#include "service_plugins/service_ssl.h"
+#include "pub_sub/shadowtraffic_aggregator.h"
+#include "tp_appid_session_api.h"
+
+using namespace snort;
+
+namespace snort
+{
+AppIdApi appid_api;
+}
+
+AppIdSession* AppIdApi::get_appid_session(const Flow& flow)
+{
+    AppIdSession* asd = (AppIdSession*)flow.get_flow_data(AppIdSession::inspector_id);
+
+    return asd;
+}
+
+const char* AppIdApi::get_application_name(AppId app_id, OdpContext& odp_ctxt)
+{
+    return odp_ctxt.get_app_info_mgr().get_app_name(app_id);
+}
+
+const char* AppIdApi::get_application_name(AppId app_id, const Flow& flow)
+{
+    const char* app_name = nullptr;
+    AppIdSession* asd = get_appid_session(flow);
+    if (asd)
+    {
+        // Skip sessions using old odp context after odp reload
+        if (!pkt_thread_odp_ctxt or
+            pkt_thread_odp_ctxt->get_version() != asd->get_odp_ctxt_version())
+            return nullptr;
+
+        if (app_id == APP_ID_UNKNOWN)
+            return "unknown";
+        app_name = asd->get_odp_ctxt().get_app_info_mgr().get_app_name(app_id);
+    }
+
+    return app_name;
+}
+
+const char* AppIdApi::get_application_name(const Flow& flow, bool from_client)
+{
+    const char* app_name = nullptr;
+    AppIdSession* asd = get_appid_session(flow);
+    if (asd)
+    {
+        // Skip sessions using old odp context after odp reload
+        if (!pkt_thread_odp_ctxt or
+            pkt_thread_odp_ctxt->get_version() != asd->get_odp_ctxt_version())
+            return nullptr;
+
+        AppId appid = asd->pick_ss_payload_app_id();
+        if (appid <= APP_ID_NONE)
+            appid = asd->pick_ss_misc_app_id();
+        if (!appid and from_client)
+        {
+            appid = asd->pick_ss_client_app_id();
+            if (!appid)
+                appid = asd->pick_service_app_id();
+        }
+        else if (!appid)
+        {
+            appid = asd->pick_service_app_id();
+            if (!appid)
+                appid = asd->pick_ss_client_app_id();
+        }
+        if (appid > APP_ID_NONE && appid < SF_APPID_MAX)
+            app_name = asd->get_odp_ctxt().get_app_info_mgr().get_app_name(appid);
+
+    }
+
+    return app_name;
+}
+
+AppId AppIdApi::get_application_id(const char* appName, const AppIdContext& ctxt)
+{
+    return ctxt.get_odp_ctxt().get_app_info_mgr().get_appid_by_name(appName);
+}
+
+bool AppIdApi::ssl_app_group_id_lookup(Flow* flow, const char* server_name,
+    const char* first_alt_name, const char* common_name, const char* org_unit,
+    bool sni_mismatch, AppId& service_id, AppId& client_id, AppId& payload_id)
+{
+    AppIdSession* asd = nullptr;
+    service_id = APP_ID_NONE;
+    client_id = APP_ID_NONE;
+    payload_id = APP_ID_NONE;
+
+    if (!pkt_thread_odp_ctxt)
+        return false;
+
+    if (flow)
+        asd = get_appid_session(*flow);
+
+    if (asd)
+    {
+        // Skip detection for sessions using old odp context after odp reload
+        if (pkt_thread_odp_ctxt->get_version() != asd->get_odp_ctxt_version())
+            return false;
+
+        AppidChangeBits change_bits;
+        if (!asd->tsession)
+            asd->tsession = new TlsSession();
+        
+        if (sni_mismatch)
+        {
+            asd->tsession->process_sni_mismatch();
+            asd->scan_flags |= SCAN_SPOOFED_SNI_FLAG;
+        }   
+
+        if (org_unit)
+        {
+            auto org_unit_len = strlen(org_unit);
+            if (org_unit_len > 0)
+            {
+                asd->tsession->set_tls_org_unit(org_unit, org_unit_len);
+                asd->scan_flags |= SCAN_SSL_ORG_UNIT_FLAG;
+            }
+        }
+
+        if (server_name)
+        {
+            auto sni_len = strlen(server_name);
+            if (sni_len > 0)
+            {
+                asd->tsession->set_tls_sni(server_name, sni_len);
+                if (!sni_mismatch)
+                    asd->scan_flags |= SCAN_SSL_HOST_FLAG;
+            }
+        }
+
+        if (first_alt_name)
+        {
+            auto first_alt_name_len = strlen(first_alt_name);
+            if (first_alt_name_len > 0)
+            {
+                asd->tsession->set_tls_first_alt_name(first_alt_name, first_alt_name_len);
+                asd->scan_flags |= SCAN_SSL_ALT_NAME;
+            }
+        }
+
+        if (common_name)
+        {
+            auto common_name_len = strlen(common_name);
+            if (common_name_len > 0)
+            {
+                asd->tsession->set_tls_cname(common_name, common_name_len);
+                asd->scan_flags |= SCAN_SSL_CERTIFICATE_FLAG;
+                asd->tsession->set_tls_handshake_done();
+            }
+        }
+
+        asd->scan_flags |= SCAN_CERTVIZ_ENABLED_FLAG;
+
+        asd->examine_ssl_metadata(change_bits, true);
+        service_id = asd->pick_service_app_id();
+        client_id = asd->pick_ss_client_app_id();
+        payload_id = asd->pick_ss_payload_app_id();
+        
+        asd->set_ss_application_ids(client_id, payload_id, change_bits);
+
+        Packet* p = DetectionEngine::get_current_packet();
+        assert(p);
+        asd->publish_appid_event(change_bits, *p);
+    }
+    else
+    {
+        HostPatternMatchers& host_matchers = pkt_thread_odp_ctxt->get_host_matchers();
+
+        if (server_name and !sni_mismatch)
+            host_matchers.scan_hostname((const uint8_t*)server_name, strlen(server_name),
+                client_id, payload_id);
+        if (first_alt_name and client_id == APP_ID_NONE and payload_id == APP_ID_NONE)
+            host_matchers.scan_hostname((const uint8_t*)first_alt_name, strlen(first_alt_name),
+                client_id, payload_id);
+        if (common_name and client_id == APP_ID_NONE and payload_id == APP_ID_NONE)
+            host_matchers.scan_cname((const uint8_t*)common_name, strlen(common_name), client_id,
+                payload_id);
+        if (org_unit and client_id == APP_ID_NONE and payload_id == APP_ID_NONE)
+            host_matchers.scan_cname((const uint8_t*)org_unit, strlen(org_unit), client_id,
+                payload_id);
+    }
+
+    if (service_id != APP_ID_NONE or client_id != APP_ID_NONE or payload_id != APP_ID_NONE)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+const AppIdSessionApi* AppIdApi::get_appid_session_api(const Flow& flow) const
+{
+    StashGenericObject* item;
+    return flow.get_attr(STASH_APPID_DATA, item) ? static_cast<AppIdSessionApi*>(item) : nullptr;
+}
+
+bool AppIdApi::is_inspection_needed(const Inspector& inspector) const
+{
+    AppIdInspector* appid_inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, true);
+
+    if (!appid_inspector)
+        return false;
+
+    SnortProtocolId id = inspector.get_service();
+    const AppIdConfig& config = appid_inspector->get_config();
+    if (id == config.snort_proto_ids[PROTO_INDEX_HTTP2] or id == config.snort_proto_ids[PROTO_INDEX_SSH]
+	    or id == config.snort_proto_ids[PROTO_INDEX_CIP])
+        return true;
+
+    return false;
+}
+
+const char* AppIdApi::get_appid_detector_directory() const
+{
+    AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, true);
+    if (!inspector)
+        return "";
+
+    return inspector->get_config().app_detector_dir;
+}
+
+void AppIdApi::reset_appid_cpu_profiler_stats()
+{
+    AppIdInspector* inspector = (AppIdInspector*) InspectorManager::get_inspector(MOD_NAME);
+    if (!inspector)
+        return;
+    const AppIdContext& ctxt = inspector->get_ctxt();
+    OdpContext& odp_ctxt = ctxt.get_odp_ctxt();
+    odp_ctxt.get_appid_cpu_profiler_mgr().cleanup_appid_cpu_profiler_table();
+}
+
+void AppIdApi::update_shadow_traffic_status(bool status)
+{
+   AppIdInspector* inspector = (AppIdInspector*) InspectorManager::get_inspector(MOD_NAME);
+    if (!inspector)
+        return;
+    const AppIdContext& ctxt = inspector->get_ctxt();
+    OdpContext& odp_ctxt = ctxt.get_odp_ctxt();
+    odp_ctxt.set_appid_shadow_traffic_status(status);
+}
+
+void AppIdApi::set_ssl_certificate_key(const Flow& flow, const std::string& cert_key)
+{
+    AppIdSession* asd = get_appid_session(flow);
+    if (asd != nullptr and asd->get_odp_ctxt().get_appid_shadow_traffic_status() and !cert_key.empty())
+        asd->set_cert_key(cert_key);
+}

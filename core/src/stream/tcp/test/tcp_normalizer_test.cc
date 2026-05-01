@@ -1,0 +1,231 @@
+//--------------------------------------------------------------------------
+// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+//
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of the GNU General Public License Version 2 as published
+// by the Free Software Foundation.  You may not use, modify or distribute
+// this program under any other version of the GNU General Public License.
+//
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+//--------------------------------------------------------------------------
+
+// tcp_normalizer_test.cc author Davis McPherson <davmcphe@cisco.com>
+// unit test main
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "stream/tcp/tcp_module.h"
+#include "stream/tcp/tcp_normalizers.h"
+#include "protocols/tcp_options.h"
+#include "stream/tcp/tcp_defs.h"
+
+#include <CppUTest/CommandLineTestRunner.h>
+#include <CppUTest/TestHarness.h>
+#include <CppUTestExt/MockSupport.h>
+
+using namespace snort;
+
+NormMode mockNormMode = NORM_MODE_ON;
+bool norm_enabled = true;
+THREAD_LOCAL TcpStats tcpStats;
+THREAD_LOCAL SnortConfig* snort_conf = nullptr;
+
+class FlowMock : public Flow
+{
+public:
+
+};
+
+TcpSession::TcpSession( Flow* ) : Session( flow ) { }
+TcpSession::~TcpSession() = default;
+bool TcpSession::setup(Packet*){ return true; }
+void TcpSession::update_direction(char, SfIp const*, unsigned short) { }
+int TcpSession::process(Packet*) { return 0; }
+void TcpSession::restart(Packet*) { }
+bool TcpSession::precheck(Packet*) { return false; }
+void TcpSession::clear(){ }
+void TcpSession::cleanup(Packet* = nullptr){ }
+bool TcpSession::add_alert(Packet*, unsigned int, unsigned int){ return true; }
+bool TcpSession::check_alerted(Packet*, unsigned int, unsigned int){ return true; }
+int TcpSession::update_alert(Packet*, unsigned int, unsigned int, unsigned int, unsigned int){ return 0; }
+void TcpSession::flush_client(Packet*){ }
+void TcpSession::flush_server(Packet*){ }
+void TcpSession::flush_talker(Packet*){ }
+void TcpSession::flush_listener(Packet*){ }
+void TcpSession::set_splitter(bool, StreamSplitter*){ }
+StreamSplitter* TcpSession::get_splitter(bool){ return nullptr; }
+void TcpSession::set_extra_data(Packet*, unsigned int){ }
+bool TcpSession::is_sequenced(unsigned char) const { return true; }
+bool TcpSession::are_packets_missing(unsigned char) const { return false; }
+uint8_t  TcpSession::missing_in_reassembled(unsigned char) const { return 0; }
+
+class TcpSessionMock : public TcpSession
+{
+public:
+    TcpSessionMock( Flow* flow ) : TcpSession( flow ), client( true ), server( false ) { }
+    ~TcpSessionMock() = default;
+
+    TcpStreamTracker client;
+    TcpStreamTracker server;
+};
+
+class Active
+{
+public:
+    void drop_packet(const Packet*, bool force = false) { }
+};
+
+bool Normalize_IsEnabled(NormFlags )
+{
+    return norm_enabled;
+}
+
+NormMode Normalize_GetMode(NormFlags )
+{
+    if( norm_enabled )
+        return mockNormMode;
+    else
+        return NORM_MODE_TEST;
+}
+
+TEST_GROUP(tcp_normalizers)
+{
+};
+
+TEST(tcp_normalizers, norm_policy)
+{
+    Normalizer::Policy norm_policy;
+    Flow* flow = new Flow;
+    TcpSession* session = new TcpSessionMock( flow );
+    TcpNormalizerState tns;
+
+    for( norm_policy = Normalizer::Policy::FIRST; norm_policy < Normalizer::Policy::MAX_NORM_POLICY; ++norm_policy )
+    {
+        TcpNormalizer* normalizer = TcpNormalizerFactory::create(
+            tns, norm_policy, session, session->client, session->server);
+
+        CHECK( normalizer.get_norm_policy(tns) == norm_policy );
+    }
+
+    delete flow;
+    delete session;
+}
+
+TEST(tcp_normalizers, paws_fudge_config)
+{
+    Normalizer::Policy norm_policy;
+    Flow* flow = new Flow;
+    TcpSession* session = new TcpSessionMock( flow );
+    TcpNormalizerState tns;
+
+    for( norm_policy = Normalizer::Policy::FIRST; norm_policy < Normalizer::Policy::MAX_NORM_POLICY; ++norm_policy )
+    {
+        TcpNormalizer* normalizer = TcpNormalizerFactory::create(
+            tns, norm_policy, session, session->client, session->server);
+
+        switch ( norm_policy )
+        {
+        case Normalizer::Policy::OS_LINUX:
+            CHECK( normalizer.get_paws_ts_fudge(tns) == 1 );
+            break;
+
+        default:
+            CHECK( normalizer.get_paws_ts_fudge(tns) == 0 );
+            break;
+        }
+    }
+
+    delete flow;
+    delete session;
+}
+
+TEST(tcp_normalizers, paws_drop_zero_ts_config)
+{
+    Normalizer::Policy norm_policy;
+    Flow* flow = new Flow;
+    TcpSession* session = new TcpSessionMock( flow );
+    TcpNormalizerState tns;
+
+    for( norm_policy = Normalizer::Policy::FIRST; norm_policy < Normalizer::Policy::MAX_NORM_POLICY; ++norm_policy )
+    {
+        TcpNormalizer* normalizer = TcpNormalizerFactory::create(
+            tns, norm_policy, session, session->client, session->server );
+
+        switch ( norm_policy )
+        {
+        case Normalizer::Policy::OS_OLD_LINUX:
+        case Normalizer::Policy::OS_SOLARIS:
+        case Normalizer::Policy::OS_WINDOWS:
+        case Normalizer::Policy::OS_WINDOWS2K3:
+        case Normalizer::Policy::OS_VISTA:
+            CHECK( !normalizer.is_paws_drop_zero_ts(tns) );
+            break;
+
+        default:
+            CHECK( normalizer.is_paws_drop_zero_ts(tns) );
+            break;
+        }
+    }
+
+    delete flow;
+    delete session;
+}
+
+TEST(tcp_normalizers, norm_options_enabled)
+{
+    Normalizer::Policy norm_policy;
+    Flow* flow = new Flow;
+    TcpSession* session = new TcpSessionMock( flow );
+
+    norm_enabled = true;
+    for( norm_policy = Normalizer::Policy::FIRST; norm_policy < Normalizer::Policy::MAX_NORM_POLICY; ++norm_policy )
+    {
+        TcpNormalizerState tns;
+        TcpNormalizer* normalizer = TcpNormalizerFactory::create(
+            tns, norm_policy, session, session->client, session->server);
+
+        CHECK( normalizer.get_opt_block(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_strip_ecn(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_tcp_block(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_trim_syn(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_trim_rst(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_trim_mss(tns) == NORM_MODE_ON );
+        CHECK( normalizer.get_trim_win(tns) == NORM_MODE_ON );
+        CHECK( normalizer.is_tcp_ips_enabled(tns) );
+    }
+
+    norm_enabled = false;
+    for( norm_policy = Normalizer::Policy::FIRST; norm_policy < Normalizer::Policy::MAX_NORM_POLICY; ++norm_policy )
+    {
+        TcpNormalizerState tns;
+        TcpNormalizer* normalizer = TcpNormalizerFactory::create(
+            tns, norm_policy, session, session->client, session->server);
+
+        CHECK( normalizer.get_opt_block(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_strip_ecn(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_tcp_block(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_trim_syn(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_trim_rst(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_trim_mss(tns) == NORM_MODE_TEST );
+        CHECK( normalizer.get_trim_win(tns) == NORM_MODE_TEST );
+        CHECK( !normalizer.is_tcp_ips_enabled(tns) );
+    }
+
+    delete flow;
+    delete session;
+}
+
+int main(int argc, char** argv)
+{
+    return CommandLineTestRunner::RunAllTests(argc, argv);
+}
+

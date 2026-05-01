@@ -1,0 +1,61 @@
+//--------------------------------------------------------------------------
+// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+//
+// This program is free software; you can redistribute it and/or modify it
+// under the terms of the GNU General Public License Version 2 as published
+// by the Free Software Foundation.  You may not use, modify or distribute
+// this program under any other version of the GNU General Public License.
+//
+// This program is distributed in the hope that it will be useful, but
+// WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+//--------------------------------------------------------------------------
+
+// main.cc author Russ Combs <rucombs@cisco.com>
+
+#ifndef MAIN_H
+#define MAIN_H
+
+struct lua_State;
+extern bool exit_requested;
+const char* get_prompt();
+
+// commands provided by the snort module
+int main_delete_inspector(lua_State* = nullptr);
+int main_dump_stats(lua_State* = nullptr);
+int main_log_command(lua_State* = nullptr);
+int main_dump_heap_stats(lua_State* = nullptr);
+int main_heap_profile(lua_State* = nullptr);
+int main_dump_heap_profile(lua_State* = nullptr);
+int main_show_heap_profile(lua_State* = nullptr);
+int main_reset_stats(lua_State* = nullptr);
+int main_set_watchdog_params(lua_State* = nullptr);
+int main_rotate_stats(lua_State* = nullptr);
+int main_reload_config(lua_State* = nullptr);
+int main_reload_policy(lua_State* = nullptr);
+int main_reload_daq(lua_State* = nullptr);
+int main_reload_hosts(lua_State* = nullptr);
+int main_show_config_generation(lua_State* = nullptr);
+int main_process(lua_State* = nullptr);
+int main_pause(lua_State* = nullptr);
+int main_resume(lua_State* = nullptr);
+int main_quit(lua_State* = nullptr);
+int main_help(lua_State* = nullptr);
+int convert_counter_type(const char* type);
+int show_snort_cpu(lua_State* = nullptr);
+int show_snort_packet_latency(lua_State* = nullptr);
+
+#ifdef SHELL
+int main_dump_plugins(lua_State* = nullptr);
+int main_detach(lua_State* = nullptr);
+#endif
+
+void main_poke(unsigned);
+
+#endif
+

@@ -1,0 +1,44 @@
+Standard IPS rule option such as "content", "pcre", "flowbits" etc..
+(non-preprocessor specific) implemented as IpsOption subclasses.
+
+Most of the IpsOptions can be built statically or dynamically.  Several,
+however, such as content, are still tightly coupled with the code and can
+only be built statically.  The code will hopefully evolve and eliminate
+these cases.
+
+IPS options are not guaranteed to get all they need for evaluation. For example,
+a packet may not have a flow assigned to it, or the flow may not have a gadget
+present. Not all options need specific inputs, so, if one does, that option should
+validate input values.
+Service-only options may not be guaranteed to get a gadget on the flow.
+
+Several options use RangeCheck to implement upper and/or lower bound
+semantics.  The Snort 2X options had various implementations of ranges so
+3X differs in some places.
+
+The "regex" and "sd_pattern" options both use hyperscan for pattern matching.
+Hyperscan is an "optional" dependency for Snort3; These rule options will 
+not exist without satisfying that dependency.
+
+Hyperscan documentation can be found online 
+https://intel.github.io/hyperscan/dev-reference
+
+The "sd_pattern" will be used as a fast pattern in the future (like "regex")
+for performance. 
+
+"replace" option has the following restrictions:
+- Content and replacement are aligned to the right side of the matching
+content and are limited not by the size of the matching content, but
+by the boundaries of the packet.
+- Be aware that after the match there should be enough room left for the
+"replace" content in the matched packet. If there is not enough space
+for the "replace" content the rule will not match.
+- Only the first occurrence of the content will be replaced.
+- "replace" works for raw packets only. So, TCP data must either fit
+under the "pkt_data" buffer requirements or one should enable detection
+on TCP payload before reassembly: search_engine.detect_raw_tcp=true.
+
+"js_data" option is used by Enhanced JavaScript Normalizer to access normalized data.
+It's implemented as a generic IPS buffer and follows the JIT approach.
+"js_data" buffer must be specified in the list of buffers available for a particular
+inspector.

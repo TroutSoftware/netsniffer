@@ -1,2 +1,0 @@
-#!/bin/sh
-cat bootstrap/deps | grep -v "^#" | xargs sudo apt-get -y install

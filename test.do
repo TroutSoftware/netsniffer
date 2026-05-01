@@ -1,5 +1,4 @@
-redo-ifchange bootstrap/deps bootstrap/snort_install
-redo-ifchange deps sh3_tests.list release envrc
+redo-ifchange sh3_tests.list release envrc
 . ./envrc
 
 exec >&2

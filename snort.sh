@@ -1,6 +1,6 @@
 #!/bin/sh
 
-redo-ifchange envrc bootstrap/deps bootstrap/snort_install_debug debug || exit 1
+redo-ifchange envrc debug || exit 1
 
 . ./envrc
 

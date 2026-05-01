@@ -1,0 +1,97 @@
+Snort provides two memory related features: management and profiling. Memory management ensures that
+Snort uses no more than a configured cap and is built with --enable-jemalloc (jemalloc required).
+Profiling displays memory usage by component and is enabled with --enable-memory-profiling.  These
+features are independent and may be used together. jemalloc is required for management because it
+supports the necessary introspection in an efficient manner. Profiling is not enabled by default
+because of the runtime overhead incurred by overloading new and delete.
+
+Memory management is implemented by periodically comparing the total process usage reported by
+jemalloc ("stats.allocated") against the configured cap. If over limit, packet threads commence a
+reap cycle and prune LRU flows up to the configured prune target. This is achieved by capturing the
+deallocated total (via "thread.deallocatedp") at the start of the reap cycle and checking the
+current difference and pruning a single flow if the target has not been reached. At most one flow is
+pruned per packet. You can learn more about the jemalloc api at http://jemalloc.net/jemalloc.3.html.
+
+Snort will go over the configured cap by a (relatively) small amount so the configured cap should be
+below the hard limit, eg the limit enforced by cgroups. The default values for memory.interval and
+memory.prune_target generally work well so you should only have to set memory.cap and
+memory.threshold. If cap is set to the hard limit, set threshold to 99% or so (or just set cap lower
+and threshold to 100%). memory.threshold is provided for convenience; the actual effective limit is
+the product of cap * threshold..
+
+Some things to keep in mind:
+
+* jemalloc updates summary stats like process total once per epoch. Snort will bump the epoch once
+  per memory.interval ms. Performance suffers if interval is too low.
+
+* Snort generally frees memory in the same thread that allocated it, however this is not always
+  true. Shared caches may delete LRU entries when updated leading to freeing by different packet
+  threads. File capture will free memory allocated by a packet thread in a capture thread. This means
+  that the memory.allocated and memory.deallocated pegs can be confusing and should be considered
+  independently.
+
+* Since only packet threads take action to enforce the cap, packet threads will be forced to
+  compensate for non-packet threads. This could lead to an apparent out of memory condition if
+  non-packet threads allocate and hold significant memory. Therefore, non-packet threads should be
+  configured with some cap and that amount should be factored into the fixed startup cost.
+
+tcmalloc builds (--enable-tcmalloc) do not support memory management.  A process total is available
+from the tcmalloc extensions but it lacks a thread deallocated number. A scheme could be implemented
+that released prune_target flows but that is not planned.  tcmalloc does provide a performance
+advantage over glibc so that may be preferred for deployments that don't need memory management,
+however internal tests show jemalloc performs better than tcmalloc for more than about 8 threads /
+cores.
+
+Files pertaining to management (all under src/memory/):
+
+* heap_interface: implements a jemalloc interface if enabled or a nerfed interface if disabled. A
+  custom HeapInterface (and pruner) can be provided by a plugin for testing. MemoryCap provides
+  methods to install them.
+
+* memory_cap: implementation of reap cycles using heap interface.
+
+* memory_config: defines config struct.
+
+* memory_module: glue between Snort and memory features.
+
+Files pertaining to profiling (all under src/memory/):
+
+* memory_allocator: overloads call the allocator to actually malloc and free memory.
+
+* memory_overloads: implements new and delete overloads using allocator.
+
+The current iteration of the memory manager is exclusively preemptive.  MemoryCap::free_space is
+called by the analyzer before each DAQ message is processed. If thread_usage > thread_limit, a
+single flow will be pruned. Demand-based pruning, ie enforcing that each allocation stays below
+limit, is both not necessary and bug prone (due to reentrancy when pruning causes flushing causes
+more allocations).
+
+This implementation has the following limitations:
+
+* If the profiler is built, it only tracks memory allocated with C++ new.  Specifically,
+  direct calls to malloc or calloc which may be made by libraries are not tracked.
+
+* Non-packet threads are assumed to have bounded memory usage, eg via a cache.
+
+* Heap managers tend to acquire memory from the system quickly and release back much more slowly,
+  if ever. It is also relatively expensive to force a release.
+
+* Therefore, pruning a single flow almost certainly won't release memory back to the system.
+
+For these reasons, the goal of the memory manager is to prevent allocation past the limit rather
+than try to reclaim memory allocated past the limit. This means that the configured limit must be
+well enough below the actual hard limit, for example the limit enforced by cgroups, such that the
+processing of a single packet will not push us over. It must also allow for additional heap
+overhead.
+
+Note regarding statistics collection in the Memory module:
+
+Locking for statistics collection is minimized as the write operation (update_global_stats)
+is protected by a standard lock to ensure multiple threads don't update the global stats
+simultaneously. We are able to bail out if another thread is currently updating the statistics,
+as they will be approximately equal for either of the simulteneous callers.
+
+Read access (Module::sum_stats) can be protected via a shared lock, since
+all that we require here is that stats are not being updated while we are reading them.
+Thus, we never should block to acquire a writer lock, and the critical section is minimal for
+the Module::sum_stats call.

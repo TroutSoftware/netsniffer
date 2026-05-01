@@ -1,6 +1,6 @@
 redo-always  # This should always be rebuild as we rely on ninja to do the actual work
 
-redo-ifchange envrc ninja_configure bootstrap/snort_install_debug
+redo-ifchange envrc build_scripts/ninja_configure build_scripts/snort_install_debug
 
 . ./envrc
 

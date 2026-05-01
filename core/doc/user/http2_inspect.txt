@@ -1,0 +1,120 @@
+New in Snort 3, the HTTP/2 inspector enables Snort to process HTTP/2 traffic.
+
+==== Overview
+
+Despite the name, it is better to think of HTTP/2 not as a newer version of HTTP/1.1, but rather a
+separate protocol layer that runs under HTTP/1.1 and on top of TLS or TCP. It supports several new
+features with the goal of improving the performance of HTTP requests, notably the ability to
+multiplex many requests over a single TCP connection, HTTP header compression, and server push.
+
+HTTP/2 is a perfect fit for the new Snort 3 PDU-based inspection architecture. The HTTP/2 inspector
+parses and strips the HTTP/2 protocol framing and outputs HTTP/1.1 messages, exactly what
+http_inspect wants to input. The HTTP/2 traffic then undergoes the same processing as regular
+HTTP/1.1 traffic discussed above. So if you haven't already, take a look at the HTTP Inspector
+section; those features also apply to HTTP/2 traffic.
+
+==== Configuration
+
+You can configure the HTTP/2 inspector with the default configuration by adding:
+
+    http2_inspect = {}
+
+to your snort.lua configuration file. Since processing HTTP/2 traffic relies on the HTTP inspector,
+http_inspect must also be configured. Keep in mind that the http_inspect configuration will also
+impact HTTP/2 traffic.
+
+===== concurrent_streams_limit
+This limits the maximum number of HTTP/2 streams Snort will process concurrently in a single HTTP/2
+flow. The default and minimum configurable value is 100. It can be configured up to a maximum of
+1000.
+
+===== settings_max_frame_size
+This sets the maximum allowed value for settings frame SETTINGS_MAX_FRAME_SIZE.
+The default and max value is 16777215. The minimum configurable value is 16384.
+
+==== Detection rules
+
+Since HTTP/2 traffic is processed through the HTTP inspector, all of the rule options discussed
+above are also available for HTTP/2 traffic. To smooth the transition to inspecting HTTP/2, rules
+that specify service:http will be treated as if they also specify service:http2. 
+Thus:
+
+    alert tcp any any -> any any (flow:established, to_server;
+    http_uri; content:"/foo"; 
+    service: http; sid:10; rev:1;)
+
+is understood to mean:
+
+    alert tcp any any -> any any (flow:established, to_server; 
+    http_uri; content:"/foo"; 
+    service: http,http2; sid:10; rev:1;)
+
+Thus it will alert on "/foo" in the URI for both HTTP/1 and HTTP/2 traffic.
+
+The reverse is not true. "service: http2" without http will match on HTTP/2 
+flows but not HTTP/1 flows.
+
+This feature makes it easy to add HTTP/2 inspection without modifying 
+large numbers of existing rules. New rules should explicitly specify 
+"service http,http2;" if that is the desired behavior. Eventually 
+support for http implies http2 may be deprecated and removed.
+
+Occasionally one needs a rule that looks at the content of the raw HTTP/2 frame, for example to match
+some odd value for an identifier in a settings frame:
+
+    alert http2 (
+        msg:"SETTINGS frame with odd max frame size";
+        flow:to_server,established;
+        http2_frame_header; content:"|04|",offset 3,depth 1;
+        http2_frame_data; content:"|00 05 12 34 56 78|";
+        sid:1;
+    )
+
+Here http2_frame_header represents the 9 bytes of the HTTP/2 header of the frame, and
+http2_frame_data represents the data part of the same frame after any padding was removed.
+
+Support for http2_frame_header is limited to data, headers, settings and push promise frames, while
+support for http2_frame_data is limited to headers, settings, push promise and continuation frames.
+
+For frames that support both http2_frame_header and http2_frame_data the rule has to match both
+on the same frame as in the example above.
+
+When http2_frame_data is matching on a headers or push promise continuation frame, http2_frame_header
+will match on the header of the headers or push promise frame. In the example below the header string
+is matched on a continuation of a headers frame.
+
+    alert http2 (
+        http2_frame_header; content:"|01|", offset 3, depth 1;
+        http2_frame_data; content:"header";
+        sid:1;
+    )
+
+In the example below the header string is matched on a continuation of a push promise frame.
+
+    alert http2 (
+        http2_frame_header; content:"|05|", offset 3, depth 1;
+        http2_frame_data; content:"header";
+        sid:1;
+    )
+
+Matching http2_frame_header on a data frame may be mixed matching on its payload, and, as one would
+expect, the http2_frame_header is the one from the data frame that is matching the payload.
+
+    alert http2 (
+        http2_frame_header; content:"|00|", offset 3, depth 1;
+        file_data; content:"response";
+        sid:1;
+    )
+
+Mixing the two HTTP/2 frame options with HTTP options at the level of an HTTP transaction (where the
+two matches correspond to different HTTP/2 frames) is not recommended. This is an example that will
+not work, it tries to match on the header of a data frame and the payload of a headers frame.
+
+    alert http2 (
+        msg:"DO NOT ATTEMPT - THIS RULE WILL NOT WORK";
+        http2_frame_header; content:"|00|", offset 3, depth 1;
+        http_method; content:"GET";
+        sid:1;
+    )
+
+
