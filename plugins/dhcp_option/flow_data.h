@@ -4,7 +4,6 @@
 
 // Snort includes
 #include <flow/flow_data.h>
-#include <framework/inspector.h>
 
 // System includes
 #include <cstdint>
