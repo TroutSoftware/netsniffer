@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -163,7 +163,7 @@ static const CodecApi ipv6_frag_api =
         sizeof(CodecApi),
         CDAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         CD_IPV6_FRAG_NAME,
         CD_IPV6_FRAG_HELP,

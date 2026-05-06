@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -85,6 +85,8 @@ public:
     { }
     ~PacketLuaDetectorManager() override
     { free_detector_flow(); }
+
+    void initialize(const snort::SnortConfig*) override;
 
     void set_detector_flow(DetectorFlow* df)
     { detector_flow = df; }

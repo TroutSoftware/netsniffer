@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -29,7 +29,7 @@
 #include "log/messages.h"
 #include "main/shell.h"
 #include "main/snort_config.h"
-#include "managers/module_manager.h"
+#include "managers/plugin_manager.h"
 #include "parser/parse_ip.h"
 #include "protocols/packet.h"
 
@@ -421,25 +421,38 @@ bool BinderModule::end(const char* fqn, int idx, SnortConfig* sc)
                 return false;
             }
 
-            if ( policy_type == FILE_KEY )
+            if ( const Shell* sh = sc->policy_map->get_shell_by_file(policy_filename) )
+            {
+                sh->get_policy_indices(binding.use.network_index, binding.use.inspection_index, binding.use.ips_index);
+                binding.use.same_file = true;
+            }
+
+            else if ( policy_type == FILE_KEY )
             {
                 Shell* sh = new Shell(policy_filename.c_str());
                 auto policies = sc->policy_map->add_shell(sh, get_network_parse_policy());
+                binding.use.network_index = get_network_parse_policy()->policy_id;
                 binding.use.inspection_index = policies->inspection->policy_id;
                 binding.use.ips_index = policies->ips->policy_id;
+                sh->set_policy_indices(binding.use.network_index, binding.use.inspection_index, binding.use.ips_index);
             }
             else if ( policy_type == INSPECTION_KEY )
             {
                 Shell* sh = new Shell(policy_filename.c_str());
                 InspectionPolicy* inspection_policy = sc->policy_map->add_inspection_shell(sh);
+                binding.use.network_index = get_network_parse_policy()->policy_id;
                 binding.use.inspection_index = inspection_policy->policy_id;
+                sh->set_policy_indices(binding.use.network_index, binding.use.inspection_index, binding.use.ips_index);
             }
             else if ( policy_type == IPS_KEY )
             {
                 Shell* sh = new Shell(policy_filename.c_str());
                 IpsPolicy* ips_policy = sc->policy_map->add_ips_shell(sh);
                 binding.use.ips_index = ips_policy->policy_id;
+                sh->set_policy_indices(binding.use.network_index, binding.use.inspection_index, binding.use.ips_index);
             }
+            else
+                assert(false);
 
             // Store the policy type and filename for verbose output
             binding.use.type = policy_type;
@@ -455,7 +468,7 @@ bool BinderModule::end(const char* fqn, int idx, SnortConfig* sc)
             {
                 // Ensure that we can resolve the type to an extant module and that it is bindable
                 const char *mod_name = binding.use.type.c_str();
-                const Module* m = ModuleManager::get_module(mod_name);
+                const Module* m = PluginManager::get_module(mod_name);
                 if ( !m )
                 {
                     ParseError("Can't bind to unknown type '%s'", mod_name);
@@ -519,15 +532,11 @@ void BinderModule::commit_policy_binding()
     binding.when.dst_nets = nullptr;
 }
 
-vector<Binding>& BinderModule::get_bindings()
-{
-    return bindings; // move semantics
-}
+vector<Binding>&& BinderModule::get_bindings()
+{ return std::move(bindings); }
 
-vector<Binding>& BinderModule::get_policy_bindings()
-{
-    return policy_bindings; // move semantics
-}
+vector<Binding>&& BinderModule::get_policy_bindings()
+{ return std::move(policy_bindings); }
 
 const PegInfo* BinderModule::get_pegs() const
 { return bind_pegs; }

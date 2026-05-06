@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -28,10 +28,10 @@ template <typename T>
 class Ring
 {
 public:
-    Ring<T>(int size);
-    ~Ring<T>();
+    Ring(int size);
+    ~Ring();
 
-    Ring<T>(const Ring<T>&) = delete;
+    Ring(const Ring<T>&) = delete;
     Ring<T>& operator=(const Ring<T>&) = delete;
 
     T* read();
@@ -41,7 +41,7 @@ public:
     bool push();
 
     T get(T);
-    bool put(T);
+    bool put(const T&);
 
     T* grab_store(int& ix);
 
@@ -104,7 +104,7 @@ T Ring<T>::get(T v)
 }
 
 template <typename T>
-bool Ring<T>::put(T v)
+bool Ring<T>::put(const T& v)
 {
     T* p = write();
     if ( !p )

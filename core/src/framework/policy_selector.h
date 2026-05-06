@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -37,7 +37,7 @@ struct _daq_pkt_hdr;
 
 namespace snort
 {
-#define POLICY_SELECTOR_API_VERSION ((BASE_API_VERSION << 16) | 1)
+#define POLICY_SELECTOR_API_VERSION ((BASE_API_VERSION << 16) | 2)
 
 struct Packet;
 class PolicySelector;

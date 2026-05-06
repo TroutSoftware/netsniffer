@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -29,7 +29,7 @@ class HttpFlowData;
 
 namespace snort
 {
-// This event is published each time new request body data is received by http_inspect for HTTP/2
+// This event is published each time new request body data is received by http_inspect for HTTP
 // traffic, up to the publish depth. The full request body may be sent in several pieces
 class SO_PUBLIC HttpRequestBodyEvent : public snort::DataEvent
 {
@@ -44,6 +44,7 @@ public:
     const uint8_t* get_client_body(int32_t& length);
     bool is_last_request_body_piece();
     bool is_mime() const;
+    bool is_urlencoded() const;
     int64_t get_httpx_stream_id() const;
 
 private:

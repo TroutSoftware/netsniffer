@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -97,6 +97,7 @@ AppIdSession* AppIdSession::allocate_session(const Packet*, IpProtocol, AppidSes
 void AppIdModule::reset_stats() {}
 void AppIdSession::set_application_ids_service(AppId, AppidChangeBits&) {}
 void AppIdSession::set_ss_application_ids(AppId, AppId, AppId, AppId, AppId, AppidChangeBits&) {}
+void AppIdSession::sync_with_snort_protocol_id(AppId, Packet*, AppidChangeBits&) {}
 AppIdHttpSession* AppIdSession::get_http_session(uint32_t stream_index) const
 {
     if (stream_index < api.hsessions.size())

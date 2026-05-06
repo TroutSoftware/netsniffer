@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -40,6 +40,8 @@
 #include "managers/inspector_manager.h"
 #include "managers/ips_manager.h"
 #include "managers/module_manager.h"
+#include "managers/trace_logger_manager.h"
+#include "managers/plugin_manager.h"
 #include "main.h"
 #include "main/analyzer.h"
 #include "main/oops_handler.h"
@@ -102,9 +104,7 @@ void RuleLatency::tterm() { }
 void rule_latency::set_force_enable(bool) { }
 void PacketLatency::tterm() { }
 void packet_latency::set_force_enable(bool) { }
-void ConnectorManager::thread_init() { }
 void ConnectorManager::thread_reinit() { }
-void ConnectorManager::thread_term() { }
 void SideChannelManager::thread_init() { }
 void SideChannelManager::thread_term() { }
 void CodecManager::thread_init() { }
@@ -113,11 +113,9 @@ uint8_t CodecManager::get_grinder() { return 0; }
 void EventManager::open_outputs() { }
 void EventManager::close_outputs() { }
 void EventManager::reload_outputs() { }
-void IpsManager::setup_options(const snort::SnortConfig*) { }
-void IpsManager::clear_options(const snort::SnortConfig*) { }
-void ActionManager::thread_init(const snort::SnortConfig*) { }
-void ActionManager::thread_term() { }
-void ActionManager::thread_reinit(const snort::SnortConfig*) { }
+void PluginManager::thread_init() { }
+void PluginManager::thread_reinit(const snort::SnortConfig*) { }
+void PluginManager::thread_term(bool) { }
 int SFRF_Alloc(unsigned int) { return -1; }
 void packet_time_update(const struct timeval*) { }
 void main_poke(unsigned) { }
@@ -149,7 +147,6 @@ Packet::Packet(bool)
 }
 Packet::~Packet()  = default;
 int Packet::inject() { return 0; }
-IpsPolicy* get_ips_policy() { return nullptr; }
 void DataBus::publish(unsigned, unsigned, Packet*, Flow*) { }
 void DataBus::publish(unsigned, unsigned, DataEvent&, Flow*) { }
 void DataBus::publish_to_all_network_policies(unsigned int, unsigned int) { }
@@ -187,7 +184,7 @@ void DetectionEngine::clear_replacement() { }
 void DetectionEngine::disable_all(Packet*) { }
 unsigned get_instance_id() { return 0; }
 const SnortConfig* SnortConfig::get_conf() { return nullptr; }
-void SnortConfig::update_thread_reload_id() { }
+unsigned SnortConfig::get_reload_id() { return 0; }
 void PacketTracer::thread_init() { }
 void PacketTracer::thread_term() { }
 void PacketTracer::log(const char*, ...) { }
@@ -219,12 +216,10 @@ void HighAvailabilityManager::process_receive() { }
 void HighAvailabilityManager::thread_term() { }
 void HighAvailabilityManager::thread_term_beginning() { }
 void HighAvailabilityManager::process_update(Flow*, Packet*) { }
-void InspectorManager::thread_init(const SnortConfig*) { }
+void InspectorManager::thread_init() { }
 void InspectorManager::thread_term() { }
-void InspectorManager::thread_stop(const SnortConfig*) { }
 void InspectorManager::thread_reinit(const SnortConfig*) { }
-void InspectorManager::thread_stop_removed(const SnortConfig*) { }
-void ModuleManager::accumulate(const char*) { }
+void ModuleManager::accumulate(const SnortConfig*, const char*) { }
 void ModuleManager::accumulate_module(const char*) { }
 void Stream::handle_timeouts(bool) { }
 void Stream::purge_flows() { }
@@ -233,8 +228,10 @@ void Stream::init_active_response(const Packet*, Flow*) { }
 void Stream::drop_flow(const Packet* ) { }
 void Stream::block_flow(const Packet*) { }
 IpsContext::IpsContext(unsigned) { }
+NetworkPolicy* get_default_network_policy(const snort::SnortConfig*) { return nullptr; }
 NetworkPolicy* get_network_policy() { return nullptr; }
 InspectionPolicy* get_inspection_policy() { return nullptr; }
+IpsPolicy* get_ips_policy() { return nullptr; }
 Flow::~Flow() = default;
 bool Flow::handle_allowlist() { return true; }
 FlowDataStore::~FlowDataStore() = default;

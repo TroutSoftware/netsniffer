@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -53,7 +53,7 @@ class SO_PUBLIC FileFlows : public FlowData
 {
 public:
 
-    FileFlows(Flow* f, FileInspect* fi) : FlowData(file_flow_data_id, (Inspector*)fi), flow(f) { }
+    FileFlows(Flow* f) : FlowData(file_flow_data_id), flow(f) { }
     ~FileFlows() override;
     std::mutex file_flow_context_mutex;
     static void init()

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -29,6 +29,7 @@
 
 #include "http_cutter.h"
 #include "http_common.h"
+#include "http_compress_stream.h"
 #include "http_enum.h"
 #include "http_js_norm.h"
 #include "http_module.h"
@@ -101,14 +102,10 @@ HttpFlowData::~HttpFlowData()
         delete[] section_buffer[k];
         delete[] partial_buffer[k];
         delete[] partial_detect_buffer[k];
+        delete compress[k];
         delete partial_mime_bufs[k];
         HttpTransaction::delete_transaction(transaction[k], nullptr);
         delete cutter[k];
-        if (compress_stream[k] != nullptr)
-        {
-            inflateEnd(compress_stream[k]);
-            delete compress_stream[k];
-        }
         delete mime_state[k];
         delete utf_state[k];
         if (fd_state[k] != nullptr)
@@ -148,15 +145,8 @@ void HttpFlowData::half_reset(SourceId source_id)
     detect_depth_remaining[source_id] = STAT_NOT_PRESENT;
     publish_depth_remaining[source_id] = STAT_NOT_PRESENT;
 
-    compression[source_id] = CMP_NONE;
-    gzip_state[source_id] = GZIP_TBD;
-    gzip_header_bytes_processed[source_id] = 0;
-    if (compress_stream[source_id] != nullptr)
-    {
-        inflateEnd(compress_stream[source_id]);
-        delete compress_stream[source_id];
-        compress_stream[source_id] = nullptr;
-    }
+    delete compress[source_id];
+    compress[source_id] = nullptr;
     delete mime_state[source_id];
     mime_state[source_id] = nullptr;
     delete utf_state[source_id];
@@ -190,13 +180,8 @@ void HttpFlowData::half_reset(SourceId source_id)
 void HttpFlowData::trailer_prep(SourceId source_id)
 {
     type_expected[source_id] = SEC_TRAILER;
-    compression[source_id] = CMP_NONE;
-    if (compress_stream[source_id] != nullptr)
-    {
-        inflateEnd(compress_stream[source_id]);
-        delete compress_stream[source_id];
-        compress_stream[source_id] = nullptr;
-    }
+    delete compress[source_id];
+    compress[source_id] = nullptr;
     delete mime_state[source_id];
     mime_state[source_id] = nullptr;
     delete utf_state[source_id];
@@ -284,7 +269,7 @@ void HttpFlowData::finish_hx_body(HttpCommon::SourceId source_id, HttpCommon::HX
     assert((hx_body_state[source_id] == HX_BODY_NOT_COMPLETE) ||
         (hx_body_state[source_id] == HX_BODY_LAST_SEG));
     hx_body_state[source_id] = state;
-    partial_flush[source_id] = false;
+    partial_flush[source_id] = HttpEnums::PF_NONE;
     if (clear_partial_buffer)
     {
         // We've already sent all data through detection so no need to reinspect. Just need to

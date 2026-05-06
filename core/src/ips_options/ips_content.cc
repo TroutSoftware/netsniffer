@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -871,7 +871,7 @@ static const IpsApi content_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_DEFAULT,
         API_OPTIONS,
         s_name,
         s_help,

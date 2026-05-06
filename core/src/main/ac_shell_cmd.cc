@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -26,6 +26,7 @@
 #include <cassert>
 
 #include "control/control.h"
+#include "main/snort_config.h"
 
 ACShellCmd::ACShellCmd(ControlConn* conn, AnalyzerCommand* ac) : AnalyzerCommand(conn), ac(ac)
 {
@@ -44,13 +45,14 @@ bool ACShellCmd::execute(Analyzer& analyzer, void** state)
 
 ACShellCmd::~ACShellCmd()
 {
+    if (ac->need_update_reload_id())
+        snort::SnortConfig::get_main_conf()->update_reload_id();
+
     delete ac;
     ControlConn::decrement_pending_cmds_count();
 
     if (ctrlcon)
     {
         ctrlcon->unblock();
-        if (ctrlcon->is_removed() and !ctrlcon->is_blocked())
-            delete ctrlcon;
     }
 }

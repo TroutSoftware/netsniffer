@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -25,6 +25,8 @@
 
 #include "framework/module.h"
 #include "managers/module_manager.h"
+#include "managers/trace_logger_manager.h"
+#include "managers/plugin_manager.h"
 #include "utils/util.h"
 
 #include "trace_config.h"
@@ -33,8 +35,7 @@ using namespace snort;
 
 std::map<std::string, std::map<std::string, bool>> TraceParser::s_configured_trace_options;
 
-TraceParser::TraceParser(TraceConfig& tc)
-    : trace_config(tc)
+TraceParser::TraceParser(TraceConfig& tc) : trace_config(tc)
 {
     // Will be initialized only once when first TraceParser instance created
     if (s_configured_trace_options.empty())
@@ -162,7 +163,7 @@ void TraceParser::reset_configured_trace_options()
 
 void TraceParser::init_configured_trace_options()
 {
-    auto trace_modules = ModuleManager::get_all_modules();
+    auto trace_modules = PluginManager::get_all_modules();
     for (const auto* module : trace_modules)
     {
         const TraceOption* trace_options = module->get_trace_options();
@@ -193,9 +194,6 @@ void TraceParser::init_configured_trace_options()
     name.set(&name##_param);                                            \
     name.set(value)
 
-#define MODULE_OPTION(name, value) \
-    CONFIG_OPTION(name, (uint64_t)value, Parameter::PT_INT, "0:255")
-
 #define PROTO_OPTION(name, value) \
     CONFIG_OPTION(name, (uint64_t)value, Parameter::PT_INT, "0:255")
 
@@ -207,161 +205,6 @@ void TraceParser::init_configured_trace_options()
 
 #define TENANT_OPTION(name, value) \
     CONFIG_OPTION(name, value, Parameter::PT_STRING, nullptr)
-
-enum { OPT_1, OPT_2 };
-
-static const TraceOption s_trace_options[] =
-{
-    { "option1", OPT_1, "test option 1" },
-    { "option2", OPT_2, "test option 2" },
-    { nullptr, 0, nullptr }
-};
-
-static const Trace *m1_trace, *m2_trace;
-
-class Module1 : public Module
-{
-public:
-    Module1() : Module("mod_1", "testing trace parser module 1") { }
-    void set_trace(const Trace* t) const override { m1_trace = t; }
-    const TraceOption* get_trace_options() const override { return s_trace_options; }
-
-};
-
-class Module2 : public Module
-{
-public:
-    Module2() : Module("mod_2", "testing trace parser module 2") { }
-    void set_trace(const Trace* t) const override { m2_trace = t; }
-    const TraceOption* get_trace_options() const override { return s_trace_options; }
-
-};
-
-TEST_CASE("modules traces", "[TraceParser]")
-{
-    static bool once = []()
-    {
-        ModuleManager::add_module(new Module1);
-        ModuleManager::add_module(new Module2);
-        return true;
-    } ();
-    (void)once;
-
-    TraceConfig tc;
-    TraceParser tp(tc);
-    tc.setup_module_trace();
-
-    SECTION("invalid module")
-    {
-        MODULE_OPTION(all, 10);
-        CHECK(false == tp.set_traces("invalid_module", all));
-    }
-
-    SECTION("invalid option")
-    {
-        MODULE_OPTION(invalid_option, 10);
-        CHECK(false == tp.set_traces("mod_1", invalid_option));
-    }
-
-    SECTION("unset")
-    {
-        REQUIRE(m1_trace != nullptr);
-        REQUIRE(m2_trace != nullptr);
-
-        CHECK(false == m1_trace->enabled(OPT_1));
-        CHECK(false == m1_trace->enabled(OPT_2));
-        CHECK(false == m2_trace->enabled(OPT_1));
-        CHECK(false == m2_trace->enabled(OPT_2));
-    }
-
-    SECTION("all modules")
-    {
-        MODULE_OPTION(all, 3);
-        CHECK(true == tp.set_traces("all", all));
-
-        REQUIRE(m1_trace != nullptr);
-        REQUIRE(m2_trace != nullptr);
-
-        CHECK(true == m1_trace->enabled(OPT_1, 3));
-        CHECK(true == m1_trace->enabled(OPT_2, 3));
-        CHECK(true == m2_trace->enabled(OPT_1, 3));
-        CHECK(true == m2_trace->enabled(OPT_2, 3));
-
-        CHECK(false == m1_trace->enabled(OPT_1, 4));
-        CHECK(false == m1_trace->enabled(OPT_2, 4));
-        CHECK(false == m2_trace->enabled(OPT_1, 4));
-        CHECK(false == m2_trace->enabled(OPT_2, 4));
-    }
-
-    SECTION("module all")
-    {
-        MODULE_OPTION(all, 3);
-        CHECK(true == tp.set_traces("mod_1", all));
-
-        REQUIRE(m1_trace != nullptr);
-        REQUIRE(m2_trace != nullptr);
-
-        CHECK(true == m1_trace->enabled(OPT_1, 3));
-        CHECK(true == m1_trace->enabled(OPT_2, 3));
-        CHECK(false == m2_trace->enabled(OPT_1, 3));
-        CHECK(false == m2_trace->enabled(OPT_2, 3));
-    }
-
-    SECTION("options")
-    {
-        MODULE_OPTION(option1, 1);
-        MODULE_OPTION(option2, 5);
-        CHECK(true == tp.set_traces("mod_1", option1));
-        CHECK(true == tp.set_traces("mod_1", option2));
-        CHECK(true == tp.set_traces("mod_2", option1));
-        CHECK(true == tp.set_traces("mod_2", option2));
-
-        REQUIRE(m1_trace != nullptr);
-        REQUIRE(m2_trace != nullptr);
-
-        CHECK(true == m1_trace->enabled(OPT_1, 1));
-        CHECK(true == m1_trace->enabled(OPT_2, 1));
-        CHECK(true == m2_trace->enabled(OPT_1, 1));
-        CHECK(true == m2_trace->enabled(OPT_2, 1));
-
-        CHECK(false == m1_trace->enabled(OPT_1, 5));
-        CHECK(true == m1_trace->enabled(OPT_2, 5));
-        CHECK(false == m2_trace->enabled(OPT_1, 5));
-        CHECK(true == m2_trace->enabled(OPT_2, 5));
-    }
-
-    SECTION("override all modules")
-    {
-        MODULE_OPTION(option1, 1);
-        MODULE_OPTION(option2, 2);
-        MODULE_OPTION(all, 3);
-        CHECK(true == tp.set_traces("mod_1", option1));
-        CHECK(true == tp.set_traces("mod_2", option2));
-        CHECK(true == tp.set_traces("all", all));
-
-        REQUIRE(m1_trace != nullptr);
-        REQUIRE(m2_trace != nullptr);
-
-        CHECK(true == m1_trace->enabled(OPT_1, 1));
-        CHECK(true == m1_trace->enabled(OPT_2, 1));
-        CHECK(true == m2_trace->enabled(OPT_1, 1));
-        CHECK(true == m2_trace->enabled(OPT_2, 1));
-
-        CHECK(false == m1_trace->enabled(OPT_1, 2));
-        CHECK(true == m1_trace->enabled(OPT_2, 2));
-        CHECK(true == m2_trace->enabled(OPT_1, 2));
-        CHECK(true == m2_trace->enabled(OPT_2, 2));
-
-        CHECK(false == m1_trace->enabled(OPT_1, 3));
-        CHECK(true == m1_trace->enabled(OPT_2, 3));
-        CHECK(true == m2_trace->enabled(OPT_1, 3));
-        CHECK(false == m2_trace->enabled(OPT_2, 3));
-    }
-
-    auto sc = SnortConfig::get_conf();
-    if (sc and sc->trace_config)
-        sc->trace_config->setup_module_trace();
-}
 
 TEST_CASE("packet constraints", "[TraceParser]")
 {

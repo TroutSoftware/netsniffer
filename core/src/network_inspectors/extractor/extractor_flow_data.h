@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -44,8 +44,7 @@ public:
     }
 
 protected:
-    ExtractorFlowData(ServiceType type, snort::Inspector& insp)
-        : FlowData(data_id, &insp), type(type) {}
+    ExtractorFlowData(ServiceType type) : FlowData(data_id), type(type) {}
 
 private:
     const ServiceType type;

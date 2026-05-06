@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -42,8 +42,9 @@ char* snort_strdup(const char* s)
 { return strdup(s); }
 time_t packet_time() { return 0; }
 void FatalError(const char* fmt, ...) { (void)fmt; exit(1); }
-
 }
+
+void host_cache_module_dump() { }
 
 TEST_GROUP(host_cache_segmented)
 {

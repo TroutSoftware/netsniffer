@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -48,6 +48,11 @@ inline bool is_body(SectionType st)
 // Caters to all extended versions of HTTP, i.e. HTTP/2, HTTP/3
 enum HXBodyState { HX_BODY_NOT_COMPLETE, HX_BODY_LAST_SEG, HX_BODY_COMPLETE,
     HX_BODY_COMPLETE_EXPECT_TRAILERS, HX_BODY_NO_BODY };
+
+enum
+{
+    TRACE_COMPRESS,
+};
 
 } // end namespace HttpCommon
 

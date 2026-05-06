@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -54,15 +54,12 @@ void UdpHAManager::process_deletion(Flow& flow)
 
 void UdpHAManager::tinit()
 {
-    if ( HighAvailabilityManager::active() )
+    if ( HighAvailabilityManager::configured() )
         udp_ha = new UdpHA();
-    else
-        udp_ha = nullptr;
 }
 
 void UdpHAManager::tterm()
 {
-    if ( udp_ha != nullptr )
-        delete udp_ha;
+    delete udp_ha;
 }
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -51,6 +51,9 @@ vector<const char*> ExtractorEvent::get_field_names() const
         res.push_back(f.name);
 
     for (auto& f : str_fields)
+        res.push_back(f.name);
+
+    for (auto& f : dbl_fields)
         res.push_back(f.name);
 
     return res;

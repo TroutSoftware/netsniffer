@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -32,9 +32,11 @@
 #include "flow/ha.h"
 #include "framework/inspector.h"
 #include "framework/data_bus.h"
+#include "helpers/policy_switcher.h"
 #include "main/analyzer.h"
 #include "main/policy.h"
 #include "main/snort_config.h"
+#include "managers/plugin_manager.h"
 #include "protocols/ip.h"
 #include "protocols/layer.h"
 #include "protocols/packet.h"
@@ -90,6 +92,9 @@ uint8_t ip::IpApi::ttl() const { return 0; }
 const Layer* layer::get_mpls_layer(const Packet* const) { return nullptr; }
 
 const SnortConfig* SnortConfig::get_conf() { return nullptr; }
+
+PolicySwitcher::PolicySwitcher(snort::Flow*) { }
+PolicySwitcher::~PolicySwitcher() { }
 
 TEST_GROUP(nondefault_timeout)
 {

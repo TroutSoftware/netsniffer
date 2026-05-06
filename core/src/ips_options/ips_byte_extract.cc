@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2010-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -155,11 +155,11 @@ IpsOption::EvalStatus ByteExtractOption::eval(Cursor& c, Packet* p)
 
     SetVarValueByIndex(value, config.var_number);
 
-    auto result = c.add_pos(config.offset + bytes_read);
-    assert(result);
-    UNUSED(result);
+    auto result = config.relative_flag
+        ? c.add_pos(config.offset + bytes_read)
+        : c.set_pos(config.offset + bytes_read);
 
-    return MATCH;
+    return result ? MATCH : NO_MATCH;
 }
 
 void ByteExtractOption::apply_alignment(uint32_t& value)
@@ -415,7 +415,7 @@ static const IpsApi byte_extract_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         s_name,
         s_help,

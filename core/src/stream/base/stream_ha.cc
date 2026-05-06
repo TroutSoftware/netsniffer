@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -273,16 +273,12 @@ THREAD_LOCAL StreamHAClient* StreamHAManager::ha_client = nullptr;
 
 void StreamHAManager::tinit()
 {
-    if ( HighAvailabilityManager::active() )
+    if ( HighAvailabilityManager::configured() )
         ha_client = new StreamHAClient();
 }
 
 void StreamHAManager::tterm()
 {
-    if ( ha_client )
-    {
-        delete ha_client;
-        ha_client = nullptr;
-    }
+    delete ha_client;
 }
 

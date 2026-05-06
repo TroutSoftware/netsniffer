@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -28,6 +28,7 @@
 
 #include "profiler/memory_profiler_active_context.h"
 #include "main.h"
+#include "main/snort.h"
 #include "memory_allocator.h"
 
 #ifdef UNIT_TEST
@@ -344,7 +345,7 @@ TEST_CASE( "memory overloads", "[memory]" )
     {
         SECTION( "allocation failure" )
         {
-            auto p = Interface::allocate(n);
+            const auto p = Interface::allocate(n);
 
             CHECK( p == nullptr );
 
@@ -356,7 +357,7 @@ TEST_CASE( "memory overloads", "[memory]" )
         {
             AllocatorSpy::pool = pool;
 
-            auto p = Interface::allocate(n);
+            const auto p = Interface::allocate(n);
 
             CHECK( p > (void*)pool );
 

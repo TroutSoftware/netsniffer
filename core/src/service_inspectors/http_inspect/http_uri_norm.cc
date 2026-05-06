@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -537,9 +537,9 @@ void UriNormalizer::load_default_unicode_map(uint8_t map[MAP_SIZE])
 // __STRDUMP_ENABLE__
 
     std::string token;
-
     while (ss >> token)
     {
+        // coverity[tainted_scalar]
         const uint16_t ucode = strtol(token.c_str(), nullptr, 16);
         map[ucode] = strtol(token.c_str()+5, nullptr, 16);
     }

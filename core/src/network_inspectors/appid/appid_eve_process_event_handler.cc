@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -50,11 +50,13 @@ void AppIdEveProcessEventHandler::handle(DataEvent& event, Flow* flow)
 
         asd = AppIdSession::allocate_session(p, p->get_ip_proto_next(), dir,
             inspector, *pkt_thread_odp_ctxt);
-        if (appidDebug->is_enabled())
+        if (appidDebug and appidDebug->is_enabled())
             appidDebug->activate(flow, asd, inspector.get_ctxt().config.log_all_sessions);
 
         APPID_LOG(p, TRACE_DEBUG_LEVEL, "New AppId session at mercury event\n");
     }
+    else if (appidDebug and appidDebug->is_enabled())
+        appidDebug->activate(flow, asd, inspector.get_ctxt().config.log_all_sessions);
 
     if (!asd->get_session_flags(APPID_SESSION_DISCOVER_APP | APPID_SESSION_SPECIAL_MONITORED))
         return;
@@ -104,7 +106,8 @@ void AppIdEveProcessEventHandler::handle(DataEvent& event, Flow* flow)
 
         snort_free(version);
     }
-    else if (!name.empty() and is_client_process_flag)
+
+    if ((client_id == APP_ID_NONE) and !name.empty() and is_client_process_flag)
     {
         client_id = odp_ctxt.get_eve_ca_matchers().match_eve_ca_pattern(name, conf);
 

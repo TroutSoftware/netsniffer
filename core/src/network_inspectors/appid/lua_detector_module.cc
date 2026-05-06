@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -55,6 +55,7 @@ using namespace std;
 #define OPEN_DETECTOR_PACKAGE_VERSION "VERSION="
 
 vector<shared_ptr<PacketLuaDetectorManager>> ControlLuaDetectorManager::lua_detector_mgr_list;
+static bool s_list_lua_detectors = false;
 
 bool get_lua_field(lua_State* L, int table, const char* field, string& out)
 {
@@ -197,27 +198,43 @@ LuaDetectorManager::~LuaDetectorManager()
     if (L)
     {
         if (lua_gettop(L))
+        {
             APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: leak of %d lua stack elements before detector unload\n",
                 lua_gettop(L));
+            lua_settop(L, 0);
+        }
 
-        for ( auto& lua_object : allocated_objects )
+        for (auto& lua_object : allocated_objects)
         {
             LuaStateDescriptor* lsd = lua_object->validate_lua_state(false);
 
-            lua_getfield(L, LUA_REGISTRYINDEX, lsd->package_info.name.c_str());
-            lua_getfield(L, -1, lsd->package_info.cleanFunctionName.c_str());
-            if ( lua_isfunction(L, -1) )
+            if (!lsd->package_info.cleanFunctionName.empty())
             {
-                string name = lsd->package_info.name + "_";
-                lua_getglobal(L, name.c_str());
-
-                if ( lua_pcall(L, 1, 1, 0) )
+                lua_getfield(L, LUA_REGISTRYINDEX, lsd->package_info.name.c_str());
+                if (lua_istable(L, -1))
                 {
-                    APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Could not cleanup the %s client app element: %s\n",
-                        lsd->package_info.name.c_str(), lua_tostring(L, -1));
+                    lua_getfield(L, -1, lsd->package_info.cleanFunctionName.c_str());
+                    if (lua_isfunction(L, -1))
+                    {
+                        string name = lsd->package_info.name + "_";
+                        lua_getglobal(L, name.c_str());
+
+                        if ( lua_pcall(L, 1, 1, 0) )
+                        {
+                            APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Error - appid: Could not cleanup the %s client app element: %s\n",
+                                lsd->package_info.name.c_str(), lua_tostring(L, -1));
+                        }
+                    }
                 }
+                else
+                {
+                    APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Error - appid: Could not find the %s detector table for cleanup\n",
+                        lsd->package_info.name.c_str());
+                }
+                
+                lua_settop(L, 0);
             }
-            lua_settop(L, 0);
+
             delete lua_object;
         }
         lua_close(L);
@@ -229,12 +246,14 @@ void LuaDetectorManager::initialize(const SnortConfig* sc)
 {
     ctxt.get_odp_ctxt().get_user_data_map().set_configuration_completed(false);
     activate_lua_detectors(sc);
-    
+    ctxt.get_odp_ctxt().get_user_data_map().set_configuration_completed(true);
+
+    s_list_lua_detectors = ctxt.config.list_odp_detectors or SnortConfig::log_verbose();
+
     if (SnortConfig::log_verbose())
         scan_and_print_odp_version(ctxt.config.app_detector_dir);
 
-
-    if (ctxt.config.list_odp_detectors or SnortConfig::log_verbose())
+    if (s_list_lua_detectors)
         list_lua_detectors();
 }
 
@@ -321,6 +340,14 @@ LuaObject* LuaDetectorManager::create_lua_detector(const char* detector_name,
 
     Lua::ManageStack mgr(L);
     lua_getfield(L, LUA_REGISTRYINDEX, detector_name);
+    if (!lua_istable(L, -1))
+    {
+        if (init(L))
+            APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Error - appid: Could not find detector table %s for initialization\n",
+                detector_name);
+        lua_pop(L, 1);
+        return nullptr;
+    }
 
     lua_getfield(L, -1, "DetectorPackageInfo");
     if (!lua_istable(L, -1))
@@ -466,8 +493,11 @@ bool LuaDetectorManager::load_detector(char* detector_filename, bool is_custom, 
 void LuaDetectorManager::activate_lua_detectors(const SnortConfig* sc)
 {
     if (lua_gettop(L))
+    {
         APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: leak of %d lua stack elements before detector activate\n",
             lua_gettop(L));
+        lua_settop(L, 0);
+    }
 
     uint32_t lua_tracker_size = compute_lua_tracker_size(MAX_MEMORY_FOR_LUA_DETECTORS, allocated_objects.size());
     list<LuaObject*>::iterator lo = allocated_objects.begin();
@@ -475,6 +505,18 @@ void LuaDetectorManager::activate_lua_detectors(const SnortConfig* sc)
     {
         LuaStateDescriptor* lsd = (*lo)->validate_lua_state(false);
         lua_getfield(L, LUA_REGISTRYINDEX, lsd->package_info.name.c_str());
+        if (!lua_istable(L, -1))
+        {
+            if (init(L))
+                APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Error - appid: Could not find detector table %s for initialization\n",
+                    (*lo)->get_detector()->get_name().c_str());
+            if (!(*lo)->get_detector()->is_custom_detector())
+                num_odp_detectors--;
+            lua_settop(L, 0);
+            delete *lo;
+            lo = allocated_objects.erase(lo);
+            continue;
+        }
         lua_getfield(L, -1, lsd->package_info.initFunctionName.c_str());
         if (!lua_isfunction(L, -1))
         {
@@ -516,7 +558,6 @@ void LuaDetectorManager::activate_lua_detectors(const SnortConfig* sc)
         lua_settop(L, 0);
         ++lo;
     }
-    ctxt.get_odp_ctxt().get_user_data_map().set_configuration_completed(true);
 }
 void ControlLuaDetectorManager::process_detector_file(char* detector_file_path, bool is_custom)
 {
@@ -605,8 +646,11 @@ void ControlLuaDetectorManager::load_lua_detectors(const char* path, bool is_cus
     if (rval == 0 )
     {
         if (lua_gettop(L))
+        {
             APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: leak of %d lua stack elements before detector load\n",
                 lua_gettop(L));
+            lua_settop(L, 0);
+        }
 
         for (unsigned n = 0; n < globs.gl_pathc; n++)
         {
@@ -690,6 +734,16 @@ std::shared_ptr<LuaDetectorManager> ControlLuaDetectorManager::get_packet_lua_de
     unsigned instance_id = get_instance_id();
     std::shared_ptr<PacketLuaDetectorManager> mgr = lua_detector_mgr_list[instance_id];
     return static_cast<std::shared_ptr<LuaDetectorManager>>(mgr);
+}
+
+void PacketLuaDetectorManager::initialize(const SnortConfig* sc)
+{
+    UserDataMap::set_configuration_completed(false);
+    activate_lua_detectors(sc);
+    UserDataMap::set_configuration_completed(true);
+
+    if (s_list_lua_detectors)
+        list_lua_detectors();
 }
 
 void PacketLuaDetectorManager::list_lua_detectors()

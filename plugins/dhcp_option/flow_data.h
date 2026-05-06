@@ -2,10 +2,19 @@
 #ifndef flow_data_fdc08c49
 #define flow_data_fdc08c49
 
+// Snort includes
+#include <flow/flow_data.h>
+#include <framework/inspector.h>
+
+// System includes
 #include <cstdint>
 #include <map>
 
-#include <flow/flow_data.h>
+// Global includes
+
+// Local includes
+
+// Debug includes
 
 namespace dhcp_option {
 
@@ -17,7 +26,7 @@ class FlowData : public snort::FlowData {
   std::map<uint8_t, Entry> map;
 
 public:
-  FlowData(snort::Inspector *);
+  FlowData();
   unsigned static get_id();
   bool set(uint8_t type, size_t offset,
            size_t size);  // Will return false if entry already set

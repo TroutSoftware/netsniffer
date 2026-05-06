@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2004-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -409,13 +409,14 @@ static inline int FTPResetsession(FTP_SESSION* Ftpsession)
     Ftpsession->data_chan_state = NO_STATE;
     Ftpsession->data_chan_index = -1;
     Ftpsession->data_xfer_index = -1;
+    Ftpsession->ftp_cmd_pipe_index = 0;
 
     return FTPP_SUCCESS;
 }
 
 FtpFlowData::FtpFlowData() : FlowData(inspector_id)
 {
-    memset(&session, 0, sizeof(session));
+    session = {};
     ftstats.concurrent_sessions++;
     if(ftstats.max_concurrent_sessions < ftstats.concurrent_sessions)
         ftstats.max_concurrent_sessions = ftstats.concurrent_sessions;

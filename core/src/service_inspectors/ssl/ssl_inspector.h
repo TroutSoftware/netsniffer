@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -35,10 +35,10 @@ public:
     virtual ~SslMetadataEvent() override
     { }
 
-    uint16_t get_version() const override;
-    uint16_t get_curve() const override;
-    uint16_t get_cipher() const override;
-    const std::string& get_server_name_identifier() const override;
+    int32_t get_version() const override;
+    int32_t get_curve() const override;
+    int32_t get_cipher() const override;
+    const std::string& get_server_name() const override;
     const std::string& get_subject() const override;
     const std::string& get_issuer() const override;
     const std::string& get_validation_status() const override;
@@ -52,7 +52,7 @@ private:
 class SslFlowData : public SslBaseFlowData
 {
 public:
-    SslFlowData(const snort::Flow* flow);
+    SslFlowData(const snort::Flow* flow, snort::Inspector*, const SSLData* = nullptr);
     ~SslFlowData() override;
 
     static void init()

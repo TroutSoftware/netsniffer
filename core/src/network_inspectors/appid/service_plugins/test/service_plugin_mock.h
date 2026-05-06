@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -41,7 +41,7 @@ namespace snort
 void ParseWarning(WarningGroup, const char*, ...) { }
 
 // Stubs for appid sessions
-FlowData::FlowData(unsigned, Inspector*) : handler(nullptr), id(0)
+FlowData::FlowData(unsigned) : id(0)
 { }
 FlowData::~FlowData() = default;
 
@@ -97,8 +97,10 @@ void ClientDiscovery::initialize(AppIdInspector&) {}
 void ClientDiscovery::reload() {}
 
 int AppIdDetector::initialize(AppIdInspector&){return 0;}
+#if !defined(RSYNC_UNIT_TEST)
 int AppIdDetector::data_add(AppIdSession&, AppIdFlowData*){return 0;}
-#ifndef FTP_UNIT_TEST
+#endif
+#if !defined(FTP_UNIT_TEST) && !defined(TFTP_UNIT_TEST) && !defined(RSYNC_UNIT_TEST)
 AppIdFlowData* AppIdDetector::data_get(const AppIdSession&) {return nullptr;}
 #endif
 void AppIdDetector::add_user(AppIdSession&, const char*, AppId, bool, AppidChangeBits&){}
@@ -189,7 +191,8 @@ AppIdSession::AppIdSession(IpProtocol, const snort::SfIp* ip, uint16_t, AppIdIns
 #ifndef DISABLE_TENANT_ID
     ,uint32_t
 #endif
-    ) : snort::FlowData(inspector_id, (snort::Inspector*)&inspector),
+    ) : snort::FlowData(inspector_id),
+        inspector(inspector),
         config(stub_config), api(*(new snort::AppIdSessionApi(this, *ip))), odp_ctxt(odpctxt)
 { }
 AppIdSession::~AppIdSession() = default;
@@ -246,7 +249,7 @@ void AppIdInspector::eval(snort::Packet*) { }
 void AppIdInspector::show(const snort::SnortConfig*) const { }
 void AppIdInspector::tinit() { }
 void AppIdInspector::tterm() { }
-void AppIdInspector::tear_down(snort::SnortConfig*) { }
+void AppIdInspector::tear_down(snort::SnortConfig*, bool) { }
 snort::ProfileStats* AppIdModule::get_profile(
         unsigned, const char*&, const char*&) const
 {
@@ -260,7 +263,8 @@ void snort::DataBus::publish(unsigned, unsigned, snort::DataEvent&, snort::Flow*
 void snort::DataBus::publish(unsigned, unsigned, const uint8_t*, unsigned, snort::Flow*) { }
 void snort::DataBus::publish(unsigned, unsigned, snort::Packet*, snort::Flow*) { }
 
-snort::Packet* snort::DetectionEngine::get_current_packet() { return nullptr; }
+static snort::Packet s_mock_packet(false);
+snort::Packet* snort::DetectionEngine::get_current_packet() { return &s_mock_packet; }
 
 unsigned AppIdInspector::get_pub_id() { return 0; }
 #endif

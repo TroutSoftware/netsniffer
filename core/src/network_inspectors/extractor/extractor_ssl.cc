@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -47,8 +47,11 @@ static const char* tls_1_1_string = "TLS 1.1";
 static const char* tls_1_2_string = "TLS 1.2";
 static const char* tls_1_3_string = "TLS 1.3";
 
-static const char* get_ssl_string_version(uint32_t version)
+static const char* get_ssl_string_version(int32_t version)
 {
+    if (version < 0)
+        return "";
+
     switch (version)
     {
     case 0x0002:
@@ -508,6 +511,10 @@ const std::unordered_map<uint16_t, const char*> ssl_cipher_map =
 static const char* get_cipher(const DataEvent* event, const Flow*)
 {
     auto tls_event = (const SslTlsMetadataBaseEvent*)event;
+
+    if (tls_event->get_cipher() < 0)
+        return "";
+
     auto map = tls_event->get_version() < 0x0300 ? ssl_cipher_map : tls_cipher_map;
     auto it = map.find(tls_event->get_cipher());
     if (it != map.end())
@@ -518,14 +525,19 @@ static const char* get_cipher(const DataEvent* event, const Flow*)
     {
         static THREAD_LOCAL char unknown_cipher[32];
         memset(unknown_cipher, 0, sizeof(unknown_cipher));
-        snprintf(unknown_cipher, sizeof(unknown_cipher), "Unknown cipher (0x%02x)", tls_event->get_cipher());
+        snprintf(unknown_cipher, sizeof(unknown_cipher), "Unknown cipher (0x%02x)", (uint16_t)tls_event->get_cipher());
         return unknown_cipher;
     }
 }
 
 static const char* get_curve(const DataEvent* event, const Flow*)
 {
-    auto it = get_ssl_string_curve_map.find(((const SslTlsMetadataBaseEvent*)event)->get_curve());
+    auto tls_event = (const SslTlsMetadataBaseEvent*)event;
+
+    if (tls_event->get_curve() < 0)
+        return "";
+
+    auto it = get_ssl_string_curve_map.find(tls_event->get_curve());
     if (it != get_ssl_string_curve_map.end())
     {
         return it->second;
@@ -534,7 +546,7 @@ static const char* get_curve(const DataEvent* event, const Flow*)
     {
         static THREAD_LOCAL char unknown_curve[32];
         memset(unknown_curve, 0, sizeof(unknown_curve));
-        snprintf(unknown_curve, sizeof(unknown_curve), "Unknown curve (0x%02x)", ((const SslTlsMetadataBaseEvent*)event)->get_curve());
+        snprintf(unknown_curve, sizeof(unknown_curve), "Unknown curve (0x%02x)", (uint16_t)tls_event->get_curve());
         return unknown_curve;
     }
 }
@@ -564,15 +576,15 @@ static const char* get_module_identifier(const DataEvent* event, const Flow*)
     return ((const SslTlsMetadataBaseEvent*)event)->get_module_identifier().c_str();
 }
 
-static const char* get_server_name_identifier(const DataEvent* event, const Flow*)
+static const char* get_server_name(const DataEvent* event, const Flow*)
 {
-    return ((const SslTlsMetadataBaseEvent*)event)->get_server_name_identifier().c_str();
+    return ((const SslTlsMetadataBaseEvent*)event)->get_server_name().c_str();
 }
 
 static const map<string, ExtractorEvent::BufGetFn> buf_getters =
 {
     {"version", get_version},
-    {"server_name_identifier", get_server_name_identifier},
+    {"server_name", get_server_name},
     {"validation_status", get_validation_status},
     {"subject", get_subject},
     {"issuer", get_issuer},

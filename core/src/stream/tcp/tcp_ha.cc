@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -69,15 +69,12 @@ void TcpHAManager::process_deletion(Flow& flow)
 
 void TcpHAManager::tinit()
 {
-    if ( HighAvailabilityManager::active() )
+    if ( HighAvailabilityManager::configured() )
         tcp_ha = new TcpHA();
-    else
-        tcp_ha = nullptr;
 }
 
 void TcpHAManager::tterm()
 {
-    if ( tcp_ha != nullptr )
-        delete tcp_ha;
+    delete tcp_ha;
 }
 

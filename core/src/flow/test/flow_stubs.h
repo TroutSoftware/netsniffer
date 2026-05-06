@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -25,6 +25,7 @@
 #include "main/policy.h"
 #include "main/snort_config.h"
 #include "main/thread_config.h"
+#include "managers/plugin_manager.h"
 #include "packet_io/packet_tracer.h"
 #include "protocols/layer.h"
 #include "protocols/packet.h"
@@ -41,7 +42,6 @@ void DataBus::publish(unsigned, unsigned, Packet*, Flow*) { }
 
 Packet::Packet(bool)
 {
-    memset((char*) this , 0, sizeof(*this));
     ip_proto_next = IpProtocol::PROTO_NOT_SET;
     packet_flags = PKT_FROM_CLIENT;
 }
@@ -75,12 +75,13 @@ IpsPolicy* get_ips_policy() { return nullptr; }
 void set_network_policy(NetworkPolicy*) { }
 void set_inspection_policy(InspectionPolicy*) { }
 void set_ips_policy(IpsPolicy*) { }
-unsigned SnortConfig::get_thread_reload_id() { return 0; }
 }
 
 void set_network_policy(unsigned) { }
 void set_inspection_policy(unsigned) { }
 void set_ips_policy(const snort::SnortConfig*, unsigned) { }
 void select_default_policy(const _daq_pkt_hdr&, const snort::SnortConfig*) { }
+
+PluginPtr PluginManager::get_plugin(const char*) { return nullptr; }
 
 #endif

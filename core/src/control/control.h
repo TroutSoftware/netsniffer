@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2017-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2017-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -23,13 +23,13 @@
 #ifndef CONTROL_H
 #define CONTROL_H
 
-#include <atomic>
 #include <cstdarg>
 #include <ctime>
 #include <queue>
 #include <string>
 #include <vector>
 
+#include "log/messages.h"
 #include "main/snort_types.h"
 
 struct lua_State;
@@ -49,10 +49,12 @@ public:
     void block();
     void unblock();
     void remove();
+    void mark_unregistered() { registered = false; }
     bool show_prompt();
+    
     bool is_blocked() const { return blocked; }
-    bool is_closed() const { return (fd == -1); }
     bool is_removed() const { return removed; }
+    bool is_registered() const { return registered; }
     bool has_pending_command() const { return !pending_commands.empty(); }
     time_t get_touched() const;
     std::string get_current_command() const { return pending_commands.front(); }
@@ -81,11 +83,14 @@ private:
     std::queue<std::string> pending_commands;
     std::string next_command;
     class Shell *shell;
-    int fd;
-    int blocked = 0; // a number of commands blocking the channel
-    bool local = false;
-    bool removed = false;
-    std::atomic<time_t> touched;
+    int blocked{0}; // a number of commands blocking the channel
+    const int fd;
+    const bool local{false};  // true if connection is from stdin (local), false for remote socket
+    bool removed{false};  // marked for removal, connection will be deleted when unblocked
+    bool registered{true};  // true if fd is registered with epoll for i/o monitoring
+    bool closed{false};  // true if fd has been closed to prevent double-close
+    bool write_failed_main{false};  // prevents repeated write attempts in main thread after failure
+    time_t touched{0};  // last activity timestamp, used for timeout detection
 
     static std::vector<std::string> log_exclusion_list;
     static unsigned pending_cmds_count; //counter to serialize commands across control connections

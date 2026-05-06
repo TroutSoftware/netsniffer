@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -30,6 +30,7 @@
 #include "flow/flow_stash.h"
 #include "flow/stream_flow.h"
 #include "main/snort_config.h"
+#include "packet_io/packet_tracer.h"
 #include "managers/inspector_manager.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
@@ -140,8 +141,10 @@ AppIdSession::AppIdSession(IpProtocol proto, const SfIp* ip, uint16_t port,
 #ifndef DISABLE_TENANT_ID
     ,uint32_t tenant_id
 #endif
-    )
-    : FlowData(inspector_id, &inspector), config(inspector.get_ctxt().config),
+    ) :
+        FlowData(inspector_id),
+        inspector(inspector),
+        config(inspector.get_ctxt().config),
         initiator_port(port),
 #ifndef DISABLE_TENANT_ID
         tenant_id(tenant_id),
@@ -151,6 +154,7 @@ AppIdSession::AppIdSession(IpProtocol proto, const SfIp* ip, uint16_t port,
         odp_ctxt_version(odp_ctxt.get_version()),
         tp_appid_ctxt(pkt_thread_tp_appid_ctxt)
 {
+    inspector.add_ref();
     appid_stats.total_sessions++;
 }
 
@@ -215,6 +219,8 @@ AppIdSession::~AppIdSession()
         delete &api;
     else
         api.asd = nullptr;
+
+    inspector.rem_ref();
 }
 
 // FIXIT-RC X Move this to somewhere more generally available/appropriate (decode_data.h).
@@ -253,9 +259,8 @@ AppIdSession* AppIdSession::create_future_session(const Packet* ctrlPkt, const S
     char src_ip[INET6_ADDRSTRLEN];
     char dst_ip[INET6_ADDRSTRLEN];
 
-    AppIdInspector* inspector =
-        static_cast<AppIdInspector*>(
-            InspectorManager::get_inspector(MOD_NAME, MOD_USAGE, appid_inspector_api.type));
+    AppIdInspector* inspector = static_cast<AppIdInspector*>
+        (InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     assert(inspector);
 
     // FIXIT-RC - port parameter passed in as 0 since we may not know client port, verify
@@ -728,6 +733,11 @@ void AppIdSession::set_client_appid_data(AppId id, char* version, bool published
     if (id <= APP_ID_NONE or id == APP_ID_HTTP)
         return;
 
+    if (id == APP_ID_SSL_CLIENT and api.service.get_id() == APP_ID_QUIC)
+    {
+        id = APP_ID_QUIC;
+    }
+
     AppId cur_id = api.client.get_id();
     if (id != cur_id)
     {
@@ -787,6 +797,11 @@ bool AppIdSession::is_svc_taking_too_much_time() const
     return (init_pkts_without_reply > odp_ctxt.max_packet_service_fail_ignore_bytes or
         (init_pkts_without_reply > odp_ctxt.max_packet_before_service_fail and
         init_bytes_without_reply > odp_ctxt.max_bytes_before_service_fail));
+}
+
+bool AppIdSession::is_midstream_svc_taking_too_much_time() const
+{
+    return srv_midstream_packet_inspected >= odp_ctxt.max_midstream_packet_before_service_fail;
 }
 
 void AppIdSession::delete_session_data()
@@ -1323,7 +1338,6 @@ void AppIdSession::publish_shadow_traffic_event(const uint32_t& shadow_traffic_b
         return;
 
     const char* app_name;
-    unsigned shadow_traffic_pub_id = 0;
     std::string str_print;
     Packet* curr_packet = nullptr;
 
@@ -1355,12 +1369,18 @@ void AppIdSession::publish_shadow_traffic_event(const uint32_t& shadow_traffic_b
         }
     }
 
-    shadow_traffic_pub_id = DataBus::get_id(shadowtraffic_pub_key);
+    ShadowTrafficEvent shadow_event(shadow_traffic_bits, "", "", app_name, ShadowTrafficDetectionSource::APPID);
+    DataBus::publish(AppIdInspector::get_shadowtraffic_pub_id(), ShadowTrafficEventIds::SHADOWTRAFFIC_FLOW_DETECTED, shadow_event, flow);
 
-    ShadowTrafficEvent shadow_event(shadow_traffic_bits, "", "", app_name);
-    DataBus::publish(shadow_traffic_pub_id, ShadowTrafficEventIds::SHADOWTRAFFIC_FLOW_DETECTED, shadow_event, flow);
+    if (PacketTracer::is_active())
+    {
+        change_shadow_traffic_bits_to_string(shadow_traffic_bits, str_print);
+        PacketTracer::log("ShadowTraffic: AppID published shadow traffic event, tag_type=0x%x (%s), "
+            "application_name=%s\n",
+            shadow_traffic_bits, str_print.c_str(), app_name);
+    }
 
-    if (appidDebug and appidDebug->is_active())
+    if (appidDebug and appidDebug->is_active() and str_print.empty())
         change_shadow_traffic_bits_to_string(shadow_traffic_bits, str_print);
 
     APPID_LOG(curr_packet, TRACE_DEBUG_LEVEL,

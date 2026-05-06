@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -32,12 +32,14 @@
 #include "main/snort_config.h"
 #include "main/snort_types.h"
 #include "managers/inspector_manager.h"
+#include "packet_io/packet_tracer.h"
 #include "profiler/profiler_defs.h"
 #include "protocols/packet.h"
 #include "protocols/tcp.h"
 #include "pub_sub/stream_event_ids.h"
 #include "stream/flush_bucket.h"
 #include "stream/stream.h"
+#include "stream/tcp/held_packet_queue.h"
 #include "stream/tcp/tcp_stream_tracker.h"
 
 #include "stream_ha.h"
@@ -57,7 +59,6 @@ static std::mutex crash_dump_flow_control_mutex;
 
 THREAD_LOCAL BaseStats stream_base_stats;
 
-
 // FIXIT-L dependency on stats define in another file
 const PegInfo base_pegs[] =
 {
@@ -70,7 +71,7 @@ const PegInfo base_pegs[] =
     { CountType::SUM, "memcap_prunes", "sessions pruned due to memcap" },
     { CountType::SUM, "ha_prunes", "sessions pruned by high availability sync" },
     { CountType::SUM, "stale_prunes", "sessions pruned due to stale connection" },
-    { CountType::SUM, "closed_prunes", "sessions pruned due to stream closed" },
+    { CountType::SUM, "flows_closed", "number of flows closed and removed from the flow cache" },
     { CountType::SUM, "expected_flows", "total expected flows created within snort" },
     { CountType::SUM, "expected_realized", "number of expected flows realized" },
     { CountType::SUM, "expected_pruned", "number of expected flows pruned" },
@@ -108,6 +109,17 @@ const PegInfo base_pegs[] =
     { CountType::SUM, "allowlist_eof_prunes", "number of allowlist flows pruned due to EOF" },
     { CountType::SUM, "excess_to_allowlist", "number of flows moved to the allowlist due to excess" },
 
+    // Flow creation failure counters
+    { CountType::SUM, "no_flow_no_proto_handler", "packets without flow: no protocol handler registered" },
+    { CountType::SUM, "no_flow_retry_packet", "packets without flow: retry packet dropped" },
+    { CountType::SUM, "no_flow_tcp_rst", "packets without flow: TCP RST packet" },
+    { CountType::SUM, "no_flow_unwanted", "packets without flow: flow not wanted" },
+    { CountType::SUM, "no_flow_midstream_reject", "packets without flow: midstream rejected" },
+    { CountType::SUM, "no_flow_alloc_failure", "packets without flow: flow allocation failed" },
+    { CountType::SUM, "no_flow_pkt_type_none", "packets without flow: packet type is NONE" },
+    { CountType::SUM, "no_flow_no_inspector", "packets without flow: no flow tracking inspector configured" },
+    { CountType::SUM, "no_flow_paf_no_flow", "packets without flow: PAF payload but no flow exists" },
+
     // Keep the NOW stats at the bottom as it requires special sum_stats logic
     { CountType::NOW, "allowlist_flows", "number of flows moved to the allowlist" },
     { CountType::NOW, "current_flows", "current number of flows in cache" },
@@ -133,7 +145,7 @@ void base_prep()
     stream_base_stats.memcap_prunes = flow_con->get_prunes(PruneReason::MEMCAP);
     stream_base_stats.ha_prunes = flow_con->get_prunes(PruneReason::HA);
     stream_base_stats.stale_prunes = flow_con->get_prunes(PruneReason::STALE);
-    stream_base_stats.closed_prunes = flow_con->get_prunes(PruneReason::STREAM_CLOSED);
+    stream_base_stats.flows_closed = flow_con->get_prunes(PruneReason::STREAM_CLOSED);
     stream_base_stats.reload_freelist_flow_deletes = flow_con->get_deletes(FlowDeleteState::FREELIST);
     stream_base_stats.reload_allowed_flow_deletes = flow_con->get_deletes(FlowDeleteState::ALLOWED);
     stream_base_stats.reload_offloaded_flow_deletes= flow_con->get_deletes(FlowDeleteState::OFFLOADED);
@@ -220,7 +232,7 @@ public:
     bool configure(SnortConfig*) override;
     void show(const SnortConfig*) const override;
 
-    void tear_down(SnortConfig*) override;
+    void tear_down(SnortConfig*, bool) override;
 
     void tinit() override;
     void tterm() override;
@@ -240,56 +252,72 @@ bool StreamBase::configure(SnortConfig*)
     return true;
 }
 
-void StreamBase::tear_down(SnortConfig* sc)
-{ sc->register_reload_handler(new StreamUnloadReloadResourceManager); }
+void StreamBase::tear_down(SnortConfig* sc, bool shutdown)
+{
+    if ( !shutdown )
+        sc->register_reload_handler(new StreamUnloadReloadResourceManager);
+}
+
+static THREAD_LOCAL bool keep_tld = false;
 
 void StreamBase::tinit()
 {
-    assert(!flow_con && config.flow_cache_cfg.max_flows);
+    if ( flow_con )
+    {
+        keep_tld = true;
+        return;
+    }
+    assert(config.flow_cache_cfg.max_flows);
 
     // this is temp added to suppress the compiler error only
     flow_con = new FlowControl(config.flow_cache_cfg);
 
-    std::unique_lock<std::mutex> flow_control_lock(crash_dump_flow_control_mutex);
-    crash_dump_flow_control.push_back(flow_con);
-    flow_control_lock.unlock();
+    {
+        std::lock_guard<std::mutex> flow_control_lock(crash_dump_flow_control_mutex);
+        crash_dump_flow_control.push_back(flow_con);
+    }
 
     InspectSsnFunc f;
 
     StreamHAManager::tinit();
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__IP)) )
+    if ( (f = InspectorManager::get_session("stream_ip", PROTO_BIT__IP)) )
         flow_con->init_proto(PktType::IP, f);
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__ICMP)) )
+    if ( (f = InspectorManager::get_session("stream_icmp", PROTO_BIT__ICMP)) )
         flow_con->init_proto(PktType::ICMP, f);
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__TCP)) )
+    if ( (f = InspectorManager::get_session("stream_tcp", PROTO_BIT__TCP)) )
         flow_con->init_proto(PktType::TCP, f);
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__UDP)) )
+    if ( (f = InspectorManager::get_session("stream_udp", PROTO_BIT__UDP)) )
         flow_con->init_proto(PktType::UDP, f);
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__USER)) )
+    if ( (f = InspectorManager::get_session("stream_user", PROTO_BIT__USER)) )
         flow_con->init_proto(PktType::USER, f);
 
-    if ( (f = InspectorManager::get_session(PROTO_BIT__FILE)) )
+    if ( (f = InspectorManager::get_session("stream_file", PROTO_BIT__FILE)) )
         flow_con->init_proto(PktType::FILE, f);
 
     if ( config.flow_cache_cfg.max_flows > 0 )
         flow_con->init_exp(config.flow_cache_cfg.max_flows);
-
-    TcpStreamTracker::set_held_packet_timeout(config.held_packet_timeout);
 
 #ifdef REG_TEST
     FlushBucket::set(config.footprint);
 #else
     FlushBucket::set();
 #endif
+    Stream::set_held_packet_queue(config.hold_time);
 }
 
 void StreamBase::tterm()
 {
+    if ( keep_tld )
+    {
+        keep_tld = false;
+        return;
+    }
+    Stream::delete_held_packet_queue();
     StreamHAManager::tterm();
     FlushBucket::clear();
     base_prep();
@@ -314,6 +342,9 @@ void StreamBase::eval(Packet* p)
     switch ( p->type() )
     {
     case PktType::NONE:
+        stream_base_stats.no_flow_pkt_type_none++;
+        if ( PacketTracer::is_active() )
+            PacketTracer::log("Flow: packet without flow - packet type is NONE\n");
         break;
 
     case PktType::IP:
@@ -390,18 +421,6 @@ static void base_dtor(Inspector* p)
     delete p;
 }
 
-static void base_tinit()
-{
-    TcpStreamTracker::thread_init();
-}
-
-static void base_tterm()
-{
-    StreamHAManager::tterm();
-    FlushBucket::clear();
-    TcpStreamTracker::thread_term();
-}
-
 static const InspectApi base_api =
 {
     {
@@ -420,10 +439,10 @@ static const InspectApi base_api =
     PROTO_BIT__ANY_SSN,
     nullptr, // buffers
     nullptr, // service
-    nullptr, // init
-    nullptr, // term
-    base_tinit,
-    base_tterm,
+    nullptr, // pinit
+    nullptr, // pterm
+    nullptr, // tinit
+    nullptr, // tterm
     base_ctor,
     base_dtor,
     nullptr, // ssn
@@ -431,3 +450,4 @@ static const InspectApi base_api =
 };
 
 const BaseApi* nin_stream_base = &base_api.base;
+

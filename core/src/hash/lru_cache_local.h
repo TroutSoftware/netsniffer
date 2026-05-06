@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "framework/counts.h"
+#include "log/messages.h"
 
 #define LRU_CACHE_LOCAL_PEGS(module) \
     { CountType::SUM, "cache_adds", module " cache added new entry" }, \
@@ -54,7 +55,12 @@ class LruCacheLocal
 {
 public:
     LruCacheLocal(const size_t sz, struct LruCacheLocalStats& st)
-        : max_size(sz), current_size(0), stats(st) { }
+        : max_size(sz and sz < entry_size ? entry_size : sz), current_size(0), stats(st)
+    {
+        if ( sz and sz < entry_size )
+            snort::WarningMessage("LruCacheLocal: max_size (%zu) is less than entry_size (%zu), "
+                "clamping to entry_size\n", sz, entry_size);
+    }
 
     virtual ~LruCacheLocal() = default;
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2023-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2023-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -35,7 +35,7 @@ static const Parameter snort_ml_params[] =
     { "uri_depth", Parameter::PT_INT, "-1:max31", "-1",
       "number of input HTTP URI bytes to scan (-1 unlimited)" },
 
-    { "client_body_depth", Parameter::PT_INT, "-1:max31", "0",
+    { "client_body_depth", Parameter::PT_INT, "-1:max31", "-1",
       "number of input HTTP client body bytes to scan (-1 unlimited)" },
 
     { "http_param_threshold", Parameter::PT_REAL, "0:1", "0.95",

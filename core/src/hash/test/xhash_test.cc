@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -45,7 +45,7 @@ DataBus::DataBus() = default;
 DataBus::~DataBus() = default;
 
 // run_flags is used indirectly from HashFnc class by calling SnortConfig::static_hash()
-SnortConfig::SnortConfig(const SnortConfig* const, const char*) : daq_config(nullptr), thread_config(nullptr)
+SnortConfig::SnortConfig(const char*) : daq_config(nullptr), thread_config(nullptr)
 { snort_conf->run_flags = 0;}
 
 SnortConfig::~SnortConfig() = default;

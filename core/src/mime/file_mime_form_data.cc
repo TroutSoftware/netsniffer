@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -15,44 +15,34 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //--------------------------------------------------------------------------
-// trace_logger.h author Oleksandr Serhiienko <oserhiie@cisco.com>
+// file_mime_form_data.cc author Anna Norokh <anorokh@cisco.com>
 
-#ifndef TRACE_LOGGER_H
-#define TRACE_LOGGER_H
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
-#include <cstdint>
+#include "file_mime_form_data.h"
 
-namespace snort
+using namespace snort;
+
+void MimeFormDataCollector::finalize_field(const std::string& filename)
 {
-struct Packet;
+    if (!is_form_data or current_field_name.empty() or is_size_exceeded)
+        return;
 
-class TraceLogger
-{
-public:
-    virtual ~TraceLogger() = default;
+    const std::string& value_to_use = (is_file_upload and !filename.empty())
+        ? filename : current_field_value;
 
-    virtual void log(const char* log_msg, const char* name,
-        uint8_t log_level, const char* trace_option, const Packet* p) = 0;
+    const size_t field_total_len = current_field_name.length() + 1 + value_to_use.length() +
+        (form_fields.empty() ? 0 : 1);
 
-    void set_ntuple(bool flag)
-    { ntuple = flag; }
+    if (accumulated_size + field_total_len > MAX_FORM_DATA_SIZE)
+    {
+        is_size_exceeded = true;
+        return;
+    }
 
-    void set_timestamp(bool flag)
-    { timestamp = flag; }
-
-protected:
-    bool ntuple = false;
-    bool timestamp = false;
-};
-
-class TraceLoggerFactory
-{
-public:
-    virtual ~TraceLoggerFactory() = default;
-
-    virtual TraceLogger* instantiate() = 0;
-};
+    form_fields.emplace_back(current_field_name, value_to_use);
+    accumulated_size += field_total_len;
 }
-
-#endif // TRACE_LOGGER_H
 

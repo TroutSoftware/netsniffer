@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -88,7 +88,7 @@ static uint64_t get_resp_bytes(const DataEvent*, const Flow* f)
 {
     if (f->session == nullptr)
         return 0;
-    
+
     if (f->pkt_type == PktType::TCP)
         return get_resp_bytes_tcp((const TcpSession*)f->session);
     else if (f->pkt_type == PktType::UDP)

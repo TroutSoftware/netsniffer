@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -102,14 +102,12 @@ FileCache::~FileCache()
 
 void FileCache::set_block_timeout(int64_t timeout)
 {
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    block_timeout = timeout;
+    block_timeout.store(timeout, std::memory_order_relaxed);
 }
 
 void FileCache::set_lookup_timeout(int64_t timeout)
 {
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    lookup_timeout = timeout;
+    lookup_timeout.store(timeout, std::memory_order_relaxed);
 }
 
 void FileCache::set_max_files(int64_t max)
@@ -295,7 +293,8 @@ FileContext* FileCache::get_file(Flow* flow, uint64_t file_id, bool to_create, b
 {
     bool cache_full = false;
     int64_t cache_expire = 0;
-    return get_file(flow, file_id, to_create, lookup_timeout, using_cache_entry, cache_full, cache_expire);
+    return get_file(flow, file_id, to_create, lookup_timeout.load(std::memory_order_relaxed),
+        using_cache_entry, cache_full, cache_expire);
 }
 
 FileVerdict FileCache::check_verdict(Packet* p, FileInfo* file,
@@ -343,7 +342,7 @@ void FileCache::publish_file_cache_event(Flow* flow, FileInfo* file, int64_t tim
 
 
         std::shared_ptr<FileMPEvent> fe = std::make_shared<FileMPEvent>(hashkey, timeout, *file);
-        unsigned file_pub_id = MPDataBus::get_id(file_pub_key);
+        unsigned file_pub_id = MPDataBus::get_id(file_mp_pub_key);
         MPDataBus::publish(file_pub_id, FileMPEvents::FILE_SHARE_SYNC, fe);
 
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
@@ -427,6 +426,12 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
         // can't block session inside a session
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, p,
             "apply_verdict:FILE_VERDICT_BLOCK with action block\n");
+
+        if (PacketTracer::is_active())
+        {
+            PacketTracer::log("File: FILE_VERDICT_BLOCK with action block\n");
+        }
+
         act->set_delayed_action(Active::ACT_BLOCK, true);
         act->set_drop_reason("file");
         break;
@@ -435,6 +440,12 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
         // can't reset session inside a session
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, p,
             "apply_verdict:FILE_VERDICT_REJECT with action reset\n");
+
+        if (PacketTracer::is_active())
+        {
+            PacketTracer::log("File: FILE_VERDICT_REJECT with action reset\n");
+        }
+
         act->set_delayed_action(Active::ACT_RESET, true);
         act->set_drop_reason("file");
         break;
@@ -442,6 +453,8 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
         file_ctx->stop_file_capture();
         return false;
     case FILE_VERDICT_PENDING:
+    {
+        int64_t cur_lookup_timeout = lookup_timeout.load(std::memory_order_relaxed);
         packet_gettimeofday(&now);
 
         if (timerisset(&file_ctx->pending_expire_time) and
@@ -456,8 +469,16 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
             {
                 FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, p,
                     "apply_verdict:FILE_VERDICT_PENDING with action reset\n");
+
+                if (PacketTracer::is_active())
+                {
+                    PacketTracer::log("File: FILE_VERDICT_PENDING with action reset due to timeout\n");
+                }
+
                 act->set_delayed_action(Active::ACT_RESET, true);
             }
+
+            file_ctx->set_timedout();
 
             if (resume)
                 policy->log_file_action(flow, file_ctx, FILE_RESUME_BLOCK);
@@ -466,11 +487,11 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
 
             FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, p,
                 "File signature lookup: timed out after %" PRIi64 "ms.\n",
-                time_elapsed_ms(&now, &file_ctx->pending_expire_time, lookup_timeout));
+                time_elapsed_ms(&now, &file_ctx->pending_expire_time, cur_lookup_timeout));
 
             if (PacketTracer::is_active())
             {
-                PacketTracer::log("File signature lookup: timed out after %" PRIi64 "ms.\n", time_elapsed_ms(&now, &file_ctx->pending_expire_time, lookup_timeout));
+                PacketTracer::log("File signature lookup: timed out after %" PRIi64 "ms.\n", time_elapsed_ms(&now, &file_ctx->pending_expire_time, cur_lookup_timeout));
             }
         }
         else
@@ -479,7 +500,7 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
 
             if (!timerisset(&file_ctx->pending_expire_time))
             {
-                add_time = { static_cast<time_t>(lookup_timeout), 0 };
+                add_time = { static_cast<time_t>(cur_lookup_timeout), 0 };
                 timeradd(&now, &add_time, &file_ctx->pending_expire_time);
 
                 FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, p,
@@ -495,12 +516,12 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
                 //  be there.
                 if (!(p->packet_flags & PKT_RETRANSMIT) or p->is_retry())
                 {
-                    PacketTracer::log("File signature lookup: adding packet to retry queue. Resume=%d, Waited %" PRIi64 "ms.\n", resume, time_elapsed_ms(&now, &file_ctx->pending_expire_time, lookup_timeout));
+                    PacketTracer::log("File signature lookup: adding packet to retry queue. Resume=%d, Waited %" PRIi64 "ms.\n", resume, time_elapsed_ms(&now, &file_ctx->pending_expire_time, cur_lookup_timeout));
 
                     FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, p,
                         "File signature lookup adding packet to retry queue"
                         "Resume=%d, Waited %" PRIi64 "ms.\n", resume,
-                        time_elapsed_ms(&now, &file_ctx->pending_expire_time, lookup_timeout));
+                        time_elapsed_ms(&now, &file_ctx->pending_expire_time, cur_lookup_timeout));
                 }
             }
 
@@ -515,7 +536,7 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
 
             if (resume)
                 policy->log_file_action(flow, file_ctx, FILE_RESUME_BLOCK);
-            else if (store_verdict(flow, file_ctx, lookup_timeout, cache_full, file_ctx->is_cacheable()) != 0)
+            else if (store_verdict(flow, file_ctx, cur_lookup_timeout, cache_full, file_ctx->is_cacheable()) != 0)
             {
                 if (cache_full)
                 {
@@ -539,6 +560,7 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
             }
         }
         return true;
+    }
     default:
         return false;
     }
@@ -552,7 +574,7 @@ bool FileCache::apply_verdict(Packet* p, FileContext* file_ctx, FileVerdict verd
     }
     else if (bool is_cacheable = file_ctx->is_cacheable())
     {
-        if (store_verdict(flow, file_ctx, block_timeout, cache_full, is_cacheable) != 0)
+        if (store_verdict(flow, file_ctx, block_timeout.load(std::memory_order_relaxed), cache_full, is_cacheable) != 0)
         {
             if (PacketTracer::is_active())
             {

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -23,7 +23,7 @@
 
 namespace snort
 {
-Module* ModuleManager::get_module(const char*)
+Module* PigPen::get_module(const char*)
 { return nullptr; }
 
 char* snort_strdup(const char* s)
@@ -42,7 +42,7 @@ void LogMessage(const char*,...) {}
 void WarningMessage(const char*,...) {}
 DataBus::DataBus() = default;
 DataBus::~DataBus() = default;
-SnortConfig::SnortConfig(const SnortConfig* const, const char*) {}
+SnortConfig::SnortConfig(const char*) {}
 SnortConfig::~SnortConfig() = default;
 time_t packet_time() { return 0; }
 
@@ -64,6 +64,8 @@ void UaFpProcessor::push(RawFingerprint const&) { }
 
 void UdpFpProcessor::push(RawFingerprint const&) { }
 
+void DeviceInfoFpProcessor::push(const DeviceInfoRawFingerprint& raw_fp) { }
+
 SmbFingerprint::SmbFingerprint(const RawFingerprint&) { }
 bool SmbFingerprint::operator==(const SmbFingerprint&) const { return true; }
 bool SmbFpProcessor::push(SmbFingerprint const&) { return true; }
@@ -81,7 +83,12 @@ bool DataPurgeAC::execute(Analyzer&, void**) { return true;}
 
 void set_host_cache_mac(HostCacheMac*) { }
 
-Inspector* PigPen::get_inspector(const char*, bool, const SnortConfig*)
+Inspector* PigPen::get_inspector(const char*, Module::Usage)
+{ return nullptr; }
+
+void PigPen::add_shutdown_hook(void (*)()) { }
+
+Module* PluginManager::get_module(const char*)
 { return nullptr; }
 
 void HostTracker::remove_flows() { }

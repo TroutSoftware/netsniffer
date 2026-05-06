@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -29,7 +29,7 @@
 namespace snort
 {
 
-#define MP_TRANSPORT_API_VERSION ((BASE_API_VERSION << 16) | 1)
+#define MP_TRANSPORT_API_VERSION ((BASE_API_VERSION << 16) | 2)
 
 struct SnortConfig;
 struct MPEventInfo;

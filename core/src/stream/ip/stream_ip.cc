@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -94,7 +94,7 @@ StreamIp::~StreamIp()
 bool StreamIp::configure(SnortConfig* sc)
 {
     defrag->configure(sc);
-    return true;
+    return Stream::is_active();
 }
 
 void StreamIp::show(const SnortConfig*) const

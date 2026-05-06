@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -50,7 +50,7 @@ THREAD_LOCAL ExtractorLogger* Extractor::logger = nullptr;
 
 static const Parameter extractor_proto_params[] =
 {
-    { "service", Parameter::PT_ENUM, "http | ftp | ssl | conn | dns | quic | weird | notice", nullptr,
+    { "service", Parameter::PT_ENUM, "http | ssh | ftp | ssl | conn | dns | quic | file | weird | notice", nullptr,
       "service to extract from" },
 
     { "tenant_id", Parameter::PT_INT, "0:max32", "0",
@@ -314,7 +314,7 @@ static InspectApi extractor_api =
         sizeof(InspectApi),
         INSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         S_NAME,
         s_help,

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -135,6 +135,7 @@ public:
     void process_sni_mismatch()
     {
         tls_host_mismatch = true;
+        tls_data_finished = false;
     }
 
     bool is_tls_host_mismatched() const { return tls_host_mismatch; }
@@ -260,6 +261,7 @@ public:
         bool swap_app_direction=false, bool bidirectional=false, bool expect_persist=false);
     void initialize_future_session(AppIdSession&, uint64_t);
 
+    AppIdInspector& inspector;
     snort::Flow* flow = nullptr;
     AppIdConfig& config;
     std::unordered_map<unsigned, AppIdFlowData*> flow_data;
@@ -273,6 +275,7 @@ public:
     uint16_t session_packet_count = 0;
     uint16_t init_pkts_without_reply = 0;
     uint64_t init_bytes_without_reply = 0;
+    uint16_t srv_midstream_packet_inspected = 0;
     AppId first_pkt_service_id = 0;
     AppId first_pkt_payload_id = 0;
     AppId first_pkt_client_id = 0;
@@ -352,6 +355,7 @@ public:
         false : true; }
     bool is_decrypted() const { return ((flags & APPID_SESSION_DECRYPTED) == 0) ? false : true; }
     bool is_svc_taking_too_much_time() const;
+    bool is_midstream_svc_taking_too_much_time() const;
 
     AppIdFlowData* get_flow_data(unsigned id) const;
     int add_flow_data(AppIdFlowData* data, unsigned id);

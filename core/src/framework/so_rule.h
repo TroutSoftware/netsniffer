@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -38,7 +38,7 @@ struct Packet;
 }
 
 // this is the current version of the api
-#define SOAPI_VERSION ((BASE_API_VERSION << 16) | 1)
+#define SOAPI_VERSION ((BASE_API_VERSION << 16) | 2)
 
 //-------------------------------------------------------------------------
 // rule format is:  header ( [<stub opts>;] soid:<tag>; [<remaining opts>;] )

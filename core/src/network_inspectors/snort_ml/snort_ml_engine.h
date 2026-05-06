@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2023-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2023-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -36,6 +36,7 @@
 
 #define SNORT_ML_ENGINE_NAME "snort_ml_engine"
 #define SNORT_ML_ENGINE_HELP "configure machine learning engine settings"
+#define SNORT_ML_ENGINE_USE  Module::GLOBAL
 
 // Mock BinaryClassifierSet for tests if LibML is absent
 #ifndef HAVE_LIBML

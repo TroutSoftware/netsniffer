@@ -58,6 +58,7 @@ normalizer = { }
 pop = { }
 rpc_decode = { }
 sip = { }
+socks = { }
 ssh = { }
 ssl = { }
 telnet = { }
@@ -89,7 +90,7 @@ http_inspect = { }
 http2_inspect = { }
 
 -- see file_magic.rules for file id rules
-file_id = { rules_file = 'file_magic.rules' }
+file_inspect = { rules_file = 'file_magic.rules' }
 file_policy = { }
 
 js_norm = default_js_norm
@@ -129,6 +130,7 @@ binder =
     { when = { proto = 'tcp', ports = '2123 2152 3386', role='server' }, use = { type = 'gtp_inspect' } },
     { when = { proto = 'tcp', ports = '2404', role='server' }, use = { type = 'iec104' } },
     { when = { proto = 'udp', ports = '2222', role = 'server' }, use = { type = 'cip' } },
+    { when = { proto = 'tcp', ports = '4840', role = 'server' }, use = { type = 'opcua' } },
     { when = { proto = 'tcp', ports = '44818', role = 'server' }, use = { type = 'cip' } },
 
     { when = { proto = 'tcp', service = 'dcerpc' },  use = { type = 'dce_tcp' } },
@@ -156,6 +158,7 @@ binder =
     { when = { service = 'ssh' },              use = { type = 'ssh' } },
     { when = { service = 'sip' },              use = { type = 'sip' } },
     { when = { service = 'smtp' },             use = { type = 'smtp' } },
+    { when = { service = 'socks' },            use = { type = 'socks' } },
     { when = { service = 'ssl' },              use = { type = 'ssl' } },
     { when = { service = 'sunrpc' },           use = { type = 'rpc_decode' } },
     { when = { service = 's7commplus' },       use = { type = 's7commplus' } },

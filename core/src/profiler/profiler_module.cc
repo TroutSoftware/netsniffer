@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -179,7 +179,7 @@ static int rule_profiling_start(lua_State* L)
     main_broadcast_command(new ProfilerControl(ProfilerControl::CommandType::ENABLE), ctrlcon);
     main_broadcast_command(new ProfilerRuleReset(), ctrlcon);
     LogRespond(ctrlcon, "Rule profiler started\n");
-    LogRespond(ctrlcon, "Configuration reload id: %u\n", SnortConfig::get_conf()->get_reload_id());
+    LogRespond(ctrlcon, "Configuration reload id: %u\n", SnortConfig::get_reload_id());
 
     return 0;
 }

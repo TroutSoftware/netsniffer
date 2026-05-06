@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2013-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -44,7 +44,7 @@ void push_parse_location(
 void pop_parse_location();
 void inc_parse_position();
 
-snort::SnortConfig* ParseSnortConf(const snort::SnortConfig*, const char* fname = nullptr);
+snort::SnortConfig* ParseSnortConf(const snort::SnortConfig*, const char* fname);
 void ParseRules(snort::SnortConfig*);
 void ParseRulesFinish(snort::SnortConfig*);
 

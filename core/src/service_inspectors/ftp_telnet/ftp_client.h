@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2004-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -26,6 +26,8 @@
 #ifndef FTP_CLIENT_H
 #define FTP_CLIENT_H
 
+#include <vector>
+
 /*
  * FTP Client Module
  *
@@ -47,6 +49,8 @@ struct FTP_CLIENT_REQ
     unsigned int param_size;
 
     const char* pipeline_req;
+    // Keep layout compatible with FTP_CLIENT_REQ for shared parsing logic.
+    std::vector<char> param_buffer;
 };
 
 struct FTP_CLIENT

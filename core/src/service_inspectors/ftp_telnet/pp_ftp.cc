@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2004-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -51,11 +51,34 @@ using namespace snort;
 #endif
 
 /*
- * Used to keep track of pipelined commands and the last one
- * that resulted in a
+ * Function: is_command_valid
+ *
+ * Purpose: Validates FTP response command format to detect malformed responses
+ *
+ * Arguments: start    => Pointer to start of command
+ *            cmd_size => Size of the command
+ *
+ * Returns: bool => true if command is valid, false if malformed
  */
-static THREAD_LOCAL int ftp_cmd_pipe_index = 0;
+static bool is_command_valid(const char *start, size_t cmd_size) {
+    if (cmd_size >= 3 &&
+        isdigit((unsigned char)start[0]) &&
+        isdigit((unsigned char)start[1]) &&
+        isdigit((unsigned char)start[2])) {
+        return true;
+    }
 
+    if (cmd_size >= 4 &&
+        (start[0] != start[1] || start[0] != start[2] || start[0] != start[3])) {
+        return true;
+    }
+
+    if (cmd_size < 4) {
+        return true;
+    }
+
+    return false;
+}
 /*
  * Function: getIP959(char **ip_start,
  *                 char *last_char,
@@ -167,12 +190,17 @@ static int getIP1639(
         char* endPtr;
         unsigned long val = strtoul(tok, &endPtr, 10);
 
-        if (
-            val > 255 || endPtr == tok ||
-            ( *endPtr && *endPtr != ',' && endPtr != last_char )
-            )
+        if ( val > 255 || endPtr == tok )
         {
             return FTPP_INVALID_ARG;
+        }
+	
+        if ( endPtr != last_char )
+        {
+            if ( *endPtr && *endPtr != ',' )
+            {
+                 return FTPP_INVALID_ARG;
+            }
         }
         bytes[nBytes++] = (uint8_t)val;
         tok = (endPtr < last_char) ? endPtr + 1 : endPtr;
@@ -245,7 +273,7 @@ static void CopyField(
     char* buf, const char* tok, int max, const char* end, char delim
     )
 {
-    int len = end - tok + 1;
+    int len = end - tok;
     char* s;
 
     if ( len >= max )
@@ -286,8 +314,10 @@ static int getIP2428(
 
     while ( tok && tok < last_char && field < 4 )
     {
-        int check = (*++tok != delim) ? field : 0;
+        if ( ++tok >= last_char )
+            break;
 
+        int check = (*tok != delim) ? field : 0;
         switch ( check )
         {
         case 0:      /* empty */
@@ -321,7 +351,7 @@ static int getIP2428(
             break;
         }
         /* advance to next field */
-        tok = strchr(tok, delim);
+        tok = (const char*)memchr(tok, delim, last_char - tok);
         field++;
     }
 
@@ -377,7 +407,7 @@ static int getFTPip(
  * Returns: int => return code indicating error or success
  *
  */
-static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param)
+static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param, const char* end)
 {
     int valid_string = 0;
     int checked_something_else = 0;
@@ -397,6 +427,9 @@ static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param)
 
         do
         {
+            if (curr_ch >= end)
+                return FTPP_INVALID_DATE;
+
             switch (*format_char)
             {
             case 'n':
@@ -429,40 +462,40 @@ static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param)
             }
             valid_string = 1;
         }
-        while ((*format_char != '\0') && !isspace((int)(*curr_ch)));
+        while ((*format_char != '\0') && (curr_ch < end) && !isspace((int)(*curr_ch)));
 
-        if ((*format_char != '\0') && isspace((int)(*curr_ch)))
+        if ((*format_char != '\0') && (curr_ch < end) && isspace((int)(*curr_ch)))
         {
             /* Didn't have enough chars to complete this format */
             return FTPP_INVALID_DATE;
         }
     }
 
-    if ((ThisFmt->optional) && !isspace((int)(*curr_ch)))
+    if ((ThisFmt->optional) && (curr_ch < end) && !isspace((int)(*curr_ch)))
     {
         const char* tmp_ch = curr_ch;
-        iRet = validate_date_format(ThisFmt->optional, &tmp_ch);
+        iRet = validate_date_format(ThisFmt->optional, &tmp_ch, end);
         if (iRet == FTPP_SUCCESS)
             curr_ch = tmp_ch;
     }
-    if ((ThisFmt->next_a) && !isspace((int)(*curr_ch)))
+    if ((ThisFmt->next_a) && (curr_ch < end) && !isspace((int)(*curr_ch)))
     {
         const char* tmp_ch = curr_ch;
         checked_something_else = 1;
-        iRet = validate_date_format(ThisFmt->next_a, &tmp_ch);
+        iRet = validate_date_format(ThisFmt->next_a, &tmp_ch, end);
         if (iRet == FTPP_SUCCESS)
         {
             curr_ch = tmp_ch;
         }
         else if (ThisFmt->next_b)
         {
-            iRet = validate_date_format(ThisFmt->next_b, &tmp_ch);
+            iRet = validate_date_format(ThisFmt->next_b, &tmp_ch, end);
             if (iRet == FTPP_SUCCESS)
                 curr_ch = tmp_ch;
         }
         if (ThisFmt->next)
         {
-            iRet = validate_date_format(ThisFmt->next, &tmp_ch);
+            iRet = validate_date_format(ThisFmt->next, &tmp_ch, end);
             if (iRet == FTPP_SUCCESS)
             {
                 curr_ch = tmp_ch;
@@ -479,7 +512,7 @@ static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param)
     {
         const char* tmp_ch = curr_ch;
         checked_something_else = 1;
-        iRet = validate_date_format(ThisFmt->next, &tmp_ch);
+        iRet = validate_date_format(ThisFmt->next, &tmp_ch, end);
         if (iRet == FTPP_SUCCESS)
         {
             curr_ch = tmp_ch;
@@ -487,13 +520,13 @@ static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param)
         }
     }
 
-    if ((isspace((int)(*curr_ch))) && ((!ThisFmt->next) || checked_next))
+    if ((curr_ch < end) && (isspace((int)(*curr_ch))) && ((!ThisFmt->next) || checked_next))
     {
         *this_param = curr_ch;
         return FTPP_SUCCESS;
     }
 
-    if (valid_string)
+    if (valid_string && (curr_ch < end))
     {
         int all_okay = 0;
         if (checked_something_else)
@@ -653,7 +686,7 @@ static int validate_param(Packet* p,
         /* check that this_param conforms to date specified */
     {
         const char* tmp_ch = this_param;
-        iRet = validate_date_format(ThisFmt->format.date_fmt, &tmp_ch);
+        iRet = validate_date_format(ThisFmt->format.date_fmt, &tmp_ch, end);
         if (iRet != FTPP_SUCCESS)
         {
             /* Alert invalid date */
@@ -673,6 +706,9 @@ static int validate_param(Packet* p,
     {
         const char* s = ThisFmt->format.literal;
         size_t n = strlen(s);
+
+        if ( (size_t)(end - this_param) < n )
+            return FTPP_INVALID_PARAM;
 
         if ( strncmp(this_param, s, n) )
         {
@@ -1030,6 +1066,15 @@ int initialize_ftp(FTP_SESSION* session, Packet* p, int iMode)
     else
         return FTPP_INVALID_ARG;
 
+    req->cmd_line = nullptr;
+    req->cmd_line_size = 0;
+    req->cmd_begin = nullptr;
+    req->cmd_end = nullptr;
+    req->cmd_size = 0;
+    req->param_begin = nullptr;
+    req->param_end = nullptr;
+    req->param_size = 0;
+
     /* Set the beginning of the pipeline to the start of the
      * (normalized) buffer */
     req->pipeline_req = (const char*)read_ptr;
@@ -1079,10 +1124,10 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
         }
         else if (session->data_chan_state & DATA_CHAN_PASV_CMD_ISSUED)
         {
-            if (ftp_cmd_pipe_index == session->data_chan_index)
+            if (session->ftp_cmd_pipe_index == session->data_chan_index)
             {
                 if (session->data_xfer_index == -1)
-                    ftp_cmd_pipe_index = 0;
+                    session->ftp_cmd_pipe_index = 0;
                 session->data_chan_index = -1;
 
                 if ( rsp_code >= 227 && rsp_code <= 229 )
@@ -1221,10 +1266,10 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
         }
         else if (session->data_chan_state & DATA_CHAN_PORT_CMD_ISSUED)
         {
-            if (ftp_cmd_pipe_index == session->data_chan_index)
+            if (session->ftp_cmd_pipe_index == session->data_chan_index)
             {
                 if (session->data_xfer_index == -1)
-                    ftp_cmd_pipe_index = 0;
+                    session->ftp_cmd_pipe_index = 0;
                 session->data_chan_index = -1;
                 if (rsp_code == 200)
                 {
@@ -1232,7 +1277,7 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
                     session->data_chan_state |= DATA_CHAN_PORT_CMD_ACCEPT;
                     session->data_chan_index = -1;
                 }
-                else if (ftp_cmd_pipe_index == session->data_chan_index)
+                else if (session->ftp_cmd_pipe_index == session->data_chan_index)
                 {
                     session->data_chan_index = -1;
                     session->data_chan_state &= ~DATA_CHAN_PORT_CMD_ISSUED;
@@ -1241,10 +1286,10 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
         }
         else if (session->data_chan_state & DATA_CHAN_REST_CMD_ISSUED)
         {
-            if (ftp_cmd_pipe_index == session->data_xfer_index)
+            if (session->ftp_cmd_pipe_index == session->data_xfer_index)
             {
                 if (session->data_chan_index == 0)
-                    ftp_cmd_pipe_index = 1;
+                    session->ftp_cmd_pipe_index = 1;
                 session->data_xfer_index = 0;
                 if (rsp_code == 350)
                 {
@@ -1262,10 +1307,10 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
         }
         else if (session->data_chan_state & DATA_CHAN_XFER_CMD_ISSUED)
         {
-            if (ftp_cmd_pipe_index == session->data_xfer_index)
+            if (session->ftp_cmd_pipe_index == session->data_xfer_index)
             {
                 if (session->data_chan_index == -1)
-                    ftp_cmd_pipe_index = 0;
+                    session->ftp_cmd_pipe_index = 0;
 
                 session->data_xfer_index = -1;
 
@@ -1375,7 +1420,7 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
     if (iMode == FTPP_SI_CLIENT_MODE)
     {
         req = &ftpssn->client.request;
-        ftp_cmd_pipe_index = 0;
+        ftpssn->ftp_cmd_pipe_index = 0;
     }
     else if (iMode == FTPP_SI_SERVER_MODE)
     {
@@ -1538,7 +1583,17 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
                     ptr++;
                 }
             }
+            //Raise an alert if the response code is not valid
+            if (!is_command_valid(req->cmd_begin, req->cmd_size))
+            {
+                ftpssn->server.response.state = FTP_RESPONSE_INV;
+                Stream::stop_inspection(p->flow, p, SSN_DIR_BOTH, -1, 0);
 
+                ftpssn->ft_ssn.fallback = true;
+                DetectionEngine::queue_event(GID_FTP, FTP_ABORTED_SESSION);
+                ++ftstats.aborted_sessions;
+                return FTPP_ALERT;
+            }
             if (encrypted)
             {
                 /* If the session wasn't already marked as encrypted...
@@ -1611,8 +1666,13 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
                         req->cmd_begin = nullptr;
                         req->cmd_end = nullptr;
                         req->cmd_size = 0;
-                        if (*read_ptr != SP && read_ptr != p->data)
+                        
+                        // Track actual buffer boundaries
+                        const uint8_t* buffer_start = (buf.len) ? buf.data : p->data;
+                        
+                        if (*read_ptr != SP && read_ptr > buffer_start)
                             read_ptr--;
+                            
                         state = FTP_RESPONSE_CONT;
                     }
                 }
@@ -1675,14 +1735,21 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
             }
             else if (space || ftpssn->server.response.state != 0)
             {
-                /* Now grab the command parameters/response message
-                 * read_ptr < end already checked */
-                req->param_begin = (const char*)read_ptr;
-                if ((read_ptr = (const unsigned char*)memchr(read_ptr, CR, end - read_ptr)) == nullptr)
-                    read_ptr = end;
-                req->param_end = (const char*)read_ptr;
-                req->param_size = req->param_end - req->param_begin;
-                read_ptr++;
+                const unsigned char* param_start = read_ptr;
+                const unsigned char* cr_pos = (const unsigned char*)memchr(read_ptr, CR, end - read_ptr);
+                const unsigned char* param_end = (cr_pos != nullptr) ? cr_pos : end;
+                size_t param_len = param_end - param_start;
+
+                req->param_buffer.resize(param_len + 1);
+                if (param_len > 0)
+                    memcpy(req->param_buffer.data(), param_start, param_len);
+                req->param_buffer[param_len] = '\0';
+
+                req->param_begin = req->param_buffer.data();
+                req->param_size = static_cast<unsigned int>(param_len);
+                req->param_end = req->param_buffer.data() + param_len;
+
+                read_ptr = param_end + 1;
 
                 if (read_ptr < end)
                 {
@@ -1774,7 +1841,7 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
                 if (CmdConf->data_chan_cmd)
                 {
                     ftpssn->data_chan_state |= DATA_CHAN_PASV_CMD_ISSUED;
-                    ftpssn->data_chan_index = ftp_cmd_pipe_index;
+                    ftpssn->data_chan_index = ftpssn->ftp_cmd_pipe_index;
                     if (ftpssn->data_chan_state & DATA_CHAN_PORT_CMD_ISSUED)
                     {
                         /*
@@ -1795,7 +1862,7 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
                         if ((errno == ERANGE || errno == EINVAL) || (offset > 0))
                         {
                             ftpssn->data_chan_state |= DATA_CHAN_REST_CMD_ISSUED;
-                            ftpssn->data_xfer_index = ftp_cmd_pipe_index;
+                            ftpssn->data_xfer_index = ftpssn->ftp_cmd_pipe_index;
                         }
                     }
                 }
@@ -1840,7 +1907,7 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
                         }
                     }
                     ftpssn->data_chan_state |= DATA_CHAN_XFER_CMD_ISSUED;
-                    ftpssn->data_xfer_index = ftp_cmd_pipe_index;
+                    ftpssn->data_xfer_index = ftpssn->ftp_cmd_pipe_index;
                 }
                 else if (CmdConf->encr_cmd)
                 {
@@ -1901,7 +1968,7 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
         }
 
         if (iMode == FTPP_SI_CLIENT_MODE)
-            ftp_cmd_pipe_index++;
+            ftpssn->ftp_cmd_pipe_index++;
         else if ((rsp_code != 226) && (rsp_code != 426))
         {
             /*
@@ -1911,13 +1978,13 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
              * The 226 may or may not be sent by the server.
              * Both are 2nd response to a transfer command.
              */
-            ftp_cmd_pipe_index++;
+            ftpssn->ftp_cmd_pipe_index++;
         }
     }
 
     if (iMode == FTPP_SI_CLIENT_MODE)
     {
-        ftp_cmd_pipe_index = 0;
+        ftpssn->ftp_cmd_pipe_index = 0;
     }
 
     if (encrypted)

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -46,8 +46,14 @@ StreamUdpConfig::StreamUdpConfig()
 class StreamUdp : public Inspector
 {
 public:
-    StreamUdp(StreamUdpConfig*);
-    ~StreamUdp() override;
+    StreamUdp(StreamUdpConfig* c)
+    { config = c; }
+
+    ~StreamUdp() override
+    { delete config; }
+
+    bool configure(SnortConfig*) override
+    { return Stream::is_active(); }
 
     void show(const SnortConfig*) const override;
     NORETURN_ASSERT void eval(Packet*) override;
@@ -55,16 +61,6 @@ public:
 public:
     StreamUdpConfig* config;
 };
-
-StreamUdp::StreamUdp (StreamUdpConfig* c)
-{
-    config = c;
-}
-
-StreamUdp::~StreamUdp()
-{
-    delete config;
-}
 
 void StreamUdp::show(const SnortConfig*) const
 {

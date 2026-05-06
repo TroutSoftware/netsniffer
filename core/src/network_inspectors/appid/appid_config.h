@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -69,6 +69,11 @@
 #define MIN_BRUTE_FORCE_INPROCESS_STATE_THRESHOLD 1
 #define MAX_BRUTE_FORCE_INPROCESS_STATE_THRESHOLD 50
 
+#define MIDSTREAM_SERVICE_INSPECTION_OFF 0
+#define DEFAULT_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL 2
+#define MIN_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL 2
+#define MAX_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL 10
+
 
 enum SnortProtoIdIndex
 {
@@ -135,6 +140,7 @@ public:
     bool dns_host_reporting = true;
     bool referred_appId_disabled = false;
     bool mdns_user_reporting = true;
+    bool detector_deviceinfo = true;
     bool chp_userid_disabled = false;
     bool is_host_port_app_cache_runtime = false;
     bool check_host_port_app_cache = false;
@@ -148,10 +154,12 @@ public:
     bool recheck_for_portservice_appid = false;
     bool eve_http_client = true;
     bool appid_cpu_profiler = true;
-    bool inspect_ooo_flows = false;
+    bool inspect_ooo_flows = true;
+    bool kerberos_check_failed_login = false;
     uint8_t brute_force_inprocess_threshold = DEFAULT_BRUTE_FORCE_INPROCESS_STATE_THRESHOLD;
     uint16_t max_packet_before_service_fail = DEFAULT_MAX_PKTS_BEFORE_SERVICE_FAIL;
     uint16_t max_packet_service_fail_ignore_bytes = DEFAULT_MAX_PKT_BEFORE_SERVICE_FAIL_IGNORE_BYTES;
+    uint16_t max_midstream_packet_before_service_fail = DEFAULT_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL;
     uint32_t chp_body_collection_max = 0;
     uint32_t rtmp_max_packets = 15;
     uint32_t max_tp_flow_depth = 5;
@@ -402,6 +410,9 @@ public:
         if (discovery_filter)
             delete discovery_filter;
     }
+
+    bool odp_ctxt_ready() const
+    { return odp_ctxt != nullptr; }
 
     OdpContext& get_odp_ctxt() const
     {

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -32,6 +32,17 @@
 
 using namespace snort;
 using namespace HttpEnums;
+using namespace HttpCommon;
+
+THREAD_LOCAL const Trace* http_trace = nullptr;
+
+#ifdef DEBUG_MSGS
+static const TraceOption http_trace_options[] =
+{
+    { "compress", TRACE_COMPRESS, "enable compress trace logging" },
+    { nullptr, 0, nullptr }
+};
+#endif
 
 HttpModule::HttpModule() : Module(HTTP_NAME, HTTP_HELP, http_params),
     script_detection_handle(LiteralSearch::setup())
@@ -494,6 +505,14 @@ HttpParaList::JsNormParam::~JsNormParam()
     delete mpse_type;
     delete mpse_attr;
 }
+
+void HttpModule::set_trace(const snort::Trace* trace) const
+{ http_trace = trace; }
+
+#ifdef DEBUG_MSGS
+const snort::TraceOption* HttpModule::get_trace_options() const
+{ return http_trace_options; }
+#endif
 
 void HttpParaList::JsNormParam::configure() const
 {

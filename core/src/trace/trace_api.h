@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -22,6 +22,8 @@
 
 #include <cstdarg>
 #include <cstdint>
+#include <string>
+#include <unordered_set>
 
 #include "main/snort_types.h"
 #include "protocols/packet.h"
@@ -33,24 +35,24 @@ namespace snort
 {
 struct Packet;
 struct SnortConfig;
-
-class TraceLoggerFactory;
-
 class SO_PUBLIC TraceApi
 {
 public:
+    static void global_init();
+    static void capture_outputs(SnortConfig*);
+    static void reset();
+
     static void thread_init(const TraceConfig* tc);
     static void thread_reinit(const TraceConfig* tc);
     static void thread_term();
-
-    // This method will change an ownership of the passed TraceLoggerFactory
-    // from the caller to the passed SnortConfig
-    static bool override_logger_factory(SnortConfig*, TraceLoggerFactory*);
 
     static void log(const char* log_msg, const char* name,
         uint8_t log_level, const char* trace_option, const Packet* p);
     static void filter(const Packet& p);
     static uint8_t get_constraints_generation();
+
+private:
+    static void clear_all_traces();
 };
 }
 
@@ -244,5 +246,5 @@ static inline void trace_print(const snort::Trace* trace, const snort::Packet* p
 #define debug_logf(...)
 #endif
 
-#endif // TRACE_API_H
+#endif
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -33,8 +33,10 @@
 #include "flow/ha.h"
 #include "flow/prune_stats.h"
 #include "framework/data_bus.h"
+#include "log/messages.h"
 #include "main/snort.h"
 #include "main/snort_config.h"
+#include "managers/inspector_manager.h"
 #include "packet_io/active.h"
 #include "packet_io/packet_tracer.h"
 #include "protocols/vlan.h"
@@ -45,6 +47,7 @@
 #include "trace/trace_api.h"
 #include "utils/util.h"
 
+#include "tcp/held_packet_queue.h"
 #include "tcp/tcp_module.h"
 #include "tcp/tcp_session.h"
 #include "tcp/tcp_stream_tracker.h"
@@ -56,9 +59,12 @@ using namespace snort;
 // this should not be publicly accessible
 extern THREAD_LOCAL class FlowControl* flow_con;
 
+THREAD_LOCAL HeldPacketQueue* hpq = nullptr;
+
 struct StreamImpl
 {
 public:
+    uint32_t hold_time = 1000;
     uint32_t xtradata_func_count = 0;
     LogFunction xtradata_map[MAX_LOG_FN];
     LogExtraData extra_data_log = nullptr;
@@ -67,6 +73,15 @@ public:
 
 static StreamImpl stream;
 static std::mutex stream_xtra_mutex;
+
+bool Stream::is_active()
+{
+    if ( InspectorManager::get_inspector("stream", Module::GLOBAL) != nullptr )
+        return true;
+
+    ParseError("stream must be configured");
+    return false;
+}
 
 //-------------------------------------------------------------------------
 // session foo
@@ -166,7 +181,16 @@ bool Stream::midstream_allowed(const Packet* p, bool alert)
         return true;
 
     if ( alert )
+    {
         DetectionEngine::queue_event(GID_STREAM_TCP, STREAM_TCP_NO_3WHS);
+        
+        if ( PacketTracer::is_active() )
+        {
+            time_t elapsed = p->pkth->ts.tv_sec - packet_first_time();
+            PacketTracer::log("Stream: midstream pickup disabled - require_3whs timeout exceeded "
+                "(hs_timeout=%d sec, elapsed=%ld sec since startup)\n", t, elapsed);
+        }
+    }
 
     return false;
 }
@@ -485,6 +509,18 @@ void Stream::set_splitter(Flow* flow, bool to_server, StreamSplitter* ss)
     return flow->session->set_splitter(to_server, ss);
 }
 
+uint32_t Stream::get_paf_position(Flow* flow, bool to_server)
+{
+    assert(flow && flow->session);
+    return flow->session->get_paf_position(to_server);
+}
+
+void Stream::set_splitter_with_rescan(Flow* flow, bool to_server, StreamSplitter* ss, uint32_t seq)
+{
+    assert(flow && flow->session);
+    return flow->session->set_splitter_with_rescan(to_server, ss, seq);
+}
+
 StreamSplitter* Stream::get_splitter(Flow* flow, bool to_server)
 {
     assert(flow && flow->session);
@@ -502,6 +538,7 @@ void Stream::log_extra_data(
     // coverity[missing_lock]
     if ( mask && stream.extra_data_log )
     {
+        // coverity[missing_lock]
         stream.extra_data_log(
             flow, stream.extra_data_context, stream.xtradata_map,
             stream.xtradata_func_count, mask, alert_info);
@@ -852,6 +889,21 @@ bool Stream::get_held_pkt_seq(Flow* flow, uint32_t& seq)
     return false;
 }
 
+uint32_t Stream::get_hold_time()
+{ return StreamModule::get_hold_time(); }
+
+void Stream::set_held_packet_queue(uint32_t t)
+{ hpq = new HeldPacketQueue(t); }
+
+HeldPacketQueue* Stream::get_held_packet_queue()
+{ return hpq; }
+
+void Stream::delete_held_packet_queue()
+{
+    delete hpq;
+    hpq = nullptr;
+}
+
 //-------------------------------------------------------------------------
 // pub sub foo
 //-------------------------------------------------------------------------
@@ -878,7 +930,6 @@ TEST_CASE("Stream API", "[stream_api][stream]")
 {
     // initialization code here
     TcpNormalizerFactory::initialize();
-    TcpReassembler::tinit();
     Flow* flow = new Flow;
     InspectionPolicy ins;
     set_inspection_policy(&ins);
@@ -994,7 +1045,6 @@ TEST_CASE("Stream API", "[stream_api][stream]")
 
     delete flow;
     TcpNormalizerFactory::term();
-    TcpReassembler::tterm();
 }
 
 #endif

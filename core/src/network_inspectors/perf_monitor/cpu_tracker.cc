@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -47,7 +47,7 @@ static inline uint64_t get_microseconds(struct timeval t)
     return (uint64_t)t.tv_sec * 1000000 + t.tv_usec;
 }
 
-CPUTracker::CPUTracker(PerfConfig *perf) : PerfTracker(perf, TRACKER_NAME)
+CPUTracker::CPUTracker(PerfConfig *perf) : PerfTracker(perf, TRACKER_NAME, PERF_CPU)
 {
     formatter->register_section("thread_" + std::to_string(get_instance_id()));
     formatter->register_field("cpu_user", &user_stat);

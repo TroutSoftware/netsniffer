@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -15,36 +15,38 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //--------------------------------------------------------------------------
-// trace_loggers.h author Oleksandr Serhiienko <oserhiie@cisco.com>
+// dump_flows_serializer.h author davis mcpherson <davmcphe@cisco.com>
 
-#ifndef TRACE_LOGGERS_H
-#define TRACE_LOGGERS_H
+#ifndef DUMP_FLOWS_SERIALIZER_H
+#define DUMP_FLOWS_SERIALIZER_H
 
-#include "trace_logger.h"
+#include <fstream>
 
-//-----------------------------------------------
-//  Logger factories
-//-----------------------------------------------
+#include "dump_flows_descriptor.h"
 
-class StdoutLoggerFactory : public snort::TraceLoggerFactory
+namespace snort
+{
+class Flow;
+}
+
+struct timeval;
+
+class DumpFlowsSerializer
 {
 public:
-    StdoutLoggerFactory() = default;
-    StdoutLoggerFactory(const StdoutLoggerFactory&) = delete;
-    StdoutLoggerFactory& operator=(const StdoutLoggerFactory&) = delete;
+    DumpFlowsSerializer() {}
+    ~DumpFlowsSerializer() {}
 
-    snort::TraceLogger* instantiate() override;
+    void initialize(const snort::Flow&, const struct timeval&);
+    void write(std::fstream&) const;
+    void print(std::fstream& ofile) const
+    {
+        dfd.print(ofile);
+    }
+
+private:
+    DumpFlowsDescriptor dfd;
 };
 
-class SyslogLoggerFactory : public snort::TraceLoggerFactory
-{
-public:
-    SyslogLoggerFactory() = default;
-    SyslogLoggerFactory(const SyslogLoggerFactory&) = delete;
-    SyslogLoggerFactory& operator=(const SyslogLoggerFactory&) = delete;
-
-    snort::TraceLogger* instantiate() override;
-};
-
-#endif // TRACE_LOGGERS_H
+#endif
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2007-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -415,11 +415,11 @@ static void LogOuterIPHeader(TextLog* log, Packet* p)
         uint16_t save_dp = p->ptrs.dp;
 
         const udp::UDPHdr* udph = layer::get_outer_udp_lyr(p);
+        assert(udph);
+
         p->ptrs.sp = ntohs(udph->uh_sport);
         p->ptrs.dp = ntohs(udph->uh_dport);
-
         LogIPHeader(log, p);
-
         p->ptrs.sp = save_sp;
         p->ptrs.dp = save_dp;
     }

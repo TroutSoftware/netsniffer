@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -56,6 +56,8 @@
 #include "lua_detector_util.h"
 #include "service_plugins/service_discovery.h"
 #include "service_plugins/service_ssl.h"
+
+#include "pub_sub/deviceinfo_events.h"
 
 using namespace snort;
 using namespace std;
@@ -3375,6 +3377,80 @@ static int set_user_detector_data_item(lua_State *L)
     return result;
 }
 
+#ifdef REG_TEST
+int lua_remove_registry_table_test(lua_State* L)
+{
+    const char* table_entry = lua_tostring(L, 2);
+    if (!table_entry)
+    {
+        return 0;
+    }
+    lua_getfield(L, LUA_REGISTRYINDEX, table_entry);
+    if (lua_isnil(L, -1))
+    {
+        APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "appid: Registry table %s not found \n", table_entry);
+        return 0;
+    }
+    lua_pushnil(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, table_entry);
+    return 1;
+}
+#endif
+
+static int detector_publish_device_info(lua_State* L)
+{
+    auto& ud = *UserData<LuaObject>::check(L, DETECTOR, 1);
+    LuaStateDescriptor* lsd = ud->validate_lua_state(true);
+    if (!lsd)
+        return 0;
+    if (!lua_istable(L, 2))
+        return 0;
+    if (!ud->get_odp_ctxt().detector_deviceinfo)
+        return 0;
+
+    DeviceInfoEvent::KeyValueVector kv_pairs;
+    std::string service_type = DEVINFO_SERVICE_NULL;
+    std::string device_name;
+
+    lua_pushnil(L);
+    while (lua_next(L, 2) != 0)
+    {
+        if (lua_type(L, -2) != LUA_TSTRING)
+        {
+            lua_pop(L, 1);
+            continue;
+        }
+        const char* key = lua_tostring(L, -2);
+        const char* value = (lua_type(L, -1) == LUA_TSTRING) ? lua_tostring(L, -1) : nullptr;
+        if (!key || !value)
+        {
+            lua_pop(L, 1);
+            continue;
+        }
+        if (strcmp(key, DEVINFO_META_SERVICE_TYPE) == 0)
+            service_type = value;
+        else
+        {
+            kv_pairs.emplace_back(key, value);
+            if (strcmp(key, DEVINFO_KEY_DEVICENAME) == 0)
+                device_name = value;
+        }
+        lua_pop(L, 1);
+    }
+
+    if (kv_pairs.empty())
+        return 0;
+
+    const Packet* pkt = lsd->ldp.pkt;
+    if (!pkt)
+        return 0;
+
+    DeviceInfoEvent event(pkt, service_type, device_name, kv_pairs);
+    DataBus::publish(DataBus::get_id(deviceinfo_pub_key), DeviceInfoEventIds::DEVICEINFO, event);
+
+    return 0;
+}
+
 static const luaL_Reg detector_methods[] =
 {
     /* Obsolete API names.  No longer use these!  They are here for backward
@@ -3507,6 +3583,12 @@ static const luaL_Reg detector_methods[] =
     {"addCipService",            detector_add_cip_service},
     {"addEnipCommand",           detector_add_enip_command},
 
+    {"publishDeviceInfo",        detector_publish_device_info},
+
+#ifdef REG_TEST
+    {"luaRemoveRegistryTableTest", lua_remove_registry_table_test},
+#endif
+
     { nullptr, nullptr }
 };
 
@@ -3603,7 +3685,7 @@ int LuaStateDescriptor::lua_validate(AppIdDiscoveryArgs& args)
     if (lua_pcall(my_lua_state, 0, 1, 0))
     {
         // Runtime Lua errors are suppressed in production code since detectors are written for
-        // efficiency and with defensive minimum checks. Errors are dealt as exceptions
+        // efficiency and with minimum defensive checks. Errors are dealt as exceptions
         // that don't impact processing by other detectors or future packets by the same detector.
         APPID_LOG(args.pkt, TRACE_ERROR_LEVEL, "lua detector %s: error validating %s\n",
             package_info.name.c_str(), lua_tostring(my_lua_state, -1));

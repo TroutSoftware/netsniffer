@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -24,6 +24,7 @@
 #endif
 
 #include "pub_sub/http_transaction_end_event.h"
+#include "pub_sub/http_form_data_event.h"
 #include "service_inspectors/http_inspect/http_common.h"
 #include "service_inspectors/http_inspect/http_enum.h"
 #include "service_inspectors/http_inspect/http_flow_data.h"
@@ -47,7 +48,7 @@ namespace snort
 {
 // Stubs whose sole purpose is to make the test code link
 unsigned FlowData::flow_data_id = 0;
-FlowData::FlowData(unsigned, Inspector*) : handler(nullptr), id(0)
+FlowData::FlowData(unsigned) : id(0)
 {}
 FlowData::~FlowData() = default;
 FlowDataStore::~FlowDataStore() = default;
@@ -73,11 +74,18 @@ const StreamBuffer StreamSplitter::reassemble(snort::Flow*, unsigned int, unsign
     return buf;
 }
 unsigned StreamSplitter::max(snort::Flow*) { return 0; }
+uint8_t TraceApi::get_constraints_generation() { return 0; }
+void TraceApi::filter(const Packet&) { }
+void trace_vprintf(const char*, TraceLevel, const char*, const snort::Packet*, const char*, va_list) { }
 }
+
+THREAD_LOCAL const snort::Trace* http_trace = nullptr;
 
 HttpParaList::UriParam::UriParam() {}
 HttpParaList::JsNormParam::~JsNormParam() {}
 HttpParaList::~HttpParaList() {}
+
+void HttpFormDataEvent::format_as_uri() const { }
 
 unsigned Http2FlowData::inspector_id = 0;
 uint32_t Http2FlowData::get_processing_stream_id() const { return 0; }
@@ -103,7 +111,7 @@ bool HttpInspect::get_buf(snort::InspectionBuffer::Type, snort::Packet*, snort::
 const uint8_t* HttpInspect::adjust_log_packet(snort::Packet*, uint16_t&) { return nullptr; }
 StreamSplitter::Status HttpStreamSplitter::scan(snort::Packet*, const uint8_t*, uint32_t, uint32_t, uint32_t*)
 { return StreamSplitter::FLUSH; }
-StreamSplitter::Status HttpStreamSplitter::scan(snort::Flow*, const uint8_t*, uint32_t, uint32_t*)
+StreamSplitter::Status HttpStreamSplitter::scan(snort::Flow*, const uint8_t*, uint32_t, uint32_t*, Packet*)
 { return StreamSplitter::FLUSH; }
 const snort::StreamBuffer HttpStreamSplitter::reassemble(snort::Flow*, unsigned, unsigned, const
     uint8_t*, unsigned, uint32_t, unsigned&)
@@ -112,7 +120,8 @@ const snort::StreamBuffer HttpStreamSplitter::reassemble(snort::Flow*, unsigned,
     return buf;
 }
 bool HttpStreamSplitter::finish(snort::Flow*) { return false; }
-void HttpStreamSplitter::prep_partial_flush(snort::Flow*, uint32_t, uint32_t, uint32_t) { }
+void HttpStreamSplitter::prep_partial_flush(snort::Flow*, uint32_t, uint32_t, uint32_t,
+    HttpEnums::PartialFlushType) { }
 void HttpMsgSection::clear_tmp_buffers() { }
 
 THREAD_LOCAL PegCount HttpModule::peg_counts[PEG_COUNT_MAX] = { };

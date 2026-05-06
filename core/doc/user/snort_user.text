@@ -8,7 +8,7 @@ Snort 3 User Manual
 The Snort Team
 
 Revision History
-Revision 3.10.0.0 2025-11-24 15:32:37 EST TST
+Revision 3.12.2.0 2026-04-22 20:06:23 EDT TST
 
 ---------------------------------------------------------------------
 
@@ -419,7 +419,7 @@ to load the external rules file named rules.txt. You can only specify
 one file this way but rules files can include other rules files with
 the include statement. In addition you can load rules like:
 
-$ sort -c snort.lua -R rules.txt
+$ snort -c snort.lua -R rules.txt
 
 You can use both approaches together.
 
@@ -736,8 +736,6 @@ Parameter limits:
   * max32 = 4294967295
   * max53 = 9007199254740992
   * maxSZ = 9007199254740992
-  * max63 = 9223372036854775807
-  * max64 = 18446744073709551615
 
 
 2.4. Plugins
@@ -1422,7 +1420,7 @@ a restart:
   * attribute_table.max_hosts
   * attribute_table.max_services_per_host
   * daq.snaplen
-  * file_id.max_files_cached
+  * file_inspect.max_files_cached
   * process.chroot
   * process.daemon
   * process.set_gid
@@ -1434,9 +1432,9 @@ a restart:
 In addition, the following scenarios require a restart:
 
   * Enabling file capture for the first time
-  * Changing file_id.capture_memcap if file capture was previously or
-    currently enabled
-  * Changing file_id.capture_block_size if file capture was
+  * Changing file_inspect.capture_memcap if file capture was
+    previously or currently enabled
+  * Changing file_inspect.capture_block_size if file capture was
     previously or currently enabled
   * Adding/removing stream_* inspectors if stream was already
     configured
@@ -1905,7 +1903,7 @@ Snort will translate the page to HTTP/2 format.
 
 Limitations for HTTP/2:
 
-  * Packet will be injected against the last received stream id.
+  * Packet will be injected against the last processed stream id.
   * Injection triggered while server-to-client flow of traffic is in
     a middle of a frame is not supported. The traffic will be
     blocked, but the page will not be injected/displayed.
@@ -3212,7 +3210,7 @@ dce_smb =
     smb_file_depth = 0,
  }
 
-file_id =
+file_inspect =
 {
     enable_type = true,
     enable_signature = true,
@@ -3489,7 +3487,7 @@ my_file_policy =
     {  when = { sha256 = "F74DC976BC8387E7D4FC0716A069017A0C7ED13F309A523CC41A8739CCB7D4B6" }, use = { verdict = 'block'} },
 }
 
-file_id =
+file_inspect =
 {
     enable_type = true,
     enable_signature = true,
@@ -3522,7 +3520,7 @@ that these pre-packaged rules are used; doing so requires that you
 include the file in your Snort configuration as such (already in
 snort.lua):
 
-file_id = { rules_file = 'file_magic.rules' }
+file_inspect = { rules_file = 'file_magic.rules' }
 
 Example:
 
@@ -3544,8 +3542,8 @@ required for each file_id rule.
 5.7.4. File Policy
 
 You can enabled file type, file signature, or file capture by
-configuring file_id. In addition, you can enable trace to see file
-stream data, file type, and file signature information.
+configuring file_inspect. In addition, you can enable trace to see
+file stream data, file type, and file signature information.
 
 Most importantly, you can configure a file policy that can block/
 alert some file type or an individual file based on SHA. This allows
@@ -4493,11 +4491,12 @@ headers or more and 200 headers or less:
 alert tcp any any -> any any ( msg:"between [100,200] headers";
 http_num_headers: 100<=>200; sid:95; rev:1; )
 
-5.10.5.1. http_uri and http_raw_uri
+5.10.5.1. http_uri, http_decoded_uri and http_raw_uri
 
 These provide the URI of the request message. The raw form is exactly
 as it appeared in the message and the normalized form is determined
-by the URI normalization options you selected. In addition to
+by the URI normalization options you selected. The decoded form
+provides normalization without path simplification. In addition to
 searching the entire URI there are six components that can be
 searched individually:
 
@@ -4550,7 +4549,14 @@ http_uri represents the normalized path, query, and fragment (/path?
 query#fragment). If the uri is of type authority (host and port), the
 host is normalized and http_uri represents the normalized host with
 the port number. In all other cases http_uri is the same as
-http_raw_uri.
+http_raw_uri. http_decoded_uri represents the decoded URI with
+normalization but without path simplification. It supports the same
+six components (path, query, fragment, host, port, scheme) as
+http_uri. For host/port/query/fragment/scheme, http_decoded_uri
+behaves like http_uri. For path, http_decoded_uri:path uses the
+decoded path without removing path traversal segments (for example, /
+safe/../../evil/secret.txt), while http_uri:path uses the normalized
+(simplified) path (for example, /evil/secret.txt).
 
 Note: this section uses informal language to explain some things.
 Nothing here is intended to conflict with the technical language of
@@ -5918,6 +5924,10 @@ Services and their events:
   * HTTP, HTTP2
 
       + eot (request-response pair)
+  * SSH
+
+      + algorithm (key exchange with details)
+      + exchange (key exchange complete)
   * FTP
 
       + request
@@ -5933,6 +5943,9 @@ Services and their events:
   * connection (conn)
 
       + eof (end of flow)
+  * file
+
+      + eof (end of file)
   * internal built-in checks which failed (weird)
 
       + builtin (internally-detected infraction is queued for further
@@ -5985,6 +5998,52 @@ Fields supported for HTTP:
   * resp_mime_types - list with the content types of the files sent
     by server
 
+Fields supported for SSH:
+
+  * version - major version
+  * direction - direction of the connection (LAN/WAN outbound/
+    inbound)
+  * client.version - the client’s version string
+  * client.kex_alg - key exchange algorithms listed by client
+  * client.host_key_alg - server host key algorithms listed by client
+  * client.cipher_c2s_alg - symmetric encryption algorithms
+    (client-to-server direction) listed by client
+  * client.cipher_s2c_alg - symmetric encryption algorithms
+    (server-to-client direction) listed by client
+  * client.mac_c2s_alg - MAC algorithms (client-to-server direction)
+    listed by client
+  * client.mac_s2c_alg - MAC algorithms (server-to-client direction)
+    listed by client
+  * client.compression_c2s_alg - compression algorithms
+    (client-to-server direction) listed by client
+  * client.compression_s2c_alg - compression algorithms
+    (server-to-client direction) listed by client
+  * server.version - the server’s version string
+  * server.kex_alg - key exchange algorithms listed by server
+  * server.host_key_alg - server host key algorithms listed by server
+  * server.cipher_c2s_alg - symmetric encryption algorithms
+    (client-to-server direction) listed by server
+  * server.cipher_s2c_alg - symmetric encryption algorithms
+    (server-to-client direction) listed by server
+  * server.mac_c2s_alg - MAC algorithms (client-to-server direction)
+    listed by server
+  * server.mac_s2c_alg - MAC algorithms (server-to-client direction)
+    listed by server
+  * server.compression_c2s_alg - compression algorithms
+    (client-to-server direction) listed by server
+  * server.compression_s2c_alg - compression algorithms
+    (server-to-client direction) listed by server
+  * kex_alg - key exchange algorithms in use (separated by comma if
+    not the same: c2s, s2c)
+  * host_key_alg - server host key algorithms in use (separated by
+    comma if not the same: c2s, s2c)
+  * cipher_alg - symmetric encryption algorithms in use (separated by
+    comma if not the same: c2s, s2c)
+  * mac_alg - MAC algorithms in use (separated by comma if not the
+    same: c2s, s2c)
+  * compression_alg - compression algorithms in use (separated by
+    comma if not the same: c2s, s2c)
+
 Fields supported for FTP:
 
   * command - last command seen in a session
@@ -6001,8 +6060,8 @@ Fields supported for FTP:
 Fields supported for SSL:
 
   * version - SSL/TLS version that the server chose
-  * server_name_identifier - Server Name Identifier ( SNI ) extracted
-    from Client Hello
+  * server_name - Server Name Identifier ( SNI ) extracted from
+    Client Hello
   * validation_status - result of certificate validation
   * subject - RFC2253 formatted certificate subject information
   * issuer - RFC2253 formatted certificate issuer information
@@ -6112,6 +6171,25 @@ UDP Events: d: Packet with payload.
 
 TCP Events: s: SYN, h: SYN-ACK, a: Pure ACK or PUSH, d: Packet with
 payload, f: FIN, r: Reset.
+
+Fields supported for file:
+
+  * filename - filename from headers in network protocols
+  * fuid - unique file identifier
+  * source - a protocol associated with the file
+  * inspector - inspector associated with the file analysis
+  * mime_type - mime attachment type (or file type identified by file
+    magic)
+  * is_orig - if sender was originator of the file transfer
+  * seen_bytes - number of bytes processed for analysis
+  * total_bytes - total file size in bytes
+  * duration - duration the file was analyzed for, in seconds
+  * timeout - if file analysis timed out
+  * sha256 - SHA256 digest of the file contents
+  * extracted- name of captured file
+  * extracted_size - number of bytes captured
+  * extracted_cutoff - true if the file being captured was cut off so
+    the whole file was not logged
 
 Fields supported for weird and notice logs:
 

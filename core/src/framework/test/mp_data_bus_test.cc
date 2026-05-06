@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -21,21 +21,24 @@
 #include "config.h"
 #endif
 
+#define MP_DATA_BUS_UNIT_TEST
+
+#include <condition_variable>
+
+#include "framework/pig_pen.h"
+#include "framework/mp_transport.h"
+#include "helpers/ring.h"
+#include "main/snort.h"
+#include "managers/mp_transport_manager.h"
+#include "managers/plugin_manager.h"
+#include "utils/stats.h"
 
 #include "../mp_data_bus.h"
 #include "../main/snort_config.h"
-#include "utils/stats.h"
-#include "helpers/ring.h"
-#include "main/snort.h"
-#include "managers/module_manager.h"
-#include <condition_variable>
 
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 #include <CppUTestExt/MockSupport.h>
-
-#include <managers/mp_transport_manager.h>
-#include <framework/mp_transport.h>
 
 using namespace snort;
 
@@ -51,7 +54,7 @@ void LogMessage(const char*, ...) { }
 const SnortConfig* SnortConfig::get_conf()
 { return snort_conf; }
 
-SnortConfig::SnortConfig(const SnortConfig* const, const char*)
+SnortConfig::SnortConfig(const char*)
 : daq_config(nullptr), thread_config(nullptr)
 { }
 
@@ -65,10 +68,15 @@ unsigned Snort::get_process_id()
     return 0;
 }
 
-Module* ModuleManager::get_module(const char*)
+Module* PigPen::get_module(const char*)
 {
     return nullptr;
 }
+}
+
+Module* PluginManager::get_module(const char*)
+{
+    return nullptr;
 }
 
 void show_stats(PegCount*, const PegInfo*, unsigned, const char*) 
@@ -271,13 +279,14 @@ TEST_GROUP(mp_data_bus_pub)
     }
 
     void teardown() override
-    { }
+    { 
+    }
 };
 
 TEST(mp_data_bus_pub, publish)
 {
-    CHECK_TRUE(mp_dbus->get_event_queue()->empty());
-    CHECK_TRUE(mp_dbus->get_event_queue()->count() == 0);
+    CHECK_TRUE(mp_dbus->get_event_queue()->is_empty());
+    CHECK_TRUE(mp_dbus->get_event_queue()->size() == 0);
 
     std::shared_ptr<UTestEvent> event = std::make_shared<UTestEvent>(100);
 
@@ -304,8 +313,8 @@ TEST(mp_data_bus_pub, publish)
 
 TEST(mp_data_bus_pub, publish_fail_to_send)
 {
-    CHECK_TRUE(mp_dbus->get_event_queue()->empty());
-    CHECK_TRUE(mp_dbus->get_event_queue()->count() == 0);
+    CHECK_TRUE(mp_dbus->get_event_queue()->is_empty());
+    CHECK_TRUE(mp_dbus->get_event_queue()->size() == 0);
 
     test_transport_send_result = false;
 
@@ -503,43 +512,6 @@ TEST_GROUP(mp_data_bus_clone)
         delete snort_conf->mp_dbus;
     }
 };
-//-------------------------------------------------------------------------
-
-TEST(mp_data_bus_clone, z_clone)
-{
-    unsigned pub_id1, pub_id2;
-    pub_id1 = MPDataBus::get_id(pub_key1);
-    pub_id2 = MPDataBus::get_id(pub_key2);
-    // subscribing to the events in the original mp_data_bus
-    // and then cloning the mp_data_bus
-    // and checking if the events are received in the cloned mp_data_bus
-    // and not in the original mp_data_bus
-    UTestHandler1* h1 = new UTestHandler1();
-    MPDataBus::subscribe(pub_key1, DbUtIds::EVENT1, h1);
-
-    UTestHandler2* h2 = new UTestHandler2();
-    MPDataBus::subscribe(pub_key2, DbUtIds::EVENT2, h2);
-
-    // original mp_data_bus should be deleted with previous SnortConfig
-    // deleted with exit handlers of Test framework
-    MPDataBus* mp_data_bus_cloned = new MPDataBus();
-    mp_data_bus_cloned->clone(*SnortConfig::get_conf()->mp_dbus, nullptr);
-
-    std::shared_ptr<UTestEvent> event1 = std::make_shared<UTestEvent>(100);
-    MPEventInfo event_info1(event1, MPEventType(DbUtIds::EVENT1), pub_id1);
-
-    mp_data_bus_cloned->receive_message(event_info1);
-
-    CHECK_EQUAL(100, h1->evt_msg);
-    CHECK_EQUAL(1, h2->evt_msg);
-
-    std::shared_ptr<UTestEvent> event2 = std::make_shared<UTestEvent>(200);
-
-    MPEventInfo event_info2(event2, MPEventType(DbUtIds::EVENT2), pub_id2);
-    mp_data_bus_cloned->receive_message(event_info2);
-    CHECK_EQUAL(100, h1->evt_msg);
-    CHECK_EQUAL(200, h2->evt_msg);
-}
 
 //-------------------------------------------------------------------------
 // main

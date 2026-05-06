@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -33,6 +33,9 @@
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 #include <CppUTestExt/MockSupport.h>
+
+#include <string>
+#include <vector>
 
 using namespace snort;
 using namespace HttpCommon;
@@ -185,6 +188,94 @@ TEST(pub_sub_http_event_test, get_all_raw_headers)
     header_start = event.get_all_raw_headers(discovered_length);
     CHECK(discovered_length == header_length);
     CHECK(memcmp(header_start, headers, header_length) == 0);
+}
+
+TEST(pub_sub_http_event_test, get_content_length)
+{
+    const char* content_length = "20000";
+    const int32_t content_length_len = strlen(content_length);
+    int64_t value = 0;
+
+    mock().expectOneCall("get_classic_buffer").withParameter("buffer_type", HttpEnums::HTTP_BUFFER_HEADER);
+    Field input(content_length_len, (const uint8_t*) content_length);
+    mock().setDataObject("output", "Field", &input);
+    HttpEvent event(nullptr, false, 0);
+    ContentLengthStatus status = event.get_content_length(value);
+    CHECK_EQUAL(20000, value);
+    CHECK(status == ContentLengthStatus::OK);
+}
+
+TEST(pub_sub_http_event_test, get_content_length_not_found)
+{
+    int64_t value = 0;
+
+    mock().expectOneCall("get_classic_buffer").withParameter("buffer_type", HttpEnums::HTTP_BUFFER_HEADER);
+    Field input(0, nullptr);
+    mock().setDataObject("output", "Field", &input);
+    HttpEvent event(nullptr, false, 0);
+    ContentLengthStatus status = event.get_content_length(value);
+    CHECK(status == ContentLengthStatus::NOT_FOUND);
+}
+
+void test_bad_content_length_value(const char* content_length_str)
+{
+    const int32_t content_length_len = strlen(content_length_str);
+    int64_t value = 0;
+
+    mock().expectOneCall("get_classic_buffer").withParameter("buffer_type", HttpEnums::HTTP_BUFFER_HEADER);
+    Field input(content_length_len, (const uint8_t*) content_length_str);
+    mock().setDataObject("output", "Field", &input);
+    HttpEvent event(nullptr, false, 0);
+    ContentLengthStatus status = event.get_content_length(value);
+    std::string error_msg = "Content length value should be found to be invalid: " + std::string(content_length_str);
+    CHECK_TEXT(status == ContentLengthStatus::MALFORMED, error_msg.c_str());
+}
+
+void test_valid_content_length(const char* content_length_str, int64_t expected)
+{
+    const int32_t content_length_len = strlen(content_length_str);
+    int64_t value = 0;
+
+    mock().expectOneCall("get_classic_buffer").withParameter("buffer_type", HttpEnums::HTTP_BUFFER_HEADER);
+    Field input(content_length_len, (const uint8_t*) content_length_str);
+    mock().setDataObject("output", "Field", &input);
+    HttpEvent event(nullptr, false, 0);
+    ContentLengthStatus status = event.get_content_length(value);
+    std::string error_msg = "Content length should be valid: " + std::string(content_length_str);
+    CHECK_TEXT(status == ContentLengthStatus::OK, error_msg.c_str());
+    CHECK_EQUAL(expected, value);
+}
+
+TEST(pub_sub_http_event_test, get_content_length_valid_values)
+{
+    test_valid_content_length("0", 0);
+    test_valid_content_length("007", 7);
+    test_valid_content_length("42,42", 42);
+    test_valid_content_length("42,99", 42);
+    test_valid_content_length("0,0", 0);
+    test_valid_content_length("999999999999999999", 999999999999999999LL);
+}
+
+TEST(pub_sub_http_event_test, get_content_length_invalid_values)
+{
+    std::vector<const char*> invalid_content_len_values =
+    {
+        "12345678901234567890123456789012345678901234567890",
+        "9223372036854775807",
+        "9223372036854775808",
+        "00aA",
+        "AC32",
+        "-500",
+        "+123",
+        "12.5",
+        ".",
+        ",42",
+        " ",
+        "\t",
+    };
+
+    for (const char* content_length_str: invalid_content_len_values)
+        test_bad_content_length_value(content_length_str);
 }
 
 int main(int argc, char** argv)

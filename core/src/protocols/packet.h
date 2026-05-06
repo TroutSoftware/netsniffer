@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -90,6 +90,13 @@ class SFDAQInstance;
 
 #define PKT_TCP_PSEUDO_EST        0x80000000 // A one-sided or bidirectional without LWS TCP session was detected
 
+#define PKT_TCP_INJECT_BLOCKED    0x0000000100000000ULL  // cannot be injected on react due to tcp packet creates a hole,
+                                             // fills a hole, has overlaps or is retransmission
+
+// used by payload_injector
+#define PKT_HTTP_INJECT_ALLOWED  0x0000000200000000ULL
+#define PKT_HTTP_INJECT_BLOCKED  0x0000000400000000ULL
+
 #define TS_PKT_OFFLOADED          0x01
 #define TS_PKT_INJECT             0x02
 
@@ -121,27 +128,27 @@ struct SO_PUBLIC Packet
     Packet(const Packet&) = delete;
     Packet& operator=(const Packet&) = delete;
 
-    Flow* flow;   /* for session tracking */
+    Flow* flow = nullptr;   /* for session tracking */
     Endianness* endianness = nullptr;
     Obfuscator* obfuscator = nullptr;
 
-    uint32_t packet_flags;      /* special flags for the packet */
-    uint32_t xtradata_mask;
-    uint32_t proto_bits;        /* protocols contained within this packet */
+    uint64_t packet_flags = 0;      /* special flags for the packet */
+    uint32_t xtradata_mask = 0;
+    uint32_t proto_bits = 0;        /* protocols contained within this packet */
 
-    uint16_t alt_dsize;         /* size for detection (iff PKT_DETECT_LIMIT) */
+    uint16_t alt_dsize = 0;         /* size for detection (iff PKT_DETECT_LIMIT) */
 
-    uint8_t num_layers;         /* index into layers for next encap */
+    uint8_t num_layers = 0;         /* index into layers for next encap */
     // FIXIT-M Consider moving ip_proto_next below `pkth`.
-    IpProtocol ip_proto_next;      /* the protocol ID after IP and all IP6 extension */
-    bool disable_inspect;
+    IpProtocol ip_proto_next = IpProtocol::PROTO_NOT_SET;      /* the protocol ID after IP and all IP6 extension */
+    bool disable_inspect = false;
     mutable FilteringState filtering_state;
-    PduSection sect;
+    PduSection sect = PS_NONE;
 
     // nothing after this point is zeroed by reset() ...
     IpsContext* context = nullptr;
     Active* active = nullptr;
-    Active* active_inst;
+    Active* active_inst = nullptr;
     ActiveAction** action = nullptr;
     ActiveAction* action_inst = nullptr;
 
@@ -149,8 +156,8 @@ struct SO_PUBLIC Packet
     SFDAQInstance* daq_instance = nullptr;  // DAQ instance the message came from
 
     // Everything beyond this point is set by PacketManager::decode()
-    const DAQ_PktHdr_t* pkth;   // packet meta data
-    const uint8_t* pkt;         // raw packet data
+    const DAQ_PktHdr_t* pkth = nullptr;   // packet meta data
+    const uint8_t* pkt = nullptr;         // raw packet data
     uint32_t pktlen = 0;        // raw packet data length
 
     // These are both set before PacketManager::decode() returns
@@ -158,18 +165,18 @@ struct SO_PUBLIC Packet
     uint16_t dsize = 0;             /* packet payload size */
 
     DecodeData ptrs; // convenience pointers used throughout Snort++
-    Layer* layers;    /* decoded encapsulations */
+    Layer* layers = nullptr;    /* decoded encapsulations */
 
     PseudoPacketType pseudo_type = PSEUDO_PKT_MAX;  // valid only when PKT_PSEUDO is set
 
-    uint64_t user_inspection_policy_id;
-    uint64_t user_ips_policy_id;
-    uint64_t user_network_policy_id;
+    uint64_t user_inspection_policy_id = 0;
+    uint64_t user_ips_policy_id = 0;
+    uint64_t user_network_policy_id = 0;
 
-    uint64_t inspection_started_timestamp;
+    uint64_t inspection_started_timestamp = 0;
 
-    uint8_t vlan_idx;
-    uint8_t ts_packet_flags; // FIXIT-M packet flags should always be thread safe
+    uint8_t vlan_idx = 0;
+    uint8_t ts_packet_flags = 0; // FIXIT-M packet flags should always be thread safe
 
     // IP_MAXPACKET is the minimum allowable max_dsize
     // there is no requirement that all data fit into an IP datagram
@@ -340,6 +347,12 @@ struct SO_PUBLIC Packet
     bool was_set() const
     { return (packet_flags & PKT_WAS_SET) != 0; }
 
+    bool is_http_inject_permission_unset() const
+    {
+        return !(packet_flags & PKT_HTTP_INJECT_BLOCKED) and
+            !(packet_flags & PKT_HTTP_INJECT_ALLOWED);
+    }
+
     bool is_detection_enabled(bool to_server);
 
     bool is_inter_group_flow() const
@@ -393,7 +406,7 @@ struct SO_PUBLIC Packet
     int inject();
 
 private:
-    bool allocated;
+    bool allocated = false;
 };
 
 #define BIT(i) (0x1 << ((i)-1))
@@ -463,4 +476,3 @@ inline uint64_t alignedNtohq(const uint64_t* ptr)
 }
 }
 #endif
-

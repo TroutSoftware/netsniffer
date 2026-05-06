@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -92,7 +92,7 @@ void EventTrace_Log(const Packet* p, const OptTreeNode* otn, IpsAction::Type act
         p->pkth->pktlen, p->pktlen);
 
     TextLog_Print(tlog,
-        "Pkt Bits: Flags=0x%X, Proto=0x%X, Err=0x%X\n",
+        "Pkt Bits: Flags=0x" STDx64 ", Proto=0x%X, Err=0x%X\n",
         p->packet_flags, (unsigned)p->proto_bits, (unsigned)p->ptrs.decode_flags);
 
     TextLog_Print(tlog,
@@ -134,4 +134,3 @@ void EventTrace_Term()
         TextLog_Term(tlog);
     }
 }
-

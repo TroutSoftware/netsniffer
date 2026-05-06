@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -22,9 +22,11 @@
 
 #include "ips_action.h"
 
+#include "actions/actions_module.h"
 #include "detection/detect.h"
 #include "detection/treenodes.h"
 #include "managers/action_manager.h"
+#include "managers/plugin_manager.h"
 #include "parser/parser.h"
 #include "utils/stats.h"
 
@@ -94,6 +96,13 @@ void IpsAction::alert(Packet* p, const ActInfo& ai)
     }
     CallAlertFuncs(p, ai.otn, rtn->listhead);
     CallLogFuncs(p, ai.otn, rtn->listhead);
+}
+
+void register_action_pegs(const char* s, const PegInfo* p)
+{
+    ActionsModule* am = (ActionsModule*)PluginManager::get_module("ips_actions");
+    assert(am);
+    am->add_action(s, p);
 }
 
 } // snort

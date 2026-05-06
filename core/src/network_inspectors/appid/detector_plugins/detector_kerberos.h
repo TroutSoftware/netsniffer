@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -21,6 +21,8 @@
 
 #ifndef DETECTOR_KERBEROS_H
 #define DETECTOR_KERBEROS_H
+
+#include <atomic>
 
 #include "protocols/packet.h"
 #include "client_plugins/client_detector.h"
@@ -47,7 +49,12 @@ public:
         krb_service_detector = s;
     }
 
-    bool failed_login = false;
+    void set_failed_login(bool failed_login)
+    {
+        check_failed_login = failed_login;
+    }
+
+    std::atomic<bool> check_failed_login { false };
 
 private:
     int krb_walk_client_packet(KRBState*, const uint8_t*, const uint8_t*,

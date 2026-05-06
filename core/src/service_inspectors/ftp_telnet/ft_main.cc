@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2004-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -176,13 +176,13 @@ int FTPCheckConfigs(SnortConfig* sc, void* pData)
         return rval;
 
     //  Verify that FTP client and FTP data inspectors are initialized.
-    if(!PigPen::get_inspector(FTP_CLIENT_NAME, false, sc))
+    if(!PigPen::get_inspector(FTP_CLIENT_NAME, Module::INSPECT))
     {
         ParseError("ftp_server requires that %s also be configured.", FTP_CLIENT_NAME);
         return -1;
     }
 
-    if(!PigPen::get_inspector(FTP_DATA_NAME, false, sc))
+    if(!PigPen::get_inspector(FTP_DATA_NAME, Module::INSPECT))
     {
         ParseError("ftp_server requires that %s also be configured.", FTP_DATA_NAME);
         return -1;

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -30,8 +30,6 @@
 #include "hash/hashes.h"
 
 using namespace snort;
-
-static FileRule emptyRule;
 
 void FileRule::clear()
 {
@@ -124,10 +122,9 @@ void FilePolicy::load()
     if (capture_enabled)
         FileService::enable_file_capture();
 
-    // Use default global setting
-    emptyRule.use.type_enabled = type_enabled;
-    emptyRule.use.signature_enabled = signature_enabled;
-    emptyRule.use.capture_enabled = capture_enabled;
+    default_rule.use.type_enabled = type_enabled;
+    default_rule.use.signature_enabled = signature_enabled;
+    default_rule.use.capture_enabled = capture_enabled;
 }
 
 FileRule& FilePolicy::match_file_rule(Flow*, FileInfo* file)
@@ -142,7 +139,7 @@ FileRule& FilePolicy::match_file_rule(Flow*, FileInfo* file)
             return file_rules[i];
     }
 
-    return emptyRule;
+    return default_rule;
 }
 
 FileVerdict FilePolicy::match_file_signature(Flow*, FileInfo* file)
@@ -194,7 +191,17 @@ FileVerdict FilePolicy::signature_lookup(Packet*, FileInfo* file)
         FileCapture* captured = nullptr;
 
         if (file->reserve_file(captured) == FILE_CAPTURE_SUCCESS)
-            captured->store_file_async();
+        {
+            std::string extracted_name = captured->store_file_async();
+            file->set_extracted_name(extracted_name);
+            if (extracted_name.empty())
+            {
+                file->set_extracted_size(0);
+                delete captured;
+            }
+            else
+                file->set_extracted_cutoff(false);
+        }
         else
             delete captured;
 

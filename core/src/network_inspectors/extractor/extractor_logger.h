@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -51,6 +51,7 @@ public:
     virtual void add_field(const char*, const char*) {}
     virtual void add_field(const char*, const char*, size_t) {}
     virtual void add_field(const char*, uint64_t) {}
+    virtual void add_field(const char*, double) {}
     virtual void add_field(const char*, struct timeval) {}
     virtual void add_field(const char*, const snort::SfIp&) {}
     virtual void add_field(const char*, bool) {}

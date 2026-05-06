@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+** Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 ** Copyright (C) 2010-2013 Sourcefire, Inc.
 ** Author: Michael R. Altizer <mialtize@cisco.com>
 **
@@ -67,6 +67,7 @@ typedef struct _pcap_context
     int buffer_size;
     DAQ_Mode mode;
     bool readback_timeout;
+    bool rewind;
     /* State */
     DAQ_ModuleInstance_h modinst;
     DAQ_Stats_t stats;
@@ -98,6 +99,7 @@ static DAQ_VariableDesc_t pcap_variable_descriptions[] = {
     { "no_promiscuous", "Disables opening the interface in promiscuous mode", DAQ_VAR_DESC_FORBIDS_ARGUMENT },
     { "no_immediate", "Disables immediate mode for traffic capture (may cause unbounded blocking)", DAQ_VAR_DESC_FORBIDS_ARGUMENT },
     { "readback_timeout", "Return timeout receive status in file readback mode", DAQ_VAR_DESC_FORBIDS_ARGUMENT },
+    { "rewind", "Resume reading at start of file upon reaching end", DAQ_VAR_DESC_FORBIDS_ARGUMENT },
 };
 
 static DAQ_BaseAPI_t daq_base_api;
@@ -257,6 +259,7 @@ static int pcap_daq_instantiate(const DAQ_ModuleConfig_h modcfg, DAQ_ModuleInsta
     pc->promisc_mode = true;
     pc->immediate_mode = true;
     pc->readback_timeout = false;
+    pc->rewind = false;
 
     const char *varKey, *varValue;
     daq_base_api.config_first_variable(modcfg, &varKey, &varValue);
@@ -271,6 +274,8 @@ static int pcap_daq_instantiate(const DAQ_ModuleConfig_h modcfg, DAQ_ModuleInsta
             pc->immediate_mode = false;
         else if (!strcmp(varKey, "readback_timeout"))
             pc->readback_timeout = true;
+        else if (!strcmp(varKey, "rewind"))
+            pc->rewind = true;
 
         daq_base_api.config_next_variable(modcfg, &varKey, &varValue);
     }
@@ -290,7 +295,10 @@ static int pcap_daq_instantiate(const DAQ_ModuleConfig_h modcfg, DAQ_ModuleInsta
         const char *fname = daq_base_api.config_get_input(modcfg);
         /* Special case: "-" is an alias for stdin */
         if (fname[0] == '-' && fname[1] == '\0')
+        {
             pc->fp = stdin;
+            pc->rewind = false;
+        }
         else
         {
             pc->fp = fopen(daq_base_api.config_get_input(modcfg), "rb");
@@ -302,6 +310,13 @@ static int pcap_daq_instantiate(const DAQ_ModuleConfig_h modcfg, DAQ_ModuleInsta
                 free(pc);
                 return DAQ_ERROR_NOMEM;
             }
+            /* libpcap doesn't make this easy, so we check for pcapng the hard way */
+            struct pcap_file_header hdr;
+
+            if (pc->rewind && (fread(&hdr, sizeof(hdr), 1, pc->fp) != 1 || hdr.magic == 0x0a0d0d0a))
+                pc->rewind = false;
+
+            rewind(pc->fp);
         }
     }
     else
@@ -655,7 +670,17 @@ static unsigned pcap_daq_msg_receive(void *handle, const unsigned max_recv, cons
             }
         }
         else
+        {
             pcap_rval = pcap_next_ex(pc->handle, &pcaphdr, &data);
+
+            // hack to rewind and continue from EOF
+            if (!pc->interrupted && pc->mode == DAQ_MODE_READ_FILE && pcap_rval == PCAP_ERROR_BREAK && pc->rewind)
+            {
+                FILE* f = pcap_file(pc->handle);
+                fseek(f, 24, SEEK_SET);
+                pcap_rval = pcap_next_ex(pc->handle, &pcaphdr, &data);
+            }
+        }
 
         if (pcap_rval <= 0)
         {

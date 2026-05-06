@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2017-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2017-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -71,7 +71,7 @@ static const CodecApi bad_proto_api =
         sizeof(CodecApi),
         CDAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         CD_BAD_PROTO_NAME,
         CD_BAD_PROTO_HELP,

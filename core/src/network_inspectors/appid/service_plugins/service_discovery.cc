@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -333,6 +333,35 @@ void ServiceDiscovery::get_port_based_services(IpProtocol protocol, uint16_t por
     }
 }
 
+void ServiceDiscovery::get_port_based_services(IpProtocol protocol, uint16_t port1,
+    uint16_t port2, AppIdSession& asd)
+{
+    ServiceDiscovery& sd = asd.get_odp_ctxt().get_service_disco_mgr();
+    std::unordered_map<uint16_t, std::vector<ServiceDetector*>>& services =
+        (protocol == IpProtocol::TCP) ? sd.tcp_services : sd.udp_services;
+
+    auto it1 = services.find(port1);
+    auto it2 = services.find(port2);
+
+    if (it1 != services.end())
+    {
+        asd.service_candidates = it1->second;
+        if (it2 != services.end() && it2 != it1)
+        {
+            for (ServiceDetector* candidate : it2->second)
+            {
+                if (std::find(asd.service_candidates.begin(), asd.service_candidates.end(),
+                    candidate) == asd.service_candidates.end())
+                    asd.service_candidates.push_back(candidate);
+            }
+        }
+    }
+    else if (it2 != services.end())
+    {
+        asd.service_candidates = it2->second;
+    }
+}
+
 /* This function should be called to find the next service detector to try when
  * we have not yet found a valid detector in the host tracker.  It will try
  * both port and/or pattern (but not brute force - that should be done outside
@@ -353,8 +382,16 @@ void ServiceDiscovery::get_next_service(const Packet* p, const AppidSessionDirec
     /* See if there are any port detectors to try.  If not, move onto patterns. */
     if ( asd.service_search_state == SESSION_SERVICE_SEARCH_STATE::PORT )
     {
-        get_port_based_services(proto,
-            (dir ==  APP_ID_FROM_RESPONDER) ? p->ptrs.sp : p->ptrs.dp, asd);
+        if (asd.get_session_flags(APPID_SESSION_MID))
+        {
+            APPID_LOG(p, TRACE_DEBUG_LEVEL, "Mid-stream session - service detection on both source and destination ports\n");
+            get_port_based_services(proto, p->ptrs.dp, p->ptrs.sp, asd);
+        }
+        else
+        {
+            get_port_based_services(proto,
+                (dir == APP_ID_FROM_RESPONDER) ? p->ptrs.sp : p->ptrs.dp, asd);
+        }
         asd.service_search_state = SESSION_SERVICE_SEARCH_STATE::PATTERN;
     }
 
@@ -371,11 +408,10 @@ void ServiceDiscovery::get_next_service(const Packet* p, const AppidSessionDirec
                 ServiceDiscoveryState* rsds = AppIdServiceState::get(p->ptrs.ip_api.get_src(),
                     proto, p->ptrs.sp, p->get_ingress_group(), p->pkth->address_space_id,
                     asd.is_decrypted());
-                std::unordered_map<uint16_t, std::vector<ServiceDetector*>>::iterator urs_iterator;
+                auto urs_iterator = udp_reversed_services.find(p->ptrs.sp);
                 if ( rsds && rsds->get_service() )
                     asd.service_candidates.emplace_back(rsds->get_service());
-                else if ( ( urs_iterator = udp_reversed_services.find(p->ptrs.sp) )
-                          != udp_reversed_services.end() and !urs_iterator->second.empty() )
+                else if ( urs_iterator != udp_reversed_services.end() and !urs_iterator->second.empty() )
                 {
                     asd.service_candidates.insert(asd.service_candidates.end(),
                         urs_iterator->second.begin(),
@@ -439,7 +475,7 @@ int ServiceDiscovery::identify_service(AppIdSession& asd, Packet* p,
         {
             if ( asd.get_session_flags(APPID_SESSION_WAIT_FOR_EXTERNAL) )
             {
-                if ( appidDebug->is_active() )
+                if ( appidDebug and appidDebug->is_active() )
                     LogMessage("AppIdDbg %s No service match, waiting for external detection\n", appidDebug->get_debug_session());
                 return APPID_INPROCESS;
             }
@@ -638,7 +674,7 @@ bool ServiceDiscovery::do_service_discovery(AppIdSession& asd, Packet* p,
                 }
                 asd.service_disco_state = APPID_DISCO_STATE_STATEFUL;
             }
-            else
+            else if (asd.is_midstream_svc_taking_too_much_time())
             {
                 asd.set_session_flags(APPID_SESSION_SERVICE_DETECTED);
                 asd.service_disco_state = APPID_DISCO_STATE_FINISHED;
@@ -647,12 +683,39 @@ bool ServiceDiscovery::do_service_discovery(AppIdSession& asd, Packet* p,
                     (asd.is_tp_appid_available() or asd.get_session_flags(APPID_SESSION_NO_TPI)))
                     asd.set_payload_id(APP_ID_UNKNOWN);
             }
+            else
+            {
+                asd.service_disco_state = APPID_DISCO_STATE_STATEFUL;
+                ++asd.srv_midstream_packet_inspected;
+            }
         }
         else
         {
             asd.service_disco_state = APPID_DISCO_STATE_STATEFUL;
         }
     }
+    else if ((p->flow->get_session_flags() & SSNFLAG_MIDSTREAM) and
+        asd.service_disco_state != APPID_DISCO_STATE_FINISHED and
+        !(asd.protocol == IpProtocol::TCP and (p->ptrs.sp == 21 or p->ptrs.dp == 21) and
+            !(p->ptrs.tcph->is_fin() or p->ptrs.tcph->is_rst())))
+    {
+        if (asd.is_midstream_svc_taking_too_much_time())
+        {
+            asd.set_session_flags(APPID_SESSION_SERVICE_DETECTED);
+            asd.service_disco_state = APPID_DISCO_STATE_FINISHED;
+
+            if ((asd.get_payload_id() == APP_ID_NONE) and
+                (asd.is_tp_appid_available() or asd.get_session_flags(APPID_SESSION_NO_TPI)))
+            {
+                asd.set_payload_id(APP_ID_UNKNOWN);
+            }
+        }
+        else
+        {
+            ++asd.srv_midstream_packet_inspected;
+        }
+    }
+    
 
     if (asd.is_encrypted_oportunistic_tls_session() and asd.encrypted.service_id > 0)
     {
@@ -680,6 +743,9 @@ bool ServiceDiscovery::do_service_discovery(AppIdSession& asd, Packet* p,
     {
         bool service_found = identify_service(asd, p, direction, change_bits) == APPID_SUCCESS;
         is_discovery_done = true;
+
+        if ((p->flow->get_session_flags() & SSNFLAG_MIDSTREAM) and service_found)
+            asd.srv_midstream_packet_inspected = 0;
 
         // Check to see if we want to stop any detectors for SIP/RTP.
         if (tp_app_id == APP_ID_SIP)

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -382,7 +382,7 @@ static const IpsApi md5_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         IPS_OPT,
         s_help,
@@ -426,7 +426,7 @@ static const IpsApi sha256_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         IPS_OPT,
         s_help,
@@ -470,7 +470,7 @@ static const IpsApi sha512_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         IPS_OPT,
         s_help,

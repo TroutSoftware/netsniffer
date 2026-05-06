@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -65,9 +65,10 @@ struct MimeDataPafInfo
     int boundary_search_len;
     const char* boundary_search;
     MimeBoundaryState boundary_state;
+    bool boundary_quoted;
 };
 
-inline bool scanning_boundary(MimeDataPafInfo* mime_info, uint32_t boundary_start, uint32_t* fp)
+inline bool scanning_boundary(const MimeDataPafInfo* mime_info, uint32_t boundary_start, uint32_t* fp)
 {
     if (boundary_start
         && mime_info->data_state != MIME_PAF_FINDING_BOUNDARY_STATE

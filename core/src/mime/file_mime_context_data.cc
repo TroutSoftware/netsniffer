@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -52,21 +52,21 @@ void MimeDecodeContextData::init()
 
 uint8_t* MimeDecodeContextData::get_decode_buf()
 {
-    MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
+    const MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
 
     return data->decode_buf;
 }
 
 uint8_t* MimeDecodeContextData::get_decompress_buf()
 {
-    MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
+    const MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
 
     return data->decompress_buf;
 }
 
 uint32_t MimeDecodeContextData::get_decompress_buf_size()
 {
-    MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
+    const MimeDecodeContextData* data = IpsContextData::get<MimeDecodeContextData>(mime_ips_id);
 
     return data->decompress_buf_size;
 }

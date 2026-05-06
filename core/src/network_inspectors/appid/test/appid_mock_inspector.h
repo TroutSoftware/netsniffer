@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -72,7 +72,7 @@ bool AppIdInspector::configure(snort::SnortConfig*) { return true; }
 void AppIdInspector::show(const snort::SnortConfig*) const { }
 void AppIdInspector::tinit() { }
 void AppIdInspector::tterm() { }
-void AppIdInspector::tear_down(snort::SnortConfig*) { }
+void AppIdInspector::tear_down(snort::SnortConfig*, bool) { }
 
 AppIdModule appid_mod;
 AppIdInspector dummy_appid_inspector( appid_mod );

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -101,6 +101,7 @@ private:
     Field ole_data;
     std::list<MimeBufs>* mime_bufs = nullptr;
     bool last_attachment_complete = true;
+    MimeFormData mime_fields;
 
     int32_t publish_length = HttpCommon::STAT_NOT_PRESENT;
 };

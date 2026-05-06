@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2003-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -60,12 +60,12 @@ SO_PUBLIC bool TextLog_Print(TextLog* const, const char* format, ...) __attribut
 SO_PUBLIC bool TextLog_Flush(TextLog* const);
 SO_PUBLIC int TextLog_Avail(TextLog* const);
 SO_PUBLIC void TextLog_Reset(TextLog* const);
-} // namespace snort
+}
 
-/*-------------------------------------------------------------------
-  * helper functions
-  *-------------------------------------------------------------------
-  */
+//--------------------------------------------------------------------------
+// helper functions
+//--------------------------------------------------------------------------
+
 inline bool TextLog_NewLine(TextLog* const txt)
 {
     return snort::TextLog_Putc(txt, '\n');

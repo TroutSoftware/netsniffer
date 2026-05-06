@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -77,6 +77,19 @@ bool HttpRequestBodyEvent::is_mime() const
 
         if (header)
             return header->has_mime_boundary();
+    }
+
+    return false;
+}
+
+bool HttpRequestBodyEvent::is_urlencoded() const
+{
+    if (http_msg_body)
+    {
+        HttpMsgHeader* header = http_msg_body->get_header(HttpCommon::SRC_CLIENT);
+
+        if (header)
+            return header->get_content_type() == HttpEnums::CT_APPLICATION_X_WWW_FORM_URLENCODED;
     }
 
     return false;

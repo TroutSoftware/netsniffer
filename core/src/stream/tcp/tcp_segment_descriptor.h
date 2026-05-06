@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -128,10 +128,10 @@ public:
         pkt->dsize -= offset;
     }
 
-    void set_packet_flags(uint32_t flags) const
+    void set_packet_flags(uint64_t flags) const
     { pkt->packet_flags |= flags; }
 
-    bool are_packet_flags_set(uint32_t flags) const
+    bool are_packet_flags_set(uint64_t flags) const
     { return (pkt->packet_flags & flags) == flags; }
 
     uint32_t get_packet_timestamp() const

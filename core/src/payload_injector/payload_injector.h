@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -39,8 +39,12 @@ enum InjectionReturnStatus : int8_t
     ERR_HTTP2_MID_FRAME = -6,
     ERR_TRANSLATED_HDRS_SIZE = -7,
     ERR_HTTP2_EVEN_STREAM_ID = -8,
-    ERR_PKT_FROM_SERVER = -9,
-    ERR_CONFLICTING_S2C_TRAFFIC = -10,
+    ERR_CONFLICTING_S2C_TRAFFIC = -9,
+    ERR_SESSION_NOT_TCP = -10,
+    ERR_STALE_S2C_DATA = -11,
+    ERR_S2C_HTTP_PROTO= -12,
+    ERR_C2S_HTTP_PROTO= -13,
+    ERR_S2C_HTTP2_PROTO= -14
     // Update InjectionErrorToString when adding/removing error codes
 };
 

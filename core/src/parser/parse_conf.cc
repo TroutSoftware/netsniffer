@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 // Copyright (C) 2000,2001 Andrew R. Baker <andrewb@uab.edu>
@@ -289,8 +289,6 @@ void add_service_to_otn(SnortConfig* sc, OptTreeNode* otn, const char* svc_name)
         // applies to both alert file and service:file rules
         std::string buf = "file_data";
         add_default_services(sc, buf, otn);
-        add_service_to_otn(sc, otn, "file");
-        return;
     }
 
     add_service_to_otn_helper(sc, otn, svc_name);

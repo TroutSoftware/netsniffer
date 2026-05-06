@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2003-2013 Sourcefire, Inc.
 // Copyright (C) 2003 Brian Caswell <bmc@snort.org>
 // Copyright (C) 2003 Michael J. Pomraning <mjp@securepipe.com>
@@ -110,6 +110,7 @@ struct PcreCounts
 };
 
 PcreCounts pcre_counts;
+static const SnortConfig* pcre_counts_config_generation = nullptr;
 
 void show_pcre_counts()
 {
@@ -684,7 +685,7 @@ bool PcreModule::begin(const char* name, int v, SnortConfig* sc)
     if ( sc->pcre_to_regex )
     {
         if ( !mod_regex )
-            mod_regex = ModuleManager::get_module(mod_regex_name);
+            mod_regex = PigPen::get_module(mod_regex_name);
 
         if( mod_regex )
             mod_regex = mod_regex->begin(name, v, sc) ? mod_regex : nullptr;
@@ -696,6 +697,13 @@ bool PcreModule::begin(const char* name, int v, SnortConfig* sc)
 
 bool PcreModule::set(const char* name, Value& v, SnortConfig* sc)
 {
+    // Reset PCRE counters once per new configuration build
+    if (sc != pcre_counts_config_generation)
+    {
+        pcre_counts = {};
+        pcre_counts_config_generation = sc;
+    }
+
     assert(v.is("~re"));
     re = v.get_string();
 
@@ -763,7 +771,7 @@ static const IpsApi pcre_api =
         sizeof(IpsApi),
         IPSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         s_name,
         s_help,

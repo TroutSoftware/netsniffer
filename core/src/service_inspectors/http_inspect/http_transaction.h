@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -60,6 +60,10 @@ public:
 
     void set_one_hundred_response();
     bool final_response() const { return !second_response_expected; }
+    bool should_publish_on_sse_event_boundary() const
+    { return publish_on_sse_event_boundary; }
+    void set_publish_on_sse_event_boundary()
+    { publish_on_sse_event_boundary = true; }
 
     void add_body_len(HttpCommon::SourceId source_id, uint64_t len)
     { body_len[source_id] += len; }
@@ -75,7 +79,7 @@ public:
     { return filename[source_id]; }
     const std::string& get_content_type(HttpCommon::SourceId source_id) const
     { return content_type[source_id]; }
-  
+
     void clear_section();
     bool is_clear() const { return active_sections == 0; }
     void garbage_collect();
@@ -103,6 +107,8 @@ private:
     HttpMsgSection* archive_hdr_list = nullptr;
     HttpInfractions* infractions[2];
 
+    // FIXIT-E compact these flags into a bitset or packed field if more per-transaction
+    // flags are added; separate bool members are easy to add but waste space.
     bool response_seen = false;
     bool one_hundred_response = false;
     bool second_response_expected = false;
@@ -111,6 +117,7 @@ private:
     // transaction in the fairly rare case where the request and response are received in
     // parallel.
     bool shared_ownership = false;
+    bool publish_on_sse_event_boundary = false;
 
     unsigned pub_id;
     snort::Flow* const flow;
@@ -125,4 +132,3 @@ private:
 };
 
 #endif
-

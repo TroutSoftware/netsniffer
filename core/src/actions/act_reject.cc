@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -48,7 +48,6 @@
 #include "config.h"
 #endif
 
-#include "actions/actions_module.h"
 #include "framework/ips_action.h"
 #include "framework/module.h"
 #include "main/snort_config.h"
@@ -211,7 +210,7 @@ class RejectModule : public Module
 {
 public:
     RejectModule() : Module(module_name, module_help, module_params) 
-    { ActionsModule::add_action(module_name, reject_pegs); }
+    { register_action_pegs(module_name, reject_pegs); }
 
     bool begin(const char*, int, SnortConfig*) override;
     bool set(const char*, Value&, SnortConfig*) override;
@@ -227,8 +226,7 @@ public:
     bool stats_are_aggregated() const override
     { return true; }
 
-    void show_stats() override
-    { /* These stats are shown by ActionsModule. */ }
+    void show_stats() override { }
 
     const PegInfo* get_pegs() const override
     { return reject_pegs; }

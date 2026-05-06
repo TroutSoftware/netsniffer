@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -65,6 +65,7 @@ enum
 
 #define MOD_NAME "stream"
 #define MOD_HELP "common flow tracking"
+#define MOD_USE Module::GLOBAL
 
 struct BaseStats
 {
@@ -77,7 +78,7 @@ struct BaseStats
      PegCount memcap_prunes;
      PegCount ha_prunes;
      PegCount stale_prunes;
-     PegCount closed_prunes;
+     PegCount flows_closed;
      PegCount expected_flows;
      PegCount expected_realized;
      PegCount expected_pruned;
@@ -115,6 +116,17 @@ struct BaseStats
      PegCount allowlist_eof_prunes;
      PegCount excess_to_allowlist;
 
+     // Flow creation failure counters
+     PegCount no_flow_no_proto_handler;
+     PegCount no_flow_retry_packet;
+     PegCount no_flow_tcp_rst;
+     PegCount no_flow_unwanted;
+     PegCount no_flow_midstream_reject;
+     PegCount no_flow_alloc_failure;
+     PegCount no_flow_pkt_type_none;
+     PegCount no_flow_no_inspector;
+     PegCount no_flow_paf_no_flow;
+
      // Keep the NOW stats at the bottom as it requires special sum_stats logic
      PegCount allowlist_flows;
      PegCount current_flows;
@@ -133,8 +145,8 @@ struct StreamModuleConfig
 #ifdef REG_TEST
     unsigned footprint = 0;
 #endif
-    uint32_t held_packet_timeout = 1000;  // in milliseconds
     int hs_timeout = -1;
+    uint32_t hold_time = 1000;
     bool drop_stale_packets = false;
     
     void show() const;
@@ -160,22 +172,6 @@ private:
 
 private:
     StreamModuleConfig config;
-};
-
-class HPQReloadTuner : public snort::ReloadResourceTuner
-{
-public:
-    explicit HPQReloadTuner(uint32_t packet_timeout) : held_packet_timeout(packet_timeout) { }
-    ~HPQReloadTuner() override = default;
-
-    const char* name() const override
-    { return "HPQReloadTuner"; }
-    bool tinit() override;
-    bool tune_packet_context() override;
-    bool tune_idle_context() override;
-
-private:
-    uint32_t held_packet_timeout;
 };
 
 class StreamUnloadReloadResourceManager : public snort::ReloadResourceTuner
@@ -220,10 +216,12 @@ public:
     { return true; }
 
     Usage get_usage() const override
-    { return GLOBAL; }
+    { return MOD_USE; }
 
     void set_trace(const snort::Trace*) const override;
     const snort::TraceOption* get_trace_options() const override;
+
+    static uint32_t get_hold_time();
 
 private:
     StreamModuleConfig config;

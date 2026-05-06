@@ -1,5 +1,5 @@
 ---------------------------------------------------------------------------
--- Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+-- Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 --
 -- This program is free software; you can redistribute it and/or modify it
 -- under the terms of the GNU General Public License Version 2 as published
@@ -38,8 +38,6 @@ output = { }
 packets = { }
 process = { }
 search_engine = { }
-so_proxy = { }
-trace = { }
 
 -- exceptions:
 
@@ -49,7 +47,7 @@ classifications = { }    -- pure list
 detection = { }          -- policy specific
 event_filter = { }       -- pure list
 event_queue = { }        -- pure list
-file_id = { }            -- opt in
+file_inspect = { }       -- opt in
 high_availability = { }  -- opt in
 inspection = { }         -- policy specific
 ips = { }                -- policy specific

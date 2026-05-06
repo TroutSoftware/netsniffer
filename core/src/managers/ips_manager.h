@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -39,12 +39,11 @@ namespace snort
 class IpsManager
 {
 public:
-    static void add_plugin(const snort::IpsApi*);
-    static void dump_plugins();
+    static class PlugInterface* get_interface(const snort::IpsApi*);
     static void release_plugins();
     static void instantiate(const snort::IpsApi*, snort::Module*, snort::SnortConfig*);
 
-    static bool option_begin(snort::SnortConfig*, const char* key, SnortProtocolId);
+    static bool option_begin(snort::SnortConfig*, const char* key, SnortProtocolId, uint64_t /*rule id*/);
     static bool option_set(
         snort::SnortConfig*, const char* key, const char* opt, const char* val);
     static snort::IpsOption* option_end(
@@ -57,10 +56,6 @@ public:
 
     static void global_init(const snort::SnortConfig*);
     static void global_term(const snort::SnortConfig*);
-
-    static void reset_options();
-    static void setup_options(const snort::SnortConfig*);
-    static void clear_options(const snort::SnortConfig*);
 
     static bool verify(snort::SnortConfig*);
 };

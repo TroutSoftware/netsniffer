@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2023-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2023-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -48,7 +48,7 @@ void DataDecryptEventHandler::handle(snort::DataEvent& event, snort::Flow* flow)
         auto direction = p->is_from_client() ? APP_ID_FROM_INITIATOR : APP_ID_FROM_RESPONDER;
         asd = AppIdSession::allocate_session( p, p->get_ip_proto_next(), direction,
                 inspector, *pkt_thread_odp_ctxt );
-        if (appidDebug->is_enabled())
+        if (appidDebug and appidDebug->is_enabled())
         {
             appidDebug->activate(flow, asd, inspector.get_ctxt().config.log_all_sessions);
             if (appidDebug->is_active())

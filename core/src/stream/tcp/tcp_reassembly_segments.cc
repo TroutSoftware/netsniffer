@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -193,6 +193,9 @@ void TcpReassemblySegments::insert_segment_in_seglist(TcpSegmentDescriptor& tsd)
         add_reassembly_segment(tsd, tsd.get_len(), 0, 0, tsd.get_seq(), tail);
         return;
     }
+
+    // Packet is problematic, may have overlaps/retransmission, fill the hole, create a hole
+    tsd.set_packet_flags(PKT_TCP_INJECT_BLOCKED);
 
     tos->init(tsd);
     overlap_resolver->eval_left(*tos);

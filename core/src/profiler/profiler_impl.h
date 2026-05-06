@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -27,6 +27,7 @@ namespace snort
 {
 class Module;
 struct ProfileStats;
+struct SnortConfig;
 }
 
 class ProfilerNodeMap;
@@ -34,8 +35,8 @@ class ProfilerNodeMap;
 class Profiler
 {
 public:
-    static void register_module(snort::Module*);
-    static void register_module(const char*, const char*, snort::Module*);
+    static void setup(snort::SnortConfig*);
+    static void clear(snort::SnortConfig*);
 
     static void start();
     static void stop(uint64_t);
@@ -52,6 +53,10 @@ public:
 
     static snort::ProfileStats* get_total_perf_stats();
     static snort::ProfileStats* get_other_perf_stats();
+
+private:
+    static void register_module(ProfilerNodeMap&, snort::Module*);
+    static void register_module(ProfilerNodeMap&, const char*, const char*, snort::Module*);
 };
 
 #endif

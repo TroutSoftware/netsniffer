@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2012-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -29,6 +29,8 @@
 
 #include "file_inspect.h"
 
+#include <atomic>
+
 #include "log/messages.h"
 
 #include "file_cache.h"
@@ -37,8 +39,11 @@
 #include "file_flows.h"
 #include "file_module.h"
 #include "file_service.h"
+#include "pub_sub/file_events_ids.h"
 
 using namespace snort;
+
+static std::atomic<unsigned> file_adv_pub_id{0};
 
 FileInspect::FileInspect(FileIdModule* fm)
 {
@@ -66,16 +71,21 @@ bool FileInspect::configure(SnortConfig* sc)
 
     FileService::set_max_file_depth(sc);
 
+    file_adv_pub_id = DataBus::get_id(file_adv_pub_key);
+
     if (sc->mp_dbus)
     {
         MPSerializeFunc serialize_func = serialize_file_event;
         MPDeserializeFunc deserialize_func = deserialize_file_event;
 
-        MPDataBus::register_event_helpers(file_pub_key, FileMPEvents::FILE_SHARE_SYNC, serialize_func, deserialize_func);
-        MPDataBus::subscribe(file_pub_key, FileMPEvents::FILE_SHARE_SYNC, new FileCacheShare());
+        MPDataBus::register_event_helpers(file_mp_pub_key, FileMPEvents::FILE_SHARE_SYNC, serialize_func, deserialize_func);
+        MPDataBus::subscribe(file_mp_pub_key, FileMPEvents::FILE_SHARE_SYNC, new FileCacheShare());
     }
     return true;
 }
+
+unsigned get_file_adv_pub_id()
+{ return file_adv_pub_id; }
 
 static void file_config_show(const FileConfig* fc)
 {
@@ -148,7 +158,7 @@ static const InspectApi file_inspect_api =
         mod_ctor,
         mod_dtor
     },
-    IT_FILE,
+    IT_PASSIVE,
     PROTO_BIT__NONE,
     nullptr,
     "file",

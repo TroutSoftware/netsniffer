@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -46,8 +46,8 @@ public:
     static constexpr ServiceType type_id = ServiceType::QUIC;
 
     QuicExtractorFlowData(QuicExtractor& owner)
-        : ExtractorFlowData(type_id, owner.get_inspector()), owner(owner) {}
-    
+        : ExtractorFlowData(type_id), owner(owner) { }
+
     ~QuicExtractorFlowData() override
     {
         if (has_data)
@@ -199,7 +199,7 @@ void QuicExtractor::dump(const QuicExtractorFlowData& fd)
         logger->add_field(f.name, (uint64_t)0);
 
     log(fd_str_fields, &fd, logger->is_strict());
-    
+
     logger->close_record(*log_id);
 }
 

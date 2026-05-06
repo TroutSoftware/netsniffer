@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -115,6 +115,18 @@ void JsonExtractorLogger::add_field(const char* f, uint64_t v)
 {
     write_key(f);
     out_buffer += std::to_string(v);
+}
+
+void JsonExtractorLogger::add_field(const char* f, double v)
+{
+    const unsigned precision = 6;
+
+    // 20 digits for integer part + '.' + precision digits + '\0'
+    char buf[20 + 1 + precision + 1];
+    std::snprintf(buf, sizeof(buf), "%.*f", (int)precision, v);
+
+    write_key(f);
+    out_buffer += buf;
 }
 
 void JsonExtractorLogger::add_field(const char* f, const snort::SfIp& v)

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -402,6 +402,17 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
                     odp_ctxt.recheck_for_portservice_appid = true;
                 }
             }
+            else if (!(strcasecmp(conf_key, "detector_deviceinfo")))
+            {
+                if (!(strcasecmp(conf_val, "enabled")))
+                {
+                    odp_ctxt.detector_deviceinfo = true;
+                }
+                else if (!(strcasecmp(conf_val, "disabled")))
+                {
+                    odp_ctxt.detector_deviceinfo = false;
+                }
+            }
             else if (!(strcasecmp(conf_key, "bittorrent_aggressiveness")))
             {
                 int aggressiveness = atoi(conf_val);
@@ -548,6 +559,27 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
                     odp_ctxt.max_bytes_before_service_fail = max_bytes_before_service_fail;
                 }
             }
+            else if (!(strcasecmp(conf_key, "max_midstream_packet_before_service_fail")))
+            {
+                int32_t max_midstream_packet_before_service_fail = atoi(conf_val);
+                if (max_midstream_packet_before_service_fail != MIDSTREAM_SERVICE_INSPECTION_OFF &&
+                    (max_midstream_packet_before_service_fail > MAX_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL ||
+                     max_midstream_packet_before_service_fail < MIN_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL))
+                {
+                    APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: invalid "
+                        "max_midstream_packet_before_service_fail %" PRIu16 ", must be %u or in the range %u-%u.\n",
+                        max_midstream_packet_before_service_fail, MIDSTREAM_SERVICE_INSPECTION_OFF,
+                        MIN_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL, MAX_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL);
+                        
+                    odp_ctxt.max_midstream_packet_before_service_fail = 
+                        max_midstream_packet_before_service_fail > MAX_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL ? 
+                            MAX_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL : MIN_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL;
+                }
+                else
+                {
+                    odp_ctxt.max_midstream_packet_before_service_fail = max_midstream_packet_before_service_fail;
+                }
+            }
             else if (!(strcasecmp(conf_key, "max_packet_before_service_fail")))
             {
                 uint16_t max_packet_before_service_fail = atoi(conf_val);
@@ -625,9 +657,9 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
             }
             else if (!(strcasecmp(conf_key, "inspect_ooo_flows")))
             {
-                if (!(strcasecmp(conf_val, "enabled")))
+                if (!(strcasecmp(conf_val, "disabled")))
                 {
-                    odp_ctxt.inspect_ooo_flows = true;
+                    odp_ctxt.inspect_ooo_flows = false;
                     continue;
                 }
             }
@@ -694,6 +726,10 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
             else if (!(strcasecmp(conf_key, "eve_http_client")))
             {
                 odp_ctxt.eve_http_client = atoi(conf_val) ? true : false;
+            }
+            else if (!(strcasecmp(conf_key, "kerberos_check_failed_login")))
+            {
+                odp_ctxt.kerberos_check_failed_login = atoi(conf_val) ? true : false;
             }
             else if (!(strcasecmp(conf_key, "appid_cpu_profiling")))
             {

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -174,28 +174,30 @@ const StrCode HttpMsgHeadShared::content_code_list[] =
 
 const StrCode HttpMsgHeadShared::content_type_list[] =
 {
-    { CT_APPLICATION_DNS,          "application/dns-message" },
-    { CT_APPLICATION_PDF,          "application/pdf" },
-    { CT_APPLICATION_OCTET_STREAM, "application/octet-stream" },
-    { CT_APPLICATION_JAVASCRIPT,   "application/javascript" },
-    { CT_APPLICATION_ECMASCRIPT,   "application/ecmascript" },
-    { CT_APPLICATION_X_JAVASCRIPT, "application/x-javascript" },
-    { CT_APPLICATION_X_ECMASCRIPT, "application/x-ecmascript" },
-    { CT_APPLICATION_XHTML_XML,    "application/xhtml+xml" },
-    { CT_TEXT_JAVASCRIPT,          "text/javascript" },
-    { CT_TEXT_JAVASCRIPT_1_0,      "text/javascript1.0" },
-    { CT_TEXT_JAVASCRIPT_1_1,      "text/javascript1.1" },
-    { CT_TEXT_JAVASCRIPT_1_2,      "text/javascript1.2" },
-    { CT_TEXT_JAVASCRIPT_1_3,      "text/javascript1.3" },
-    { CT_TEXT_JAVASCRIPT_1_4,      "text/javascript1.4" },
-    { CT_TEXT_JAVASCRIPT_1_5,      "text/javascript1.5" },
-    { CT_TEXT_ECMASCRIPT,          "text/ecmascript" },
-    { CT_TEXT_X_JAVASCRIPT,        "text/x-javascript" },
-    { CT_TEXT_X_ECMASCRIPT,        "text/x-ecmascript" },
-    { CT_TEXT_JSCRIPT,             "text/jscript" },
-    { CT_TEXT_LIVESCRIPT,          "text/livescript" },
-    { CT_TEXT_HTML,                "text/html" },
-    { 0,                           nullptr }
+    { CT_APPLICATION_DNS,                   "application/dns-message" },
+    { CT_APPLICATION_PDF,                   "application/pdf" },
+    { CT_APPLICATION_OCTET_STREAM,          "application/octet-stream" },
+    { CT_APPLICATION_JAVASCRIPT,            "application/javascript" },
+    { CT_APPLICATION_ECMASCRIPT,            "application/ecmascript" },
+    { CT_APPLICATION_X_JAVASCRIPT,          "application/x-javascript" },
+    { CT_APPLICATION_X_ECMASCRIPT,          "application/x-ecmascript" },
+    { CT_APPLICATION_XHTML_XML,             "application/xhtml+xml" },
+    { CT_APPLICATION_X_WWW_FORM_URLENCODED, "application/x-www-form-urlencoded" },
+    { CT_MULTIPART_FORM_DATA,               "multipart/form-data" },
+    { CT_TEXT_JAVASCRIPT,                   "text/javascript" },
+    { CT_TEXT_JAVASCRIPT_1_0,               "text/javascript1.0" },
+    { CT_TEXT_JAVASCRIPT_1_1,               "text/javascript1.1" },
+    { CT_TEXT_JAVASCRIPT_1_2,               "text/javascript1.2" },
+    { CT_TEXT_JAVASCRIPT_1_3,               "text/javascript1.3" },
+    { CT_TEXT_JAVASCRIPT_1_4,               "text/javascript1.4" },
+    { CT_TEXT_JAVASCRIPT_1_5,               "text/javascript1.5" },
+    { CT_TEXT_ECMASCRIPT,                   "text/ecmascript" },
+    { CT_TEXT_X_JAVASCRIPT,                 "text/x-javascript" },
+    { CT_TEXT_X_ECMASCRIPT,                 "text/x-ecmascript" },
+    { CT_TEXT_JSCRIPT,                      "text/jscript" },
+    { CT_TEXT_LIVESCRIPT,                   "text/livescript" },
+    { CT_TEXT_HTML,                         "text/html" },
+    { 0,                                    nullptr }
 };
 
 const StrCode HttpMsgHeadShared::charset_code_list[] =
@@ -287,7 +289,6 @@ const RuleMap HttpModule::http_events[] =
     { EVENT_BROKEN_CHUNK,               "HTTP chunk misformatted" },
     { EVENT_CHUNK_WHITESPACE,           "white space adjacent to chunk length" },
     { EVENT_HEAD_NAME_WHITESPACE,       "white space within header name" },
-    { EVENT_GZIP_OVERRUN,               "excessive gzip compression" },
     { EVENT_GZIP_FAILURE,               "gzip decompression failed" },
     { EVENT_ZERO_NINE_CONTINUE,         "HTTP 0.9 requested followed by another request" },
     { EVENT_ZERO_NINE_NOT_FIRST,        "HTTP 0.9 request following a normal request" },
@@ -356,6 +357,8 @@ const RuleMap HttpModule::http_events[] =
                                         "disallowed methods list" },
     { EVENT_GZIP_RESERVED_FLAGS,        "HTTP gzip body with reserved flag set" },
     { EVENT_MAX_PARTIAL_FLUSH,          "Too many partial flushes" },
+    { EVENT_DEFLATE_EARLY_END,          "deflate compressed data followed by unexpected non-deflate data" },
+    { EVENT_DEFLATE_FAILURE,            "deflate decompression failed" },
     { 0, nullptr }
 };
 
@@ -385,6 +388,7 @@ const PegInfo HttpModule::peg_names[PEG_COUNT_MAX+1] =
     { CountType::MAX, "max_concurrent_sessions", "maximum concurrent http sessions" },
     { CountType::SUM, "script_detections", "early inspections of scripts in HTTP responses" },
     { CountType::SUM, "partial_inspections", "early inspections done for script detection" },
+    { CountType::SUM, "partial_publishes", "publish-only partial flushes" },
     { CountType::SUM, "excess_parameters", "repeat parameters exceeding max" },
     { CountType::SUM, "parameters", "HTTP parameters inspected" },
     { CountType::SUM, "connect_tunnel_cutovers", "CONNECT tunnel flow cutovers to wizard" },
@@ -397,6 +401,10 @@ const PegInfo HttpModule::peg_names[PEG_COUNT_MAX+1] =
     { CountType::SUM, "js_pdf_scripts", "total number of PDF files processed" },
     { CountType::SUM, "skip_mime_attach", "total number of HTTP requests with too many MIME attachments to inspect" },
     { CountType::SUM, "compressed_gzip", "total number of HTTP bodies compressed with GZIP" },
+    { CountType::SUM, "compressed_gzip_failed", "total number of HTTP bodies with failed GZIP decompression" },
+    { CountType::SUM, "compressed_deflate", "total number of HTTP bodies compressed with Deflate" },
+    { CountType::SUM, "incorrect_deflate_header", "total number of HTTP bodies compressed with Deflate that had incorrect header" },
+    { CountType::SUM, "compressed_deflate_failed", "total number of HTTP bodies with failed Deflate decompression" },
     { CountType::SUM, "compressed_not_supported", "total number of HTTP bodies compressed with known but not supported methods" },
     { CountType::SUM, "compressed_unknown", "total number of HTTP bodies compressed with unknown methods" },
     { CountType::SUM, "max_publish_depth_hits", "total number of times the maximum publish depth was exceeded" },

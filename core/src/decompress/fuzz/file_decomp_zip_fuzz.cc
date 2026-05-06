@@ -1,6 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
-// Copyright (C) 2005-2013 Sourcefire, Inc.
+// Copyright (C) 2026-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -17,14 +16,42 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //--------------------------------------------------------------------------
 
-// dcerpc.h author Sourcefire Inc.
+// file_decomp_zip_fuzz.cc author Jason Crowder <jasocrow@cisco.com>
 
-#ifndef DCERPC_H
-#define DCERPC_H
+#include "../file_decomp_zip.h"
 
-#include <cstdint>
+using namespace snort;
 
-int dcerpc_validate(const uint8_t* data, int size);
+// Matches DEFAULT_DECOMP from mime/file_mime_config.h
+// Duplicated here to avoid pulling in dependencies
+#define DEFAULT_DECOMP 100000
 
-#endif
+uint8_t out_data[DEFAULT_DECOMP] = { };
 
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
+{
+    uint32_t clamped_size = (uint32_t)size;
+
+    if (size > UINT32_MAX)
+    {
+        return 0;
+    }
+
+    fd_session_t* fd = File_Decomp_New();
+
+    fd->File_Type = FILE_TYPE_ZIP;
+    fd->Next_In = data;
+    fd->Avail_In = clamped_size;
+    fd->Next_Out = out_data;
+    fd->Avail_Out = sizeof(out_data);
+
+    File_Decomp_Init_ZIP(fd);
+
+    File_Decomp_ZIP(fd);
+
+    File_Decomp_End_ZIP(fd);
+
+    File_Decomp_Free(fd);
+
+    return 0;
+}

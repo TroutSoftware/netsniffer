@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -137,6 +137,11 @@ bool Iec104Decode(Packet* p, Iec104FlowData* iec104fd)
 
         case IEC104_APCI_TYPE_I:
         {
+            if (p->dsize < IEC104_APCI_TYPE_I_MIN_LEN)
+            {
+                return false;
+            }
+
             // build up the APCI
             const Iec104ApciI* apci = (const Iec104ApciI*) p->data;
 

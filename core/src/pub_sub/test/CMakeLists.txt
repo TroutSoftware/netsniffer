@@ -17,6 +17,10 @@ add_cpputest( pub_sub_http_body_event_test
     SOURCES
         ../http_body_event.cc
 )
+add_cpputest( pub_sub_http_form_data_event_test
+    SOURCES
+        ../http_form_data_event.cc
+)
 add_cpputest( pub_sub_eve_process_event_test
     SOURCES
         ../eve_process_event.h
@@ -34,6 +38,7 @@ add_cpputest( pub_sub_http_transaction_end_event_test
         ../../service_inspectors/http_inspect/http_test_manager.cc
         ../../service_inspectors/http_inspect/http_test_input.cc
         ../../service_inspectors/http_inspect/http_field.cc
+        ../../service_inspectors/http_inspect/http_compress_stream.cc
     LIBS ${ZLIB_LIBRARIES}
 )
 add_cpputest( pub_sub_ftp_events_test
@@ -44,4 +49,8 @@ add_cpputest( pub_sub_ftp_events_test
 add_cpputest( pub_sub_detection_events_test
     SOURCES
         ../detection_events.cc
+)
+add_cpputest( pub_sub_file_events_test
+    SOURCES
+        ../file_events.cc
 )

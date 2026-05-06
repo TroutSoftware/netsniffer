@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -40,74 +40,6 @@ using namespace snort;
 
 #define DEFAULT_DAEMON_ALERT_FILE  "alert"
 
-/****************************************************************************
- *
- * Function: OpenAlertFile(char *)
- *
- * Purpose: Set up the file pointer/file for alerting
- *
- * Arguments: filearg => the filename to open
- *
- * Returns: file handle
- *
- ***************************************************************************/
-FILE* OpenAlertFile(const char* filearg, bool is_critical)
-{
-    FILE* file;
-
-    if ( !filearg )
-        filearg = "alert.txt";
-
-    std::string name;
-    const char* filename = get_instance_file(name, filearg);
-
-    if ((file = fopen(filename, "a")) == nullptr)
-    {
-        if (is_critical)
-            FatalError("OpenAlertFile() => fopen() alert file %s: %s\n", filename, get_error(errno));
-        else
-            ErrorMessage("OpenAlertFile() => fopen() alert file %s: %s\n", filename, get_error(errno));
-    }
-    else
-        setvbuf(file, (char*)nullptr, _IOLBF, (size_t)0);
-
-    return file;
-}
-
-/****************************************************************************
- *
- * Function: RollAlertFile(char *)
- *
- * Purpose: rename existing alert file with by appending time to name
- *
- * Arguments: filearg => the filename to rename (same as for OpenAlertFile())
- *
- * Returns: 0=success, else errno
- *
- ***************************************************************************/
-int RollAlertFile(const char* filearg)
-{
-    char newname[STD_BUF+1];
-    time_t now = time(nullptr);
-
-    if ( !filearg )
-        filearg = "alert.txt";
-
-    std::string name;
-    get_instance_file(name, filearg);
-    const char* oldname = name.c_str();
-
-    SnortSnprintf(newname, sizeof(newname)-1, "%s.%lu", oldname, (unsigned long)now);
-
-
-    if ( rename(oldname, newname) )
-    {
-        FatalError("RollAlertFile() => rename(%s, %s) = %s\n",
-            oldname, newname, get_error(errno));
-    }
-    return errno;
-}
-
 //--------------------------------------------------------------------
 // default logger stuff
 //--------------------------------------------------------------------
@@ -118,12 +50,16 @@ static TextLog* text_log = nullptr;
 
 void OpenLogger()
 {
+    // Called during single-threaded startup before packet processing begins
+    // coverity[missing_lock]
     text_log = TextLog_Init("stdout", 300*1024);
 }
 
 void CloseLogger()
 {
+    // Called during single-threaded shutdown after packet processing ends
     BatchedLogger::BatchedLogManager::shutdown();
+    // coverity[missing_lock]
     TextLog_Term(text_log);
 }
 
@@ -175,7 +111,7 @@ void InitProtoNames()
 
     for ( int i = 0; i < NUM_IP_PROTOS; i++ )
     {
-        struct protoent* pt = getprotobynumber(i);  // main thread only
+        const struct protoent* pt = getprotobynumber(i);  // main thread only
 
         if (pt != nullptr)
         {

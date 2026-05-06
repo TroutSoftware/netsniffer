@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2013-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -25,7 +25,9 @@
 #include "log_errors.h"
 
 #include <syslog.h>
+#include <unistd.h>
 
+#include <atomic>
 #include <cassert>
 #include <cstring>
 
@@ -40,9 +42,9 @@ using namespace snort;
 
 static int already_fatal = 0;
 
-static unsigned parse_errors = 0;
-static unsigned parse_warnings = 0;
-static unsigned reload_errors = 0;
+static std::atomic<unsigned> parse_errors = 0;
+static std::atomic<unsigned> parse_warnings = 0;
+static std::atomic<unsigned> reload_errors = 0;
 
 static std::string reload_errors_description;
 
@@ -297,7 +299,10 @@ void ErrorMessage(const char* format,...)
     // -----------------------------
     // bail now if we are reentering
     if ( already_fatal )
-        exit(1);
+    {
+        fflush(NULL);
+        _exit(1);
+    }
     else
         already_fatal = 1;
     // -----------------------------
@@ -333,8 +338,8 @@ void ErrorMessage(const char* format,...)
     else
 #endif
     {
-        // FIXIT-M this makes no sense from main thread
-        exit(EXIT_FAILURE);
+        fflush(NULL);
+        _exit(EXIT_FAILURE);
     }
 }
 

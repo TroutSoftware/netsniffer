@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -40,10 +40,12 @@ public:
     Usage get_usage() const override
     { return GLOBAL; }
 
-    static void add_action(std::string module_name, const PegInfo* pegs);
-    void prep_counts(bool) override;
+    void add_action(std::string module_name, const PegInfo* pegs);
+
     PegCount* get_counts() const override;
     const PegInfo* get_pegs() const override;
+
+    void prep_counts(bool) override;
 
     bool counts_need_prep() const override
     { return true; }
@@ -54,8 +56,9 @@ public:
     void reset_stats() override;
 
 private:
-    static std::map<std::string, std::vector<PegInfo>> module_peg_info_map;
-    static std::array<PegInfo, ACTIONS_ARRAY_SIZE> peg_info_array;
+    std::map<std::string, std::vector<PegInfo>> module_peg_info_map;
+    std::array<PegInfo, ACTIONS_ARRAY_SIZE> peg_info_array { };
+
     static THREAD_LOCAL std::array<PegCount, ACTIONS_ARRAY_SIZE> peg_count_array;
     static THREAD_LOCAL std::array<PegCount, ACTIONS_ARRAY_SIZE> prev_peg_count_array;
 };

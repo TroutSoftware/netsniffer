@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -23,14 +23,17 @@
 
 #include "trace_module.h"
 
-#include <syslog.h>
+#include <functional>
+#include <sstream>
 
 #include "main/snort_config.h"
 #include "managers/module_manager.h"
+#include "managers/plugin_manager.h"
+#include "managers/trace_logger_manager.h"
 #include "packet_io/packet_constraints.h"
 
+#include "trace_api.h"
 #include "trace_config.h"
-#include "trace_loggers.h"
 #include "trace_parser.h"
 #include "trace_swap.h"
 
@@ -56,26 +59,110 @@ static std::string extract_module_option(const char* fqn)
     return option_name;
 }
 
+std::function<const char*()> get_trace_loggers = []()
+{ return PluginManager::get_available_plugins(PT_TRACE, "none |"); };
+
 // Module stuff
 
 #define trace_help "configure trace log messages"
 #define s_name "trace"
 
-TraceModule::TraceModule() : Module(s_name, trace_help)
+const static Parameter trace_constraints_params[] =
+{
+    { "ip_proto", Parameter::PT_INT, "0:255", nullptr,
+      "numerical IP protocol ID filter" },
+
+    { "src_ip", Parameter::PT_STRING, nullptr, nullptr,
+      "source IP address filter" },
+
+    { "src_port", Parameter::PT_INT, "0:65535", nullptr,
+      "source port filter" },
+
+    { "dst_ip", Parameter::PT_STRING, nullptr, nullptr,
+      "destination IP address filter" },
+
+    { "dst_port", Parameter::PT_INT, "0:65535", nullptr,
+      "destination port filter" },
+
+    { "match", Parameter::PT_BOOL, nullptr, "true",
+      "use constraints to filter traces" },
+
+    { "tenants", Parameter::PT_STRING, nullptr, nullptr,
+      "tenants filter" },
+
+    { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
+};
+
+static Parameter trace_params[] =
+{
+    { "output", Parameter::PT_DYNAMICS, (void*)&get_trace_loggers, "stdout_trace",
+      "output method(s) for trace log messages" },
+
+    { "ntuple", Parameter::PT_BOOL, nullptr, "false",
+      "print packet n-tuple info with trace messages" },
+
+    { "timestamp", Parameter::PT_BOOL, nullptr, "false",
+      "print message timestamps with trace messages" },
+
+    { "constraints", Parameter::PT_TABLE, trace_constraints_params,
+      nullptr, "trace filtering constraints" },
+
+    { "modules", Parameter::PT_TABLE, nullptr, nullptr, "modules trace option" },
+
+    { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
+};
+
+static const Command s_commands[] =
+{
+    { "set", TraceSwapParams::set, trace_params, "set trace configuration" },
+    { "clear", TraceSwapParams::clear, nullptr, "clear trace configuration" },
+    { nullptr, nullptr, nullptr, nullptr }
+};
+
+TraceModule::TraceModule() : Module(s_name, trace_help) { }
+
+TraceModule::~TraceModule()
+{ delete trace_parser; }
+
+void TraceModule::init()
 {
     generate_params();
     TraceSwapParams::set_params(get_parameters());
 }
 
-TraceModule::~TraceModule()
-{ delete trace_parser; }
+void TraceModule::reset()
+{
+    modules_params.clear();
+    module_ranges.clear();
+    modules_help.clear();
+    outputs.clear();
+
+    delete trace_parser;
+    trace_parser = nullptr;
+
+    set_params(nullptr);
+}
+
+void TraceModule::capture_outputs(TraceConfig* tc)
+{
+    std::stringstream ss(outputs);
+    std::string tok;
+
+    while ( ss >> tok )
+    {
+        if ( tok != "none" )
+            tc->output_traces.push_back(tok);
+    }
+}
 
 const Command* TraceModule::get_commands() const
-{ return TraceSwapParams::get_commands(); }
+{
+    return s_commands;
+}
 
 void TraceModule::generate_params()
 {
-    auto modules = snort::ModuleManager::get_all_modules();
+    auto modules = PluginManager::get_all_modules();
     for ( const auto* module : modules )
     {
         const TraceOption* trace_options = module->get_trace_options();
@@ -114,50 +201,13 @@ void TraceModule::generate_params()
 
     modules_params.emplace_back(nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr);
 
-    const static Parameter trace_constraints_params[] =
-    {
-        { "ip_proto", Parameter::PT_INT, "0:255", nullptr,
-          "numerical IP protocol ID filter" },
+    Parameter* p = trace_params;
 
-        { "src_ip", Parameter::PT_STRING, nullptr, nullptr,
-          "source IP address filter" },
+    while ( p->name and strcmp(p->name, "modules") )
+        p++;
 
-        { "src_port", Parameter::PT_INT, "0:65535", nullptr,
-          "source port filter" },
-
-        { "dst_ip", Parameter::PT_STRING, nullptr, nullptr,
-          "destination IP address filter" },
-
-        { "dst_port", Parameter::PT_INT, "0:65535", nullptr,
-          "destination port filter" },
-
-        { "match", Parameter::PT_BOOL, nullptr, "true",
-          "use constraints to filter traces" },
-        
-        { "tenants", Parameter::PT_STRING, nullptr, nullptr,
-          "tenants filter" },
-
-        { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
-    };
-
-    const static Parameter trace_params[] =
-    {
-        { "modules", Parameter::PT_TABLE, modules_params.data(), nullptr, "modules trace option" },
-
-        { "constraints", Parameter::PT_TABLE, trace_constraints_params,
-          nullptr, "trace filtering constraints" },
-
-        { "output", Parameter::PT_ENUM, "stdout | syslog", nullptr,
-          "output method for trace log messages" },
-
-        { "ntuple", Parameter::PT_BOOL, nullptr, "false",
-          "print packet n-tuple info with trace messages" },
-
-        { "timestamp", Parameter::PT_BOOL, nullptr, "false",
-          "print message timestamps with trace messages" },
-
-        { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
-    };
+    assert(p);
+    p->range = modules_params.data();
 
     set_params(trace_params);
 }
@@ -166,14 +216,8 @@ bool TraceModule::begin(const char* fqn, int, SnortConfig* sc)
 {
     if ( !strcmp(fqn, "trace") )
     {
+        sc->trace_config->load_traces();
         trace_parser = new TraceParser(*sc->trace_config);
-
-        // Init default output type based on Snort run-mode
-        if ( sc->daemon_mode() or SnortConfig::log_syslog() )
-            log_output_type = OUTPUT_TYPE_SYSLOG;
-        else
-            log_output_type = OUTPUT_TYPE_STDOUT;
-
     }
     return true;
 }
@@ -181,77 +225,34 @@ bool TraceModule::begin(const char* fqn, int, SnortConfig* sc)
 bool TraceModule::set(const char* fqn, Value& v, SnortConfig*)
 {
     if ( v.is("output") )
-    {
-        switch ( v.get_uint8() )
-        {
-            case OUTPUT_TYPE_STDOUT:
-                log_output_type = OUTPUT_TYPE_STDOUT;
-                break;
-            case OUTPUT_TYPE_SYSLOG:
-                log_output_type = OUTPUT_TYPE_SYSLOG;
-                break;
-            default:
-                return false;
-        }
-        return true;
-    }
+        outputs = v.get_string();
+
     else if ( v.is("ntuple") )
-    {
         trace_parser->get_trace_config().ntuple = v.get_bool();
-        return true;
-    }
+
     else if ( v.is("timestamp") )
-    {
         trace_parser->get_trace_config().timestamp = v.get_bool();
-        return true;
-    }
+
     else if ( strstr(fqn, "trace.modules.") == fqn )
     {
         std::string option_name = extract_module_option(fqn);
         return trace_parser->set_traces(option_name, v);
     }
-    else if ( strstr(fqn, "trace.constraints.") == fqn )
+    else
+    {
+        assert(strstr(fqn, "trace.constraints.") == fqn);
         return trace_parser->set_constraints(v);
-
-    return false;
+    }
+    return true;
 }
 
-bool TraceModule::end(const char* fqn, int, SnortConfig* sc)
+bool TraceModule::end(const char* fqn, int, SnortConfig*)
 {
     if ( !strcmp(fqn, "trace") )
     {
         assert(trace_parser);
-
-        if ( sc->dump_config_mode() )
-            trace_parser->clear_traces();
-        else
-        {
-            switch ( log_output_type )
-            {
-            case OUTPUT_TYPE_STDOUT:
-                trace_parser->get_trace_config().logger_factory = new StdoutLoggerFactory();
-                break;
-            case OUTPUT_TYPE_SYSLOG:
-                trace_parser->get_trace_config().logger_factory = new SyslogLoggerFactory();
-                break;
-            default:
-                break;
-            }
-
-            // "output=syslog" config override case
-            // do not closelog() here since it will be closed in Snort::clean_exit()
-            if ( !SnortConfig::log_syslog() and log_output_type == OUTPUT_TYPE_SYSLOG
-                and !local_syslog )
-            {
-                local_syslog = true;
-                openlog("snort", LOG_PID | LOG_CONS, LOG_DAEMON);
-            }
-
-            trace_parser->finalize_constraints();
-        }
-
         trace_parser->get_trace_config().initialized = true;
-
+        trace_parser->finalize_constraints();
         delete trace_parser;
         trace_parser = nullptr;
     }

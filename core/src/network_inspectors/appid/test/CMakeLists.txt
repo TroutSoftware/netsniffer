@@ -48,8 +48,18 @@ add_cpputest( appid_eve_process_event_handler_test
     SOURCES $<TARGET_OBJECTS:appid_cpputest_deps>
 )
 
+add_cpputest( appid_dns_payload_event_handler_test
+    SOURCES $<TARGET_OBJECTS:appid_cpputest_deps>
+)
+
 add_cpputest( user_data_map_test
     SOURCES ../user_data_map.cc
+)
+
+add_cpputest( appid_ssh_event_handler_test
+    SOURCES
+        appid_ssh_event_handler_test.cc
+        $<TARGET_OBJECTS:appid_cpputest_deps>
 )
 
 add_cpputest( tp_lib_handler_test

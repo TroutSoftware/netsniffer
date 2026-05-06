@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -105,6 +105,8 @@ static const PegInfo dce2_smb_pegs[] =
       "total number of SMBv2 create request packets ignored as share type is IPC" },
     { CountType::SUM, "v2_crt_tree_trkr_misng",
       "total number of SMBv2 create response packets ignored due to missing tree tracker" },
+    { CountType::SUM, "v2_crt_rtrkr_ins_fail",
+      "total number of SMBv2 create request packets failed due to request tracker insert failure" },
     { CountType::SUM, "v2_wrt", "total number of SMBv2 write packets seen" },
     { CountType::SUM, "v2_wrt_err_resp", "total number of SMBv2 write error response packets seen" },
     { CountType::SUM, "v2_wrt_ignored",
@@ -145,6 +147,8 @@ static const PegInfo dce2_smb_pegs[] =
       "total number of SMBv2 close request packets ignored due to missing file tracker" },
     { CountType::SUM, "v2_cls_req_hdr_err",
       "total number of SMBv2 close request packets ignored due to corrupted header" },
+    { CountType::SUM, "v2_cls_rtrkr_ins_fail",
+      "total number of SMBv2 close request packets failed due to request tracker insert failure" },
     { CountType::SUM, "v2_tree_discn",
       "total number of SMBv2 tree disconnect packets seen" },
     { CountType::SUM, "v2_tree_discn_ignored",

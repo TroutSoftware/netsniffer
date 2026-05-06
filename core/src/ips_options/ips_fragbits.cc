@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -419,7 +419,7 @@ static const IpsApi fragbits_api =
         sizeof(IpsApi), //uint32_t size
         IPSAPI_VERSION, //uint32_t api_version
         0,              //uint32_t version
-        API_RESERVED,   //uint32_t reserved
+        PLUGIN_SO_RELOAD,   //uint32_t reserved
         API_OPTIONS,    //const char* options
         s_name,         //const char* name
         s_help,         //const char* help

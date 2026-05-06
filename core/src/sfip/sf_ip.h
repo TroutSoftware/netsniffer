@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 1998-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -124,7 +124,7 @@ private:
         uint32_t ip32[4];
         uint64_t ip64[2];
     };
-    int16_t family;
+    int16_t family = AF_UNSPEC;
 } __attribute__((__packed__));
 
 
@@ -134,7 +134,7 @@ private:
 
 inline void SfIp::clear()
 {
-    family = 0;
+    family = AF_UNSPEC;
     ip32[0] = ip32[1] = ip32[2] = ip32[3] = 0;
 }
 

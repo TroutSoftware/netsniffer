@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -39,14 +39,15 @@ public:
         source_id(is_client_to_server ? HttpCommon::SRC_CLIENT : HttpCommon::SRC_SERVER) {}
     Status scan(snort::Packet* pkt, const uint8_t* data, uint32_t length, uint32_t not_used,
         uint32_t* flush_offset) override;
-    Status scan(snort::Flow* flow, const uint8_t* data, uint32_t length, uint32_t* flush_offset) override;
+    Status scan(snort::Flow* flow, const uint8_t* data, uint32_t length, uint32_t* flush_offset,
+        snort::Packet* pkt = nullptr) override;
     const snort::StreamBuffer reassemble(snort::Flow* flow, unsigned total, unsigned, const
         uint8_t* data, unsigned len, uint32_t flags, unsigned& copied) override;
     bool finish(snort::Flow* flow) override;
     void prep_partial_flush(snort::Flow* flow, uint32_t num_flush) override
-    { prep_partial_flush(flow, num_flush, 0, 0); }
+    { prep_partial_flush(flow, num_flush, 0, 0, HttpEnums::PF_DETECT); }
     void prep_partial_flush(snort::Flow* flow, uint32_t num_flush, uint32_t num_excess,
-        uint32_t num_head_lines);
+        uint32_t num_head_lines, HttpEnums::PartialFlushType partial_flush_type);
     bool is_paf() override { return true; }
     static StreamSplitter::Status status_value(StreamSplitter::Status ret_val, bool http2 = false);
 
@@ -62,13 +63,8 @@ private:
     HttpCutter* get_cutter(HttpCommon::SectionType type, HttpFlowData* session) const;
     void chunk_spray(HttpFlowData* session_data, uint8_t* buffer, const uint8_t* data,
         unsigned length) const;
-    void decompress_copy(uint8_t* buffer, uint32_t& offset, const uint8_t* data,
-        uint32_t length, HttpEnums::CompressId& compression, z_stream*& compress_stream,
-        bool at_start, HttpInfractions* infractions, HttpEventGen* events,
-        HttpFlowData* session_data) const;
-    uint8_t* process_gzip_header(const uint8_t* data,
-        uint32_t length, HttpFlowData* session_data) const;
-    bool gzip_header_check_done(HttpFlowData* session_data) const;
+    void decompress_copy(const uint8_t* src, uint32_t src_size,
+        uint8_t* dst, uint32_t& dst_size, HttpFlowData* const session_data) const;
     StreamSplitter::Status handle_zero_nine(snort::Flow*, HttpFlowData*, const uint8_t* data,
         uint32_t length, uint32_t* flush_offset, HttpCommon::SectionType&, HttpCutter*&);
     StreamSplitter::Status call_cutter(snort::Flow*, HttpFlowData*, const uint8_t* data,

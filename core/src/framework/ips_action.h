@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -36,13 +36,14 @@
 #include "packet_io/active_action.h"
 
 // this is the current version of the api
-#define ACTAPI_VERSION ((BASE_API_VERSION << 16) | 2)
+#define ACTAPI_VERSION ((BASE_API_VERSION << 16) | 3)
 
 //-------------------------------------------------------------------------
 // api for class
 //-------------------------------------------------------------------------
 
 class ActInfo;
+struct PegInfo;
 
 namespace snort
 {
@@ -117,6 +118,11 @@ struct ActionApi
     ActNewFunc ctor;
     ActDelFunc dtor;
 };
+
+// override show_stats to do nothing and call this in the action module
+// ctor to get the stats aggregated under ips_actions
+SO_PUBLIC void register_action_pegs(const char* mod_name, const PegInfo*);
+
 }
 #endif
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -101,7 +101,7 @@ StreamSplitter::Status Http2StreamSplitter::scan(Packet* pkt, const uint8_t* dat
         return HttpStreamSplitter::status_value(StreamSplitter::ABORT, true);
 
     StreamSplitter::Status ret_val =
-        implement_scan(session_data, data, length, flush_offset, source_id);
+        implement_scan(session_data, data, length, flush_offset, source_id, pkt);
 
     session_data->bytes_scanned[source_id] += (ret_val == StreamSplitter::FLUSH)?
         *flush_offset : length;

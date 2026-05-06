@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -32,6 +32,7 @@
 
 #include "pp_telnet.h"
 
+#include <climits>
 #include "detection/detection_buf.h"
 #include "detection/detection_engine.h"
 #include "protocols/packet.h"
@@ -69,6 +70,7 @@ int normalize_telnet(
     int consec_8bit_chars = 0;
 
     const unsigned char* start = buf.data;
+    unsigned int max_buf = 0;
     buf.len = 0;
 
     /* Telnet commands are handled in here.
@@ -180,7 +182,7 @@ int normalize_telnet(
                 /* wind it back a character? */
                 if (ignoreEraseCmds == FTPP_APPLY_TNC_ERASE_CMDS)
                 {
-                    if (write_ptr  > start)
+                    if (write_ptr  > start && buf.len > 0)
                     {
                         write_ptr--;
                         buf.len--;
@@ -193,21 +195,25 @@ int normalize_telnet(
                 if (ignoreEraseCmds == FTPP_APPLY_TNC_ERASE_CMDS)
                 {
                     /* Go back to previous CR null or CR LF? */
-                    while (write_ptr > start)
+                    while (write_ptr > start && buf.len > 0)
                     {
                         /* Go to previous char */
                         write_ptr--;
                         buf.len--;
 
-                        if ((*write_ptr == CR) &&
+                        if ((*write_ptr == CR) && (write_ptr + 1 < start + max_buf) &&
                             ((*(write_ptr+1) == NUL) || (*(write_ptr+1) == LF)) )
                         {
                             /* Okay, found the CR NUL or CR LF, move it
                              * forward past those two -- that is the
                              * beginning of this line
                              */
-                            write_ptr+=2;
-                            buf.len+=2;
+                            if (buf.len <= UINT_MAX - 2)
+                            {
+                                write_ptr+=2;
+                                buf.len+=2;
+                                max_buf = (buf.len > max_buf) ? buf.len : max_buf;
+                            }
                             break;
                         }
                     }
@@ -261,6 +267,7 @@ int normalize_telnet(
                 read_ptr++; /* skip past the first IAC */
                 *write_ptr++ = *read_ptr++;
                 buf.len++;
+                max_buf = (buf.len > max_buf) ? buf.len : max_buf;
                 break;
             case TNC_WILL:
             case TNC_WONT:
@@ -280,17 +287,20 @@ int normalize_telnet(
             }
         }
         /* check for subnegotiation */
-        else if (((read_ptr + 1) < end) &&
+        else if (((read_ptr + 2) < end) &&
             (*read_ptr == (unsigned char)TNC_IAC) &&
             (*(read_ptr+1) == (unsigned char)TNC_SB))
         {
             sb_start = read_ptr;
 
+            if ((read_ptr + 2) >= end) break;
             switch (*(read_ptr+2))
             {
             case 0x26: /* Encryption -- RFC 2946 */
                 /* printf("Telnet: Saw SB for Encryption\n"); */
+                if ((read_ptr + 3) >= end) break;
                 read_ptr += 3;
+                if (read_ptr >= end) break;
                 switch (*read_ptr)
                 {
 #ifdef TRACK_ENCRYPTION_NEGOTIATION
@@ -298,6 +308,7 @@ int normalize_telnet(
                     /* Client sending the Encryption IS marker
                      * followed by address. */
                 {
+                    if ((read_ptr + 1) >= end) break;
                     read_ptr++;
                     if (*read_ptr != 0x00)
                     /* Encryption type is not null */
@@ -312,6 +323,7 @@ int normalize_telnet(
                     /* Client sending the Encryption START marker
                      * followed by address. */
                 {
+                    if ((read_ptr + 1) >= end) break;
                     read_ptr++;
                     /* printf("Encryption started by telnet client\n"); */
                     if (tnssn)
@@ -339,7 +351,8 @@ int normalize_telnet(
              * for the TNC_IAC could end it too early. */
             while (read_ptr < end)
             {
-                if ((*read_ptr == (unsigned char)TNC_IAC) &&
+                if (((read_ptr + 1) < end) &&
+                    (*read_ptr == (unsigned char)TNC_IAC) &&
                     (*(read_ptr+1) == (unsigned char)TNC_SE))
                 {
                     sb_start = nullptr;
@@ -387,7 +400,7 @@ int normalize_telnet(
             case 0x7F: /* Delete */
             case 0x08: /* Backspace/Ctrl-H */
                 /* wind it back a character */
-                if (write_ptr > start)
+                if (write_ptr > start && buf.len > 0)
                 {
                     write_ptr--;
                     buf.len--;
@@ -397,6 +410,7 @@ int normalize_telnet(
             default:
                 *write_ptr++ = *read_ptr++;
                 buf.len++;
+                max_buf = (buf.len > max_buf) ? buf.len : max_buf;
                 break;
             }
 

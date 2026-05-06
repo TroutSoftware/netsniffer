@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -30,6 +30,8 @@
 
 #include "perf_monitor.h"
 
+#include <algorithm>
+
 #include <appid/appid_api.h>
 #include "flow/stream_flow.h"
 #include "framework/data_bus.h"
@@ -38,6 +40,7 @@
 #include "hash/xhash.h"
 #include "log/messages.h"
 #include "main/analyzer_command.h"
+#include "main/snort_config.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
 #include "pub_sub/intrinsic_event_ids.h"
@@ -245,6 +248,9 @@ void PerfMonitor::tinit()
     if (config->perf_flags & PERF_BASE)
         trackers->emplace_back(new BaseTracker(config));
 
+    if (config->perf_flags & PERF_CPU )
+        trackers->emplace_back(new CPUTracker(config));
+
     if (config->perf_flags & PERF_FLOW)
         trackers->emplace_back(new FlowTracker(config));
 
@@ -255,15 +261,12 @@ void PerfMonitor::tinit()
     if (config->perf_flags & PERF_CPU )
         trackers->emplace_back(new CPUTracker(config));
 
-    // Second condition is to prevent overflow, shouldn't happen in practice
-    for (unsigned i = 0; i < trackers->size() && i < std::numeric_limits<unsigned>::max(); i++)
+    for (size_t i = 0; i < trackers->size(); i++)
     {
-        if (!(*trackers)[i]->open(true))
+        if (!(*trackers)[i]->open(true) && i > 0)
         {
             disable_tracker(i);
-
-            if (i > 0)
-                i--;
+            i--;
         }
     }
 
@@ -273,7 +276,9 @@ void PerfMonitor::tinit()
 
 bool PerfMonReloadTuner::tinit()
 {
-    PerfMonitor* pm = reinterpret_cast<PerfMonitor*>(PigPen::get_inspector(PERF_NAME, true));
+    PerfMonitor* pm = reinterpret_cast<PerfMonitor*>(PigPen::get_inspector(PERF_NAME, Module::GLOBAL));
+    pm->update_trackers();
+
     auto* new_constraints = pm->get_constraints();
 
     if (new_constraints->flow_ip_enabled)
@@ -321,6 +326,66 @@ void PerfMonitor::tterm()
             flow_ip_tracker = nullptr;
         }
     }
+}
+
+void PerfMonitor::update_trackers()
+{
+    unsigned curr_flags = 0;
+
+    for ( auto* trk : *trackers )
+        curr_flags |= trk->get_flag();
+
+    // set aside the keepers and nuke the rest (base is not a keeper)
+    std::vector<PerfTracker*> tmp;
+
+    while ( !trackers->empty() )
+    {
+        auto trk = trackers->back();
+
+        if ( config->perf_flags & trk->get_flag() and (trk->get_flag() != PERF_BASE) )
+            tmp.push_back(trk);
+
+        else if ( trk != flow_ip_tracker )
+            delete trk;
+
+        trackers->pop_back();
+    }
+    trackers->swap(tmp);
+
+    // now add the new stuff
+    if ( (config->perf_flags & PERF_BASE) )
+        tmp.emplace_back(new BaseTracker(config));
+
+    if ( (config->perf_flags & PERF_FLOW) and !(curr_flags & PERF_FLOW) )
+        tmp.emplace_back(new FlowTracker(config));
+
+    if ( (config->perf_flags & PERF_FLOWIP) and !(curr_flags & PERF_FLOWIP) )
+        tmp.emplace_back(flow_ip_tracker);
+
+    if ( (config->perf_flags & PERF_CPU) and !(curr_flags & PERF_CPU) )
+        tmp.emplace_back(new CPUTracker(config));
+
+    // purge anything that fails to open
+    for (unsigned i = 0; i < tmp.size(); i++)
+    {
+        if (!tmp[i]->open(true))
+        {
+            if ( tmp[i] == flow_ip_tracker )
+                flow_ip_tracker = nullptr;
+
+            delete tmp[i];
+            tmp[i] = tmp[tmp.size()-1];
+            tmp.pop_back();
+        }
+    }
+
+    // capture all the new stuff
+    for (auto* trk : tmp)
+        trackers->push_back(trk);
+
+    // sort for consistent output order of trackers
+    std::sort(trackers->begin(), trackers->end(),
+        [] (PerfTracker* a, PerfTracker* b) { return a->get_name() < b->get_name(); });
 }
 
 void PerfMonitor::rotate()
@@ -402,11 +467,14 @@ void PerfMonitor::eval(Packet* p)
 #ifdef ENABLE_MEMORY_PROFILER
             PigPen::show_runtime_memory_stats();
 #endif
-            for (unsigned i = 0; i < trackers->size(); i++)
+            for (size_t i = 0; i < trackers->size(); i++)
             {
                 (*trackers)[i]->process(false);
-                if (!(*trackers)[i]->auto_rotate())
-                    disable_tracker(i--);
+                if (!(*trackers)[i]->auto_rotate() && i > 0)
+                {
+                    disable_tracker(i);
+                    i--;
+                }
             }
         }
     }
@@ -500,11 +568,7 @@ static const InspectApi pm_api =
     nullptr  // reset
 };
 
-#ifdef BUILDING_SO
-SO_PUBLIC const BaseApi* snort_plugins[] =
-#else
 const BaseApi* nin_perf_monitor[] =
-#endif
 {
     &pm_api.base,
     nullptr

@@ -8,7 +8,7 @@ Snort 3 Reference Manual
 The Snort Team
 
 Revision History
-Revision 3.10.0.0 2025-11-24 15:32:19 EST TST
+Revision 3.12.2.0 2026-04-22 20:06:05 EDT TST
 
 ---------------------------------------------------------------------
 
@@ -76,12 +76,13 @@ Table of Contents
     3.19. mpls
     3.20. pbb
     3.21. pgm
-    3.22. pppoe
-    3.23. tcp
-    3.24. token_ring
-    3.25. udp
-    3.26. vlan
-    3.27. wlan
+    3.22. pppoe_disc
+    3.23. pppoe_sess
+    3.24. tcp
+    3.25. token_ring
+    3.26. udp
+    3.27. vlan
+    3.28. wlan
 
 4. Connector Modules
 
@@ -110,7 +111,7 @@ Table of Contents
     5.16. domain_filter
     5.17. dpx
     5.18. extractor
-    5.19. file_id
+    5.19. file_inspect
     5.20. file_log
     5.21. ftp_client
     5.22. ftp_data
@@ -125,40 +126,39 @@ Table of Contents
     5.31. modbus
     5.32. netflow
     5.33. normalizer
-    5.34. null_trace_logger
-    5.35. opcua
-    5.36. packet_capture
-    5.37. perf_monitor
-    5.38. pop
-    5.39. port_scan
-    5.40. reputation
-    5.41. rna
-    5.42. rpc_decode
-    5.43. s7commplus
-    5.44. sip
-    5.45. smtp
-    5.46. snort_ml
-    5.47. snort_ml_engine
-    5.48. so_proxy
-    5.49. ssh
-    5.50. ssl
-    5.51. stream
-    5.52. stream_file
-    5.53. stream_icmp
-    5.54. stream_ip
-    5.55. stream_tcp
-    5.56. stream_udp
-    5.57. stream_user
-    5.58. telnet
-    5.59. tlv_pdu
-    5.60. wizard
+    5.34. opcua
+    5.35. packet_capture
+    5.36. perf_monitor
+    5.37. pop
+    5.38. port_scan
+    5.39. reputation
+    5.40. rna
+    5.41. rpc_decode
+    5.42. s7commplus
+    5.43. sip
+    5.44. smtp
+    5.45. snort_ml
+    5.46. snort_ml_engine
+    5.47. socks
+    5.48. ssh
+    5.49. ssl
+    5.50. stream
+    5.51. stream_file
+    5.52. stream_icmp
+    5.53. stream_ip
+    5.54. stream_tcp
+    5.55. stream_udp
+    5.56. stream_user
+    5.57. telnet
+    5.58. tlv_pdu
+    5.59. wizard
 
 6. IPS Action Modules
 
     6.1. alert
     6.2. block
     6.3. drop
-    6.4. file_id_action
+    6.4. file_id
     6.5. log
     6.6. pass
     6.7. react
@@ -217,92 +217,99 @@ Table of Contents
     7.48. http2_frame_header
     7.49. http_client_body
     7.50. http_cookie
-    7.51. http_header
-    7.52. http_header_test
-    7.53. http_max_header_line
-    7.54. http_max_trailer_line
-    7.55. http_method
-    7.56. http_num_cookies
-    7.57. http_num_headers
-    7.58. http_num_trailers
-    7.59. http_param
-    7.60. http_raw_body
-    7.61. http_raw_cookie
-    7.62. http_raw_header
-    7.63. http_raw_request
-    7.64. http_raw_status
-    7.65. http_raw_trailer
-    7.66. http_raw_uri
-    7.67. http_stat_code
-    7.68. http_stat_msg
-    7.69. http_trailer
-    7.70. http_trailer_test
-    7.71. http_true_ip
-    7.72. http_uri
-    7.73. http_version
-    7.74. http_version_match
-    7.75. icmp_id
-    7.76. icmp_seq
-    7.77. icode
-    7.78. id
-    7.79. iec104_apci_type
-    7.80. iec104_asdu_func
-    7.81. ip_proto
-    7.82. ipopts
-    7.83. isdataat
-    7.84. itype
-    7.85. js_data
-    7.86. md5
-    7.87. metadata
-    7.88. mms_data
-    7.89. mms_func
-    7.90. modbus_data
-    7.91. modbus_func
-    7.92. modbus_unit
-    7.93. msg
-    7.94. mss
-    7.95. opcua_msg_service
-    7.96. opcua_msg_type
-    7.97. opcua_node_id
-    7.98. opcua_node_namespace_index
-    7.99. pcre
-    7.100. pkt_data
-    7.101. pkt_num
-    7.102. priority
-    7.103. raw_data
-    7.104. reference
-    7.105. regex
-    7.106. rem
-    7.107. replace
-    7.108. rev
-    7.109. rpc
-    7.110. s7commplus_content
-    7.111. s7commplus_func
-    7.112. s7commplus_opcode
-    7.113. sd_pattern
-    7.114. seq
-    7.115. service
-    7.116. sha256
-    7.117. sha512
-    7.118. sid
-    7.119. sip_body
-    7.120. sip_header
-    7.121. sip_method
-    7.122. sip_stat_code
-    7.123. so
-    7.124. soid
-    7.125. ssl_state
-    7.126. ssl_version
-    7.127. stream_reassemble
-    7.128. stream_size
-    7.129. tag
-    7.130. target
-    7.131. tos
-    7.132. ttl
-    7.133. urg
-    7.134. vba_data
-    7.135. window
-    7.136. wscale
+    7.51. http_decoded_uri
+    7.52. http_header
+    7.53. http_header_test
+    7.54. http_max_header_line
+    7.55. http_max_trailer_line
+    7.56. http_method
+    7.57. http_num_cookies
+    7.58. http_num_headers
+    7.59. http_num_trailers
+    7.60. http_param
+    7.61. http_raw_body
+    7.62. http_raw_cookie
+    7.63. http_raw_header
+    7.64. http_raw_request
+    7.65. http_raw_status
+    7.66. http_raw_trailer
+    7.67. http_raw_uri
+    7.68. http_stat_code
+    7.69. http_stat_msg
+    7.70. http_trailer
+    7.71. http_trailer_test
+    7.72. http_true_ip
+    7.73. http_uri
+    7.74. http_version
+    7.75. http_version_match
+    7.76. icmp_id
+    7.77. icmp_seq
+    7.78. icode
+    7.79. id
+    7.80. iec104_apci_type
+    7.81. iec104_asdu_func
+    7.82. ip_proto
+    7.83. ipopts
+    7.84. isdataat
+    7.85. itype
+    7.86. js_data
+    7.87. md5
+    7.88. metadata
+    7.89. mms_data
+    7.90. mms_func
+    7.91. modbus_data
+    7.92. modbus_func
+    7.93. modbus_unit
+    7.94. msg
+    7.95. mss
+    7.96. opcua_msg_service
+    7.97. opcua_msg_type
+    7.98. opcua_node_id
+    7.99. opcua_node_namespace_index
+    7.100. pcre
+    7.101. pkt_data
+    7.102. pkt_num
+    7.103. priority
+    7.104. raw_data
+    7.105. reference
+    7.106. regex
+    7.107. rem
+    7.108. replace
+    7.109. rev
+    7.110. rpc
+    7.111. s7commplus_content
+    7.112. s7commplus_func
+    7.113. s7commplus_opcode
+    7.114. sd_pattern
+    7.115. seq
+    7.116. service
+    7.117. sha256
+    7.118. sha512
+    7.119. sid
+    7.120. sip_body
+    7.121. sip_header
+    7.122. sip_method
+    7.123. sip_stat_code
+    7.124. so
+    7.125. socks_address_type
+    7.126. socks_command
+    7.127. socks_remote_address
+    7.128. socks_remote_port
+    7.129. socks_state
+    7.130. socks_version
+    7.131. soid
+    7.132. ssl_state
+    7.133. ssl_version
+    7.134. stream_reassemble
+    7.135. stream_size
+    7.136. tag
+    7.137. target
+    7.138. tos
+    7.139. ttl
+    7.140. urg
+    7.141. vba_data
+    7.142. window
+    7.143. wscale
 
 8. Search Engine Modules
 9. SO Rule Modules
@@ -950,11 +957,10 @@ Usage: inspect
 
 Configuration:
 
-  * int inspection.id = 0: correlate policy and events with other
-    items in configuration { 0:max64 }
+  * int inspection.id = 1: correlate policy and events with other
+    items in configuration { 1:max53 }
   * string inspection.uuid: correlate events by uuid
-  * enum inspection.mode = inline-test: set policy mode { inline | 
-    inline-test }
+  * enum inspection.mode: set policy mode { inline | inline-test }
   * int inspection.max_aux_ip = 16: maximum number of auxiliary IPs
     per flow to detect and save (-1 = disable, 0 = detect but don’t
     save, 1+ = save in FIFO manner) { -1:127 }
@@ -980,8 +986,8 @@ Configuration:
     rules { no | yes | inherit }
   * bool ips.enable_builtin_rules = false: enable events from builtin
     rules w/o stubs
-  * int ips.id = 0: correlate unified2 events with configuration {
-    0:max64 }
+  * int ips.id = 1: correlate unified2 events with configuration {
+    1:max53 }
   * string ips.include: snort rules and includes
   * enum ips.mode: set policy mode { tap | inline | inline-test }
   * bool ips.obfuscate_pii = true: mask all but the last 4 characters
@@ -1023,6 +1029,9 @@ Peg counts:
     (sum)
   * ips_actions.react: number of packets that matched an IPS react
     rule (sum)
+  * ips_actions.non_supported_react: number of packets that matched
+    an IPS react rule but could not be processed because the protocol
+    is not supported (sum)
   * ips_actions.reject: number of packets that matched an IPS reject
     rule (sum)
   * ips_actions.rewrite: number of packets that matched an IPS
@@ -1183,7 +1192,7 @@ Usage: global
 
 Configuration:
 
-  * int mp_data_bus.max_eventq_size = 1000: maximum events to queue {
+  * int mp_data_bus.max_eventq_size = 4096: maximum events to queue {
     100:65535 }
   * string mp_data_bus.transport: transport to use for inter-process
     communication
@@ -1226,8 +1235,8 @@ Configuration:
     | ip | noip | tcp | notcp | udp | noudp | icmp | noicmp | none }
   * multi network.checksum_eval = all: checksums to verify { all | ip
     | noip | tcp | notcp | udp | noudp | icmp | noicmp | none }
-  * int network.id = 0: correlate unified2 events with configuration
-    { 0:18446744073709551614 }
+  * int network.id = 1: correlate unified2 events with configuration
+    { 1:max53 }
   * int network.min_ttl = 1: alert / normalize packets with lower TTL
     / hop limit (you must enable rules and / or normalization also) {
     1:255 }
@@ -1350,14 +1359,38 @@ Usage: global
 
 Peg counts:
 
-  * payload_injector.http_injects: total number of http injections
+  * payload_injector.http_injects: total number of HTTP injections
     (sum)
-  * payload_injector.http2_injects: total number of http2 injections
+  * payload_injector.http2_injects: total number of HTTP/2 injections
     (sum)
-  * payload_injector.http2_translate_err: total number of http2 page
+  * payload_injector.failed_injects: total number of failed HTTP and
+    HTTP/2 injections (sum)
+  * payload_injector.http2_translate_err: total number of HTTP/2 page
     translation errors (sum)
   * payload_injector.http2_mid_frame: total number of attempts to
     inject mid-frame (sum)
+  * payload_injector.err_unidentified_protocol: total number of
+    unidentified-protocol errors (sum)
+  * payload_injector.err_stream_not_established: total number of
+    stream-not-established errors (sum)
+  * payload_injector.err_injector_not_configured: total number of
+    injector-not-configured errors (sum)
+  * payload_injector.err_conflicting_s2c_traffic: total number of
+    conflicting s2c traffic errors (sum)
+  * payload_injector.err_http2_even_stream: total number of HTTP/2
+    even-numbered stream errors (sum)
+  * payload_injector.err_http2_stream_id_0: total number of HTTP/2
+    stream ID 0 errors (sum)
+  * payload_injector.err_session_not_tcp: total number of
+    session-not-tcp errors (sum)
+  * payload_injector.err_stale_s2c_data: total number of stale s2c
+    data errors (sum)
+  * payload_injector.err_s2c_http_proto: total number of s2c HTTP
+    protocol errors (sum)
+  * payload_injector.err_c2s_http_proto: total number of c2s HTTP
+    protocol errors (sum)
+  * payload_injector.err_s2c_http2_proto: total number of s2c HTTP2
+    protocol errors (sum)
 
 
 2.27. process
@@ -1468,8 +1501,8 @@ Configuration:
     future hits until timeout { alert | block | drop | file_id | log
     | pass | react | reject | rewrite }
   * int rate_filter[].timeout = 1: count interval { 0:max32 }
-  * string rate_filter[].apply_to: restrict filter to these addresses
-    according to track
+  * addr_list rate_filter[].apply_to: restrict filter to these
+    addresses according to track
 
 Peg counts:
 
@@ -1647,6 +1680,8 @@ Configuration:
   * string snort.--bpf: <filter options> are standard BPF options, as
     seen in TCPDump
   * string snort.--c2x: output hex for given char (see also --x2c)
+  * implied snort.--close-all-plugins: Snort will not dlclose plugin
+    libraries at shutdown unless this is set
   * string snort.--control-socket: <file> to create unix socket
   * implied snort.--create-instance-file: create instance mappings
     file for this Snort process at startup
@@ -1711,8 +1746,8 @@ Configuration:
     available modules in JSON format
   * string snort.--help-options: [<option prefix>] output matching
     command line option quick help (same as -?) { (optional) }
-  * implied snort.--help-plugins: list all available plugins with
-    brief help
+  * string snort.--help-plugins: list all available plugins with
+    brief help { (optional) }
   * implied snort.--help-signals: dump available control signals
   * int snort.--id-offset = 0: offset to add to instance IDs when
     logging to files { 0:65535 }
@@ -1729,7 +1764,8 @@ Configuration:
     generators { (optional) }
   * string snort.--list-modules: [<module type>] list all known
     modules of given type { (optional) }
-  * implied snort.--list-plugins: list all known plugins
+  * string snort.--list-plugins: list all known plugins { (optional)
+    }
   * string snort.--lua: <chunk> extend/override conf with chunk; may
     be repeated
   * string snort.--lua-sandbox: <file> file that contains the lua
@@ -1787,7 +1823,8 @@ Configuration:
   * implied snort.--show-file-codes: indicate how files are located:
     A=absolute and W, F, C which are relative to the working
     directory, including file, and config file respectively
-  * implied snort.--show-plugins: list module and plugin versions
+  * implied snort.--show-modules: list builtin and plugin modules and
+    versions
   * int snort.--skip: <n> skip 1st n packets { 0:max53 }
   * int snort.--snaplen: <snap> set snaplen of packet (same as -s) {
     0:65535 }
@@ -1823,38 +1860,36 @@ Configuration:
 
 Commands:
 
-  * snort.set_watchdog_params(timer, min_thread_count): set watchdog
-    parameters
-  * snort.show_plugins(): show available plugins
-  * snort.delete_inspector(inspector): delete an inspector from the
-    default policy
-  * snort.dump_stats(): show summary statistics
+  * snort.detach(): detach from control shell (without shutting down)
+  * snort.dump_heap_profile(): dump jemalloc memory profile
   * snort.dump_heap_stats(): show heap statistics
+  * snort.dump_inspector_map(): show inspectors to policy ID mapping
+  * snort.dump_stats(): show summary statistics
   * snort.heap_profile(enable, sample_rate): jemalloc memory tracking
     configuration
-  * snort.dump_heap_profile(): dump jemalloc memory profile
-  * snort.show_heap_profile(): show jemalloc memory profiling
-    configuration
-  * snort.reset_stats(type): clear summary statistics. Type can be:
-    daq|module|appid|file_id|snort|ha|all. reset_stats() without a
-    parameter clears all statistics.
-  * snort.rotate_stats(): roll perfmonitor log files
-  * snort.reload_config(filename): load new configuration
-  * snort.reload_policy(filename): reload part or all of the default
-    policy
-  * snort.reload_daq(): reload daq module
-  * snort.reload_hosts(filename): load a new hosts table
+  * snort.help(): this output
+  * snort.list_plugins(): list loaded plugins
   * snort.log_command(command, logging): enable or disable command
     logging
+  * snort.pause(): suspend packet processing
+  * snort.quit(): shutdown and dump-stats
+  * snort.reload_config(filename): load new configuration
+  * snort.reload_daq(): reload daq module
+  * snort.reload_hosts(filename): load a new hosts table
+  * snort.reset_stats(type): clear summary statistics. Type can be:
+    daq|module|appid|file_inspect|snort|ha|all. reset_stats() without
+    a parameter clears all statistics.
+  * snort.resume(pkt_num): continue packet processing. If number of
+    packets is specified, will resume for n packets and pause
+  * snort.rotate_stats(): roll perfmonitor log files
+  * snort.set_watchdog_params(timer, min_thread_count): set watchdog
+    parameters
+  * snort.show_heap_profile(): show jemalloc memory profiling
+    configuration
+  * snort.show_plugins(): show loaded plugins
   * snort.show_config_generation(): show loaded configuration ID
   * snort.show_snort_cpu(): show snort cpu usage
   * snort.show_snort_packet_latency(): show snort packet latency data
-  * snort.pause(): suspend packet processing
-  * snort.resume(pkt_num): continue packet processing. If number of
-    packets is specified, will resume for n packets and pause
-  * snort.detach(): detach from control shell (without shutting down)
-  * snort.quit(): shutdown and dump-stats
-  * snort.help(): this output
 
 Peg counts:
 
@@ -1909,6 +1944,23 @@ Usage: global
 
 Configuration:
 
+  * dynamics trace.output = stdout_trace: output method(s) for trace
+    log messages { none | | file_trace | null_trace_logger |
+    stdout_trace | syslog_trace }
+  * bool trace.ntuple = false: print packet n-tuple info with trace
+    messages
+  * bool trace.timestamp = false: print message timestamps with trace
+    messages
+  * int trace.constraints.ip_proto: numerical IP protocol ID filter {
+    0:255 }
+  * string trace.constraints.src_ip: source IP address filter
+  * int trace.constraints.src_port: source port filter { 0:65535 }
+  * string trace.constraints.dst_ip: destination IP address filter
+  * int trace.constraints.dst_port: destination port filter { 0:65535
+    }
+  * bool trace.constraints.match = true: use constraints to filter
+    traces
+  * string trace.constraints.tenants: tenants filter
   * int trace.modules.all: enable trace for all modules { 0:255 }
   * int trace.modules.appid.all: enable all trace options { 0:255 }
   * int trace.modules.dce_smb.all: enable all trace options { 0:255 }
@@ -1919,7 +1971,8 @@ Configuration:
   * int trace.modules.detection.fp_info: enable fast pattern info
     logging { 0:255 }
   * int trace.modules.dpx.all: enable all trace options { 0:255 }
-  * int trace.modules.file_id.all: enable all trace options { 0:255 }
+  * int trace.modules.file_inspect.all: enable all trace options {
+    0:255 }
   * int trace.modules.js_norm.all: enable all trace options { 0:255 }
   * int trace.modules.js_norm.proc: enable processing logging { 0:255
     }
@@ -1937,28 +1990,12 @@ Configuration:
   * int trace.modules.vba_data.all: enable all trace options { 0:255
     }
   * int trace.modules.wizard.all: enable all trace options { 0:255 }
-  * int trace.constraints.ip_proto: numerical IP protocol ID filter {
-    0:255 }
-  * string trace.constraints.src_ip: source IP address filter
-  * int trace.constraints.src_port: source port filter { 0:65535 }
-  * string trace.constraints.dst_ip: destination IP address filter
-  * int trace.constraints.dst_port: destination port filter { 0:65535
-    }
-  * bool trace.constraints.match = true: use constraints to filter
-    traces
-  * string trace.constraints.tenants: tenants filter
-  * enum trace.output: output method for trace log messages { stdout
-    | syslog }
-  * bool trace.ntuple = false: print packet n-tuple info with trace
-    messages
-  * bool trace.timestamp = false: print message timestamps with trace
-    messages
 
 Commands:
 
-  * trace.set(modules, constraints, ntuple, timestamp): set modules
-    traces, constraints, ntuple and timestamp options
-  * trace.clear(): clear modules traces and constraints
+  * trace.set(output, ntuple, timestamp, constraints, modules): set
+    trace configuration
+  * trace.clear(): clear trace configuration
 
 
 ---------------------------------------------------------------------
@@ -2434,7 +2471,7 @@ Rules:
 
 --------------
 
-Help: support for 802.1ah protocol
+Help: support for 802.1ah provider backbone bridging protocol
 
 Type: codec
 
@@ -2460,11 +2497,11 @@ Rules:
   * 116:454 (pgm) PGM nak list overflow attempt
 
 
-3.22. pppoe
+3.22. pppoe_disc
 
 --------------
 
-Help: support for point-to-point protocol over ethernet
+Help: support for point-to-point discovery
 
 Type: codec
 
@@ -2472,10 +2509,25 @@ Usage: context
 
 Rules:
 
-  * 116:120 (pppoe) bad PPPOE frame detected
+  * 116:120 (pppoe_disc) bad PPPOE discovery frame detected
 
 
-3.23. tcp
+3.23. pppoe_sess
+
+--------------
+
+Help: support for point-to-point session
+
+Type: codec
+
+Usage: context
+
+Rules:
+
+  * 116:479 (pppoe_sess) bad PPPOE session frame detected
+
+
+3.24. tcp
 
 --------------
 
@@ -2516,7 +2568,7 @@ Peg counts:
   * tcp.checksum_bypassed: checksum calculations bypassed (sum)
 
 
-3.24. token_ring
+3.25. token_ring
 
 --------------
 
@@ -2534,7 +2586,7 @@ Rules:
   * 116:143 (token_ring) bad Token Ring MR header
 
 
-3.25. udp
+3.26. udp
 
 --------------
 
@@ -2569,7 +2621,7 @@ Peg counts:
   * udp.checksum_bypassed: checksum calculations bypassed (sum)
 
 
-3.26. vlan
+3.27. vlan
 
 --------------
 
@@ -2589,7 +2641,7 @@ Rules:
   * 116:130 (vlan) bad VLAN frame
 
 
-3.27. wlan
+3.28. wlan
 
 --------------
 
@@ -3261,6 +3313,9 @@ Peg counts:
     packets ignored as share type is IPC (sum)
   * dce_smb.v2_crt_tree_trkr_misng: total number of SMBv2 create
     response packets ignored due to missing tree tracker (sum)
+  * dce_smb.v2_crt_rtrkr_ins_fail: total number of SMBv2 create
+    request packets failed due to request tracker insert failure
+    (sum)
   * dce_smb.v2_wrt: total number of SMBv2 write packets seen (sum)
   * dce_smb.v2_wrt_err_resp: total number of SMBv2 write error
     response packets seen (sum)
@@ -3306,6 +3361,9 @@ Peg counts:
     request packets ignored due to missing file tracker (sum)
   * dce_smb.v2_cls_req_hdr_err: total number of SMBv2 close request
     packets ignored due to corrupted header (sum)
+  * dce_smb.v2_cls_rtrkr_ins_fail: total number of SMBv2 close
+    request packets failed due to request tracker insert failure
+    (sum)
   * dce_smb.v2_tree_discn: total number of SMBv2 tree disconnect
     packets seen (sum)
   * dce_smb.v2_tree_discn_ignored: total number of SMBv2 tree
@@ -3695,7 +3753,8 @@ Configuration:
   * enum extractor.default_filter = pick: default action for protocol
     with no filter provided { pick | skip }
   * enum extractor.protocols[].service: service to extract from { 
-    http | ftp | ssl | conn | dns | quic | weird | notice }
+    http | ssh | ftp | ssl | conn | dns | quic | file | weird | 
+    notice }
   * int extractor.protocols[].tenant_id = 0: tenant_id of target
     tenant { 0:max32 }
   * string extractor.protocols[].on_events: specify events to log
@@ -3706,13 +3765,13 @@ Peg counts:
   * extractor.total_events: total events processed by extractor (sum)
 
 
-5.19. file_id
+5.19. file_inspect
 
 --------------
 
-Help: configure file identification
+Help: configure file inspection
 
-Type: inspector (file)
+Type: inspector (passive)
 
 Usage: global
 
@@ -3720,54 +3779,60 @@ Instance Type: global
 
 Configuration:
 
-  * int file_id.type_depth = 1460: stop type ID at this point {
+  * int file_inspect.type_depth = 1460: stop type ID at this point {
     0:max53 }
-  * int file_id.signature_depth = 10485760: stop signature at this
-    point { 0:max53 }
-  * int file_id.block_timeout = 86400: stop blocking after this many
-    seconds { 0:max31 }
-  * int file_id.lookup_timeout = 2: give up on lookup after this many
-    seconds { 0:max31 }
-  * bool file_id.block_timeout_lookup = false: block if lookup times
-    out
-  * int file_id.capture_memcap = 100: memcap for file capture in
-    megabytes { 0:max53 }
-  * int file_id.capture_max_size = 1048576: stop file capture beyond
+  * int file_inspect.signature_depth = 10485760: stop signature at
     this point { 0:max53 }
-  * int file_id.capture_min_size = 0: stop file capture if file size
-    less than this { 0:max53 }
-  * int file_id.capture_block_size = 32768: file capture block size
-    in bytes { 8:max53 }
-  * int file_id.max_files_cached = 65536: maximal number of files
-    cached in memory { 8:max53 }
-  * int file_id.max_files_per_flow = 128: maximal number of files
-    able to be concurrently processed per flow { 1:max53 }
-  * int file_id.show_data_depth = 100: print this many octets {
+  * int file_inspect.block_timeout = 86400: stop blocking after this
+    many seconds { 0:max31 }
+  * int file_inspect.lookup_timeout = 2: give up on lookup after this
+    many seconds { 0:max31 }
+  * bool file_inspect.block_timeout_lookup = false: block if lookup
+    times out
+  * int file_inspect.capture_memcap = 100: memcap for file capture in
+    megabytes { 0:max53 }
+  * int file_inspect.capture_max_size = 1048576: stop file capture
+    beyond this point { 0:max53 }
+  * int file_inspect.capture_min_size = 0: stop file capture if file
+    size less than this { 0:max53 }
+  * int file_inspect.capture_block_size = 32768: file capture block
+    size in bytes { 8:max53 }
+  * int file_inspect.max_files_cached = 65536: maximal number of
+    files cached in memory { 8:max53 }
+  * int file_inspect.max_files_per_flow = 128: maximal number of
+    files able to be concurrently processed per flow { 1:max53 }
+  * int file_inspect.show_data_depth = 100: print this many octets {
     0:max53 }
-  * string file_id.rules_file: name of file with IPS rules for file
-    identification
-  * bool file_id.trace_type = false: enable runtime dump of type info
-  * bool file_id.trace_signature = false: enable runtime dump of
+  * string file_inspect.rules_file: name of file with IPS rules for
+    file identification
+  * bool file_inspect.trace_type = false: enable runtime dump of type
+    info
+  * bool file_inspect.trace_signature = false: enable runtime dump of
     signature info
-  * bool file_id.trace_stream = false: enable runtime dump of file
-    data
-  * int file_id.decompress_buffer_size = 100000: file decompression
-    buffer size { 1024:max31 }
+  * bool file_inspect.trace_stream = false: enable runtime dump of
+    file data
+  * int file_inspect.decompress_buffer_size = 100000: file
+    decompression buffer size { 1024:max31 }
 
 Rules:
 
-  * 150:1 (file_id) file not processed due to per flow limit
+  * 150:1 (file_inspect) file not processed due to per flow limit
 
 Peg counts:
 
-  * file_id.total_files: number of files processed (sum)
-  * file_id.total_file_data: number of file data bytes processed
+  * file_inspect.total_files: number of files processed (sum)
+  * file_inspect.total_file_data: number of file data bytes processed
     (sum)
-  * file_id.cache_failures: number of file cache add failures (sum)
-  * file_id.files_not_processed: number of files not processed due to
-    per-flow limit (sum)
-  * file_id.max_concurrent_files: maximum files processed
+  * file_inspect.cache_failures: number of file cache add failures
+    (sum)
+  * file_inspect.files_not_processed: number of files not processed
+    due to per-flow limit (sum)
+  * file_inspect.max_concurrent_files: maximum files processed
     concurrently on a flow (max)
+  * file_inspect.buffers_max: maximum number of file buffers that can
+    be allocated (max)
+  * file_inspect.buffers_in_use: number of file buffers currently in
+    use (now)
 
 
 5.20. file_log
@@ -4258,7 +4323,6 @@ Rules:
   * 119:213 (http_inspect) HTTP chunk misformatted
   * 119:214 (http_inspect) white space adjacent to chunk length
   * 119:215 (http_inspect) white space within header name
-  * 119:216 (http_inspect) excessive gzip compression
   * 119:217 (http_inspect) gzip decompression failed
   * 119:218 (http_inspect) HTTP 0.9 requested followed by another
     request
@@ -4359,6 +4423,9 @@ Rules:
     methods list or is on disallowed methods list
   * 119:288 (http_inspect) HTTP gzip body with reserved flag set
   * 119:289 (http_inspect) Too many partial flushes
+  * 119:290 (http_inspect) deflate compressed data followed by
+    unexpected non-deflate data
+  * 119:291 (http_inspect) deflate decompression failed
 
 Peg counts:
 
@@ -4396,6 +4463,8 @@ Peg counts:
     HTTP responses (sum)
   * http_inspect.partial_inspections: early inspections done for
     script detection (sum)
+  * http_inspect.partial_publishes: publish-only partial flushes
+    (sum)
   * http_inspect.excess_parameters: repeat parameters exceeding max
     (sum)
   * http_inspect.parameters: HTTP parameters inspected (sum)
@@ -4418,6 +4487,14 @@ Peg counts:
     too many MIME attachments to inspect (sum)
   * http_inspect.compressed_gzip: total number of HTTP bodies
     compressed with GZIP (sum)
+  * http_inspect.compressed_gzip_failed: total number of HTTP bodies
+    with failed GZIP decompression (sum)
+  * http_inspect.compressed_deflate: total number of HTTP bodies
+    compressed with Deflate (sum)
+  * http_inspect.incorrect_deflate_header: total number of HTTP
+    bodies compressed with Deflate that had incorrect header (sum)
+  * http_inspect.compressed_deflate_failed: total number of HTTP
+    bodies with failed Deflate decompression (sum)
   * http_inspect.compressed_not_supported: total number of HTTP
     bodies compressed with known but not supported methods (sum)
   * http_inspect.compressed_unknown: total number of HTTP bodies
@@ -4898,20 +4975,7 @@ Peg counts:
   * normalizer.tcp_block: blocked segments (sum)
 
 
-5.34. null_trace_logger
-
---------------
-
-Help: trace logger with a null printout
-
-Type: inspector (passive)
-
-Usage: global
-
-Instance Type: global
-
-
-5.35. opcua
+5.34. opcua
 
 --------------
 
@@ -4926,7 +4990,7 @@ Instance Type: multiton
 Rules:
 
   * 153:1 (opcua) invalid OPC UA MessageSize value detected
-  * 153:2 (opcua) abnormal OPC UA MessageSize value detected
+  * 153:2 (opcua) large OPC UA MessageSize value detected
   * 153:3 (opcua) invalid OPC UA MsgType value detected
   * 153:4 (opcua) invalid OPC UA IsFinal value detected
   * 153:5 (opcua) OPC UA message split across multiple packets
@@ -4964,7 +5028,7 @@ Peg counts:
     across multiple packets was detected (sum)
 
 
-5.36. packet_capture
+5.35. packet_capture
 
 --------------
 
@@ -5005,7 +5069,7 @@ Peg counts:
     (sum)
 
 
-5.37. perf_monitor
+5.36. perf_monitor
 
 --------------
 
@@ -5067,7 +5131,7 @@ Peg counts:
     by new flows (sum)
 
 
-5.38. pop
+5.37. pop
 
 --------------
 
@@ -5132,7 +5196,7 @@ Peg counts:
   * pop.js_pdf_scripts: total number of PDF files processed (sum)
 
 
-5.39. port_scan
+5.38. port_scan
 
 --------------
 
@@ -5306,7 +5370,7 @@ Peg counts:
     portscan (now)
 
 
-5.40. reputation
+5.39. reputation
 
 --------------
 
@@ -5363,7 +5427,7 @@ Peg counts:
     monitored (sum)
 
 
-5.41. rna
+5.40. rna
 
 --------------
 
@@ -5407,6 +5471,24 @@ Configuration:
   * int rna.tcp_fingerprints[].major: smb major version { 0:max31 }
   * int rna.tcp_fingerprints[].minor: smb minor version { 0:max31 }
   * int rna.tcp_fingerprints[].flags: smb flags { 0:max32 }
+  * string rna.tcp_fingerprints[].service_type: deviceinfo service
+    type
+  * string rna.tcp_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
+  * string rna.tcp_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.tcp_fingerprints[].model_pattern: deviceinfo model
+    pattern
+  * string rna.tcp_fingerprints[].model: deviceinfo model value
+  * string rna.tcp_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
+  * string rna.tcp_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.tcp_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.tcp_fingerprints[].os_value: deviceinfo os value
+  * string rna.tcp_fingerprints[].mac_addr: deviceinfo mac address
+  * string rna.tcp_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.tcp_fingerprints[].os_postfix: deviceinfo os postfix
   * int rna.ua_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * int rna.ua_fingerprints[].type = 0: fingerprint type { 0:max32 }
   * string rna.ua_fingerprints[].uuid: fingerprint uuid
@@ -5429,6 +5511,24 @@ Configuration:
   * int rna.ua_fingerprints[].major: smb major version { 0:max31 }
   * int rna.ua_fingerprints[].minor: smb minor version { 0:max31 }
   * int rna.ua_fingerprints[].flags: smb flags { 0:max32 }
+  * string rna.ua_fingerprints[].service_type: deviceinfo service
+    type
+  * string rna.ua_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
+  * string rna.ua_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.ua_fingerprints[].model_pattern: deviceinfo model
+    pattern
+  * string rna.ua_fingerprints[].model: deviceinfo model value
+  * string rna.ua_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
+  * string rna.ua_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.ua_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.ua_fingerprints[].os_value: deviceinfo os value
+  * string rna.ua_fingerprints[].mac_addr: deviceinfo mac address
+  * string rna.ua_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.ua_fingerprints[].os_postfix: deviceinfo os postfix
   * int rna.udp_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * int rna.udp_fingerprints[].type = 0: fingerprint type { 0:max32 }
   * string rna.udp_fingerprints[].uuid: fingerprint uuid
@@ -5451,6 +5551,24 @@ Configuration:
   * int rna.udp_fingerprints[].major: smb major version { 0:max31 }
   * int rna.udp_fingerprints[].minor: smb minor version { 0:max31 }
   * int rna.udp_fingerprints[].flags: smb flags { 0:max32 }
+  * string rna.udp_fingerprints[].service_type: deviceinfo service
+    type
+  * string rna.udp_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
+  * string rna.udp_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.udp_fingerprints[].model_pattern: deviceinfo model
+    pattern
+  * string rna.udp_fingerprints[].model: deviceinfo model value
+  * string rna.udp_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
+  * string rna.udp_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.udp_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.udp_fingerprints[].os_value: deviceinfo os value
+  * string rna.udp_fingerprints[].mac_addr: deviceinfo mac address
+  * string rna.udp_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.udp_fingerprints[].os_postfix: deviceinfo os postfix
   * int rna.smb_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * int rna.smb_fingerprints[].type = 0: fingerprint type { 0:max32 }
   * string rna.smb_fingerprints[].uuid: fingerprint uuid
@@ -5473,6 +5591,82 @@ Configuration:
   * int rna.smb_fingerprints[].major: smb major version { 0:max31 }
   * int rna.smb_fingerprints[].minor: smb minor version { 0:max31 }
   * int rna.smb_fingerprints[].flags: smb flags { 0:max32 }
+  * string rna.smb_fingerprints[].service_type: deviceinfo service
+    type
+  * string rna.smb_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
+  * string rna.smb_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.smb_fingerprints[].model_pattern: deviceinfo model
+    pattern
+  * string rna.smb_fingerprints[].model: deviceinfo model value
+  * string rna.smb_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
+  * string rna.smb_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.smb_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.smb_fingerprints[].os_value: deviceinfo os value
+  * string rna.smb_fingerprints[].mac_addr: deviceinfo mac address
+  * string rna.smb_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.smb_fingerprints[].os_postfix: deviceinfo os postfix
+  * int rna.deviceinfo_fingerprints[].fpid = 0: fingerprint id {
+    0:max32 }
+  * int rna.deviceinfo_fingerprints[].type = 0: fingerprint type {
+    0:max32 }
+  * string rna.deviceinfo_fingerprints[].uuid: fingerprint uuid
+  * int rna.deviceinfo_fingerprints[].ttl = 0: fingerprint ttl {
+    0:255 }
+  * string rna.deviceinfo_fingerprints[].tcp_window: fingerprint tcp
+    window
+  * string rna.deviceinfo_fingerprints[].mss = X: fingerprint mss
+  * string rna.deviceinfo_fingerprints[].id = X: id
+  * string rna.deviceinfo_fingerprints[].topts: fingerprint tcp
+    options
+  * string rna.deviceinfo_fingerprints[].ws = X: fingerprint window
+    size
+  * bool rna.deviceinfo_fingerprints[].df = false: fingerprint don’t
+    fragment flag
+  * enum rna.deviceinfo_fingerprints[].ua_type = os: type of user
+    agent fingerprints { os | device | jail-broken | jail-broken-host
+    }
+  * string rna.deviceinfo_fingerprints[].user_agent[].substring: a
+    substring of user agent string
+  * string rna.deviceinfo_fingerprints[].host_name: host name
+    information
+  * string rna.deviceinfo_fingerprints[].device: device information
+  * string rna.deviceinfo_fingerprints[].dhcp55: dhcp option 55
+    values
+  * string rna.deviceinfo_fingerprints[].dhcp60: dhcp option 60
+    values
+  * int rna.deviceinfo_fingerprints[].major: smb major version {
+    0:max31 }
+  * int rna.deviceinfo_fingerprints[].minor: smb minor version {
+    0:max31 }
+  * int rna.deviceinfo_fingerprints[].flags: smb flags { 0:max32 }
+  * string rna.deviceinfo_fingerprints[].service_type: deviceinfo
+    service type
+  * string rna.deviceinfo_fingerprints[].manufacturer_pattern:
+    deviceinfo manufacturer pattern
+  * string rna.deviceinfo_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.deviceinfo_fingerprints[].model_pattern: deviceinfo
+    model pattern
+  * string rna.deviceinfo_fingerprints[].model: deviceinfo model
+    value
+  * string rna.deviceinfo_fingerprints[].devicename_pattern:
+    deviceinfo devicename pattern
+  * string rna.deviceinfo_fingerprints[].devicename: deviceinfo
+    devicename value
+  * string rna.deviceinfo_fingerprints[].os_pattern: deviceinfo os
+    pattern
+  * string rna.deviceinfo_fingerprints[].os_value: deviceinfo os
+    value
+  * string rna.deviceinfo_fingerprints[].mac_addr: deviceinfo mac
+    address
+  * string rna.deviceinfo_fingerprints[].os_prefix: deviceinfo os
+    prefix
+  * string rna.deviceinfo_fingerprints[].os_postfix: deviceinfo os
+    postfix
 
 Commands:
 
@@ -5505,12 +5699,13 @@ Peg counts:
   * rna.dhcp_info: count of new DHCP lease events received (sum)
   * rna.smb: count of new SMB events received (sum)
   * rna.netflow_record: count of netflow record events received (sum)
+  * rna.deviceinfo: count of deviceinfo events received (sum)
   * rna.total_events_in_interval: count of RNA events generated (sum)
   * rna.total_packets_in_interval: count of packets processed (sum)
   * rna.total_bytes_in_interval: count of bytes processed (sum)
 
 
-5.42. rpc_decode
+5.41. rpc_decode
 
 --------------
 
@@ -5539,7 +5734,7 @@ Peg counts:
     sessions (max)
 
 
-5.43. s7commplus
+5.42. s7commplus
 
 --------------
 
@@ -5568,7 +5763,7 @@ Peg counts:
     sessions (max)
 
 
-5.44. sip
+5.43. sip
 
 --------------
 
@@ -5680,7 +5875,7 @@ Peg counts:
   * sip.code_9xx: 9xx (sum)
 
 
-5.45. smtp
+5.44. smtp
 
 --------------
 
@@ -5794,7 +5989,7 @@ Peg counts:
   * smtp.js_pdf_scripts: total number of PDF files processed (sum)
 
 
-5.46. snort_ml
+5.45. snort_ml
 
 --------------
 
@@ -5810,7 +6005,7 @@ Configuration:
 
   * int snort_ml.uri_depth = -1: number of input HTTP URI bytes to
     scan (-1 unlimited) { -1:max31 }
-  * int snort_ml.client_body_depth = 0: number of input HTTP client
+  * int snort_ml.client_body_depth = -1: number of input HTTP client
     body bytes to scan (-1 unlimited) { -1:max31 }
   * real snort_ml.http_param_threshold = 0.95: alert threshold for
     http_param_model { 0:1 }
@@ -5832,7 +6027,7 @@ Peg counts:
     bytes processed (sum)
 
 
-5.47. snort_ml_engine
+5.46. snort_ml_engine
 
 --------------
 
@@ -5876,21 +6071,48 @@ Peg counts:
   * snort_ml_engine.libml_calls: total libml calls (sum)
 
 
-5.48. so_proxy
+5.47. socks
 
 --------------
 
-Help: a proxy inspector to track flow data from SO rules (internal
-use only)
+Help: SOCKS protocol inspector
 
-Type: inspector (passive)
+Type: inspector (service)
 
-Usage: global
+Usage: inspect
 
-Instance Type: global
+Instance Type: multiton
+
+Rules:
+
+  * 155:1 (socks) SOCKS unknown command
+  * 155:2 (socks) SOCKS protocol violation
+  * 155:3 (socks) SOCKS5 unknown address type
+  * 155:4 (socks) SOCKS5 UDP fragmentation detected
+
+Peg counts:
+
+  * socks.sessions: total SOCKS sessions (sum)
+  * socks.concurrent_sessions: current concurrent SOCKS sessions
+    (now)
+  * socks.max_concurrent_sessions: maximum concurrent SOCKS sessions
+    (max)
+  * socks.auth_requests: authentication requests (sum)
+  * socks.auth_successes: successful authentications (sum)
+  * socks.auth_failures: failed authentications (sum)
+  * socks.connect_requests: CONNECT requests (sum)
+  * socks.bind_requests: BIND requests (sum)
+  * socks.udp_associate_requests: UDP ASSOCIATE requests (sum)
+  * socks.successful_connections: successful connections (sum)
+  * socks.failed_connections: failed connections (sum)
+  * socks.udp_associations_created: UDP ASSOCIATE completions (sum)
+  * socks.udp_expectations_created: UDP expectations created for
+    dynamic ports (sum)
+  * socks.udp_packets: UDP packets processed (sum)
+  * socks.udp_frags: UDP fragmented packets detected (sum)
 
 
-5.49. ssh
+5.48. ssh
 
 --------------
 
@@ -5931,7 +6153,7 @@ Peg counts:
   * ssh.aborted_sessions: total session aborted (sum)
 
 
-5.50. ssl
+5.49. ssl
 
 --------------
 
@@ -5956,6 +6178,10 @@ Rules:
   * 137:2 (ssl) invalid server HELLO without client HELLO detected
   * 137:3 (ssl) heartbeat read overrun attempt detected
   * 137:4 (ssl) large heartbeat response detected
+  * 137:5 (ssl) multiple client HELLO host names detected in single
+    packet
+  * 137:6 (ssl) multiple server CERTIFICATE common names or
+    organizational units detected in single packet
 
 Peg counts:
 
@@ -5982,7 +6208,7 @@ Peg counts:
     (max)
 
 
-5.51. stream
+5.50. stream
 
 --------------
 
@@ -6028,8 +6254,9 @@ Configuration:
 
 Commands:
 
-  * stream.dump_flows(): dump the flow table
-  * stream.dump_flows_summary(): dump the flow summaries
+  * stream.dump_flows(): dump the flow table in text format
+  * stream.dump_flows_binary(): dump the flow table in binary format
+  * stream.dump_flows_summary(): dump flow table summary
 
 Rules:
 
@@ -6051,7 +6278,8 @@ Peg counts:
   * stream.ha_prunes: sessions pruned by high availability sync (sum)
   * stream.stale_prunes: sessions pruned due to stale connection
     (sum)
-  * stream.closed_prunes: sessions pruned due to stream closed (sum)
+  * stream.flows_closed: number of flows closed and removed from the
+    flow cache (sum)
   * stream.expected_flows: total expected flows created within snort
     (sum)
   * stream.expected_realized: number of expected flows realized (sum)
@@ -6121,6 +6349,24 @@ Peg counts:
     to EOF (sum)
   * stream.excess_to_allowlist: number of flows moved to the
     allowlist due to excess (sum)
+  * stream.no_flow_no_proto_handler: packets without flow: no
+    protocol handler registered (sum)
+  * stream.no_flow_retry_packet: packets without flow: retry packet
+    dropped (sum)
+  * stream.no_flow_tcp_rst: packets without flow: TCP RST packet
+    (sum)
+  * stream.no_flow_unwanted: packets without flow: flow not wanted
+    (sum)
+  * stream.no_flow_midstream_reject: packets without flow: midstream
+    rejected (sum)
+  * stream.no_flow_alloc_failure: packets without flow: flow
+    allocation failed (sum)
+  * stream.no_flow_pkt_type_none: packets without flow: packet type
+    is NONE (sum)
+  * stream.no_flow_no_inspector: packets without flow: no flow
+    tracking inspector configured (sum)
+  * stream.no_flow_paf_no_flow: packets without flow: PAF payload but
+    no flow exists (sum)
   * stream.allowlist_flows: number of flows moved to the allowlist
     (now)
   * stream.current_flows: current number of flows in cache (now)
@@ -6128,7 +6374,7 @@ Peg counts:
   * stream.uni_ip_flows: number of uni ip flows in cache (now)
 
 
-5.52. stream_file
+5.51. stream_file
 
 --------------
 
@@ -6145,7 +6391,7 @@ Configuration:
   * bool stream_file.upload = false: indicate file transfer direction
 
 
-5.53. stream_icmp
+5.52. stream_icmp
 
 --------------
 
@@ -6173,7 +6419,7 @@ Peg counts:
   * stream_icmp.stale_packets: icmp stale packets (sum)
 
 
-5.54. stream_ip
+5.53. stream_ip
 
 --------------
 
@@ -6246,7 +6492,7 @@ Peg counts:
   * stream_ip.fragmented_bytes: total fragmented bytes (sum)
 
 
-5.55. stream_tcp
+5.54. stream_tcp
 
 --------------
 
@@ -6348,6 +6594,8 @@ Peg counts:
   * stream_tcp.setups: session initializations (sum)
   * stream_tcp.restarts: sessions restarted (sum)
   * stream_tcp.resyns: SYN received on established session (sum)
+  * stream_tcp.bad_syn_seq: SYN packets rejected due to mismatched
+    sequence number (sum)
   * stream_tcp.discards: tcp packets discarded (sum)
   * stream_tcp.discards_skipped: tcp packet discards skipped due to
     normalization disabled (sum)
@@ -6465,7 +6713,7 @@ Peg counts:
     exceeded due to a hole (sum)
 
 
-5.56. stream_udp
+5.55. stream_udp
 
 --------------
 
@@ -6495,7 +6743,7 @@ Peg counts:
   * stream_udp.ignored: udp packets ignored (sum)
 
 
-5.57. stream_user
+5.56. stream_user
 
 --------------
 
@@ -6513,7 +6761,7 @@ Configuration:
     1:max31 }
 
 
-5.58. telnet
+5.57. telnet
 
 --------------
 
@@ -6549,7 +6797,7 @@ Peg counts:
     sessions (max)
 
 
-5.59. tlv_pdu
+5.58. tlv_pdu
 
 --------------
 
@@ -6578,14 +6826,14 @@ Peg counts:
   * tlv_pdu.aborts: total unrecoverable scan errors (sum)
 
 
-5.60. wizard
+5.59. wizard
 
 --------------
 
 Help: inspector that implements port-independent protocol
 identification
 
-Type: inspector (wizard)
+Type: inspector (service)
 
 Usage: inspect
 
@@ -6609,7 +6857,7 @@ Configuration:
     wild cards (*)
   * multi wizard.curses: enable service identification based on
     internal algorithm { dce_smb | dce_udp | dce_tcp | mms | opcua |
-    s7commplus | sslv2 }
+    s7commplus | socks | sslv2 }
   * int wizard.max_search_depth = 8192: maximum scan depth per flow {
     0:65535 }
 
@@ -6686,7 +6934,7 @@ Peg counts:
 no match
 
 
-6.4. file_id_action
+6.4. file_id
 
 --------------
 
@@ -7661,7 +7909,34 @@ Configuration:
     will be removed in a future release
 
 
-7.51. http_header
+7.51. http_decoded_uri
+
+--------------
+
+Help: rule option to set the detection cursor to URI of the request
+message without path simplification
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * implied http_decoded_uri.scheme: match against scheme section of
+    URI only
+  * implied http_decoded_uri.host: match against host section of URI
+    only
+  * implied http_decoded_uri.port: match against port section of URI
+    only
+  * implied http_decoded_uri.path: match against path section of URI
+    only
+  * implied http_decoded_uri.query: match against query section of
+    URI only
+  * implied http_decoded_uri.fragment: match against fragment section
+    of URI only
+
+
+7.52. http_header
 
 --------------
 
@@ -7686,7 +7961,7 @@ Configuration:
     will be removed in a future release
 
 
-7.52. http_header_test
+7.53. http_header_test
 
 --------------
 
@@ -7715,7 +7990,7 @@ Configuration:
   * implied http_header_test.absent: header is absent
 
 
-7.53. http_max_header_line
+7.54. http_max_header_line
 
 --------------
 
@@ -7733,7 +8008,7 @@ Configuration:
     from the request message even when examining the response
 
 
-7.54. http_max_trailer_line
+7.55. http_max_trailer_line
 
 --------------
 
@@ -7751,7 +8026,7 @@ Configuration:
     from the request message even when examining the response
 
 
-7.55. http_method
+7.56. http_method
 
 --------------
 
@@ -7772,7 +8047,7 @@ Configuration:
     will be removed in a future release
 
 
-7.56. http_num_cookies
+7.57. http_num_cookies
 
 --------------
 
@@ -7790,7 +8065,7 @@ Configuration:
     the request message even when examining the response
 
 
-7.57. http_num_headers
+7.58. http_num_headers
 
 --------------
 
@@ -7814,7 +8089,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.58. http_num_trailers
+7.59. http_num_trailers
 
 --------------
 
@@ -7838,7 +8113,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.59. http_param
+7.60. http_param
 
 --------------
 
@@ -7855,7 +8130,7 @@ Configuration:
   * implied http_param.nocase: case insensitive match
 
 
-7.60. http_raw_body
+7.61. http_raw_body
 
 --------------
 
@@ -7867,7 +8142,7 @@ Type: ips_option
 Usage: detect
 
 
-7.61. http_raw_cookie
+7.62. http_raw_cookie
 
 --------------
 
@@ -7890,7 +8165,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.62. http_raw_header
+7.63. http_raw_header
 
 --------------
 
@@ -7915,7 +8190,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.63. http_raw_request
+7.64. http_raw_request
 
 --------------
 
@@ -7936,7 +8211,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.64. http_raw_status
+7.65. http_raw_status
 
 --------------
 
@@ -7955,7 +8230,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.65. http_raw_trailer
+7.66. http_raw_trailer
 
 --------------
 
@@ -7978,7 +8253,7 @@ Configuration:
     will be removed in a future release
 
 
-7.66. http_raw_uri
+7.67. http_raw_uri
 
 --------------
 
@@ -8007,7 +8282,7 @@ Configuration:
     URI only
 
 
-7.67. http_stat_code
+7.68. http_stat_code
 
 --------------
 
@@ -8025,7 +8300,7 @@ Configuration:
     will be removed in a future release
 
 
-7.68. http_stat_msg
+7.69. http_stat_msg
 
 --------------
 
@@ -8044,7 +8319,7 @@ Configuration:
     will be removed in a future release
 
 
-7.69. http_trailer
+7.70. http_trailer
 
 --------------
 
@@ -8066,7 +8341,7 @@ Configuration:
     be removed in a future release
 
 
-7.70. http_trailer_test
+7.71. http_trailer_test
 
 --------------
 
@@ -8093,7 +8368,7 @@ Configuration:
   * implied http_trailer_test.absent: trailer is absent
 
 
-7.71. http_true_ip
+7.72. http_true_ip
 
 --------------
 
@@ -8114,7 +8389,7 @@ Configuration:
     will be removed in a future release
 
 
-7.72. http_uri
+7.73. http_uri
 
 --------------
 
@@ -8142,7 +8417,7 @@ Configuration:
     only
 
 
-7.73. http_version
+7.74. http_version
 
 --------------
 
@@ -8164,7 +8439,7 @@ Configuration:
     will be removed in a future release
 
 
-7.74. http_version_match
+7.75. http_version_match
 
 --------------
 
@@ -8188,7 +8463,7 @@ Configuration:
     and will be removed in a future release
 
 
-7.75. icmp_id
+7.76. icmp_id
 
 --------------
 
@@ -8204,7 +8479,7 @@ Configuration:
     0:65535 }
 
 
-7.76. icmp_seq
+7.77. icmp_seq
 
 --------------
 
@@ -8220,7 +8495,7 @@ Configuration:
     given range { 0:65535 }
 
 
-7.77. icode
+7.78. icode
 
 --------------
 
@@ -8236,7 +8511,7 @@ Configuration:
     0:255 }
 
 
-7.78. id
+7.79. id
 
 --------------
 
@@ -8252,7 +8527,7 @@ Configuration:
     }
 
 
-7.79. iec104_apci_type
+7.80. iec104_apci_type
 
 --------------
 
@@ -8267,7 +8542,7 @@ Configuration:
   * string iec104_apci_type.~: APCI type to match
 
 
-7.80. iec104_asdu_func
+7.81. iec104_asdu_func
 
 --------------
 
@@ -8282,7 +8557,7 @@ Configuration:
   * string iec104_asdu_func.~: function code to match
 
 
-7.81. ip_proto
+7.82. ip_proto
 
 --------------
 
@@ -8297,7 +8572,7 @@ Configuration:
   * string ip_proto.~proto: [!|>|<] name or number
 
 
-7.82. ipopts
+7.83. ipopts
 
 --------------
 
@@ -8313,7 +8588,7 @@ Configuration:
     lsrre|ssrr|satid|any }
 
 
-7.83. isdataat
+7.84. isdataat
 
 --------------
 
@@ -8330,7 +8605,7 @@ Configuration:
     buffer
 
 
-7.84. itype
+7.85. itype
 
 --------------
 
@@ -8346,7 +8621,7 @@ Configuration:
     0:255 }
 
 
-7.85. js_data
+7.86. js_data
 
 --------------
 
@@ -8358,7 +8633,7 @@ Type: ips_option
 Usage: detect
 
 
-7.86. md5
+7.87. md5
 
 --------------
 
@@ -8378,7 +8653,7 @@ Configuration:
     of buffer
 
 
-7.87. metadata
+7.88. metadata
 
 --------------
 
@@ -8395,7 +8670,7 @@ Configuration:
     pairs
 
 
-7.88. mms_data
+7.89. mms_data
 
 --------------
 
@@ -8406,7 +8681,7 @@ Type: ips_option
 Usage: detect
 
 
-7.89. mms_func
+7.90. mms_func
 
 --------------
 
@@ -8421,7 +8696,7 @@ Configuration:
   * string mms_func.~: func to match
 
 
-7.90. modbus_data
+7.91. modbus_data
 
 --------------
 
@@ -8432,7 +8707,7 @@ Type: ips_option
 Usage: detect
 
 
-7.91. modbus_func
+7.92. modbus_func
 
 --------------
 
@@ -8447,7 +8722,7 @@ Configuration:
   * string modbus_func.~: function code to match
 
 
-7.92. modbus_unit
+7.93. modbus_unit
 
 --------------
 
@@ -8462,7 +8737,7 @@ Configuration:
   * int modbus_unit.~: Modbus unit ID { 0:255 }
 
 
-7.93. msg
+7.94. msg
 
 --------------
 
@@ -8477,7 +8752,7 @@ Configuration:
   * string msg.~: message describing rule
 
 
-7.94. mss
+7.95. mss
 
 --------------
 
@@ -8493,7 +8768,7 @@ Configuration:
     }
 
 
-7.95. opcua_msg_service
+7.96. opcua_msg_service
 
 --------------
 
@@ -8508,7 +8783,7 @@ Configuration:
   * string opcua_msg_service.~: message service to match
 
 
-7.96. opcua_msg_type
+7.97. opcua_msg_type
 
 --------------
 
@@ -8523,7 +8798,7 @@ Configuration:
   * string opcua_msg_type.~: message type to match
 
 
-7.97. opcua_node_id
+7.98. opcua_node_id
 
 --------------
 
@@ -8538,7 +8813,7 @@ Configuration:
   * string opcua_node_id.~: message node id to match
 
 
-7.98. opcua_node_namespace_index
+7.99. opcua_node_namespace_index
 
 --------------
 
@@ -8554,7 +8829,7 @@ Configuration:
     to match
 
 
-7.99. pcre
+7.100. pcre
 
 --------------
 
@@ -8577,7 +8852,7 @@ Peg counts:
   * pcre.pcre_error: total number of times pcre returns error (sum)
 
 
-7.100. pkt_data
+7.101. pkt_data
 
 --------------
 
@@ -8589,7 +8864,7 @@ Type: ips_option
 Usage: detect
 
 
-7.101. pkt_num
+7.102. pkt_num
 
 --------------
 
@@ -8605,7 +8880,7 @@ Configuration:
     { 1: }
 
 
-7.102. priority
+7.103. priority
 
 --------------
 
@@ -8621,7 +8896,7 @@ Configuration:
     1:max31 }
 
 
-7.103. raw_data
+7.104. raw_data
 
 --------------
 
@@ -8632,7 +8907,7 @@ Type: ips_option
 Usage: detect
 
 
-7.104. reference
+7.105. reference
 
 --------------
 
@@ -8647,7 +8922,7 @@ Configuration:
   * string reference.~ref: reference: <scheme>,<id>
 
 
-7.105. regex
+7.106. regex
 
 --------------
 
@@ -8671,7 +8946,7 @@ Configuration:
     instead of start of buffer
 
 
-7.106. rem
+7.107. rem
 
 --------------
 
@@ -8686,7 +8961,7 @@ Configuration:
   * string rem.~: comment
 
 
-7.107. replace
+7.108. replace
 
 --------------
 
@@ -8702,7 +8977,7 @@ Configuration:
   * string replace.~: byte code to replace with
 
 
-7.108. rev
+7.109. rev
 
 --------------
 
@@ -8717,7 +8992,7 @@ Configuration:
   * int rev.~: revision { 1:max32 }
 
 
-7.109. rpc
+7.110. rpc
 
 --------------
 
@@ -8734,7 +9009,7 @@ Configuration:
   * string rpc.~proc: procedure number or * for any
 
 
-7.110. s7commplus_content
+7.111. s7commplus_content
 
 --------------
 
@@ -8745,7 +9020,7 @@ Type: ips_option
 Usage: detect
 
 
-7.111. s7commplus_func
+7.112. s7commplus_func
 
 --------------
 
@@ -8760,7 +9035,7 @@ Configuration:
   * string s7commplus_func.~: function code to match
 
 
-7.112. s7commplus_opcode
+7.113. s7commplus_opcode
 
 --------------
 
@@ -8775,7 +9050,7 @@ Configuration:
   * string s7commplus_opcode.~: opcode code to match
 
 
-7.113. sd_pattern
+7.114. sd_pattern
 
 --------------
 
@@ -8799,7 +9074,7 @@ Peg counts:
   * sd_pattern.terminated: hyperscan terminated (sum)
 
 
-7.114. seq
+7.115. seq
 
 --------------
 
@@ -8815,7 +9090,7 @@ Configuration:
     range { 0: }
 
 
-7.115. service
+7.116. service
 
 --------------
 
@@ -8830,7 +9105,7 @@ Configuration:
   * string service.*: one or more comma-separated service names
 
 
-7.116. sha256
+7.117. sha256
 
 --------------
 
@@ -8850,7 +9125,7 @@ Configuration:
     start of buffer
 
 
-7.117. sha512
+7.118. sha512
 
 --------------
 
@@ -8870,7 +9145,7 @@ Configuration:
     start of buffer
 
 
-7.118. sid
+7.119. sid
 
 --------------
 
@@ -8885,7 +9160,7 @@ Configuration:
   * int sid.~: signature id { 1:max32 }
 
 
-7.119. sip_body
+7.120. sip_body
 
 --------------
 
@@ -8896,7 +9171,7 @@ Type: ips_option
 Usage: detect
 
 
-7.120. sip_header
+7.121. sip_header
 
 --------------
 
@@ -8908,7 +9183,7 @@ Type: ips_option
 Usage: detect
 
 
-7.121. sip_method
+7.122. sip_method
 
 --------------
 
@@ -8923,7 +9198,7 @@ Configuration:
   * string sip_method.*method: sip method
 
 
-7.122. sip_stat_code
+7.123. sip_stat_code
 
 --------------
 
@@ -8938,7 +9213,7 @@ Configuration:
   * int sip_stat_code.*code: status code { 1:999 }
 
 
-7.123. so
+7.124. so
 
 --------------
 
@@ -8955,7 +9230,103 @@ Configuration:
     buffer
 
 
-7.124. soid
+7.125. socks_address_type
+
+--------------
+
+Help: match SOCKS address type (1=IPv4, 3=Domain, 4=IPv6) - SOCKS5
+only
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * int socks_address_type.~type: address type (1=IPv4, 3=Domain, 4=
+    IPv6) { 1:4 }
+
+
+7.126. socks_command
+
+--------------
+
+Help: match SOCKS command (1=CONNECT, 2=BIND, 3=UDP_ASSOCIATE)
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * int socks_command.~command: SOCKS command (1=CONNECT, 2=BIND, 3=
+    UDP_ASSOCIATE) { 1:3 }
+
+
+7.127. socks_remote_address
+
+--------------
+
+Help: set cursor to remote destination address (IP or domain)
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * string socks_remote_address.~: address to match (substring)
+
+
+7.128. socks_remote_port
+
+--------------
+
+Help: match SOCKS remote destination port
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * port socks_remote_port.~port: destination port to match
+
+
+7.129. socks_state
+
+--------------
+
+Help: match SOCKS state (1=auth, 2=request_response, 3=established, 4
+=error)
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * string socks_state.~state: state to match (1-4 or auth|
+    request_response|established|error)
+
+
+7.130. socks_version
+
+--------------
+
+Help: match SOCKS version (4 or 5)
+
+Type: ips_option
+
+Usage: detect
+
+Configuration:
+
+  * int socks_version.~version: SOCKS version to match (4 or 5) { 4:5
+    }
+
+
+7.131. soid
 
 --------------
 
@@ -8971,7 +9342,7 @@ Configuration:
     like 3_45678_9
 
 
-7.125. ssl_state
+7.132. ssl_state
 
 --------------
 
@@ -9000,7 +9371,7 @@ Configuration:
     unknown
 
 
-7.126. ssl_version
+7.133. ssl_version
 
 --------------
 
@@ -9027,7 +9398,7 @@ Configuration:
     tls1.2
 
 
-7.127. stream_reassemble
+7.134. stream_reassemble
 
 --------------
 
@@ -9048,7 +9419,7 @@ Configuration:
     remainder of the session
 
 
-7.128. stream_size
+7.135. stream_size
 
 --------------
 
@@ -9066,7 +9437,7 @@ Configuration:
     direction(s) { either|to_server|to_client|both }
 
 
-7.129. tag
+7.136. tag
 
 --------------
 
@@ -9085,7 +9456,7 @@ Configuration:
   * int tag.bytes: tag for this many bytes { 1:max32 }
 
 
-7.130. target
+7.137. target
 
 --------------
 
@@ -9101,7 +9472,7 @@ Configuration:
     dst_ip }
 
 
-7.131. tos
+7.138. tos
 
 --------------
 
@@ -9116,7 +9487,7 @@ Configuration:
   * interval tos.~range: check if IP TOS is in given range { 0:255 }
 
 
-7.132. ttl
+7.139. ttl
 
 --------------
 
@@ -9132,7 +9503,7 @@ Configuration:
     0:255 }
 
 
-7.133. urg
+7.140. urg
 
 --------------
 
@@ -9148,7 +9519,7 @@ Configuration:
     { 0:65535 }
 
 
-7.134. vba_data
+7.141. vba_data
 
 --------------
 
@@ -9160,7 +9531,7 @@ Type: ips_option
 Usage: detect
 
 
-7.135. window
+7.142. window
 
 --------------
 
@@ -9176,7 +9547,7 @@ Configuration:
     range { 0:65535 }
 
 
-7.136. wscale
+7.143. wscale
 
 --------------
 
@@ -9328,7 +9699,7 @@ Configuration:
     stdout
   * multi alert_json.fields = timestamp pkt_num proto pkt_gen pkt_len
     dir src_ap dst_ap rule action: selected fields will be output in
-    given order left to right { action | class | b64_data |
+    given order left to right { action | app_id | class | b64_data |
     client_bytes | client_pkts | dir | dst_addr | dst_ap | dst_port |
     eth_dst | eth_len | eth_src | eth_type | flowstart_time |
     geneve_vni | gid | icmp_code | icmp_id | icmp_seq | icmp_type |
@@ -9578,6 +9949,8 @@ libraries see the Getting Started section of the manual.
   * --bpf <filter options> are standard BPF options, as seen in
     TCPDump
   * --c2x output hex for given char (see also --x2c)
+  * --close-all-plugins Snort will not dlclose plugin libraries at
+    shutdown unless this is set
   * --control-socket <file> to create unix socket
   * --create-instance-file create instance mappings file for this
     Snort process at startup
@@ -9633,6 +10006,7 @@ libraries see the Getting Started section of the manual.
   * --help-options [<option prefix>] output matching command line
     option quick help (same as -?) (optional)
   * --help-plugins list all available plugins with brief help
+    (optional)
   * --help-signals dump available control signals
   * --id-offset offset to add to instance IDs when logging to files
     (0:65535)
@@ -9649,7 +10023,7 @@ libraries see the Getting Started section of the manual.
     (optional)
   * --list-modules [<module type>] list all known modules of given
     type (optional)
-  * --list-plugins list all known plugins
+  * --list-plugins list all known plugins (optional)
   * --lua <chunk> extend/override conf with chunk; may be repeated
   * --lua-sandbox <file> file that contains the lua sandbox
     environment in which config will be loaded
@@ -9702,7 +10076,7 @@ libraries see the Getting Started section of the manual.
   * --show-file-codes indicate how files are located: A=absolute and
     W, F, C which are relative to the working directory, including
     file, and config file respectively
-  * --show-plugins list module and plugin versions
+  * --show-modules list builtin and plugin modules and versions
   * --skip <n> skip 1st n packets (0:max53)
   * --snaplen <snap> set snaplen of packet (same as -s) (0:65535)
   * --stdin-rules read rules from stdin until EOF or a line starting
@@ -9783,7 +10157,7 @@ libraries see the Getting Started section of the manual.
     (0 is unlimited) { 0:maxSZ }
   * multi alert_json.fields = timestamp pkt_num proto pkt_gen pkt_len
     dir src_ap dst_ap rule action: selected fields will be output in
-    given order left to right { action | class | b64_data |
+    given order left to right { action | app_id | class | b64_data |
     client_bytes | client_pkts | dir | dst_addr | dst_ap | dst_port |
     eth_dst | eth_len | eth_src | eth_type | flowstart_time |
     geneve_vni | gid | icmp_code | icmp_id | icmp_seq | icmp_type |
@@ -10184,7 +10558,8 @@ libraries see the Getting Started section of the manual.
   * string extractor.protocols[].fields: specify fields to log
   * string extractor.protocols[].on_events: specify events to log
   * enum extractor.protocols[].service: service to extract from { 
-    http | ftp | ssl | conn | dns | quic | weird | notice }
+    http | ssh | ftp | ssl | conn | dns | quic | file | weird | 
+    notice }
   * int extractor.protocols[].tenant_id = 0: tenant_id of target
     tenant { 0:max32 }
   * enum extractor.time = unix: output format for timestamp values { 
@@ -10195,38 +10570,39 @@ libraries see the Getting Started section of the manual.
   * string file_connector[].name: channel name
   * bool file_connector[].text_format = false: skip header and add
     newline at the end of the message
-  * int file_id.block_timeout = 86400: stop blocking after this many
-    seconds { 0:max31 }
-  * bool file_id.block_timeout_lookup = false: block if lookup times
-    out
-  * int file_id.capture_block_size = 32768: file capture block size
-    in bytes { 8:max53 }
-  * int file_id.capture_max_size = 1048576: stop file capture beyond
-    this point { 0:max53 }
-  * int file_id.capture_memcap = 100: memcap for file capture in
+  * int file_inspect.block_timeout = 86400: stop blocking after this
+    many seconds { 0:max31 }
+  * bool file_inspect.block_timeout_lookup = false: block if lookup
+    times out
+  * int file_inspect.capture_block_size = 32768: file capture block
+    size in bytes { 8:max53 }
+  * int file_inspect.capture_max_size = 1048576: stop file capture
+    beyond this point { 0:max53 }
+  * int file_inspect.capture_memcap = 100: memcap for file capture in
     megabytes { 0:max53 }
-  * int file_id.capture_min_size = 0: stop file capture if file size
-    less than this { 0:max53 }
-  * int file_id.decompress_buffer_size = 100000: file decompression
-    buffer size { 1024:max31 }
-  * int file_id.lookup_timeout = 2: give up on lookup after this many
-    seconds { 0:max31 }
-  * int file_id.max_files_cached = 65536: maximal number of files
-    cached in memory { 8:max53 }
-  * int file_id.max_files_per_flow = 128: maximal number of files
-    able to be concurrently processed per flow { 1:max53 }
-  * string file_id.rules_file: name of file with IPS rules for file
-    identification
-  * int file_id.show_data_depth = 100: print this many octets {
+  * int file_inspect.capture_min_size = 0: stop file capture if file
+    size less than this { 0:max53 }
+  * int file_inspect.decompress_buffer_size = 100000: file
+    decompression buffer size { 1024:max31 }
+  * int file_inspect.lookup_timeout = 2: give up on lookup after this
+    many seconds { 0:max31 }
+  * int file_inspect.max_files_cached = 65536: maximal number of
+    files cached in memory { 8:max53 }
+  * int file_inspect.max_files_per_flow = 128: maximal number of
+    files able to be concurrently processed per flow { 1:max53 }
+  * string file_inspect.rules_file: name of file with IPS rules for
+    file identification
+  * int file_inspect.show_data_depth = 100: print this many octets {
     0:max53 }
-  * int file_id.signature_depth = 10485760: stop signature at this
-    point { 0:max53 }
-  * bool file_id.trace_signature = false: enable runtime dump of
+  * int file_inspect.signature_depth = 10485760: stop signature at
+    this point { 0:max53 }
+  * bool file_inspect.trace_signature = false: enable runtime dump of
     signature info
-  * bool file_id.trace_stream = false: enable runtime dump of file
-    data
-  * bool file_id.trace_type = false: enable runtime dump of type info
-  * int file_id.type_depth = 1460: stop type ID at this point {
+  * bool file_inspect.trace_stream = false: enable runtime dump of
+    file data
+  * bool file_inspect.trace_type = false: enable runtime dump of type
+    info
+  * int file_inspect.type_depth = 1460: stop type ID at this point {
     0:max53 }
   * bool file_log.log_pkt_time = true: log the packet time when event
     generated
@@ -10255,6 +10631,8 @@ libraries see the Getting Started section of the manual.
   * string file_policy.rules[].when.sha256: SHA 256
   * int file_policy.verdict_delay = 0: number of queries to return
     final verdict { 0:max53 }
+  * int file_trace.max_file_size = 0: maximum file size in bytes (0=
+    unlimited) { 0: }
   * string file_type.~: list of file type IDs to match
   * string flags.~mask_flags: these flags are don’t cares
   * string flags.~test_flags: these flags are tested
@@ -10382,6 +10760,18 @@ libraries see the Getting Started section of the manual.
     will be removed in a future release
   * implied http_cookie.with_trailer: option is no longer used and
     will be removed in a future release
+  * implied http_decoded_uri.fragment: match against fragment section
+    of URI only
+  * implied http_decoded_uri.host: match against host section of URI
+    only
+  * implied http_decoded_uri.path: match against path section of URI
+    only
+  * implied http_decoded_uri.port: match against port section of URI
+    only
+  * implied http_decoded_uri.query: match against query section of
+    URI only
+  * implied http_decoded_uri.scheme: match against scheme section of
+    URI only
   * string http_header.field: restrict to given header. Header name
     is case insensitive.
   * implied http_header.request: match against the headers from the
@@ -10665,13 +11055,12 @@ libraries see the Getting Started section of the manual.
     (-1 no limit) { -1:65535 }
   * int imap.uu_decode_depth = -1: Unix-to-Unix decoding depth (-1 no
     limit) { -1:65535 }
-  * int inspection.id = 0: correlate policy and events with other
-    items in configuration { 0:max64 }
+  * int inspection.id = 1: correlate policy and events with other
+    items in configuration { 1:max53 }
   * int inspection.max_aux_ip = 16: maximum number of auxiliary IPs
     per flow to detect and save (-1 = disable, 0 = detect but don’t
     save, 1+ = save in FIFO manner) { -1:127 }
-  * enum inspection.mode = inline-test: set policy mode { inline | 
-    inline-test }
+  * enum inspection.mode: set policy mode { inline | inline-test }
   * string inspection.uuid: correlate events by uuid
   * select ipopts.~opt: output format { rr|eol|nop|ts|sec|esec|lsrr|
     lsrre|ssrr|satid|any }
@@ -10684,8 +11073,8 @@ libraries see the Getting Started section of the manual.
     rules { no | yes | inherit }
   * bool ips.enable_builtin_rules = false: enable events from builtin
     rules w/o stubs
-  * int ips.id = 0: correlate unified2 events with configuration {
-    0:max64 }
+  * int ips.id = 1: correlate unified2 events with configuration {
+    1:max53 }
   * string ips.include: snort rules and includes
   * enum ips.mode: set policy mode { tap | inline | inline-test }
   * bool ips.obfuscate_pii = true: mask all but the last 4 characters
@@ -10768,7 +11157,7 @@ libraries see the Getting Started section of the manual.
   * string modbus_func.~: function code to match
   * int modbus_unit.~: Modbus unit ID { 0:255 }
   * bool mp_data_bus.debug = false: enable debugging
-  * int mp_data_bus.max_eventq_size = 1000: maximum events to queue {
+  * int mp_data_bus.max_eventq_size = 4096: maximum events to queue {
     100:65535 }
   * string mp_data_bus.transport: transport to use for inter-process
     communication
@@ -10806,8 +11195,8 @@ libraries see the Getting Started section of the manual.
     | ip | noip | tcp | notcp | udp | noudp | icmp | noicmp | none }
   * multi network.checksum_eval = all: checksums to verify { all | ip
     | noip | tcp | notcp | udp | noudp | icmp | noicmp | none }
-  * int network.id = 0: correlate unified2 events with configuration
-    { 0:18446744073709551614 }
+  * int network.id = 1: correlate unified2 events with configuration
+    { 1:max53 }
   * int network.layers = 40: the maximum number of protocols that
     Snort can correctly decode { 3:255 }
   * int network.max_ip6_extensions = 0: the maximum number of IP6
@@ -11122,8 +11511,8 @@ libraries see the Getting Started section of the manual.
   * enum profiler.rules.sort = total_time: sort by given field { none
     | checks | avg_check | total_time | matches | no_matches | 
     avg_match | avg_no_match }
-  * string rate_filter[].apply_to: restrict filter to these addresses
-    according to track
+  * addr_list rate_filter[].apply_to: restrict filter to these
+    addresses according to track
   * int rate_filter[].count = 1: number of events in interval before
     tripping { 0:max32 }
   * int rate_filter[].gid = 1: rule generator ID { 0:8129 }
@@ -11169,6 +11558,64 @@ libraries see the Getting Started section of the manual.
   * bool reputation.scan_local = false: inspect local address defined
     in RFC 1918
   * int rev.~: revision { 1:max32 }
+  * string rna.deviceinfo_fingerprints[].device: device information
+  * string rna.deviceinfo_fingerprints[].devicename: deviceinfo
+    devicename value
+  * string rna.deviceinfo_fingerprints[].devicename_pattern:
+    deviceinfo devicename pattern
+  * bool rna.deviceinfo_fingerprints[].df = false: fingerprint don’t
+    fragment flag
+  * string rna.deviceinfo_fingerprints[].dhcp55: dhcp option 55
+    values
+  * string rna.deviceinfo_fingerprints[].dhcp60: dhcp option 60
+    values
+  * int rna.deviceinfo_fingerprints[].flags: smb flags { 0:max32 }
+  * int rna.deviceinfo_fingerprints[].fpid = 0: fingerprint id {
+    0:max32 }
+  * string rna.deviceinfo_fingerprints[].host_name: host name
+    information
+  * string rna.deviceinfo_fingerprints[].id = X: id
+  * string rna.deviceinfo_fingerprints[].mac_addr: deviceinfo mac
+    address
+  * int rna.deviceinfo_fingerprints[].major: smb major version {
+    0:max31 }
+  * string rna.deviceinfo_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.deviceinfo_fingerprints[].manufacturer_pattern:
+    deviceinfo manufacturer pattern
+  * int rna.deviceinfo_fingerprints[].minor: smb minor version {
+    0:max31 }
+  * string rna.deviceinfo_fingerprints[].model: deviceinfo model
+    value
+  * string rna.deviceinfo_fingerprints[].model_pattern: deviceinfo
+    model pattern
+  * string rna.deviceinfo_fingerprints[].mss = X: fingerprint mss
+  * string rna.deviceinfo_fingerprints[].os_pattern: deviceinfo os
+    pattern
+  * string rna.deviceinfo_fingerprints[].os_postfix: deviceinfo os
+    postfix
+  * string rna.deviceinfo_fingerprints[].os_prefix: deviceinfo os
+    prefix
+  * string rna.deviceinfo_fingerprints[].os_value: deviceinfo os
+    value
+  * string rna.deviceinfo_fingerprints[].service_type: deviceinfo
+    service type
+  * string rna.deviceinfo_fingerprints[].tcp_window: fingerprint tcp
+    window
+  * string rna.deviceinfo_fingerprints[].topts: fingerprint tcp
+    options
+  * int rna.deviceinfo_fingerprints[].ttl = 0: fingerprint ttl {
+    0:255 }
+  * int rna.deviceinfo_fingerprints[].type = 0: fingerprint type {
+    0:max32 }
+  * enum rna.deviceinfo_fingerprints[].ua_type = os: type of user
+    agent fingerprints { os | device | jail-broken | jail-broken-host
+    }
+  * string rna.deviceinfo_fingerprints[].user_agent[].substring: a
+    substring of user agent string
+  * string rna.deviceinfo_fingerprints[].uuid: fingerprint uuid
+  * string rna.deviceinfo_fingerprints[].ws = X: fingerprint window
+    size
   * string rna.dump_file: file name to dump RNA mac cache on
     shutdown; won’t dump by default
   * bool rna.enable_logger = true: enable or disable writing
@@ -11177,6 +11624,10 @@ libraries see the Getting Started section of the manual.
     snort is idle
   * string rna.rna_conf_path: path to rna configuration
   * string rna.smb_fingerprints[].device: device information
+  * string rna.smb_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.smb_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
   * bool rna.smb_fingerprints[].df = false: fingerprint don’t
     fragment flag
   * string rna.smb_fingerprints[].dhcp55: dhcp option 55 values
@@ -11185,9 +11636,23 @@ libraries see the Getting Started section of the manual.
   * int rna.smb_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * string rna.smb_fingerprints[].host_name: host name information
   * string rna.smb_fingerprints[].id = X: id
+  * string rna.smb_fingerprints[].mac_addr: deviceinfo mac address
   * int rna.smb_fingerprints[].major: smb major version { 0:max31 }
+  * string rna.smb_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.smb_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
   * int rna.smb_fingerprints[].minor: smb minor version { 0:max31 }
+  * string rna.smb_fingerprints[].model: deviceinfo model value
+  * string rna.smb_fingerprints[].model_pattern: deviceinfo model
+    pattern
   * string rna.smb_fingerprints[].mss = X: fingerprint mss
+  * string rna.smb_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.smb_fingerprints[].os_postfix: deviceinfo os postfix
+  * string rna.smb_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.smb_fingerprints[].os_value: deviceinfo os value
+  * string rna.smb_fingerprints[].service_type: deviceinfo service
+    type
   * string rna.smb_fingerprints[].tcp_window: fingerprint tcp window
   * string rna.smb_fingerprints[].topts: fingerprint tcp options
   * int rna.smb_fingerprints[].ttl = 0: fingerprint ttl { 0:255 }
@@ -11199,6 +11664,10 @@ libraries see the Getting Started section of the manual.
   * string rna.smb_fingerprints[].uuid: fingerprint uuid
   * string rna.smb_fingerprints[].ws = X: fingerprint window size
   * string rna.tcp_fingerprints[].device: device information
+  * string rna.tcp_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.tcp_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
   * bool rna.tcp_fingerprints[].df = false: fingerprint don’t
     fragment flag
   * string rna.tcp_fingerprints[].dhcp55: dhcp option 55 values
@@ -11207,9 +11676,23 @@ libraries see the Getting Started section of the manual.
   * int rna.tcp_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * string rna.tcp_fingerprints[].host_name: host name information
   * string rna.tcp_fingerprints[].id = X: id
+  * string rna.tcp_fingerprints[].mac_addr: deviceinfo mac address
   * int rna.tcp_fingerprints[].major: smb major version { 0:max31 }
+  * string rna.tcp_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.tcp_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
   * int rna.tcp_fingerprints[].minor: smb minor version { 0:max31 }
+  * string rna.tcp_fingerprints[].model: deviceinfo model value
+  * string rna.tcp_fingerprints[].model_pattern: deviceinfo model
+    pattern
   * string rna.tcp_fingerprints[].mss = X: fingerprint mss
+  * string rna.tcp_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.tcp_fingerprints[].os_postfix: deviceinfo os postfix
+  * string rna.tcp_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.tcp_fingerprints[].os_value: deviceinfo os value
+  * string rna.tcp_fingerprints[].service_type: deviceinfo service
+    type
   * string rna.tcp_fingerprints[].tcp_window: fingerprint tcp window
   * string rna.tcp_fingerprints[].topts: fingerprint tcp options
   * int rna.tcp_fingerprints[].ttl = 0: fingerprint ttl { 0:255 }
@@ -11221,6 +11704,10 @@ libraries see the Getting Started section of the manual.
   * string rna.tcp_fingerprints[].uuid: fingerprint uuid
   * string rna.tcp_fingerprints[].ws = X: fingerprint window size
   * string rna.ua_fingerprints[].device: device information
+  * string rna.ua_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.ua_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
   * bool rna.ua_fingerprints[].df = false: fingerprint don’t fragment
     flag
   * string rna.ua_fingerprints[].dhcp55: dhcp option 55 values
@@ -11229,9 +11716,23 @@ libraries see the Getting Started section of the manual.
   * int rna.ua_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * string rna.ua_fingerprints[].host_name: host name information
   * string rna.ua_fingerprints[].id = X: id
+  * string rna.ua_fingerprints[].mac_addr: deviceinfo mac address
   * int rna.ua_fingerprints[].major: smb major version { 0:max31 }
+  * string rna.ua_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.ua_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
   * int rna.ua_fingerprints[].minor: smb minor version { 0:max31 }
+  * string rna.ua_fingerprints[].model: deviceinfo model value
+  * string rna.ua_fingerprints[].model_pattern: deviceinfo model
+    pattern
   * string rna.ua_fingerprints[].mss = X: fingerprint mss
+  * string rna.ua_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.ua_fingerprints[].os_postfix: deviceinfo os postfix
+  * string rna.ua_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.ua_fingerprints[].os_value: deviceinfo os value
+  * string rna.ua_fingerprints[].service_type: deviceinfo service
+    type
   * string rna.ua_fingerprints[].tcp_window: fingerprint tcp window
   * string rna.ua_fingerprints[].topts: fingerprint tcp options
   * int rna.ua_fingerprints[].ttl = 0: fingerprint ttl { 0:255 }
@@ -11243,6 +11744,10 @@ libraries see the Getting Started section of the manual.
   * string rna.ua_fingerprints[].uuid: fingerprint uuid
   * string rna.ua_fingerprints[].ws = X: fingerprint window size
   * string rna.udp_fingerprints[].device: device information
+  * string rna.udp_fingerprints[].devicename: deviceinfo devicename
+    value
+  * string rna.udp_fingerprints[].devicename_pattern: deviceinfo
+    devicename pattern
   * bool rna.udp_fingerprints[].df = false: fingerprint don’t
     fragment flag
   * string rna.udp_fingerprints[].dhcp55: dhcp option 55 values
@@ -11251,9 +11756,23 @@ libraries see the Getting Started section of the manual.
   * int rna.udp_fingerprints[].fpid = 0: fingerprint id { 0:max32 }
   * string rna.udp_fingerprints[].host_name: host name information
   * string rna.udp_fingerprints[].id = X: id
+  * string rna.udp_fingerprints[].mac_addr: deviceinfo mac address
   * int rna.udp_fingerprints[].major: smb major version { 0:max31 }
+  * string rna.udp_fingerprints[].manufacturer: deviceinfo
+    manufacturer value
+  * string rna.udp_fingerprints[].manufacturer_pattern: deviceinfo
+    manufacturer pattern
   * int rna.udp_fingerprints[].minor: smb minor version { 0:max31 }
+  * string rna.udp_fingerprints[].model: deviceinfo model value
+  * string rna.udp_fingerprints[].model_pattern: deviceinfo model
+    pattern
   * string rna.udp_fingerprints[].mss = X: fingerprint mss
+  * string rna.udp_fingerprints[].os_pattern: deviceinfo os pattern
+  * string rna.udp_fingerprints[].os_postfix: deviceinfo os postfix
+  * string rna.udp_fingerprints[].os_prefix: deviceinfo os prefix
+  * string rna.udp_fingerprints[].os_value: deviceinfo os value
+  * string rna.udp_fingerprints[].service_type: deviceinfo service
+    type
   * string rna.udp_fingerprints[].tcp_window: fingerprint tcp window
   * string rna.udp_fingerprints[].topts: fingerprint tcp options
   * int rna.udp_fingerprints[].ttl = 0: fingerprint ttl { 0:255 }
@@ -11419,6 +11938,8 @@ libraries see the Getting Started section of the manual.
     seen in TCPDump
   * string snort.--c2x: output hex for given char (see also --x2c)
   * string snort.-c: <conf> use this configuration
+  * implied snort.--close-all-plugins: Snort will not dlclose plugin
+    libraries at shutdown unless this is set
   * string snort.--control-socket: <file> to create unix socket
   * implied snort.-C: print out payloads with character data only (no
     hex)
@@ -11489,8 +12010,8 @@ libraries see the Getting Started section of the manual.
     brief help
   * string snort.--help-options: [<option prefix>] output matching
     command line option quick help (same as -?) { (optional) }
-  * implied snort.--help-plugins: list all available plugins with
-    brief help
+  * string snort.--help-plugins: list all available plugins with
+    brief help { (optional) }
   * implied snort.--help: show help overview
   * implied snort.--help-signals: dump available control signals
   * implied snort.-H: make hash tables deterministic
@@ -11514,7 +12035,8 @@ libraries see the Getting Started section of the manual.
     generators { (optional) }
   * string snort.--list-modules: [<module type>] list all known
     modules of given type { (optional) }
-  * implied snort.--list-plugins: list all known plugins
+  * string snort.--list-plugins: list all known plugins { (optional)
+    }
   * string snort.-l: <logdir> log to this directory instead of
     current directory
   * string snort.-L: <mode> logging mode (none, dump, pcap, or log_*)
@@ -11533,7 +12055,7 @@ libraries see the Getting Started section of the manual.
     engines
   * string snort.--metadata-filter: <filter> load only rules
     containing filter string in metadata if set
-  * int snort_ml.client_body_depth = 0: number of input HTTP client
+  * int snort_ml.client_body_depth = -1: number of input HTTP client
     body bytes to scan (-1 unlimited) { -1:max31 }
   * int snort_ml_engine.cache_memcap = 0: maximum memory for verdict
     cache in bytes, 0 = disabled { 0:maxSZ }
@@ -11602,7 +12124,8 @@ libraries see the Getting Started section of the manual.
   * implied snort.--show-file-codes: indicate how files are located:
     A=absolute and W, F, C which are relative to the working
     directory, including file, and config file respectively
-  * implied snort.--show-plugins: list module and plugin versions
+  * implied snort.--show-modules: list builtin and plugin modules and
+    versions
   * int snort.--skip: <n> skip 1st n packets { 0:max53 }
   * int snort.--snaplen: <snap> set snaplen of packet (same as -s) {
     0:65535 }
@@ -11654,6 +12177,16 @@ libraries see the Getting Started section of the manual.
   * int snort.-z: <count> maximum number of packet threads (same as
     --max-packet-threads); 0 gets the number of CPU cores reported by
     the system; default is 1 { 0:max32 }
+  * int socks_address_type.~type: address type (1=IPv4, 3=Domain, 4=
+    IPv6) { 1:4 }
+  * int socks_command.~command: SOCKS command (1=CONNECT, 2=BIND, 3=
+    UDP_ASSOCIATE) { 1:3 }
+  * string socks_remote_address.~: address to match (substring)
+  * port socks_remote_port.~port: destination port to match
+  * string socks_state.~state: state to match (1-4 or auth|
+    request_response|established|error)
+  * int socks_version.~version: SOCKS version to match (4 or 5) { 4:5
+    }
   * string so.~func: name of eval function
   * string soid.~: SO rule ID is unique key, eg <gid>_<sid>_<rev>
     like 3_45678_9
@@ -11813,6 +12346,8 @@ libraries see the Getting Started section of the manual.
   * int suppress[].sid = 0: rule signature ID { 0:max32 }
   * enum suppress[].track: suppress only matching source or
     destination addresses { by_src | by_dst }
+  * enum syslog_trace.priority = info: select syslog priority { emerg
+    | alert | crit | err | warning | notice | info | debug }
   * int tag.bytes: tag for this many bytes { 1:max32 }
   * enum tag.~: log all packets in session or all packets to or from
     host { session|host_src|host_dst }
@@ -11861,7 +12396,8 @@ libraries see the Getting Started section of the manual.
   * int trace.modules.detection.opt_tree: enable tree option trace
     logging { 0:255 }
   * int trace.modules.dpx.all: enable all trace options { 0:255 }
-  * int trace.modules.file_id.all: enable all trace options { 0:255 }
+  * int trace.modules.file_inspect.all: enable all trace options {
+    0:255 }
   * int trace.modules.js_norm.all: enable all trace options { 0:255 }
   * int trace.modules.js_norm.dump: enable data logging { 0:255 }
   * int trace.modules.js_norm.proc: enable processing logging { 0:255
@@ -11881,8 +12417,9 @@ libraries see the Getting Started section of the manual.
   * int trace.modules.wizard.all: enable all trace options { 0:255 }
   * bool trace.ntuple = false: print packet n-tuple info with trace
     messages
-  * enum trace.output: output method for trace log messages { stdout
-    | syslog }
+  * dynamics trace.output = stdout_trace: output method(s) for trace
+    log messages { none | | file_trace | null_trace_logger |
+    stdout_trace | syslog_trace }
   * bool trace.timestamp = false: print message timestamps with trace
     messages
   * interval ttl.~range: check if IP TTL is in the given range {
@@ -11930,7 +12467,7 @@ libraries see the Getting Started section of the manual.
     range { 0:65535 }
   * multi wizard.curses: enable service identification based on
     internal algorithm { dce_smb | dce_udp | dce_tcp | mms | opcua |
-    s7commplus | sslv2 }
+    s7commplus | socks | sslv2 }
   * select wizard.hexes[].proto = any: protocol to scan { tcp | udp |
     any }
   * string wizard.hexes[].service: name of service
@@ -12149,6 +12686,9 @@ libraries see the Getting Started section of the manual.
     request packets ignored due to missing file tracker (sum)
   * dce_smb.v2_cls_req_hdr_err: total number of SMBv2 close request
     packets ignored due to corrupted header (sum)
+  * dce_smb.v2_cls_rtrkr_ins_fail: total number of SMBv2 close
+    request packets failed due to request tracker insert failure
+    (sum)
   * dce_smb.v2_cls: total number of SMBv2 close packets seen (sum)
   * dce_smb.v2_cmpnd_req_lt_crossed: total number of SMBv2 packets
     seen where compound requests exceed the smb_max_compound limit
@@ -12165,6 +12705,9 @@ libraries see the Getting Started section of the manual.
     packets ignored as share type is IPC (sum)
   * dce_smb.v2_crt_resp_hdr_err: total number of SMBv2 create
     response packets ignored due to corrupted header (sum)
+  * dce_smb.v2_crt_rtrkr_ins_fail: total number of SMBv2 create
+    request packets failed due to request tracker insert failure
+    (sum)
   * dce_smb.v2_crt_rtrkr_misng: total number of SMBv2 create response
     packets ignored due to missing create request tracker (sum)
   * dce_smb.v2_crt: total number of SMBv2 create packets seen (sum)
@@ -12429,14 +12972,19 @@ libraries see the Getting Started section of the manual.
     out of local memory (sum)
   * extractor.total_events: total events processed by extractor (sum)
   * file_connector.messages: total messages (sum)
-  * file_id.cache_failures: number of file cache add failures (sum)
-  * file_id.files_not_processed: number of files not processed due to
-    per-flow limit (sum)
-  * file_id.max_concurrent_files: maximum files processed
-    concurrently on a flow (max)
-  * file_id.total_file_data: number of file data bytes processed
+  * file_inspect.buffers_in_use: number of file buffers currently in
+    use (now)
+  * file_inspect.buffers_max: maximum number of file buffers that can
+    be allocated (max)
+  * file_inspect.cache_failures: number of file cache add failures
     (sum)
-  * file_id.total_files: number of files processed (sum)
+  * file_inspect.files_not_processed: number of files not processed
+    due to per-flow limit (sum)
+  * file_inspect.max_concurrent_files: maximum files processed
+    concurrently on a flow (max)
+  * file_inspect.total_file_data: number of file data bytes processed
+    (sum)
+  * file_inspect.total_files: number of files processed (sum)
   * file_log.total_events: total file events (sum)
   * ftp_data.packets: total packets (sum)
   * ftp_server.concurrent_sessions: total concurrent FTP sessions
@@ -12530,6 +13078,12 @@ libraries see the Getting Started section of the manual.
   * http2_inspect.total_bytes: total HTTP/2 data bytes inspected
     (sum)
   * http_inspect.chunked: chunked message bodies (sum)
+  * http_inspect.compressed_deflate_failed: total number of HTTP
+    bodies with failed Deflate decompression (sum)
+  * http_inspect.compressed_deflate: total number of HTTP bodies
+    compressed with Deflate (sum)
+  * http_inspect.compressed_gzip_failed: total number of HTTP bodies
+    with failed GZIP decompression (sum)
   * http_inspect.compressed_gzip: total number of HTTP bodies
     compressed with GZIP (sum)
   * http_inspect.compressed_not_supported: total number of HTTP
@@ -12547,6 +13101,8 @@ libraries see the Getting Started section of the manual.
   * http_inspect.flows: HTTP connections inspected (sum)
   * http_inspect.get_requests: GET requests inspected (sum)
   * http_inspect.head_requests: HEAD requests inspected (sum)
+  * http_inspect.incorrect_deflate_header: total number of HTTP
+    bodies compressed with Deflate that had incorrect header (sum)
   * http_inspect.inspections: total message sections inspected (sum)
   * http_inspect.js_external_scripts: total number of external
     JavaScripts processed (sum)
@@ -12564,6 +13120,8 @@ libraries see the Getting Started section of the manual.
   * http_inspect.parameters: HTTP parameters inspected (sum)
   * http_inspect.partial_inspections: early inspections done for
     script detection (sum)
+  * http_inspect.partial_publishes: publish-only partial flushes
+    (sum)
   * http_inspect.pipelined_flows: total HTTP connections containing
     pipelined requests (sum)
   * http_inspect.pipelined_requests: total requests placed in a
@@ -12634,6 +13192,9 @@ libraries see the Getting Started section of the manual.
     file_id rule (sum)
   * ips_actions.log: number of packets that matched an IPS log rule
     (sum)
+  * ips_actions.non_supported_react: number of packets that matched
+    an IPS react rule but could not be processed because the protocol
+    is not supported (sum)
   * ips_actions.pass: number of packets that matched an IPS pass rule
     (sum)
   * ips_actions.react: number of packets that matched an IPS react
@@ -12824,13 +13385,37 @@ libraries see the Getting Started section of the manual.
   * packet_capture.captured: packets captured after matching filter
     (sum)
   * packet_capture.processed: packets processed against filter (sum)
-  * payload_injector.http2_injects: total number of http2 injections
+  * payload_injector.err_c2s_http_proto: total number of c2s HTTP
+    protocol errors (sum)
+  * payload_injector.err_conflicting_s2c_traffic: total number of
+    conflicting s2c traffic errors (sum)
+  * payload_injector.err_http2_even_stream: total number of HTTP/2
+    even-numbered stream errors (sum)
+  * payload_injector.err_http2_stream_id_0: total number of HTTP/2
+    stream ID 0 errors (sum)
+  * payload_injector.err_injector_not_configured: total number of
+    injector-not-configured errors (sum)
+  * payload_injector.err_s2c_http2_proto: total number of s2c HTTP2
+    protocol errors (sum)
+  * payload_injector.err_s2c_http_proto: total number of s2c HTTP
+    protocol errors (sum)
+  * payload_injector.err_session_not_tcp: total number of
+    session-not-tcp errors (sum)
+  * payload_injector.err_stale_s2c_data: total number of stale s2c
+    data errors (sum)
+  * payload_injector.err_stream_not_established: total number of
+    stream-not-established errors (sum)
+  * payload_injector.err_unidentified_protocol: total number of
+    unidentified-protocol errors (sum)
+  * payload_injector.failed_injects: total number of failed HTTP and
+    HTTP/2 injections (sum)
+  * payload_injector.http2_injects: total number of HTTP/2 injections
     (sum)
   * payload_injector.http2_mid_frame: total number of attempts to
     inject mid-frame (sum)
-  * payload_injector.http2_translate_err: total number of http2 page
+  * payload_injector.http2_translate_err: total number of HTTP/2 page
     translation errors (sum)
-  * payload_injector.http_injects: total number of http injections
+  * payload_injector.http_injects: total number of HTTP injections
     (sum)
   * pcre.pcre_error: total number of times pcre returns error (sum)
   * pcre.pcre_match_limit: total number of times pcre hit the match
@@ -12894,6 +13479,7 @@ libraries see the Getting Started section of the manual.
   * rna.change_host_update: count number of change host update events
     (sum)
   * rna.cpe_os: count of CPE OS events received (sum)
+  * rna.deviceinfo: count of deviceinfo events received (sum)
   * rna.dhcp_data: count of DHCP data events received (sum)
   * rna.dhcp_info: count of new DHCP lease events received (sum)
   * rna.icmp_bidirectional: count of bidirectional ICMP flows
@@ -13042,6 +13628,24 @@ libraries see the Getting Started section of the manual.
     (sum)
   * snort.remote_commands: total remote commands processed (sum)
   * snort.signals: total signals processed (sum)
+  * socks.auth_failures: failed authentications (sum)
+  * socks.auth_requests: authentication requests (sum)
+  * socks.auth_successes: successful authentications (sum)
+  * socks.bind_requests: BIND requests (sum)
+  * socks.concurrent_sessions: current concurrent SOCKS sessions
+    (now)
+  * socks.connect_requests: CONNECT requests (sum)
+  * socks.failed_connections: failed connections (sum)
+  * socks.max_concurrent_sessions: maximum concurrent SOCKS sessions
+    (max)
+  * socks.sessions: total SOCKS sessions (sum)
+  * socks.successful_connections: successful connections (sum)
+  * socks.udp_associate_requests: UDP ASSOCIATE requests (sum)
+  * socks.udp_associations_created: UDP ASSOCIATE completions (sum)
+  * socks.udp_expectations_created: UDP expectations created for
+    dynamic ports (sum)
+  * socks.udp_frags: UDP fragmented packets detected (sum)
+  * socks.udp_packets: UDP packets processed (sum)
   * ssh.aborted_sessions: total session aborted (sum)
   * ssh.concurrent_sessions: total concurrent ssh sessions (now)
   * ssh.max_concurrent_sessions: maximum concurrent ssh sessions
@@ -13081,7 +13685,6 @@ libraries see the Getting Started section of the manual.
     (now)
   * stream.allowlist_memcap_prunes: number of allowlist flows pruned
     due to memcap (sum)
-  * stream.closed_prunes: sessions pruned due to stream closed (sum)
   * stream.current_flows: current number of flows in cache (now)
   * stream.excess_prunes: sessions pruned due to excess (sum)
   * stream.excess_to_allowlist: number of flows moved to the
@@ -13098,6 +13701,8 @@ libraries see the Getting Started section of the manual.
     memcap (sum)
   * stream.file_timeout_prunes: number of FILE flows pruned due to
     timeout (sum)
+  * stream.flows_closed: number of flows closed and removed from the
+    flow cache (sum)
   * stream.flows: total sessions (sum)
   * stream.ha_prunes: sessions pruned by high availability sync (sum)
   * stream_icmp.created: icmp session trackers created (sum)
@@ -13149,6 +13754,24 @@ libraries see the Getting Started section of the manual.
   * stream_ip.trackers_completed: datagram trackers completed (sum)
   * stream_ip.trackers_freed: datagram trackers released (sum)
   * stream.memcap_prunes: sessions pruned due to memcap (sum)
+  * stream.no_flow_alloc_failure: packets without flow: flow
+    allocation failed (sum)
+  * stream.no_flow_midstream_reject: packets without flow: midstream
+    rejected (sum)
+  * stream.no_flow_no_inspector: packets without flow: no flow
+    tracking inspector configured (sum)
+  * stream.no_flow_no_proto_handler: packets without flow: no
+    protocol handler registered (sum)
+  * stream.no_flow_paf_no_flow: packets without flow: PAF payload but
+    no flow exists (sum)
+  * stream.no_flow_pkt_type_none: packets without flow: packet type
+    is NONE (sum)
+  * stream.no_flow_retry_packet: packets without flow: retry packet
+    dropped (sum)
+  * stream.no_flow_tcp_rst: packets without flow: TCP RST packet
+    (sum)
+  * stream.no_flow_unwanted: packets without flow: flow not wanted
+    (sum)
   * stream.pdu_eof_prunes: number of PDU flows pruned due to EOF
     (sum)
   * stream.pdu_memcap_prunes: number of PDU flows pruned due to
@@ -13175,6 +13798,8 @@ libraries see the Getting Started section of the manual.
     (sum)
   * stream_tcp.asymmetric_flows: number of completed flows having
     one-way traffic only (sum)
+  * stream_tcp.bad_syn_seq: SYN packets rejected due to mismatched
+    sequence number (sum)
   * stream_tcp.client_cleanups: number of times data from server was
     flushed when session released (sum)
   * stream_tcp.closing: number of sessions currently closing (now)
@@ -13357,9 +13982,9 @@ libraries see the Getting Started section of the manual.
     count (sum)
   * unix_transport.receive_events: mp_transport events received count
     (sum)
-  * unix_transport.sent_bytes: mp_transport events bytes sent count
+  * unix_transport.send_errors: mp_transport events errors count
     (sum)
-  * unix_transport.sent_errors: mp_transport events errors count
+  * unix_transport.sent_bytes: mp_transport events bytes sent count
     (sum)
   * unix_transport.sent_events: mp_transport events sent count (sum)
   * unix_transport.successful_connections: successful mp_transport
@@ -13405,7 +14030,8 @@ libraries see the Getting Started section of the manual.
   * 116: mpls
   * 116: pbb
   * 116: pgm
-  * 116: pppoe
+  * 116: pppoe_disc
+  * 116: pppoe_sess
   * 116: tcp
   * 116: token_ring
   * 116: udp
@@ -13438,11 +14064,12 @@ libraries see the Getting Started section of the manual.
   * 145: dnp3
   * 148: cip
   * 149: s7commplus
-  * 150: file_id
+  * 150: file_inspect
   * 151: iec104
   * 152: mms
   * 153: opcua
   * 154: js_norm
+  * 155: socks
   * 175: domain_filter
   * 256: dpx
   * 411: snort_ml
@@ -13627,7 +14254,7 @@ bytes.
 
 (eapol) EAP header truncated
 
-116:120 (pppoe) bad PPPOE frame detected
+116:120 (pppoe_disc) bad PPPOE discovery frame detected
 
 A bad PPPOE frame has been detected. The frames length is less than
 the PPPOE frame minimum (6 bytes).
@@ -14027,12 +14654,12 @@ session.
 The TCP packet is invalid because it doesn’t have a SYN, ACK, or RST
 flag set.
 
-116:424 (eth) truncated ethernet header
+116:424 (pbb) truncated ethernet header
 
 The packet length is less than the minimum ethernet header size (14
 bytes)
 
-116:424 (eth) truncated ethernet header
+116:424 (pbb) truncated ethernet header
 
 A truncated ethernet header was detected.
 
@@ -14582,7 +15209,7 @@ and trailing whitespace.
 
 An HTTP header name contains whitespace.
 
-119:216 (http_inspect) excessive gzip compression
+119:216
 
 A gzip-encoded HTTP message body was found to have an excessive
 compression ratio during decompression.
@@ -14659,7 +15286,7 @@ too big
 
 The decompressed size of the PDF/SWF/ZIP file contained in the HTTP
 message body exceeded the configured limit. The decompression limit
-can be configured with file_id.decompress_buffer_size.
+can be configured with file_inspect.decompress_buffer_size.
 
 119:230 (http_inspect) nonprinting character in HTTP message header
 name
@@ -16359,9 +16986,9 @@ length needed for the given S7commplus function
 
 (s7commplus) reserved S7commplus function code in use
 
-150:1 (file_id) file not processed due to per flow limit
+150:1 (file_inspect) file not processed due to per flow limit
 
-(file_id) file not processed due to per flow limit
+(file_inspect) file not processed due to per flow limit
 
 151:1 (iec104) Length in IEC104 APCI header does not match the length
 needed for the given IEC104 ASDU type id
@@ -16811,43 +17438,42 @@ alert is raised by the enhanced JavaScript normalizer.
   * rna.delete_mac_host_proto(mac, proto): delete a protocol
     associated with a MAC host
   * rna.purge_data(): purge all host cache and mac cache data
-  * snort.set_watchdog_params(timer, min_thread_count): set watchdog
-    parameters
-  * snort.show_plugins(): show available plugins
-  * snort.delete_inspector(inspector): delete an inspector from the
-    default policy
-  * snort.dump_stats(): show summary statistics
+  * snort.detach(): detach from control shell (without shutting down)
+  * snort.dump_heap_profile(): dump jemalloc memory profile
   * snort.dump_heap_stats(): show heap statistics
+  * snort.dump_inspector_map(): show inspectors to policy ID mapping
+  * snort.dump_stats(): show summary statistics
   * snort.heap_profile(enable, sample_rate): jemalloc memory tracking
     configuration
-  * snort.dump_heap_profile(): dump jemalloc memory profile
-  * snort.show_heap_profile(): show jemalloc memory profiling
-    configuration
-  * snort.reset_stats(type): clear summary statistics. Type can be:
-    daq|module|appid|file_id|snort|ha|all. reset_stats() without a
-    parameter clears all statistics.
-  * snort.rotate_stats(): roll perfmonitor log files
-  * snort.reload_config(filename): load new configuration
-  * snort.reload_policy(filename): reload part or all of the default
-    policy
-  * snort.reload_daq(): reload daq module
-  * snort.reload_hosts(filename): load a new hosts table
+  * snort.help(): this output
+  * snort.list_plugins(): list loaded plugins
   * snort.log_command(command, logging): enable or disable command
     logging
+  * snort.pause(): suspend packet processing
+  * snort.quit(): shutdown and dump-stats
+  * snort.reload_config(filename): load new configuration
+  * snort.reload_daq(): reload daq module
+  * snort.reload_hosts(filename): load a new hosts table
+  * snort.reset_stats(type): clear summary statistics. Type can be:
+    daq|module|appid|file_inspect|snort|ha|all. reset_stats() without
+    a parameter clears all statistics.
+  * snort.resume(pkt_num): continue packet processing. If number of
+    packets is specified, will resume for n packets and pause
+  * snort.rotate_stats(): roll perfmonitor log files
+  * snort.set_watchdog_params(timer, min_thread_count): set watchdog
+    parameters
+  * snort.show_heap_profile(): show jemalloc memory profiling
+    configuration
+  * snort.show_plugins(): show loaded plugins
   * snort.show_config_generation(): show loaded configuration ID
   * snort.show_snort_cpu(): show snort cpu usage
   * snort.show_snort_packet_latency(): show snort packet latency data
-  * snort.pause(): suspend packet processing
-  * snort.resume(pkt_num): continue packet processing. If number of
-    packets is specified, will resume for n packets and pause
-  * snort.detach(): detach from control shell (without shutting down)
-  * snort.quit(): shutdown and dump-stats
-  * snort.help(): this output
-  * stream.dump_flows(): dump the flow table
-  * stream.dump_flows_summary(): dump the flow summaries
-  * trace.set(modules, constraints, ntuple, timestamp): set modules
-    traces, constraints, ntuple and timestamp options
-  * trace.clear(): clear modules traces and constraints
+  * stream.dump_flows(): dump the flow table in text format
+  * stream.dump_flows_binary(): dump the flow table in binary format
+  * stream.dump_flows_summary(): dump flow table summary
+  * trace.set(output, ntuple, timestamp, constraints, modules): set
+    trace configuration
+  * trace.clear(): clear trace configuration
 
 
 11.9. Signals
@@ -16991,13 +17617,13 @@ and are not applicable elsewhere.
   * file_connector (connector): implement the file based connector
   * file_data (ips_option): rule option to set detection cursor to
     file data
-  * file_id (inspector): configure file identification
-  * file_id_action (ips_action): manage the counters for the file_id
-    action
+  * file_id (ips_action): manage the counters for the file_id action
+  * file_inspect (inspector): configure file inspection
   * file_log (inspector): log file event to file.log
   * file_meta (ips_option): rule option to set file metadata (file
     type and id)
   * file_policy (basic): configure file policy
+  * file_trace (trace): file trace logger
   * file_type (ips_option): rule option to check file type
   * flags (ips_option): rule option to test TCP control flags
   * flow (ips_option): rule option to check session properties
@@ -17035,6 +17661,8 @@ and are not applicable elsewhere.
     cursor to the request body
   * http_cookie (ips_option): rule option to set the detection cursor
     to the HTTP cookie
+  * http_decoded_uri (ips_option): rule option to set the detection
+    cursor to URI of the request message without path simplification
   * http_header (ips_option): rule option to set the detection cursor
     to the normalized headers
   * http_header_test (ips_option): rule option to perform range check
@@ -17146,7 +17774,7 @@ and are not applicable elsewhere.
   * netflow (inspector): netflow inspection
   * network (basic): configure basic network parameters
   * normalizer (inspector): packet scrubbing for inline mode
-  * null_trace_logger (inspector): trace logger with a null printout
+  * null_trace_logger (trace): trace logger with a null printout
   * opcua (inspector): opcua inspection
   * opcua_msg_service (ips_option): rule option to check the OPC UA
     message service
@@ -17162,7 +17790,8 @@ and are not applicable elsewhere.
   * packets (basic): configure basic packet handling
   * pass (ips_action): manage the counters for the pass action
   * payload_injector (basic): payload injection utility
-  * pbb (codec): support for 802.1ah protocol
+  * pbb (codec): support for 802.1ah provider backbone bridging
+    protocol
   * pcre (ips_option): rule option for matching payload data with
     pcre
   * perf_monitor (inspector): performance monitoring and flow
@@ -17174,7 +17803,8 @@ and are not applicable elsewhere.
   * pop (inspector): pop inspection
   * port_scan (inspector): detect various ip, icmp, tcp, and udp port
     or protocol scans
-  * pppoe (codec): support for point-to-point protocol over ethernet
+  * pppoe_disc (codec): support for point-to-point discovery
+  * pppoe_sess (codec): support for point-to-point session
   * priority (ips_option): rule option for prioritizing events
   * process (basic): configure basic process setup
   * profiler (basic): configure profiling of rules and/or modules
@@ -17233,8 +17863,18 @@ and are not applicable elsewhere.
   * snort_ml_engine (inspector): configure machine learning engine
     settings
   * so (ips_option): rule option to call custom eval function
-  * so_proxy (inspector): a proxy inspector to track flow data from
-    SO rules (internal use only)
+  * socks (inspector): SOCKS protocol inspector
+  * socks_address_type (ips_option): match SOCKS address type (1=
+    IPv4, 3=Domain, 4=IPv6) - SOCKS5 only
+  * socks_command (ips_option): match SOCKS command (1=CONNECT, 2=
+    BIND, 3=UDP_ASSOCIATE)
+  * socks_remote_address (ips_option): set cursor to remote
+    destination address (IP or domain)
+  * socks_remote_port (ips_option): match SOCKS remote destination
+    port
+  * socks_state (ips_option): match SOCKS state (1=auth, 2=
+    request_response, 3=established, 4=error)
+  * socks_version (ips_option): match SOCKS version (4 or 5)
   * soid (ips_option): rule option to specify a shared object rule ID
   * ssh (inspector): ssh inspection
   * ssl (inspector): ssl inspection
@@ -17242,6 +17882,7 @@ and are not applicable elsewhere.
   * ssl_version (ips_option): detection option for ssl version
   * std_connector (connector): implement the stdout/stdin based
     connector
+  * stdout_trace (trace): trace logger that prints to stdout
   * stream (inspector): common flow tracking
   * stream_file (inspector): stream inspector for file flow tracking
     and processing
@@ -17258,6 +17899,7 @@ and are not applicable elsewhere.
   * stream_user (inspector): stream inspector for user flow tracking
     and reassembly
   * suppress (basic): configure event suppressions
+  * syslog_trace (trace): syslog trace logger
   * tag (ips_option): rule option to log additional packets
   * target (ips_option): rule option to indicate target of attack
   * tcp (codec): support for transmission control protocol
@@ -17328,7 +17970,8 @@ and are not applicable elsewhere.
   * codec::llc: support for logical link control
   * codec::mpls: support for multiprotocol label switching
   * codec::null: support for null encapsulation (DLT 0)
-  * codec::pbb: support for 802.1ah protocol
+  * codec::pbb: support for 802.1ah provider backbone bridging
+    protocol
   * codec::pflog: support for OpenBSD PF log (DLT 117)
   * codec::pgm: support for pragmatic general multicast
   * codec::ppp: support for point-to-point encapsulation (DLT 9)
@@ -17342,6 +17985,7 @@ and are not applicable elsewhere.
   * codec::token_ring: support for token ring decoding
   * codec::trans_bridge: support for trans-bridging
   * codec::udp: support for user datagram protocol
+  * codec::unknown: support for unknown protocols
   * codec::user: support for user sessions (DLT 230)
   * codec::vlan: support for local area network
   * codec::vxlan: support for Virtual Extensible LAN
@@ -17375,14 +18019,16 @@ and are not applicable elsewhere.
   * inspector::domain_filter: alert on configured HTTP domains
   * inspector::dpx: dynamic inspector example
   * inspector::extractor: extracts protocol specific data
-  * inspector::file_id: configure file identification
+  * inspector::file_inspect: configure file inspection
   * inspector::file_log: log file event to file.log
-  * inspector::ftp_client: FTP inspector client module
+  * inspector::ftp_client: FTP client configuration module for use
+    with ftp_server
   * inspector::ftp_data: FTP data channel handler
-  * inspector::ftp_server: FTP inspector server module
+  * inspector::ftp_server: main FTP module; ftp_client should also be
+    configured
   * inspector::gtp_inspect: gtp control channel inspection
-  * inspector::http2_inspect: the HTTP/2 inspector
-  * inspector::http_inspect: the new HTTP inspector!
+  * inspector::http2_inspect: HTTP/2 inspector
+  * inspector::http_inspect: HTTP inspector
   * inspector::iec104: iec104 inspection
   * inspector::imap: imap inspection
   * inspector::mem_test: for testing memory management
@@ -17390,7 +18036,6 @@ and are not applicable elsewhere.
   * inspector::modbus: modbus inspection
   * inspector::netflow: netflow inspection
   * inspector::normalizer: packet scrubbing for inline mode
-  * inspector::null_trace_logger: trace logger with a null printout
   * inspector::opcua: opcua inspection
   * inspector::packet_capture: raw packet dumping facility
   * inspector::perf_monitor: performance monitoring and flow
@@ -17408,8 +18053,7 @@ and are not applicable elsewhere.
   * inspector::snort_ml: machine learning based exploit detector
   * inspector::snort_ml_engine: configure machine learning engine
     settings
-  * inspector::so_proxy: a proxy inspector to track flow data from SO
-    rules (internal use only)
+  * inspector::socks: SOCKS protocol inspector
   * inspector::ssh: ssh inspection
   * inspector::ssl: ssl inspection
   * inspector::stream: common flow tracking
@@ -17428,18 +18072,17 @@ and are not applicable elsewhere.
     field
   * inspector::wizard: inspector that implements port-independent
     protocol identification
-  * ips_action::alert: generate alert on the current packet
-  * ips_action::block: block current packet and all the subsequent
-    packets in this flow
-  * ips_action::drop: drop the current packet
-  * ips_action::file_id: file_id file type id
-  * ips_action::log: log the current packet
-  * ips_action::pass: mark the current packet as passed
-  * ips_action::react: send response to client and terminate session
-  * ips_action::reject: terminate session with TCP reset or ICMP
-    unreachable
-  * ips_action::rewrite: overwrite packet contents with the "replace"
-    option content
+  * ips_action::alert: manage the counters for the alert action
+  * ips_action::block: manage the counters for the block action
+  * ips_action::drop: manage the counters for the drop action
+  * ips_action::file_id: manage the counters for the file_id action
+  * ips_action::log: manage the counters for the log action
+  * ips_action::pass: manage the counters for the pass action
+  * ips_action::react: manage the data and the counters for the react
+    action
+  * ips_action::reject: manage the data and the counters for the
+    reject action
+  * ips_action::rewrite: manage the counters for the rewrite action
   * ips_option::ack: rule option to match on TCP ack numbers
   * ips_option::appids: detection option for application ids
   * ips_option::base64_data: set detection cursor to decoded Base64
@@ -17519,6 +18162,8 @@ and are not applicable elsewhere.
     cursor to the request body
   * ips_option::http_cookie: rule option to set the detection cursor
     to the HTTP cookie
+  * ips_option::http_decoded_uri: rule option to set the detection
+    cursor to URI of the request message without path simplification
   * ips_option::http_header: rule option to set the detection cursor
     to the normalized headers
   * ips_option::http_header_test: rule option to perform range check
@@ -17643,6 +18288,17 @@ and are not applicable elsewhere.
   * ips_option::sip_method: detection option for sip method
   * ips_option::sip_stat_code: detection option for sip stat code
   * ips_option::so: rule option to call custom eval function
+  * ips_option::socks_address_type: match SOCKS address type (1=IPv4,
+    3=Domain, 4=IPv6) - SOCKS5 only
+  * ips_option::socks_command: match SOCKS command (1=CONNECT, 2=
+    BIND, 3=UDP_ASSOCIATE)
+  * ips_option::socks_remote_address: set cursor to remote
+    destination address (IP or domain)
+  * ips_option::socks_remote_port: match SOCKS remote destination
+    port
+  * ips_option::socks_state: match SOCKS state (1=auth, 2=
+    request_response, 3=established, 4=error)
+  * ips_option::socks_version: match SOCKS version (4 or 5)
   * ips_option::soid: rule option to specify a shared object rule ID
   * ips_option::ssl_state: detection option for ssl state
   * ips_option::ssl_version: detection option for ssl version
@@ -17686,4 +18342,8 @@ and are not applicable elsewhere.
   * search_engine::lowmem: Keyword Trie (low memory, low performance)
     MPSE
   * so_rule::3|18758: SO rule example
+  * trace::file_trace: file trace logger
+  * trace::null_trace_logger: trace logger with a null printout
+  * trace::stdout_trace: trace logger that prints to stdout
+  * trace::syslog_trace: syslog trace logger
 

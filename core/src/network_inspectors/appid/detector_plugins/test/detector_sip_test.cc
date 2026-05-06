@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -78,7 +78,6 @@ unsigned get_instance_id()
 { return 0; }
 unsigned ThreadConfig::get_instance_max() { return 1; }
 }
-
 
 void AppIdContext::create_odp_ctxt()
 {

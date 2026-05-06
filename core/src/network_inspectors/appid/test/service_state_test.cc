@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -88,8 +88,7 @@ AppInfoTableEntry* AppInfoManager::get_app_info_entry(AppId)
 
 // Stubs for appid classes
 class AppIdInspector{};
-FlowData::FlowData(unsigned, Inspector*) : handler(nullptr), id(0)
-{ }
+FlowData::FlowData(unsigned) : id(0) { }
 FlowData::~FlowData() = default;
 
 // Stubs for AppIdDebug
@@ -108,12 +107,12 @@ OdpContext::OdpContext(const AppIdConfig&, snort::SnortConfig*) { }
 AppIdConfig stub_config;
 AppIdContext stub_ctxt(stub_config);
 OdpContext stub_odp_ctxt(stub_config, nullptr);
-AppIdSession::AppIdSession(IpProtocol, const SfIp* ip, uint16_t, AppIdInspector&,
+AppIdSession::AppIdSession(IpProtocol, const SfIp* ip, uint16_t, AppIdInspector& inspector,
     OdpContext&, uint32_t
 #ifndef DISABLE_TENANT_ID
     ,uint32_t
 #endif
-    ) : FlowData(0), config(stub_config),
+    ) : FlowData(0), inspector(inspector), config(stub_config),
     api(*(new AppIdSessionApi(this, *ip))), odp_ctxt(stub_odp_ctxt) { }
 AppIdSession::~AppIdSession() = default;
 AppIdDiscovery::~AppIdDiscovery() = default;
@@ -133,6 +132,7 @@ void ServiceDiscovery::reload() {}
 void ServiceDiscovery::finalize_service_patterns() {}
 void ServiceDiscovery::match_by_pattern(AppIdSession&, const Packet*, IpProtocol) {}
 void ServiceDiscovery::get_port_based_services(IpProtocol, uint16_t, AppIdSession&) {}
+void ServiceDiscovery::get_port_based_services(IpProtocol, uint16_t, uint16_t, AppIdSession&) {}
 void ServiceDiscovery::get_next_service(const Packet*, const AppidSessionDirection, AppIdSession&) {}
 int ServiceDiscovery::identify_service(AppIdSession&, Packet*, AppidSessionDirection,
     AppidChangeBits&) { return 0; }

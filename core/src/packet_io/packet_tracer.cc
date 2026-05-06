@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2017-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2017-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -421,6 +421,13 @@ void PacketTracer::add_ip_header_info(const Packet& p)
 
     uint16_t sport = p.ptrs.sp;
     uint16_t dport = p.ptrs.dp;
+
+    if (p.type() == PktType::ICMP)
+    {
+        assert(p.ptrs.icmph);
+        sport = p.ptrs.icmph ? p.ptrs.icmph->type : 0;
+        dport = 0;
+    }
 
     const SfIp* actual_sip = p.ptrs.ip_api.get_src();
     const SfIp* actual_dip = p.ptrs.ip_api.get_dst();

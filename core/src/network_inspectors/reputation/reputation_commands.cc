@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -76,7 +76,7 @@ bool ReputationReload::execute(Analyzer&, void**)
 static int reload(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    Reputation* ins = static_cast<Reputation*>(PigPen::get_inspector(REPUTATION_NAME));
+    Reputation* ins = static_cast<Reputation*>(PigPen::get_inspector(REPUTATION_NAME, Module::CONTEXT));
 
     if (ins)
         main_broadcast_command(new ReputationReload(ctrlcon, *ins), ctrlcon);

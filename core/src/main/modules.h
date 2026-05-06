@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -24,9 +24,7 @@
 // this is for builtin module initialization.
 // ideally, modules.cc would be refactored into several files.
 
-#include "framework/counts.h"
-
-void module_init();
-const char* get_lua_defaults();
+void add_independent_modules();
+void add_dependent_modules();
 
 #endif

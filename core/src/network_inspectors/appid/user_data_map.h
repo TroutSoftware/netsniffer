@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -46,7 +46,7 @@ public:
         const std::string& item, bool override_existing = false);
     const char* get_user_data_value_str(const std::string& table, const std::string& key);
 
-    void set_configuration_completed(bool completed);
+    static void set_configuration_completed(bool completed);
 private:
     UserDataMaps user_data_maps;
 };

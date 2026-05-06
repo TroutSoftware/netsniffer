@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -244,7 +244,7 @@ bool AppIdDiscovery::do_pre_discovery(Packet* p, AppIdSession*& asd, AppIdInspec
     }
 
     const AppIdConfig& config = inspector.get_config();
-    if (appidDebug->is_enabled())
+    if (appidDebug and appidDebug->is_enabled())
         appidDebug->activate(p->flow, asd, config.log_all_sessions);
 
     if (is_packet_ignored(p))

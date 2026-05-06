@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -55,6 +55,7 @@ void validate_services(struct snort::SnortConfig*, OptTreeNode*);
 unsigned fp_serialize(const struct snort::SnortConfig*, const std::string& dir);
 unsigned fp_deserialize(const struct snort::SnortConfig*, const std::string& dir);
 
+void clear_buffer_map();
 void update_buffer_map(const char** bufs, const char* svc);
 void add_default_services(struct snort::SnortConfig*, const std::string&, OptTreeNode*);
 

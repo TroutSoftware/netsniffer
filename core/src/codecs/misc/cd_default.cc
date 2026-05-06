@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -75,5 +75,9 @@ static const CodecApi default_api =
     dtor, // dtor
 };
 
-const CodecApi* default_codec = &default_api;
+const BaseApi* cd_default[] =
+{
+    &default_api.base,
+    nullptr
+};
 

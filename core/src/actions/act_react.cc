@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -48,7 +48,6 @@
 #include <fstream>
 #include <string>
 
-#include "actions/actions_module.h"
 #include "framework/ips_action.h"
 #include "framework/module.h"
 #include "log/messages.h"
@@ -134,11 +133,14 @@ private:
 static THREAD_LOCAL struct ReactStats
 {
     PegCount react;
+    PegCount non_supported_react;
 } react_stats;
 
 const PegInfo react_pegs[] =
 {
     { CountType::SUM, "react", "number of packets that matched an IPS react rule" },
+    { CountType::SUM, "non_supported_react", "number of packets that matched an IPS react rule"
+      " but could not be processed because the protocol is not supported" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -178,7 +180,7 @@ void ReactActiveAction::send(Packet* p)
     if (p->flow && p->flow->gadget &&
         (strcmp(p->flow->gadget->get_name(), "http2_inspect") == 0))
     {
-        Http2FlowData* const session_data =
+        const Http2FlowData* const session_data =
             (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
         assert(session_data != nullptr);
         const SourceId source_id = p->is_from_client() ? SRC_CLIENT : SRC_SERVER;
@@ -225,6 +227,16 @@ void ReactAction::exec(Packet* p, const ActInfo& ai)
     p->active->drop_packet(p);
     p->active->set_drop_reason("ips");
 
+    if ( p->flow )
+        p->flow->disable_inspection();
+
+    if ( p->context->wire_packet and
+         !p->active->is_reset_candidate(p->context->wire_packet) )
+    {
+        p->active->block_session(p);
+        ++react_stats.non_supported_react;
+    }    
+
     alert(p, ai);
     ++react_stats.react;
 }
@@ -245,7 +257,7 @@ class ReactModule : public Module
 {
 public:
     ReactModule() : Module(module_name, module_help, module_params)
-    { ActionsModule::add_action(module_name, react_pegs); }
+    { register_action_pegs(module_name, react_pegs); }
 
     bool begin(const char*, int, SnortConfig*) override;
     bool set(const char*, Value&, SnortConfig*) override;
@@ -274,8 +286,7 @@ public:
     bool stats_are_aggregated() const override
     { return true; }
 
-    void show_stats() override
-    { /* These stats are shown by ActionsModule. */ }
+    void show_stats() override { }
 
     const PegInfo* get_pegs() const override
     { return react_pegs; }

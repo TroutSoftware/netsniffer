@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -688,7 +688,7 @@ static inline void DCE2_CoEraseCtxIds(DCE2_CoTracker* cot)
 
 static DCE2_CoCtxIdNode* dce_co_process_ctx_id(DCE2_SsnData* sd,DCE2_CoTracker* cot,
     const DceRpcCoHdr* co_hdr,DCE2_Policy policy,
-    const uint8_t*& frag_ptr, uint16_t frag_len)
+    const uint8_t*& frag_ptr, uint16_t& frag_len)
 {
     DCE2_CoCtxIdNode* ctx_node;
     DCE2_Ret status;
@@ -1312,24 +1312,30 @@ static Packet* DCE2_CoGetRpkt(DCE2_SsnData* sd, DCE2_CoTracker* cot,
     if ((frag_data != nullptr) && (seg_data != nullptr))
     {
         uint16_t hdr_size = sizeof(DceRpcCoHdr) + sizeof(DceRpcCoRequest);
-
-        /* Need to just extract the stub data from the seg buffer
-         * if there is enough data there */
-        // FIXIT-L PORT_IF_NEEDED seg len check
-        const DceRpcCoHdr* co_hdr = (const DceRpcCoHdr*)seg_data;
-
-        /* Don't use it if it's not a request and therefore doesn't
-         * belong with the frag data.  This is an insanity check -
-         * shouldn't have seg data that's not a request if there are
-         * frags queued up */
-        if (DceRpcCoPduType(co_hdr) != DCERPC_PDU_TYPE__REQUEST)
+        if (seg_len >= hdr_size)
         {
-            seg_data = nullptr;
-            seg_len = 0;
+            /* Need to just extract the stub data from the seg buffer
+             * if there is enough data there */
+            const DceRpcCoHdr* co_hdr = (const DceRpcCoHdr*)seg_data;
+
+            /* Don't use it if it's not a request and therefore doesn't
+             * belong with the frag data.  This is an insanity check -
+             * shouldn't have seg data that's not a request if there are
+             * frags queued up */
+            if (DceRpcCoPduType(co_hdr) != DCERPC_PDU_TYPE__REQUEST)
+            {
+                seg_data = nullptr;
+                seg_len = 0;
+            }
+            else
+            {
+                dce2_move(seg_data, seg_len, hdr_size);
+            }
         }
         else
         {
-            dce2_move(seg_data, seg_len, hdr_size);
+            seg_data = nullptr;
+            seg_len = 0;
         }
     }
 
@@ -2182,17 +2188,19 @@ static void DCE2_CoEarlyReassemble(DCE2_SsnData* sd, DCE2_CoTracker* cot)
         {
             uint16_t hdr_size = sizeof(DceRpcCoHdr) + sizeof(DceRpcCoRequest);
 
-            // FIXIT-L PORT_IF_NEEDED header size check
-            DceRpcCoHdr* co_hdr = (DceRpcCoHdr*)DCE2_BufferData(cot->cli_seg.buf);
-
-            if (DceRpcCoPduType(co_hdr) == DCERPC_PDU_TYPE__REQUEST)
+            if (DCE2_BufferLength(cot->cli_seg.buf) >= hdr_size)
             {
-                seg_bytes = DCE2_BufferLength(cot->cli_seg.buf) - hdr_size;
+                DceRpcCoHdr* co_hdr = (DceRpcCoHdr*)DCE2_BufferData(cot->cli_seg.buf);
 
-                if ((UINT32_MAX - bytes) < seg_bytes)
-                    seg_bytes = UINT32_MAX - bytes;
+                if (DceRpcCoPduType(co_hdr) == DCERPC_PDU_TYPE__REQUEST)
+                {
+                    seg_bytes = DCE2_BufferLength(cot->cli_seg.buf) - hdr_size;
 
-                bytes += seg_bytes;
+                    if ((UINT32_MAX - bytes) < seg_bytes)
+                        seg_bytes = UINT32_MAX - bytes;
+
+                    bytes += seg_bytes;
+                }
             }
         }
 

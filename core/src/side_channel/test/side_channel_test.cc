@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -93,7 +93,7 @@ Connector* receive_connector = nullptr;
 Connector* transmit_connector = nullptr;
 Connector* duplex_connector = nullptr;
 
-void ConnectorManager::thread_init()
+void thread_init()
 {
     receive_conf.direction = Connector::Direction::CONN_RECEIVE;
     receive_connector = new ReceiveConnector;
@@ -103,7 +103,7 @@ void ConnectorManager::thread_init()
     duplex_connector = new DuplexConnector;
 }
 
-void ConnectorManager::thread_term()
+void thread_term()
 {
     delete receive_connector;
     delete transmit_connector;
@@ -201,13 +201,13 @@ TEST_GROUP(side_channel)
         test_connectors.clear();
         test_ports.reset(7);
 
-        ConnectorManager::thread_init();
+        thread_init();
         SideChannelManager::thread_init();
     }
 
     void teardown() override
     {
-        ConnectorManager::thread_term();
+        thread_term();
         SideChannelManager::thread_term();
         SideChannelManager::term();
 

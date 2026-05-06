@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -27,7 +27,6 @@
 namespace snort
 {
 struct PolicySelectorApi;
-class Module;
 struct SnortConfig;
 }
 
@@ -36,11 +35,8 @@ struct SnortConfig;
 class PolicySelectorManager
 {
 public:
-    static void add_plugin(const snort::PolicySelectorApi* api);
-    static void dump_plugins();
-    static void release_plugins();
+    static class PlugInterface* get_interface(const snort::PolicySelectorApi*);
 
-    static void instantiate(const snort::PolicySelectorApi*, snort::Module*, snort::SnortConfig*);
     static void print_config(const snort::SnortConfig*);
 };
 

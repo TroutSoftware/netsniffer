@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -36,6 +36,7 @@
 
 #include "log/messages.h"
 #include "profiler/profiler_defs.h"
+#include "utils/util.h"
 
 #include "unixdomain_connector_module.h"
 
@@ -47,12 +48,46 @@ THREAD_LOCAL ProfileStats unixdomain_connector_perfstats;
 
 /* Module *****************************************************************/
 
+#define SOCKET_SEND_BUFFER_SIZE_MULTIPLIER 4
+
+static void increase_socket_send_buffer_size(int& sock_handle, uint8_t size_mult)
+{
+    char buf[4] = {};
+    socklen_t buf_len = 4;
+    auto get_opts = getsockopt(sock_handle, SOL_SOCKET, SO_SNDBUF, buf, &buf_len);
+    if (get_opts == 0 and buf_len <= 4)
+    {
+        LogMessage("UnixDomainC: Socket default send buffer size: %d ; Attempting to increase\n", *(int*)buf);
+        uint32_t socket_size = *(int*)buf * size_mult;
+
+        auto set_opt_res = setsockopt(sock_handle, SOL_SOCKET, SO_SNDBUF, (void*)&socket_size, sizeof(socket_size));
+
+        if (set_opt_res != 0)
+        {
+            LogMessage("UnixDomainC: Failed to update send buffer size, continuing with default: %s \n", strerror(errno));
+        }
+        else
+        {
+            get_opts = getsockopt(sock_handle, SOL_SOCKET, SO_SNDBUF, buf, &buf_len);
+            if (get_opts == 0)
+                LogMessage("UnixDomainC: Updated Socket send buffer size: %d \n", *(int*)buf);
+        }
+    }
+    else
+    {
+        LogMessage("UnixDomainC: Failed to get socket send buffer size: %s \n", strerror(errno));
+    }
+}
+
+
 static bool attempt_connection(int& sfd, const char* path, unsigned long timeout_sec) {
     sfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sfd == -1) {
         ErrorMessage("UnixDomainC: socket error: %s \n", strerror(errno));
         return false;
     }
+
+    increase_socket_send_buffer_size(sfd, SOCKET_SEND_BUFFER_SIZE_MULTIPLIER);
 
     // Set the socket to non-blocking mode
     int flags = fcntl(sfd, F_GETFL, 0);
@@ -167,12 +202,13 @@ static void connection_retry_handler(const UnixDomainConnectorConfig& cfg, size_
 
 static void start_retry_thread(const UnixDomainConnectorConfig& cfg, size_t idx, UnixDomainConnectorUpdateHandler update_handler = nullptr) {
     std::thread retry_thread(connection_retry_handler, cfg, idx, update_handler, nullptr);
+    SET_THREAD_NAME(retry_thread.native_handle(), "snort3.ud_retry");
     retry_thread.detach();
 }
 
 UnixDomainConnector::UnixDomainConnector(const UnixDomainConnectorConfig& unixdomain_connector_config, int sfd, size_t idx, UnixDomainConnectorReconnectHelper* reconnect_helper)
     : Connector(unixdomain_connector_config), sock_fd(sfd), run_thread(false), receive_thread(nullptr),
-      receive_ring(new ReceiveRing(50)), instance_id(idx), cfg(unixdomain_connector_config), reconnect_helper(reconnect_helper) {
+      receive_ring(new ReceiveRing(2000)), instance_id(idx), cfg(unixdomain_connector_config), reconnect_helper(reconnect_helper) {
     if (unixdomain_connector_config.async_receive) {
         start_receive_thread();
     }
@@ -353,6 +389,7 @@ void UnixDomainConnector::receive_processing_thread() {
 void UnixDomainConnector::start_receive_thread() {
     run_thread.store(true, std::memory_order_relaxed);
     receive_thread = new std::thread(&UnixDomainConnector::receive_processing_thread, this);
+    SET_THREAD_NAME(receive_thread->native_handle(), "snort3.ud_recv");
 }
 
 void UnixDomainConnector::stop_receive_thread() {
@@ -376,18 +413,21 @@ bool UnixDomainConnector::internal_transmit_message(const ConnectorMsg& msg) {
         return false;
     }
 
-    UnixDomainConnectorMsgHdr unixdomainc_hdr(msg.get_length());
-
-    if ( send( sock_fd, (const char*)&unixdomainc_hdr, sizeof(unixdomainc_hdr), 0 ) != sizeof(unixdomainc_hdr) )
+    if (send(sock_fd, msg.get_data(), msg.get_length(), 0) != msg.get_length())
     {
-        ErrorMessage("UnixDomainC: failed to transmit header\n");
+        ErrorMessage("UnixDomainC: failed to transmit message, error = %s\n", strerror(errno));
         return false;
     }
 
-    if (send(sock_fd, msg.get_data(), msg.get_length(), 0) != msg.get_length())
-        return false;
-
     return true;
+}
+
+ConnectorMsg UnixDomainConnector::allocate_connector_message(uint32_t length)
+{
+    UnixDomainConnectorMsgHdr unixdomainc_hdr(length);
+    uint8_t* data = new uint8_t[length + sizeof(UnixDomainConnectorMsgHdr)];
+    memcpy(data, &unixdomainc_hdr, sizeof(UnixDomainConnectorMsgHdr));
+    return ConnectorMsg(data, length + sizeof(UnixDomainConnectorMsgHdr), true, sizeof(UnixDomainConnectorMsgHdr));
 }
 
 bool UnixDomainConnector::transmit_message(const ConnectorMsg& msg, const ID&) {
@@ -479,6 +519,7 @@ static UnixDomainConnector* unixdomain_connector_tinit_answer(const UnixDomainCo
         close(sfd);
         return nullptr;
     }
+    increase_socket_send_buffer_size(peer_sfd, SOCKET_SEND_BUFFER_SIZE_MULTIPLIER);
 
     LogMessage("UnixDomainC: Accepted connection from %s \n", path);
     return new UnixDomainConnector(cfg, peer_sfd, idx);
@@ -599,6 +640,7 @@ void UnixDomainConnectorListener::start_accepting_connections(UnixDomainConnecto
     should_accept = true;
     accept_thread = new std::thread([this, handler = std::move(handler), config]()
     {
+        SET_THREAD_NAME(pthread_self(), "snort3.ud_acpt");
         sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if (sock_fd == -1) {
             ErrorMessage("UnixDomainC: socket error: %s \n", strerror(errno));
@@ -644,6 +686,7 @@ void UnixDomainConnectorListener::start_accepting_connections(UnixDomainConnecto
                 ErrorMessage("UnixDomainC: accept error: %s \n", strerror(errno));
                 continue;
             }
+            increase_socket_send_buffer_size(peer_sfd, SOCKET_SEND_BUFFER_SIZE_MULTIPLIER);
             error_count = 0;
             auto config_copy = new UnixDomainConnectorConfig(*config);
             auto unix_conn = new UnixDomainConnector(*config_copy, peer_sfd, 0);
@@ -688,6 +731,7 @@ void UnixDomainConnectorReconnectHelper::connect(const char* path, size_t idx)
         if (cfg.conn_retries) {
             
             connection_thread = new std::thread(connection_retry_handler, cfg, idx, update_handler, this);
+            SET_THREAD_NAME(connection_thread->native_handle(), "snort3.ud_conn");
             return; 
         } else {
             close(sfd);
@@ -723,6 +767,7 @@ void UnixDomainConnectorReconnectHelper::reconnect(size_t idx)
     }
     
     connection_thread = new std::thread(connection_retry_handler, cfg, idx, update_handler, this);
+    SET_THREAD_NAME(connection_thread->native_handle(), "snort3.ud_conn");
 }
 
 void UnixDomainConnectorReconnectHelper::set_reconnect_enabled(bool enabled)

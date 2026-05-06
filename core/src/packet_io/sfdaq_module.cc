@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -87,6 +87,12 @@ SFDAQModule::SFDAQModule() : Module("daq", sfdaq_help, s_params)
 {
     config = nullptr;
     module_config = nullptr;
+}
+
+SFDAQModule::~SFDAQModule()
+{
+    delete config;
+    delete module_config;
 }
 
 bool SFDAQModule::begin(const char* fqn, int idx, SnortConfig*)

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -58,7 +58,7 @@ class OpcuaFlowData;
 #define OPCUA_RHE_ENDPOINT_URL_MAX_SIZE 4096
 #define OPCUA_SECURITY_POLICY_URI_MAX_SIZE 255
 #define OPCUA_OPN_RECEIVER_CERT_THUMBPRINT_SIZE 20
-#define OPCUA_CHUNK_DATA_BUF_SIZE 8192
+#define OPCUA_CHUNK_DATA_BUF_SIZE 32767
 
 // Field and size constants
 #define OPCUA_MSG_HDR_LEN 24

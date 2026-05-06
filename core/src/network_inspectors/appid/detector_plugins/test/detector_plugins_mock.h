@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -45,8 +45,7 @@ void ParseWarning(WarningGroup, const char*, ...) { }
 // LCOV_EXCL_STOP
 
 // Stubs for appid sessions
-FlowData::FlowData(unsigned, Inspector*) : handler(nullptr), id(0)
-{ }
+FlowData::FlowData(unsigned) : id(0) { }
 FlowData::~FlowData() = default;
 FlowDataStore::~FlowDataStore() = default;
 
@@ -156,7 +155,8 @@ AppIdSession::AppIdSession(IpProtocol, const snort::SfIp* ip, uint16_t, AppIdIns
 #ifndef DISABLE_TENANT_ID
     ,uint32_t
 #endif
-    ) : snort::FlowData(inspector_id, (snort::Inspector*)&inspector),
+    ) : snort::FlowData(inspector_id),
+        inspector(inspector),
         config(stub_config), api(*(new snort::AppIdSessionApi(this, *ip))), odp_ctxt(odpctxt)
 {
     
@@ -295,7 +295,7 @@ void AppIdInspector::eval(snort::Packet*) { }
 void AppIdInspector::show(const snort::SnortConfig*) const { }
 void AppIdInspector::tinit() { }
 void AppIdInspector::tterm() { }
-void AppIdInspector::tear_down(snort::SnortConfig*) { }
+void AppIdInspector::tear_down(snort::SnortConfig*, bool) { }
 
 ClientDetector::ClientDetector() { }
 

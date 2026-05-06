@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -25,6 +25,8 @@
 #include <map>
 #include <string>
 #include <vector>
+
+#include "main/snort_types.h"
 
 #define DEFAULT_TRACE_LOG_LEVEL 1
 #define TRACE_CRITICAL_LEVEL 2
@@ -60,13 +62,12 @@ struct TraceOption
     const char* help;
 };
 
-class Trace
+class SO_PUBLIC Trace
 {
 public:
-    Trace(const Module& m);
-    Trace& operator=(const Trace&);
+    Trace(const Module*);
 
-    bool set(const std::string& option_name, uint8_t option_level);
+    bool set(const std::string& option_name, uint8_t option_level, const Module*);
     void set_module_trace() const;
 
     void clear();
@@ -77,7 +78,7 @@ public:
     const char* option_name(size_t index) const
     {
         assert(index < option_levels.size());
-        return options[index].name;
+        return option_names[index].c_str();
     }
 
     bool enabled(TraceOptionID trace_option_id, TraceLevel log_level = DEFAULT_TRACE_LOG_LEVEL) const
@@ -87,10 +88,12 @@ public:
     }
 
 private:
+    const TraceOption* get_trace_options(const Module*) const;
+
+private:
     std::string mod_name;
-    const TraceOption* options;
-    const Module& module;
     std::vector<TraceLevel> option_levels;
+    std::vector<std::string> option_names;
 };
 }
 

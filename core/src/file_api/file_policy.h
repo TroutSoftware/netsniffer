@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -84,6 +84,7 @@ private:
     FileVerdict match_file_signature(snort::Flow*, snort::FileInfo*);
     std::vector<FileRule> file_rules;
     std::map<std::string, FileVerdict> file_shas;
+    FileRule default_rule;
     bool type_enabled = false;
     bool signature_enabled = false;
     bool capture_enabled = false;

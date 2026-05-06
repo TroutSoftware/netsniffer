@@ -1,3 +1,258 @@
+2026-04-22: 3.12.2.0
+
+* appid: add nullchecks for appidDebug and appid_thread_pegs
+* appid: fix lua detector use-after-free during reload
+* appid: Lua API for publishing deviceinfo event
+* appid: two way ssl cache data
+* dce_rpc: cleanup tracker before setting new one
+* dce_rpc: clear stale file tracker references to prevent use-after-free
+* dce_rpc: close command memory leak fix
+* dce_rpc: create request memory leak fix
+* dce_rpc: fix memory leak in DCE2_SmbTrans2Open2Req
+* dce_rpc: underflow memory leak fix
+* dce_smb: prevent underflow in WriteAndX raw request
+* decompress: add initial decompression fuzzers and build support
+* detection: skip detection when UDP outer layer not found
+* extractor: print connection ID as UID whenever available
+* file_api: cache file_adv_pub_id for DataBus publish
+* file_api: generate advance log for unknown verdict
+* flow: add connection id field set by external module
+* flow: remove trailing spaces
+* framework: initialize Packet member variables
+* ftp_telnet: fix OOB read in e_literal param validation
+* ftp_telnet: fix OOB read in validate_date_format
+* ftp_telnet: fix out-of-bounds read in getIP1639 LPRT parser
+* ftp_telnet: fix out-of-bounds read in getIP2428 EPRT/EPSV parser
+* ftp_telnet: fix out-of-bounds read in TNC_EAL normalize loop
+* ftp_telnet: FTP Stale buffer pointer fix
+* http_inspect: publish on sse event boundaries
+* inspector_manager: reload buffer map on reload
+* log: ensure LogIPPkt won't call LogOuterIPHeader for missing layer
+* main: change main thread name back to just 'snort3'
+* main: cleanup thread names and exit without throwing core on FatalError
+* main: save and restore the old network policy on thread_term
+* packet_tracer: display icmp type and zero dst port
+* plugin_manager: fix load_id timing and thread_reinit for plugin reload
+* rate_filter: fix apply_to type
+* stream_tcp: skip r_win_base related validation for asymmetric Missed3whs
+
+2026-03-17: 3.12.1.0
+
+* appid: address FIXIT comments related to http inspector
+* appid: add unit test to cover DNS payload handler null dsession
+* appid: fix app detection when sni is spoofed
+* appid: removing dead code in service ssl
+* appid: sync host attributes on http event service detection
+* decompress: fix tsan data race
+* decompress: fix tsan data race in decompress_buffer_size
+* dns: prevent unbounded TCP session vector growth
+* extractor: add FILE logging
+* extractor: add more details in SSH
+* extractor: add SSH direction field
+* extractor: add SSH version field
+* extractor: compute shared (selected) algorithm in SSH
+* extractor: log SSH events
+* extractor: move details under 'algorithm' event
+* extractor: refine code
+* extractor: rename ssl.server_name_identifier
+* file_api: change file_service termination order after MPDatabus
+* file_api: fix tsan datarace in circular buffer, file cache and file policy
+* file_inspect: fix reload error messages
+* file names: add unit tests for get_main_file and get_instance_file
+* framework: return original string if list is empty
+* hash: clamp max_size to entry_size minimum
+* http_inspect: decompress optimization
+* http_inspect: fix Out-Of-Bounds read in find_next_header
+* kerberos: fix race condition when reloading and setting failed_login
+* logs: do not add / to run prefix for main thread logs
+* main: fallback to specified process affinity if we can't satisfy process.lua
+* mime: partial header memory optimization using vectors to preallocate memory rather than allocating for every new chunk of header appended
+* opcua: buf size increase and service modifications
+* plugins: move trash pickup from analyzers to main
+* pub_sub: add content-length validation
+* snort: relax memory order for reload_id updates
+* snort: tweak config dtor so that tuners are released before their inspector
+* socks: remove block_udp_fragmentation configuration option
+* ssl: adding additional parser data fields checks
+* stream: pass opaque during IP fragment reassembly in FragRebuild
+* stream_tcp: make sure to check for bad seq only when ISS is initialized
+
+2026-03-03: 3.12.0.0
+
+* alert_syslog, snort, syslog_trace: refactor syslog calls
+* appid: add missing stub for ssh event handler test
+* appid: fix shadow traffic registration (configures are unordered)
+* appid: fix unit test
+* doc: update file_id inspector is now file_inspect
+* file_inspect: disallow external enable if not configured
+* file_inspect: fix file cache race condition with lookup timeout
+* file_inspect: update capture buffers upon summing
+* file_trace: refactor
+* file_trace, stdout_trace, syslog_trace: support dynamic build
+* file_trace, stdout_trace, syslog_trace, trace: simplify implementation
+* imap, pop, smtp: clear search tool pointers on delete
+* inspector_manager: accommodate acquire_file_inspector calls from non-packet thread.
+* inspector_manager: add dump_inspector_map command for serviceability
+* inspector_manager: always dump map with verbose output
+* inspector_manager: fix cppcheck issue
+* inspectors: clear service buffer map on reload
+* ips: coerce id = 1 when configured via -R
+* module_manager: clear static parameter map when reloading plugins
+* module_manager: remove redundant
+* modules: provide config for dump stats accumulation
+* mp_data_bus: fix unit test
+* opcua: enable so lib reloads
+* opcua: update unit test mocks
+* parser: change error counts to atomic
+* payload_injector: add support for payload injection on s2c packets for http and http2 traffic
+* plugin_manager: by default do not dlclose plugin libraries at shutdown
+* plugin_manager: do not unload plugins that are not reloadable
+* plugin_manager: make load_id atomic
+* plugin_manager: propagate contexts for non-reloadable plugins
+* plugins: bump API version for base and all types
+* quic: don't cache inspector pointer in extractor
+* snort: add list_plugins command for serviceability
+* snort: add reg test feature --exit-after-reload
+* snort: finalize so_fix
+* snort: fix coverity issue with unlocked reload_id update
+* snort: fix --exit-after-reload help
+* snort_ml: use new get_inspector args
+* snort: run --show-plugins in help mode
+* socks: fix unit test stubs
+* ssl: don't call OPENSSL_cleanup at shutdown to minimize reported leaks
+* test: exclude from coverage unexecuted unit test stubs
+* text log: capture file name to avoid rollover issues
+* trace: remove unstable unit test
+* trace: support reloading trace logger plugin libraries
+* trace: update command implementations
+* trace: update managaer to use the new plug interface
+* trace: update to new plug interface
+
+2026-02-26: 3.11.1.0
+
+* appid: address FIXIT comments in detector plugins
+* appid: address FIXIT comments in service plugins
+* appid: detect ssl service during midstream
+* appid: inspect server port and client port during midstream; add support for NFSv4.1
+* appid: refine ssh event id handling
+* appid: remove assertion while processing dns pkt
+* dce_rpc: fix DCE/RPC context id list parsing out-of-bounds read
+* dns: clear insert flag for DoH/DoQ
+* dns: fix heap-buffer-overflow in DNS NSEC resource record decoder
+* doc: fix typo. Thanks to Nils Rennebarth for reporting the issue
+* file_api: add data about buffers to perf-monitor output
+* file_api: add packet tracer logs
+* file_api: support fields for extractor
+* flow: save the flow_id from the DAQ header struct of a Packet in the Flow object when it is allocated for a new flow
+* ftp_telnet: clear stale pointers in FTP_CLIENT_REQ to prevent UAF
+* ftp_telnet: fix 1-byte heap-buffer-overflow in telnet normalization
+* ftp_telnet: fix off-by-one OOB read in CopyField
+* ftp_telnet: fix out-of-bounds read vulnerabilities in normalize_telnet function
+* ftp_telnet: improve performance in TelnetSplitter
+* http_inspect: add decoded URI buffer with shared decoded path
+* http_inspect: add http_decoded_uri ips option
+* imap: fix out-of-bounds read in body length parsing
+* imap: replace memrchr with cross-platform snort_memrchr
+* kerberos: add config to set failed_login flag in kerberos client detector
+* mms: fix session spdu params OOB read
+* mms: guard against case where p->flow is null and dereference causes a crash
+* mp_dbus: lockless event ring
+* mp_unix_transport: verify connector message allocation
+* output: add coverity annotations for thread-safe startup/shutdown functions
+* perf_mon: coverity fixes
+* pub_sub: add get_content_length method to HttpEvent
+* rna: support for deviceinfo fingerprint and events processing
+* shadowtraffic: enhance logging to system support trace
+* shadowtraffic: Fix shadow traffic detection failing after config reload and crash during deploy
+* socks: socks inspector
+* src: fix copyright
+* ssl: alert on multiple chello certificate records
+* ssl: populate inspector in flow data
+* ssl: prevent caching zero size ssl data
+* stream: include the flow_id flow data output of the dump_flows command
+* stream: skip check for held packet retransmit if current packet is not a wire packet
+* stream_tcp: clear packet action flags after meta ACK processing to ensure parent packet processing is not affected
+* stream_tcp: default to overwrite upon zwp mismatch instead of session block
+* stream_tcp: reject SYNs with different sequence numbers than first seen SYN
+* test: fix comparison for pointers in check tests
+* wizard: additional coverage of unit tests
+* wizard: improve MMS curse against fragmented traffic
+* wizard: improve MMS presentation context search logic
+
+2026-01-22: 3.11.0.0
+
+* trace: implemented multi-logging feature to support new lua configuration
+
+2026-01-21: 3.10.2.0
+
+* appid: configurable midstream service discovery
+* appid: prefer QUIC client appid over SSL
+* appid: prevent out-of-bounds read in bootp option parsing
+* appid: prevent out-of-bounds read in sslv2 server-hello detection
+* control: refactor connection ownership model and improve thread safety
+* extractor: avoid reporting default values for missing SSL fields
+* file_api: coverity fix
+* flow: refactor dump_flows command to dump flow state in binary format
+* mime: fix compile issues
+* react: block flow when packets are not reset candidates
+* show_flows: implement utility program to convert dump_flows binary files to text Flow state data for each flow
+* smtp: handle split CRLF in multi-line response parsing
+* ssl: ssl client hello event is published with empty hostname
+
+2026-01-11: 3.10.1.0
+
+* alert_fast: ensure call_once definition doesn't collide in std vs glibc, thanks to krag on GitHub for suggesting this fix
+* alert_json: add support for logging appid, thanks to ssam18 on GitHub for suggesting this change
+* appid: add check to avoid setting brute force state for pending sessions that are pruned
+* appid: allow out-of-order packet inspection in third-party engine
+* appid: check for Lua table errors during initialization and cleanup
+* appid: enable out-of-order inspection by default
+* appid: fix client process regex mapping logic
+* appid: fix eve process handler event debug logging
+* appid: fix setting global ssh ignore flag
+* appid: fix size check in TFTP service detector
+* appid: mDNS TXT records parsing and deviceinfo event generation
+* appid: prevent multiple out-of-bounds reads in ssl
+* build: address compilation warnings
+* build: fix Coverity warnings in related components
+* cmake: fix pkg-config path for libdir, thanks to brianmcgillion on GitHub for submitting a similar fix
+* decoder: adding encode function for TransbridgeCodec
+* dns: add fix infinite recursion vulnerability
+* file: use new EVP functions rather than deprecated SHA functions
+* flow: add logs to show different ways a flow can fail to create
+* ftp_telnet: fix coverity errors and improve cmd_len configurability
+* ftp_telnet: fix ftp_cmd_pipe_index handling
+* ftp_telnet: Handle malformed traffic in ftp to generate alert
+* hash: update hashes to use new EVP functions, thanks to
+* http_inspect: add urlencoded to content-type list
+* http_inspect: fix coverity error
+* iec104: fix IEC 104 SQ0 bounds checks by removing duplicate asdu_size_map entries and using IO_GROUP sizes, preventing out-of-bounds reads
+* iec104: validate Type I length to prevent ASDU out-of-bounds read
+* ips_options: fix cursor position for byte_extract
+* ips_options: reset PCRE rule counts on new configuration loaded
+* main: update dioctl daqSnort latency common change
+* mime: add unit tests for data fitting memory limit
+* mime: add unit tests for data over memory limit
+* mime: add unit tests for file logging
+* mime: fix mime boundary parsing
+* mime: ignore field collection if not configured
+* mime: implement content parsing of multipart/form_data
+* mime: improve form-data collection for incomplete boundaries
+* mime: leave room for null-character in case of size limit hit
+* mime: remove unused forward-declaration
+* mime: rename class field to comply with the style
+* mime: return error code if cannot add headers for logging
+* pub_sub: add is_urlencoded method
+* sip: fix out-of-bounds reads in sip_parse_sdp_m
+* smb,dlp: update filename,filesize of FileInfo handling to enable dlp evaluation for repeated txns
+* smtp: usage of config cmds
+* snort2lua: fix failure in converting patterns containing commas
+* snort_ml: enable client body scanning by default
+* snort_ml: scan multipart form data
+* ssl: free certificate data if certificate length is 0
+* ssl: tls client hello check out of bounds fix
+* unified2: use proper API for obtaining VLAN ID from packet
+
 2025-11-24: 3.10.0.0
 
 * appid: ftp parsing bounds check

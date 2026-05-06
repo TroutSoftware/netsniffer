@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -190,7 +190,7 @@ void ServiceDiscoveryState::set_service_id_failed(AppIdSession& asd, const SfIp*
     }
     else if ( ( state == ServiceState::SEARCHING_PORT_PATTERN ) and
         ( asd.service_search_state == SESSION_SERVICE_SEARCH_STATE::PENDING ) and
-        asd.service_candidates.empty() and
+        asd.service_candidates.empty() and invalid_delta == 0 and
         !asd.get_session_flags(APPID_SESSION_MID | APPID_SESSION_OOO) )
     {
         if ( ( asd.protocol == IpProtocol::TCP ) or ( asd.protocol == IpProtocol::UDP ) )

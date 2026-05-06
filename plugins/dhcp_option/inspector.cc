@@ -340,9 +340,9 @@ class Inspector : public snort::Inspector {
       p->flow->free_flow_data(FlowData::get_id());
     }
 
-    auto flowData = std::make_unique<FlowData>(
-        this); // Store flow data in unique ptr so clean up will be automatic if
-               // not used
+    auto flowData =
+        std::make_unique<FlowData>(); // Store flow data in unique ptr so clean
+                                      // up will be automatic if not used
 
     while (index.hasMore()) {
       auto type = p->data[index++];

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -173,7 +173,7 @@ static const InspectApi s7commplus_api =
         sizeof(InspectApi),
         INSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         S7COMMPLUS_NAME,
         S7COMMPLUS_HELP,

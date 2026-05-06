@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -37,6 +37,7 @@
 #include "log/messages.h"
 #include "main/snort.h"
 #include "main/snort_config.h"
+#include "utils/util.h"
 
 static std::mutex _receive_mutex;
 static std::shared_mutex _connection_update_mutex;
@@ -162,6 +163,12 @@ bool MPUnixDomainTransport::send_to_transport(MPEventInfo &event)
         for (auto &&sc_handler : this->side_channels)
         {
             auto msg = sc_handler->side_channel->alloc_transmit_message(sizeof(MPTransportMessageHeader) + transport_message.header.data_length);
+            if (!msg)
+            {
+                MPTransportLog("Failed to send message to side channel\n");
+                dynamic_transport_stats.send_errors++;
+                continue;
+            }
             memcpy(msg->content, &transport_message, sizeof(MPTransportMessageHeader));
             memcpy(msg->content + sizeof(MPTransportMessageHeader), transport_message.data, transport_message.header.data_length);
             auto send_result = sc_handler->side_channel->transmit_message(msg);
@@ -460,6 +467,7 @@ void MPUnixDomainTransport::init_side_channels()
 
     assert(!this->consume_thread);
     this->consume_thread = new std::thread(&MPUnixDomainTransport::process_messages_from_side_channels, this);
+    SET_THREAD_NAME(this->consume_thread->native_handle(), "snort3.mp_recv");
 }
 
 void MPUnixDomainTransport::cleanup_side_channels()

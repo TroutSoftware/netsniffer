@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -30,6 +30,7 @@
 #include "service_inspectors/http_inspect/http_enum.h"
 #include "service_inspectors/http_inspect/http_field.h"
 #include "service_inspectors/http_inspect/http_msg_body_cl.h"
+#include "service_inspectors/http_inspect/http_msg_head_shared.h"
 
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
@@ -64,6 +65,7 @@ void HttpMsgSection::clear() {}
 #ifdef REG_TEST
 void HttpMsgBody::print_body_section(FILE*, const char*) {}
 #endif
+int32_t HttpMsgHeadShared::get_content_type() { return content_type; }
 
 HttpMsgSection::HttpMsgSection(const uint8_t* buffer, const uint16_t buf_size,
     HttpFlowData* session_data_, HttpCommon::SourceId source_id_, bool buf_owner,

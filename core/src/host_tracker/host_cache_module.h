@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -84,15 +84,22 @@ public:
     std::string get_host_cache_stats();
     std::string get_host_cache_segment_stats(int seg_idx);
 
+    const char* get_dump_file() const
+    { return dump_file.c_str(); }
+
     void set_trace(const snort::Trace*) const override;
     const snort::TraceOption* get_trace_options() const override;
+
+    static void dump();
 
 private:
     std::string dump_file;
     size_t memcap = 0;
     uint8_t segments = 1;
 };
+
 extern THREAD_LOCAL const snort::Trace* host_cache_trace;
+void host_cache_module_dump();
 
 #endif
 

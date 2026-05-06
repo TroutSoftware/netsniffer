@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -112,6 +112,7 @@ static std::unordered_map<std::string, SvcList> buffer_map;
 
 static const char* get_service(const char* buf)
 {
+    assert(in_main_thread());
     auto it = buffer_map.find(buf);
 
     if ( it == buffer_map.end() )
@@ -122,6 +123,7 @@ static const char* get_service(const char* buf)
 
 static unsigned get_num_services(const char* buf)
 {
+    assert(in_main_thread());
     auto it = buffer_map.find(buf);
 
     if ( it == buffer_map.end() )
@@ -130,8 +132,16 @@ static unsigned get_num_services(const char* buf)
     return it->second.size();
 }
 
+void clear_buffer_map()
+{
+    assert(in_main_thread());
+    buffer_map.clear();
+}
+
 void update_buffer_map(const char** bufs, const char* svc)
 {
+    assert(in_main_thread());
+
     if ( !bufs )
         return;
 
@@ -147,6 +157,7 @@ void update_buffer_map(const char** bufs, const char* svc)
 
 void add_default_services(SnortConfig* sc, const std::string& buf, OptTreeNode* otn)
 {
+    assert(in_main_thread());
     SvcList& list = buffer_map[buf];
 
     for ( auto& svc : list )
@@ -183,6 +194,9 @@ static const char* guess_service(const char* opt)
 
     if ( !strncmp(opt, "sip_", 4) )
         return "sip";
+
+    if ( !strncmp(opt, "socks_", 6) )
+        return "socks";
 
     if ( !strncmp(opt, "ssl_", 4) )
         return "ssl";
@@ -713,7 +727,11 @@ unsigned compile_mpses(struct SnortConfig* sc, bool parallel)
     }
 
     for ( unsigned i = 0; i < max; ++i )
-        workers.push_back(new std::thread(compile_mpse, sc, i, &count));
+    {
+        auto* w = new std::thread(compile_mpse, sc, i, &count);
+        SET_THREAD_NAME(w->native_handle(), "snort3.compile");
+        workers.push_back(w);
+    }
 
     for ( auto* w : workers )
     {

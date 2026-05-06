@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -26,6 +26,8 @@
 
 #include "control/control.h"
 #include "detection/rules.h"
+#include "flow/dump_flows_descriptor.h"
+#include "flow/dump_flows.h"
 #include "flow/flow_cache.h"
 #include "log/messages.h"
 #include "lua/lua.h"
@@ -33,11 +35,11 @@
 #include "main/snort.h"
 #include "main/snort_config.h"
 #include "managers/inspector_manager.h"
+#include "managers/module_manager.h"
 #include "stream/flush_bucket.h"
 #include "stream/tcp/tcp_stream_tracker.h"
 #include "time/packet_time.h"
 #include "trace/trace.h"
-#include "flow/filter_flow_critera.h"
 
 using namespace snort;
 using namespace std;
@@ -52,7 +54,7 @@ static const TraceOption stream_trace_options[] =
 #endif
 
 THREAD_LOCAL const Trace* stream_trace = nullptr;
-static THREAD_LOCAL timeval reload_time { };
+static uint32_t hold_time = 0;
 
 //-------------------------------------------------------------------------
 // stream module
@@ -157,199 +159,230 @@ const TraceOption* StreamModule::get_trace_options() const
 #endif
 }
 
-static int dump_flows(lua_State* L)
+enum DumpFlowsParams {FileName, Count, Protocol, ipA, ipB, portA, portB, Resume};
+struct DumpFlowsLuaParameters
+{
+    DumpFlowsParams param;
+    unsigned lua_index;
+};
+
+std::vector<DumpFlowsLuaParameters> df_params =
+{
+    { DumpFlowsParams::FileName, 1 },
+    { DumpFlowsParams::Count, 2 },
+    { DumpFlowsParams::Protocol, 3 },
+    { DumpFlowsParams::ipA, 4 },
+    { DumpFlowsParams::ipB, 5 },
+    { DumpFlowsParams::portA, 6 },
+    { DumpFlowsParams::portB, 7 },
+    { DumpFlowsParams::Resume, 8 }
+};
+
+std::vector<DumpFlowsLuaParameters> dfb_params =
+{
+    { DumpFlowsParams::FileName, 1 },
+    { DumpFlowsParams::Protocol, 2 },
+    { DumpFlowsParams::ipA, 3 },
+    { DumpFlowsParams::ipB, 4 },
+    { DumpFlowsParams::portA, 5 },
+    { DumpFlowsParams::portB, 6 },
+    { DumpFlowsParams::Resume, 7 }
+};
+
+std::vector<DumpFlowsLuaParameters> dfs_params =
+{
+    { DumpFlowsParams::Protocol, 1 },
+    { DumpFlowsParams::ipA, 2 },
+    { DumpFlowsParams::ipB, 3 },
+    { DumpFlowsParams::portA, 4 },
+    { DumpFlowsParams::portB, 5 },
+};
+
+static int validate_cmd_parameters(ControlConn* ctrlcon, lua_State* L, std::vector<DumpFlowsLuaParameters>& cmd_params, DumpFlowsFilter* dff)
+{
+    for (auto const& param : cmd_params)
+    {
+        switch ( param.param )
+        {
+            case DumpFlowsParams::FileName:
+            {
+                const char* file_name = luaL_optstring(L, param.lua_index, nullptr);
+                if ( !file_name )
+                {
+                    LogRespond(ctrlcon, "Dump flows requires a file name\n");
+                    return false;
+                }
+                else
+                    dff->file_name = file_name;
+
+                break;
+            }
+
+            case DumpFlowsParams::Count:
+                dff->count = luaL_optint(L, param.lua_index, 4);
+                if ( dff->count >  1000 )
+                {
+                    LogRespond(ctrlcon, "Invalid count value: %u.  Count value must be between 1 - 1000\n", dff->count);
+                    return false;
+                }
+                break;
+
+            case DumpFlowsParams::Protocol:
+            {
+                const char* protocol = luaL_optstring(L, param.lua_index, nullptr);
+                if ( !protocol )
+                {
+                    LogRespond(ctrlcon, "protocol must be a string or convertible to a string\n");
+                    return false;
+                }
+
+                if ( *protocol )
+                {
+                    auto proto_it = protocol_to_type.find(protocol);
+                    if ( proto_it == protocol_to_type.end() )
+                    {
+                        LogRespond(ctrlcon, "Invalid protocol: %s.  Valid protocols are IP/TCP/UDP/ICMP\n",
+                            protocol);
+                        return false;
+                    }
+                    else
+                        dff->proto_type = proto_it->second;
+                }
+
+                break;
+            }
+            
+            case DumpFlowsParams::ipA:
+            {
+                const char* ip_addr = luaL_optstring(L, param.lua_index, nullptr);
+                if ( ip_addr  and !dff->set_ipA(ip_addr) )
+                {
+                    LogRespond(ctrlcon, "Invalid source ip\n");
+                    return false;
+                }
+
+                break;
+            }
+
+            case DumpFlowsParams::ipB:
+            {
+                const char* ip_addr = luaL_optstring(L, param.lua_index, nullptr);
+                if ( ip_addr and !dff->set_ipB(ip_addr) )
+                {
+                    LogRespond(ctrlcon, "Invalid destination ip\n");
+                    return false;
+                }
+
+                break;
+            }
+
+            case DumpFlowsParams::portA:
+            {
+                unsigned port = luaL_optint(L, param.lua_index, 0);
+                if ( port > 65535 )
+                {
+                    LogRespond(ctrlcon, "source_port must be between 0 - 65535\n");
+                    return false;
+                }
+                if ( port )
+                    dff->set_portA(static_cast<uint16_t>(port));
+
+                break;
+            }
+
+            case DumpFlowsParams::portB:
+            {
+                unsigned port = luaL_optint(L, param.lua_index, 0);
+                if ( port > 65535 )
+                {
+                    LogRespond(ctrlcon, "destination_port must be between 0 - 65535\n");
+                    return false;
+                }
+
+                if ( port )
+                    dff->set_portB(static_cast<uint16_t>(port));
+                break;
+            }
+            
+            case DumpFlowsParams::Resume:
+                dff->resume = -1;
+#ifdef REG_TEST
+                dff->resume = luaL_optint(L, param.lua_index, -1);
+#endif
+                break;
+        }
+    }
+
+    return true;   
+}
+
+static int dump_flows_worker(lua_State* L, bool enable_binary)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    PktType proto_type = PktType::NONE;
-    Inspector* inspector = InspectorManager::get_inspector("stream", Module::GLOBAL, IT_STREAM);
+    Inspector* inspector = InspectorManager::get_inspector("stream", Module::GLOBAL);
+
     if (!inspector)
     {
         LogRespond(ctrlcon, "Dump flows requires stream to be configured\n");
         return -1;
     }
-    const char* file_name = luaL_optstring(L, 1, nullptr);
-    if (!file_name)
+
+    DumpFlowsFilter* dff = nullptr;
+    if ( enable_binary )
     {
-        LogRespond(ctrlcon, "Dump flows requires a file name\n");
-        return -1;
-    }
-    int count = luaL_optint(L, 2, 4);
-    if (0 >= count || 100 < count)
-    {
-        LogRespond(ctrlcon, "Dump flows requires a count value of 1-100\n");
-        return -1;
-    }
-    const char* protocol = luaL_optstring(L, 3, nullptr);
-    if (!protocol)
-    {
-        LogRespond(ctrlcon, "protocol must be a string or convertible to a string\n");
-        return -1;
-    }
-    
-    if (protocol[0] != '\0')
-    {
-        auto proto_it = protocol_to_type.find(protocol);
-        if (proto_it == protocol_to_type.end())
+        dff = new DumpFlowsFilterOr(enable_binary);
+        if ( !validate_cmd_parameters(ctrlcon, L, dfb_params, dff) )
         {
-            LogRespond(ctrlcon, "valid protocols are IP/TCP/UDP/ICMP\n");
+            delete dff;
             return -1;
         }
-        else
-            proto_type = proto_it->second;
+    }
+    else
+    {
+        dff = new DumpFlowsFilterAnd(enable_binary);
+        if ( !validate_cmd_parameters(ctrlcon, L, df_params, dff) )
+        {
+            delete dff;
+            return -1;
+        }
     }
 
-    std::string source_ip = luaL_optstring(L, 4, nullptr);
-    if (!source_ip.c_str())
-    {
-        LogRespond(ctrlcon, "source_ip must be a string or convertible to a string\n");
-        return -1;
-    }
-    std::string destination_ip= luaL_optstring(L, 5, nullptr);
-    if (!destination_ip.c_str())
-    {
-        LogRespond(ctrlcon, "destination_ip must be a string or convertible to a string\n");
-        return -1;
-    }
-    int source_port = luaL_optint(L, 6, -1);
-    if ( source_port<0 || source_port>65535 )
-    {
-        LogRespond(ctrlcon, "source_port must be between 0-65535\n");
-        return -1;
-    }
-    int destination_port = luaL_optint(L, 7, -1);
-    if ( destination_port<0 || destination_port>65535)
-    {
-        LogRespond(ctrlcon, "destination_port must be between 0-65535\n");
-        return -1;
-    }
-
-/*resume count is used to complete the command execution from
-uncompleted queue*/
-#ifdef REG_TEST
-    int resume = luaL_optint(L, 8, -1);
-#endif
-    DumpFlows* df = new DumpFlows(count, ctrlcon
-#ifdef REG_TEST
-        , resume
-#endif
-    );
-    SfIp src_ip,src_subnet;
-    if (!df->set_ip(std::move(source_ip), src_ip, src_subnet))
-    {
-        LogRespond(ctrlcon, "Invalid source ip\n");
-        delete df;
-        return -1;
-    }
-    SfIp dst_ip,dst_subnet;
-    if (!df->set_ip(std::move(destination_ip), dst_ip, dst_subnet))
-    {
-        LogRespond(ctrlcon, "Invalid destination ip\n");
-        delete df;
-        return -1;
-    }
-
-    FilterFlowCriteria ffc;
-    ffc.pkt_type = proto_type;
-    ffc.source_port = static_cast<uint16_t>(source_port);
-    ffc.destination_port = static_cast<uint16_t>(destination_port);
-    ffc.source_sfip=src_ip;
-    ffc.destination_sfip=dst_ip;
-    ffc.source_subnet_sfip=src_subnet;
-    ffc.destination_subnet_sfip=dst_subnet;
-    df->set_filter_criteria(ffc);
-
-    if (!df->open_files(file_name))
-    {
-        delete df;
-        return -1;
-    }
+    // set filter for flow selection
+    DumpFlows* df = new DumpFlows(ctrlcon, dff);
 
     LogRespond(ctrlcon, "== dumping connections\n");
     main_broadcast_command(df, ctrlcon);
     return 0;
 }
 
+static int dump_flows(lua_State* L)
+{
+    return dump_flows_worker(L, false);
+}
+
+static int dump_flows_binary(lua_State* L)
+{
+    return dump_flows_worker(L, true);
+}
+    
 static int dump_flows_summary(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    PktType proto_type = PktType::NONE;
-    Inspector* inspector = InspectorManager::get_inspector("stream", Module::GLOBAL, IT_STREAM);
+    Inspector* inspector = InspectorManager::get_inspector("stream", Module::GLOBAL);
+
     if (!inspector)
     {
         LogRespond(ctrlcon, "Dump flows requires stream to be configured\n");
         return -1;
     }
-    const char* protocol = luaL_optstring(L, 1, nullptr);
-    if (!protocol)
-    {
-        LogRespond(ctrlcon, "protocol must be a string or convertible to a string\n");
-        return -1;
-    }
     
-    if (protocol[0] != '\0')
+    DumpFlowsFilter* dff = new DumpFlowsFilterAnd(false);
+    if ( !validate_cmd_parameters(ctrlcon, L, dfs_params, dff) )
     {
-        auto proto_it = protocol_to_type.find(protocol);
-        if (proto_it == protocol_to_type.end())
-        {
-            LogRespond(ctrlcon, "valid protocols are IP/TCP/UDP/ICMP\n");
-            return -1;
-        }
-        else
-            proto_type = proto_it->second;
-    }
-
-    std::string source_ip = luaL_optstring(L, 2, nullptr);
-    if (!source_ip.c_str())
-    {
-        LogRespond(ctrlcon, "source_ip must be a string or convertible to a string\n");
+        delete dff;
         return -1;
     }
-    std::string destination_ip= luaL_optstring(L, 3, nullptr);
-    if (!destination_ip.c_str())
-    {
-        LogRespond(ctrlcon, "destination_ip must be a string or convertible to a string\n");
-        return -1;
-    }
-    int source_port = luaL_optint(L, 4, -1);
-    if ( source_port<0 || source_port>65535 )
-    {
-        LogRespond(ctrlcon, "source_port must be between 0-65535\n");
-        return -1;
-    }
-    int destination_port = luaL_optint(L, 5, -1);
-    if ( destination_port<0 || destination_port>65535)
-    {
-        LogRespond(ctrlcon, "destination_port must be between 0-65535\n");
-        return -1;
-    }
-
-    DumpFlowsSummary* dfs = new DumpFlowsSummary(ctrlcon);
-
-    SfIp src_ip,src_subnet;
-    if (!dfs->set_ip(std::move(source_ip), src_ip, src_subnet))
-    {
-        LogRespond(ctrlcon, "Invalid source ip\n");
-        delete dfs;
-        return -1;
-    }
-    SfIp dst_ip,dst_subnet;
-    if (!dfs->set_ip(std::move(destination_ip), dst_ip, dst_subnet))
-    {
-        LogRespond(ctrlcon, "Invalid destination ip\n");
-        delete dfs;
-        return -1;
-    }
-
-    FilterFlowCriteria ffc;
-    ffc.pkt_type = proto_type;
-    ffc.source_port = static_cast<uint16_t>(source_port);
-    ffc.destination_port = static_cast<uint16_t>(destination_port);
-    ffc.source_sfip=src_ip;
-    ffc.destination_sfip=dst_ip;
-    ffc.source_subnet_sfip=src_subnet;
-    ffc.destination_subnet_sfip=dst_subnet;
-    dfs->set_filter_criteria(ffc);
-
+    DumpFlowsSummary* dfs = new DumpFlowsSummary(ctrlcon, dff);
 
     LogRespond(ctrlcon, "== dumping connection summaries\n");
     main_broadcast_command(dfs, ctrlcon);
@@ -358,9 +391,9 @@ static int dump_flows_summary(lua_State* L)
 
 static const Command stream_cmds[] =
 {
-    { "dump_flows", dump_flows, nullptr, "dump the flow table" },
-    { "dump_flows_summary", dump_flows_summary, nullptr, "dump the flow summaries" },
-
+    { "dump_flows", dump_flows, nullptr, "dump the flow table in text format" },
+    { "dump_flows_binary", dump_flows_binary, nullptr, "dump the flow table in binary format" },
+    { "dump_flows_summary", dump_flows_summary, nullptr, "dump flow table summary" },
     { nullptr, nullptr, nullptr, nullptr }
 };
 
@@ -383,7 +416,13 @@ const RuleMap* StreamModule::get_rules() const
 { return stream_rules; }
 
 const StreamModuleConfig* StreamModule::get_data()
-{ return &config; }
+{
+    hold_time = config.hold_time;
+    return &config;
+}
+
+uint32_t StreamModule::get_hold_time()
+{ return hold_time; }
 
 bool StreamModule::begin(const char* fqn, int, SnortConfig*)
 {
@@ -402,7 +441,7 @@ bool StreamModule::set(const char* fqn, Value& v, SnortConfig* c)
 #endif
 
     if ( v.is("held_packet_timeout") )
-        config.held_packet_timeout = v.get_uint32();
+        config.hold_time = v.get_int32();
 
     else if ( v.is("ip_frags_only") )
     {
@@ -472,8 +511,6 @@ bool StreamModule::end(const char* fqn, int, SnortConfig* sc)
             sc->register_reload_handler(reload_resource_manager);
         else
             delete reload_resource_manager;
-
-        sc->register_reload_handler(new HPQReloadTuner(config.held_packet_timeout));
     }
 
     return true;
@@ -620,7 +657,8 @@ void StreamModuleConfig::show() const
     ConfigLogger::log_value("prune_flows", flow_cache_cfg.prune_flows);
     ConfigLogger::log_limit("require_3whs", hs_timeout, -1, hs_timeout < 0 ? hs_timeout : -1);
     ConfigLogger::log_value("drop_stale_packets", drop_stale_packets ? "enabled" : "disabled");
-    
+    ConfigLogger::log_value("held_packet_timeout", hold_time);
+
     for (int i = to_utype(PktType::IP); i < to_utype(PktType::PDU); ++i)
     {
         std::string tmp;
@@ -638,18 +676,3 @@ void StreamModuleConfig::show() const
     }
 }
 
-bool HPQReloadTuner::tinit()
-{
-    packet_gettimeofday(&reload_time);
-    return TcpStreamTracker::adjust_expiration(held_packet_timeout, reload_time);
-}
-
-bool HPQReloadTuner::tune_packet_context()
-{
-    return !TcpStreamTracker::release_held_packets(reload_time, max_work);
-}
-
-bool HPQReloadTuner::tune_idle_context()
-{
-    return !TcpStreamTracker::release_held_packets(reload_time, max_work_idle);
-}

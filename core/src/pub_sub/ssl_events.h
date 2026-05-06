@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -82,10 +82,10 @@ public:
     virtual ~SslTlsMetadataBaseEvent() override = default;
 
     /* Values expected to be in host machine byte order */
-    virtual uint16_t get_version() const = 0;
-    virtual uint16_t get_curve() const = 0;
-    virtual uint16_t get_cipher() const = 0;
-    virtual const std::string& get_server_name_identifier() const = 0;
+    virtual int32_t get_version() const = 0;
+    virtual int32_t get_curve() const = 0;
+    virtual int32_t get_cipher() const = 0;
+    virtual const std::string& get_server_name() const = 0;
     virtual const std::string& get_subject() const = 0;
     virtual const std::string& get_issuer() const = 0;
     virtual const std::string& get_validation_status() const = 0;

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -797,7 +797,7 @@ static int ftp_validate_port(const uint8_t* data, uint16_t size, SfIp* address, 
     uint32_t addr;
     uint32_t addr2;
 
-    memset(address,0,sizeof(*address));
+    address->clear();
     *port = 0;
 
     end = data + size;
@@ -864,7 +864,7 @@ static int ftp_validate_eprt(const uint8_t* data, uint16_t size, SfIp* address, 
     uint32_t tmp;
     char tmp_str[INET6_ADDRSTRLEN+1];
 
-    memset(address, 0, sizeof(*address));
+    address->clear();
     *port = 0;
 
     end = data + size;
@@ -893,7 +893,6 @@ static int ftp_validate_eprt(const uint8_t* data, uint16_t size, SfIp* address, 
     }
     tmp_str[index] = '\0'; // make the copied portion be nul terminated.
 
-    // FIXIT-L recode logic above and this call to call sfip_pton instead...
     if (address->pton(addrFamilySupported, tmp_str) != SFIP_SUCCESS)
         return -1;
 

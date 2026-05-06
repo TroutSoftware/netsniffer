@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -36,13 +36,14 @@
 using namespace snort;
 using namespace std;
 
-#define FLUSHER_THREAD_NAME "std_connector.flusher"
+#define FLUSHER_AFFINITY_NAME "std_connector.flusher"
+#define FLUSHER_THREAD_NAME "snort3.stdc_fl"
 
 static void flusher(const SnortConfig* initial_config, const char* output,
     mutex& rings_mutex, list<Ring2>& rings, atomic_flag& latest, atomic_flag& run)
 {
     ThreadConfig *thread_config = initial_config->thread_config;
-    thread_config->implement_named_thread_affinity(FLUSHER_THREAD_NAME);
+    thread_config->implement_named_thread_affinity(FLUSHER_AFFINITY_NAME);
     SET_THREAD_NAME(pthread_self(), FLUSHER_THREAD_NAME);
 
     SnortConfig local_config;

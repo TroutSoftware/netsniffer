@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -121,7 +121,7 @@ AppIdSession::AppIdSession(IpProtocol, const SfIp* ip, uint16_t, AppIdInspector&
 #ifndef DISABLE_TENANT_ID
     ,uint32_t
 #endif
-    ) : FlowData(inspector_id, &inspector), config(stub_config),
+    ) : FlowData(inspector_id), inspector(inspector), config(stub_config),
         api(*(new AppIdSessionApi(this, *ip))), odp_ctxt(stub_odp_ctxt)
 {}
 
@@ -175,8 +175,6 @@ void AppIdDebug::set_constraints(const char*, const AppIdDebugSessionConstraints
 }
 
 // Profiler mock functions
-void Profiler::register_module(Module*) { }
-void Profiler::register_module(const char*, const char*, Module*) { }
 void Profiler::consolidate_stats(snort::ProfilerType) { }
 void Profiler::reset_stats(snort::ProfilerType) { }
 void Profiler::show_stats() { }

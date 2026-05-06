@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -392,7 +392,7 @@ void BatchedLogManager::init()
     snort::ThreadConfig* thread_config = snort::SnortConfig::get_conf()->thread_config;
     thread_config->implement_named_thread_affinity("BatchedLoggerWriter");
     writer_thread = std::thread(writer_thread_func);
-    SET_THREAD_NAME(writer_thread.native_handle(), "snort.logger");
+    SET_THREAD_NAME(writer_thread.native_handle(), "snort3.logger");
     thread_config->implement_thread_affinity(STHREAD_TYPE_MAIN, snort::ThreadConfig::DEFAULT_THREAD_ID);
 
     std::atexit(BatchedLogManager::shutdown);

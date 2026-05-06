@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -41,7 +41,7 @@ static Flow flow;
 void ApplicationDescriptor::set_id(const Packet&, AppIdSession&, AppidSessionDirection, AppId, AppidChangeBits&) { }
 void AppIdModule::reset_stats() {}
 
-Inspector* InspectorManager::get_inspector(char const*, bool, const snort::SnortConfig*)
+Inspector* InspectorManager::get_inspector(char const*, Module::Usage)
 {
     return nullptr;
 }

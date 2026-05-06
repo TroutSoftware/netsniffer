@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2007-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -59,6 +59,8 @@
     ((uint32_t)((uint32_t)(((const uint8_t*)(msb_ptr))[0] << 16) \
     + (uint32_t)(((const uint8_t*)(msb_ptr))[1] << 8) \
     + (uint32_t)(((const uint8_t*)(msb_ptr))[2])))
+
+#define SSL_CERTS_LEN_SIZE 3
 
 #define SSL_VERFLAGS \
     (SSL_VER_SSLV2_FLAG | SSL_VER_SSLV3_FLAG | \
@@ -248,17 +250,17 @@ struct SO_PUBLIC SSLV3ServerCertData
 
 struct SO_PUBLIC TLSConnectionParams
 {
-    uint16_t curve = 0;
-    uint16_t cipher = 0;
-    uint16_t selected_tls_version = 0;
+    int32_t curve = -1;
+    int32_t cipher = -1;
+    int32_t selected_tls_version = -1;
 };
 
 struct SO_PUBLIC TLSConnectionData
 {
     void process(const SSLV3ServerCertData& cert_data);
     void process(const SSLV3ClientHelloData& client_hello_data);
-    
-    std::string server_name_identifier;
+
+    std::string server_name;
     std::string subject_info;
     std::string issuer_info;
     TLSConnectionParams tls_params;
@@ -350,28 +352,33 @@ struct ServiceSSLV3ExtensionSupportedVersion
     SSL_BAD_VER_FLAG | SSL_BAD_TYPE_FLAG | \
     SSL_TRAILING_GARB_FLAG | SSL_UNKNOWN_FLAG))
 
-#define SSL_HEARTBLEED_REQUEST  0x01
-#define SSL_HEARTBLEED_RESPONSE 0x02
-#define SSL_HEARTBLEED_UNKNOWN  0x04
+// SSL alert flags
+#define SSL_ALERT_HEARTBLEED_REQUEST          0x01
+#define SSL_ALERT_HEARTBLEED_RESPONSE         0x02
+#define SSL_ALERT_HEARTBLEED_UNKNOWN          0x04
+#define SSL_ALERT_CHELLO_MULTIPLE_RECORDS     0x08
+#define SSL_ALERT_CERT_MULTIPLE_RECORDS       0x10
 
 namespace snort
 {
 
-enum ParseHelloResult : uint8_t
+enum ParseResult : uint8_t
 {
     SUCCESS = 0,
     FRAGMENTED_PACKET = 1,
-    FAILURE = 2
+    MULTIPLE_RECORDS = 2,
+    FAILURE = 3
 };
+
 
 SO_PUBLIC uint32_t SSL_decode(
     const uint8_t* pkt, int size, uint32_t pktflags, uint32_t prevflags,
     uint8_t* alert_flags, uint16_t* partial_rec_len, int hblen, uint32_t* info_flags = nullptr,
     SSLV3ClientHelloData* data = nullptr, SSLV3ServerCertData* server_cert_data = nullptr, TLSConnectionParams* tls_connection_params = nullptr);
 
-    ParseHelloResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3ClientHelloData*);
-    ParseHelloResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnectionParams*);
-    bool parse_server_certificates(SSLV3ServerCertData* server_cert_data);
+    ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3ClientHelloData*);
+    ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnectionParams*);
+    ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data);
     bool parse_server_key_exchange(const uint8_t* pkt, uint16_t size, TLSConnectionParams*);
 
 SO_PUBLIC bool IsTlsClientHello(const uint8_t* ptr, const uint8_t* end);
@@ -379,4 +386,3 @@ SO_PUBLIC bool IsTlsServerHello(const uint8_t* ptr, const uint8_t* end);
 SO_PUBLIC bool IsSSL(const uint8_t* ptr, int len, int pkt_flags);
 }
 #endif
-

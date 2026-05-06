@@ -12,6 +12,7 @@ option ( STATIC_LOGGERS "include loggers in binary" ON )
 option ( STATIC_IPS_ACTIONS "include ips actions in binary" ON )
 option ( STATIC_IPS_OPTIONS "include ips options in binary" ON )
 option ( STATIC_SEARCH_ENGINES "include search engines in binary" ON )
+option ( STATIC_TRACERS "include tracers in binary" ON )
 option ( ENABLE_STATIC_DAQ "link static DAQ modules" ON )
 
 # features
@@ -24,6 +25,10 @@ option ( ENABLE_COREFILES "Prevent Snort from generating core files" ON )
 option ( ENABLE_LARGE_PCAP "Enable support for pcaps larger than 2 GB" OFF )
 option ( ENABLE_STDLOG "Use file descriptor 3 instead of stdout for alerts" OFF )
 option ( ENABLE_TSC_CLOCK "Use timestamp counter register clock (x86 and arm only)" OFF )
+
+option ( ENABLE_FUZZERS "enable fuzzers" OFF )
+option ( ENABLE_FUZZ_SANITIZER "Enable libFuzzer fuzzer sanitizer builds" OFF )
+set ( LIB_FUZZING_ENGINE "" CACHE FILEPATH "Path to external fuzzing engine library (e.g. FuzzingEngine.a)" )
 
 # documentation
 option ( MAKE_HTML_DOC "Create the HTML documentation" ON )
@@ -51,6 +56,7 @@ option ( ENABLE_UB_SANITIZER "enable undefined behavior sanitizer support" OFF )
 option ( ENABLE_TCMALLOC "enable using tcmalloc for dynamic memory management" OFF )
 option ( ENABLE_JEMALLOC "enable using jemalloc for dynamic memory management" OFF )
 option ( ENABLE_CODE_COVERAGE "Whether to enable code coverage support" OFF )
+option ( ENABLE_FUZZ_COVERAGE "Enable settings for collecting fuzzer code coverage" OFF )
 
 # signals
 set (

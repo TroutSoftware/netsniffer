@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2010-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -206,6 +206,8 @@ NormalizeModule::~NormalizeModule()
 {
     for ( auto s : test_text )
         delete s;
+
+    test_pegs.clear();
 }
 
 ProfileStats* NormalizeModule::get_profile() const

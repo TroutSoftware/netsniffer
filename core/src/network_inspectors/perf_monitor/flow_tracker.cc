@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -39,7 +39,7 @@ using namespace snort;
 
 #define MAX_PKT_LEN  9000
 
-FlowTracker::FlowTracker(PerfConfig* perf) : PerfTracker(perf, TRACKER_NAME),
+FlowTracker::FlowTracker(PerfConfig* perf) : PerfTracker(perf, TRACKER_NAME, PERF_FLOW),
     flow_max_port_to_track(perf->flow_max_port_to_track)
 {
     pkt_len_cnt.resize( MAX_PKT_LEN + 1 );

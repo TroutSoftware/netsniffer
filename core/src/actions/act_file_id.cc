@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -27,15 +27,13 @@
 #include "managers/action_manager.h"
 #include "parser/parser.h"
 
-#include "actions_module.h"
-
 using namespace snort;
 
 #define action_name "file_id"
 #define action_help \
     "file_id file type id"
 
-#define module_name "file_id_action"
+#define module_name "file_id"
 #define module_help \
     "manage the counters for the file_id action"
 
@@ -86,13 +84,12 @@ class File_IdActionModule : public Module
 {
 public:
     File_IdActionModule() : Module(module_name, module_help)
-    { ActionsModule::add_action(module_name, file_id_pegs); }
+    { register_action_pegs(module_name, file_id_pegs); }
 
     bool stats_are_aggregated() const override
     { return true; }
 
-    void show_stats() override
-    { /* These stats are shown by ActionsModule. */ }
+    void show_stats() override { }
 
     const PegInfo* get_pegs() const override
     { return file_id_pegs; }

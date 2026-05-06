@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2023-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2023-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -26,17 +26,22 @@
 #include <CppUTest/TestHarness.h>
 #include <CppUTestExt/MockSupport.h>
 
+// LCOV_EXCL_START
 void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
 void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+// LCOV_EXCL_STOP
 
 namespace snort
 {
+    bool SnortConfig::tunnel_bypass_enabled(unsigned short) const { return false; }
+
+// LCOV_EXCL_START
     bool TextLog_Print(TextLog* const, const char*, ...) { return false; }
     void Codec::codec_event(const CodecData&, CodecSid) { }
-    bool SnortConfig::tunnel_bypass_enabled(unsigned short) const { return false; }
-    unsigned get_instance_id()
-    { return 0; }
+
+    unsigned get_instance_id() { return 0; }
     unsigned ThreadConfig::get_instance_max() { return 1; }
+// LCOV_EXCL_STOP
 }
 
 // Geneve data with 2 variable options.

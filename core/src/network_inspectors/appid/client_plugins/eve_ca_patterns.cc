@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -116,7 +116,7 @@ void EveCaPatternMatchers::finalize_patterns()
 
         #ifdef REG_TEST
         AppIdInspector* inspector =
-            (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, true);
+            (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
         if (inspector and inspector->get_ctxt().config.log_eve_process_client_mappings)
             APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Adding EVE Client App pattern %d %s %d\n",
                 p->app_id, p->pattern.c_str(), p->confidence);

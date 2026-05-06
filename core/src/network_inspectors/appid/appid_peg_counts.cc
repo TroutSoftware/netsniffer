@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -186,6 +186,8 @@ void AppIdPegCounts::sum_stats()
 
 void AppIdPegCounts::inc_service_count(AppId id)
 {
+    if (!appid_thread_pegs)
+        return;
     auto peg = appid_thread_pegs->peg_counts.find(id);
     if (peg != appid_thread_pegs->peg_counts.end())
         peg->second.stats[DetectorPegs::SERVICE_DETECTS]++;

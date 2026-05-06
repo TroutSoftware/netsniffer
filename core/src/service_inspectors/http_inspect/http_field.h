@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -20,9 +20,11 @@
 #ifndef HTTP_FIELD_H
 #define HTTP_FIELD_H
 
-#include <cstdint>
-#include <cstdio>
 #include <cassert>
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <utility>
 
 #include "main/snort_types.h"
 
@@ -75,6 +77,8 @@ struct MimeBufs
         file(file_len, file_buf, file_own),
         vba(vba_len, vba_buf, vba_own) {}
 };
+
+using MimeFormData = std::vector<std::pair<std::string, std::string>>;
 
 #endif
 

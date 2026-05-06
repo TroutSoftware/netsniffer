@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -54,7 +54,7 @@ public:
 
 private:
     Continuation(unsigned max_cnt) : states_cnt(0), states_cnt_max(max_cnt),
-        reload_id(snort::SnortConfig::get_thread_reload_id())
+        reload_id(snort::SnortConfig::get_reload_id())
     { }
 
     template <bool opt_parent>
@@ -162,7 +162,7 @@ void Continuation::recall(dot_node_state_t& nst,
 
 bool Continuation::is_reloaded() const
 {
-    return snort::SnortConfig::get_thread_reload_id() != reload_id;
+    return snort::SnortConfig::get_reload_id() != reload_id;
 }
 
 void Continuation::eval(snort::Packet& p)
@@ -180,6 +180,7 @@ void Continuation::eval(snort::Packet& p)
 
     while (i != &states)
     {
+        // coverity[use_after_free:FALSE]
         auto st = i;
         bool r = (**st).eval(p);
         i = st->get_next();

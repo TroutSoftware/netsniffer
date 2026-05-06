@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -26,18 +26,20 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "framework/module.h"
+#include "framework/pig_pen.h"
+#include "helpers/ring.h"
+#include "log/log_stats.h"
+#include "log/messages.h"
+#include "main/snort.h"
 #include "main/snort_config.h"
+#include "main/snort_types.h"
+#include "managers/mp_transport_manager.h"
+#include "managers/plugin_manager.h"
 #include "protocols/packet.h"
 #include "pub_sub/intrinsic_event_ids.h"
 #include "utils/stats.h"
-#include "main/snort_types.h"
-#include "log/messages.h"
-#include "log/log_stats.h"
-#include "helpers/ring.h"
-#include "managers/mp_transport_manager.h"
-#include "managers/module_manager.h"
-#include "main/snort.h"
-#include "framework/module.h"
+#include "utils/util.h"
 
 using namespace snort;
 
@@ -76,10 +78,9 @@ void MPDataBusLog(const char* msg, ...)
 
 MPDataBus::MPDataBus() :
     run_thread(true),
-    worker_thread(nullptr),
-    mp_event_queue(nullptr)
+    worker_thread(nullptr)
 {
-    mp_event_queue = new Ring<std::shared_ptr<MPEventInfo>>(mp_max_eventq_size);
+    mp_event_queue = new MPEventQueue(mp_max_eventq_size);
     start_worker_thread();
 }
 
@@ -90,16 +91,8 @@ MPDataBus::~MPDataBus()
     for (auto& [_, sublist] : mp_pub_sub)
     {
         for (auto* handler : sublist)
-        {
-            if (handler->cloned)
-            {
-                handler->cloned = false;
-            }
-            else
-            {
-                delete handler; 
-            }
-        }
+            delete handler;
+
         sublist.clear();
     }
     mp_pub_sub.clear();
@@ -127,25 +120,6 @@ unsigned MPDataBus::init(int max_procs)
     transport_layer->init_connection();
 
     return 0;
-}
-
-void MPDataBus::clone(MPDataBus& from, const char* exclude_name)
-{
-    from.stop_worker_thread();
-    for (const auto& [key, sublist] : from.mp_pub_sub)
-    {
-        unsigned pid = key.first; 
-        unsigned eid = key.second;
-
-        for (auto* h : sublist)
-        {
-            if (!exclude_name || strcmp(exclude_name, h->module_name) != 0)
-            {
-                h->cloned = true;
-                _subscribe(pid, eid, h);
-            }
-        }
-    }
 }
 
 unsigned MPDataBus::get_id(const PubKey& key)
@@ -290,23 +264,23 @@ void MPDataBus::process_event_queue()
 
     // coverity[wait_not_in_locked_loop:FALSE]
     if( (std::cv_status::timeout == queue_cv.wait_for(u_lock, std::chrono::milliseconds(WORKER_THREAD_SLEEP))) and
-        mp_event_queue->empty() )
+        mp_event_queue->is_empty() )
         return;
 
-    while (!mp_event_queue->empty()) {
-        std::shared_ptr<MPEventInfo> event_info = mp_event_queue->get(nullptr);
-        if (event_info) {
-            MPDataBusLog("Processing event for publisher ID %u \n",
-                        event_info->pub_id);
-
-            if (!transport_layer){
-                run_thread.store(false);
-                ErrorMessage("MPDataBus: Transport layer not initialized\n");
-                return;
-            }
-
+    
+    static std::shared_ptr<MPEventInfo> event_info;
+    
+    while (mp_event_queue->try_pop(event_info))
+    {
+        if (UNLIKELY(!transport_layer))
+        {
+            run_thread.store(false);
+            ErrorMessage("MPDataBus: Transport layer not initialized\n");
+            return;
+        }
+        
+            MPDataBusLog("Processing event for publisher ID %u \n", event_info->pub_id);
             auto send_res = transport_layer->send_to_transport(*event_info);
-
             {
                 std::lock_guard<std::mutex> lock(mp_stats_mutex);
                 mp_pub_stats[event_info->pub_id].total_messages_published++;
@@ -319,7 +293,7 @@ void MPDataBus::process_event_queue()
                     mp_pub_stats[event_info->pub_id].total_messages_sent++;
                 }
             }
-        }
+        
     }
 }
 
@@ -334,6 +308,7 @@ void MPDataBus::start_worker_thread()
 {
     run_thread.store(true);
     worker_thread = std::make_unique<std::thread>(&MPDataBus::worker_thread_func, this);
+    SET_THREAD_NAME(worker_thread->native_handle(), "snort3.mp_dbus");
 }
 
 void MPDataBus::stop_worker_thread()
@@ -407,28 +382,27 @@ void MPDataBus::sum_stats()
 
 void MPDataBus::reset_stats()
 {
-    std::lock_guard<std::mutex> lock(mp_stats_mutex);
-
-    for(auto& [_, pub_stats] : mp_pub_stats)
     {
-        pub_stats.total_messages_sent = 0;
-        pub_stats.total_messages_received = 0;
-        pub_stats.total_messages_dropped = 0;
-        pub_stats.total_messages_published = 0;
-        pub_stats.total_messages_delivered = 0;
+        std::lock_guard<std::mutex> lock(mp_stats_mutex);
+
+        for(auto& [_, pub_stats] : mp_pub_stats)
+        {
+            pub_stats.total_messages_sent = 0;
+            pub_stats.total_messages_received = 0;
+            pub_stats.total_messages_dropped = 0;
+            pub_stats.total_messages_published = 0;
+            pub_stats.total_messages_delivered = 0;
+        }
+
+        mp_global_stats.total_messages_sent = 0;
+        mp_global_stats.total_messages_received = 0;
+        mp_global_stats.total_messages_dropped = 0;
+        mp_global_stats.total_messages_published = 0;
+        mp_global_stats.total_messages_delivered = 0;
     }
-    
-    mp_global_stats.total_messages_sent = 0;
-    mp_global_stats.total_messages_received = 0;
-    mp_global_stats.total_messages_dropped = 0;
-    mp_global_stats.total_messages_published = 0;
-    mp_global_stats.total_messages_delivered = 0;
 
-    auto transport_module = ModuleManager::get_module(transport.c_str());
-    if (transport_module)
-    {
+    if (auto transport_module = PigPen::get_module(transport.c_str()))
         transport_module->reset_stats();
-    }
 }
 
 void MPDataBus::dump_stats(ControlConn *ctrlconn, const char *module_name)
@@ -453,8 +427,7 @@ void MPDataBus::dump_stats(ControlConn *ctrlconn, const char *module_name)
         
         show_stats(reinterpret_cast<PegCount*>(&mp_global_stats), mp_databus_pegs, array_size(mp_databus_pegs)-1);
 
-        auto transport_module = ModuleManager::get_module(transport.c_str());
-        if(transport_module)
+        if (auto transport_module = PigPen::get_module(transport.c_str()))
         {
             auto transport_pegs = transport_module->get_pegs();
             if(transport_pegs)
@@ -474,8 +447,8 @@ void MPDataBus::dump_stats(ControlConn *ctrlconn, const char *module_name)
 
 void MPDataBus::dump_events(ControlConn *ctrlconn, const char *module_name)
 {
-    int current_read_idx = 0;
-    uint32_t ring_items = mp_event_queue->count();
+    uint32_t current_read_idx = 0;
+    uint32_t ring_items = mp_event_queue->size();
     if(ring_items == 0)
     {
         if (ctrlconn)
@@ -488,16 +461,7 @@ void MPDataBus::dump_events(ControlConn *ctrlconn, const char *module_name)
         }
         return;
     }
-    auto event_queue_store = mp_event_queue->grab_store(current_read_idx);
-
-    if (current_read_idx == 0)
-    {
-        current_read_idx = mp_max_eventq_size - 1;
-    }
-    else
-    {
-        current_read_idx--;
-    }
+    auto event_queue_buffer = mp_event_queue->get_buffer(current_read_idx);
 
     for (uint32_t i = current_read_idx; i <= ring_items; i++)
     {
@@ -506,7 +470,7 @@ void MPDataBus::dump_events(ControlConn *ctrlconn, const char *module_name)
             i = 0;
             ring_items -= mp_max_eventq_size;
         }
-        auto event_info = event_queue_store[i];
+        auto event_info = event_queue_buffer[i].data;
         if (event_info)
         {
             if (module_name)
@@ -625,7 +589,7 @@ bool MPDataBus::_publish(unsigned pid, unsigned eid, DataEvent& e, Flow* f)
 
 bool snort::MPDataBus::_enqueue_event(std::shared_ptr<MPEventInfo> ev_info)
 {
-    bool res = mp_event_queue != nullptr and !mp_event_queue->full() and mp_event_queue->put(std::move(ev_info));
+    bool res = mp_event_queue != nullptr and mp_event_queue->try_push(std::move(ev_info));
     if(res) queue_cv.notify_one();
     return res;
 }

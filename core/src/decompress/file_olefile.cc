@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -780,7 +780,10 @@ void OleFile :: find_and_extract_vba(uint8_t*& vba_buf, uint32_t& vba_buf_len)
 
     //Delete vba_buf if decompression could not happen
     if (!vba_buf_len)
+    {
         delete[] vba_buf;
+        vba_buf = nullptr;
+    }
 }
 
 // Beginning function of ole file processing.

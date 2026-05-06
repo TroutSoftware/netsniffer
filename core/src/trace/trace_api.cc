@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -23,22 +23,28 @@
 
 #include "trace_api.h"
 
+#include <algorithm>
 #include <cstring>
 
 #include "main/snort.h"
 #include "main/snort_config.h"
+#include "main/thread.h"
+#include "managers/module_manager.h"
+#include "managers/trace_logger_manager.h"
+#include "managers/plugin_manager.h"
 #include "packet_io/packet_constraints.h"
 #include "protocols/packet.h"
 #include "utils/safec.h"
 
 #include "trace_config.h"
-#include "trace_logger.h"
+#include "trace_module.h"
 
 using namespace snort;
 
-static THREAD_LOCAL TraceLogger* g_trace_logger = nullptr;
 static THREAD_LOCAL PacketConstraints* g_packet_constraints = nullptr;
 static THREAD_LOCAL uint8_t g_constraints_generation = 0;
+static THREAD_LOCAL std::vector<snort::TraceLoggerPlug*>* g_trace_logger_plug = nullptr;
+static THREAD_LOCAL bool g_trace_initialized = false;
 
 static void update_constraints(PacketConstraints* new_cs)
 {
@@ -54,21 +60,53 @@ static void update_constraints(PacketConstraints* new_cs)
     g_packet_constraints = new_cs;
 }
 
-static inline void set_logger_options(const TraceConfig* trace_config)
+void TraceApi::global_init()
 {
-    if ( g_trace_logger )
-    {
-        g_trace_logger->set_ntuple(trace_config->ntuple);
-        g_trace_logger->set_timestamp(trace_config->timestamp);
-    }
+    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    assert(tm);
+    tm->init();
+}
+
+void TraceApi::reset()
+{
+    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    assert(tm);
+    tm->reset();
+}
+
+void TraceApi::capture_outputs(SnortConfig* sc)
+{
+    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    assert(tm);
+    tm->capture_outputs(sc->trace_config);
+    TraceLoggerManager::instantiate_default_loggers(sc->trace_config);
 }
 
 void TraceApi::thread_init(const TraceConfig* trace_config)
 {
-    if ( trace_config->logger_factory )
-        g_trace_logger = trace_config->logger_factory->instantiate();
+    if (g_trace_initialized)
+        return;
+    
+    g_trace_initialized = true;
+    
+    if (!g_trace_logger_plug)
+        g_trace_logger_plug = new std::vector<snort::TraceLoggerPlug*>();
+    
+    g_trace_logger_plug->clear();
+    for (const auto& tracer_name : trace_config->output_traces)
+    {
+        auto tracer_plugin = TraceLoggerManager::get_logger(tracer_name);
 
-    set_logger_options(trace_config);
+        if (tracer_plugin)
+        {
+            tracer_plugin->set_timestamp(trace_config->timestamp);
+            tracer_plugin->set_ntuple(trace_config->ntuple);
+            tracer_plugin->set_thread_type(get_thread_type());
+            tracer_plugin->set_instance_id(get_instance_id());
+            g_trace_logger_plug->push_back(tracer_plugin);
+        }
+    }
+
     update_constraints(trace_config->constraints);
     trace_config->setup_module_trace();
 }
@@ -76,39 +114,69 @@ void TraceApi::thread_init(const TraceConfig* trace_config)
 void TraceApi::thread_term()
 {
     g_packet_constraints = nullptr;
+    if (g_trace_logger_plug)
+    {
+        g_trace_logger_plug->clear();
+        delete g_trace_logger_plug;
+        g_trace_logger_plug = nullptr;
+    }
+    g_trace_initialized = false;
+}
 
-    delete g_trace_logger;
-    g_trace_logger = nullptr;
+void TraceApi::clear_all_traces()
+{
+    auto mods = PluginManager::get_all_modules();
+
+    for ( auto* m : mods )
+        m->set_trace(nullptr);
 }
 
 void TraceApi::thread_reinit(const TraceConfig* trace_config)
 {
-    set_logger_options(trace_config);
+    if (g_trace_logger_plug)
+        g_trace_logger_plug->clear();
+
+    if (!trace_config->is_configured())
+    {
+        clear_all_traces();
+        return;
+    }
+    if (!g_trace_logger_plug)
+        g_trace_logger_plug = new std::vector<snort::TraceLoggerPlug*>();
+
+    for (const auto& tracer_name : trace_config->output_traces)
+    {
+        auto tracer_plugin = TraceLoggerManager::get_logger(tracer_name);
+
+        if (!tracer_plugin)
+            tracer_plugin = TraceLoggerManager::set_logger(tracer_name);
+
+        if (tracer_plugin)
+        {
+            tracer_plugin->set_timestamp(trace_config->timestamp);
+            tracer_plugin->set_ntuple(trace_config->ntuple);
+            tracer_plugin->set_thread_type(get_thread_type());
+            tracer_plugin->set_instance_id(get_instance_id());
+            g_trace_logger_plug->push_back(tracer_plugin);
+        }
+    }
     update_constraints(trace_config->constraints);
     trace_config->setup_module_trace();
-}
-
-bool TraceApi::override_logger_factory(SnortConfig* sc, TraceLoggerFactory* factory)
-{
-    if ( !sc or !sc->trace_config or !factory )
-        return false;
-
-    delete sc->trace_config->logger_factory;
-    sc->trace_config->logger_factory = factory;
-
-    if ( !Snort::is_reloading() )
-    {
-        delete g_trace_logger;
-        g_trace_logger = sc->trace_config->logger_factory->instantiate();
-    }
-
-    return true;
 }
 
 void TraceApi::log(const char* log_msg, const char* name,
     uint8_t log_level, const char* trace_option, const Packet* p)
 {
-    g_trace_logger->log(log_msg, name, log_level, trace_option, p);
+    if (g_trace_logger_plug && !g_trace_logger_plug->empty())
+    {
+        for (const auto& tracer_plugin : *g_trace_logger_plug)
+        {
+            if (tracer_plugin)
+            {
+                tracer_plugin->log(log_msg, name, log_level, trace_option, p);
+            }
+        }
+    }
 }
 
 void TraceApi::filter(const Packet& p)
@@ -243,7 +311,7 @@ static void test_log(const char* log_msg, const char* name,
 
 TEST_CASE("macros", "[trace]")
 {
-    TraceTestCase cases[] =
+    const TraceTestCase cases[] =
     {
         {
             sx(debug_log(1, test_trace, "my message")),
@@ -316,23 +384,23 @@ TEST_CASE("debug_log, debug_logf", "[trace]")
 
     TraceOption test_trace_options(nullptr, 0, nullptr);
     TraceTestModule trace_test_module("test_module", &test_trace_options);
-    Trace test_trace(trace_test_module);
+    Trace test_trace(&trace_test_module);
 
     TraceTestModule trace_test_module_opt("test_opt_module", test_trace_values);
-    Trace test_opt_trace(trace_test_module_opt);
+    Trace test_opt_trace(&trace_test_module_opt);
 
-    test_trace.set("all", 0);
+    test_trace.set("all", 0, &trace_test_module);
 
     testing_dump[0] = '\0';
     debug_log(&test_trace, nullptr, "my message");
     CHECK( testing_dump[0] == '\0' );
 
-    test_trace.set("all", 1);
-    test_opt_trace.set("option1", 1);
-    test_opt_trace.set("option2", 2);
-    test_opt_trace.set("option3", 3);
-    test_opt_trace.set("option4", 2);
-    test_opt_trace.set("option5", 2);
+    test_trace.set("all", 1, &trace_test_module);
+    test_opt_trace.set("option1", 1, &trace_test_module_opt);
+    test_opt_trace.set("option2", 2, &trace_test_module_opt);
+    test_opt_trace.set("option3", 3, &trace_test_module_opt);
+    test_opt_trace.set("option4", 2, &trace_test_module_opt);
+    test_opt_trace.set("option5", 2, &trace_test_module_opt);
 
     char message[BUF_SIZE_MIN + 1];
     for( int i = 0; i < BUF_SIZE_MIN; i++ )
@@ -400,7 +468,7 @@ TEST_CASE("trace big message", "[trace]")
 {
     TraceOption test_trace_options(nullptr, 0, nullptr);
     TraceTestModule trace_test_module("test_module", &test_trace_options);
-    Trace test_trace(trace_test_module);
+    Trace test_trace(&trace_test_module);
 
     const int hdr_size = strlen("test_module:all:1: ");
     const char exp_1[] = "test_module:all:1: 1111111111111111111111111111";
@@ -414,7 +482,7 @@ TEST_CASE("trace big message", "[trace]")
     char msg_3[BUF_SIZE_MAX * 1];
     char msg_4[BUF_SIZE_MAX * 2];
 
-    test_trace.set("all", 1);
+    test_trace.set("all", 1, &trace_test_module);
 
     memset(msg_1, '1', sizeof(msg_1));
     memset(msg_2, '2', sizeof(msg_2));

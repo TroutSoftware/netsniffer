@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -21,6 +21,7 @@
 #ifndef FILE_CACHE_H
 #define FILE_CACHE_H
 
+#include <atomic>
 #include <mutex>
 
 #include "sfip/sf_ip.h"
@@ -77,8 +78,8 @@ private:
 
     /* The hash table of expected files */
     ExpectedFileCache* fileHash = nullptr;
-    int64_t block_timeout = DEFAULT_FILE_BLOCK_TIMEOUT;
-    int64_t lookup_timeout = DEFAULT_FILE_LOOKUP_TIMEOUT;
+    std::atomic<int64_t> block_timeout{DEFAULT_FILE_BLOCK_TIMEOUT};
+    std::atomic<int64_t> lookup_timeout{DEFAULT_FILE_LOOKUP_TIMEOUT};
     int64_t max_files = DEFAULT_MAX_FILES_CACHED;
     std::mutex cache_mutex;
 };

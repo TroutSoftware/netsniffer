@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -21,7 +21,7 @@
 #define HTTP_CUTTER_H
 
 #include <cassert>
-#include <zlib.h>
+#include <optional>
 
 #include "http_common.h"
 #include "http_enum.h"
@@ -119,39 +119,78 @@ private:
 class HttpBodyCutter : public HttpCutter
 {
 public:
+    using Buffer = std::pair<const uint8_t*, uint32_t>;
+
     HttpBodyCutter(bool accelerated_blocking_, ScriptFinder* finder,
-        HttpEnums::CompressId compression_);
-    ~HttpBodyCutter() override;
+        HttpFlowData* const session_data, HttpCommon::SourceId source_id);
     void soft_reset() override { octets_seen = 0; }
 
-protected:
-    bool need_accelerated_blocking(const uint8_t* data, uint32_t length);
-
 private:
-    bool dangerous(const uint8_t* data, uint32_t length);
-    bool find_partial(const uint8_t*, uint32_t, bool);
+    struct FlushContext
+    {
+        enum Decision : uint8_t
+        {
+            ACCELERATE,
+            PUBLISH,
+            NONE,
+        };
+
+        uint32_t consumed = 0;
+        Decision decision = NONE;
+
+        bool is_none() const { return decision == NONE; }
+        bool is_publish() const { return decision == PUBLISH; }
+        bool is_accelerate() const { return decision == ACCELERATE; }
+    };
+
+    struct DecompressOutput
+    {
+        std::optional<Buffer> decompressed;
+        uint32_t consumed = 0;
+    };
+
+protected:
+    FlushContext analyze_body(const uint8_t* data, uint32_t length,
+        HttpInfractions* infractions, HttpEventGen* events);
+    DecompressOutput decompress(const uint8_t* src, uint32_t src_size,
+        HttpInfractions* infractions, HttpEventGen* events);
 
     const bool accelerated_blocking;
+private:
+    enum SseState : uint8_t
+    {
+        SSE_DISABLED,
+        SSE_START,
+        SSE_DATA_LINE,
+        SSE_CR_DATA_LINE,
+        SSE_EMPTY_LINE,
+        SSE_CR_EMPTY_LINE,
+    };
+
+    FlushContext dangerous(const uint8_t* data, uint32_t length,
+        HttpInfractions* infractions, HttpEventGen* events);
+    bool find_partial(const uint8_t*, uint32_t, bool);
+    bool has_sse_boundary(const uint8_t* data, uint32_t length);
+
     uint8_t partial_match = 0;
-    HttpEnums::CompressId compression = HttpEnums::CompressId::CMP_NONE;
-    bool decompress_failed = false;
     uint8_t string_length = 0;
-    z_stream* compress_stream = nullptr;
+    SseState sse_state = SSE_DISABLED;
     ScriptFinder* const finder;
     const uint8_t* match_string = nullptr;
     const uint8_t* match_string_upper = nullptr;
+    HttpFlowData* const session_data;
+    const HttpCommon::SourceId source_id;
 };
 
 class HttpBodyClCutter : public HttpBodyCutter
 {
 public:
-    HttpBodyClCutter(int64_t expected_length,
-        bool accelerated_blocking,
-        ScriptFinder* finder,
-        HttpEnums::CompressId compression) :
-        HttpBodyCutter(accelerated_blocking, finder, compression),
-        remaining(expected_length)
-        { assert(remaining > 0); }
+    HttpBodyClCutter(int64_t expected_length, bool accelerated_blocking_, ScriptFinder* finder,
+        HttpFlowData* const session_data, HttpCommon::SourceId source_id)
+        : HttpBodyCutter(accelerated_blocking_, finder, session_data, source_id)
+        , remaining(expected_length)
+    { assert(remaining > 0); }
+
     HttpEnums::ScanResult cut(const uint8_t*, uint32_t length, HttpInfractions*, HttpEventGen*,
         uint32_t flow_target, bool stretch, HttpCommon::HXBodyState) override;
 
@@ -162,10 +201,10 @@ private:
 class HttpBodyOldCutter : public HttpBodyCutter
 {
 public:
-    HttpBodyOldCutter(bool accelerated_blocking, ScriptFinder* finder,
-        HttpEnums::CompressId compression) :
-        HttpBodyCutter(accelerated_blocking, finder, compression)
-        {}
+    HttpBodyOldCutter(bool accelerated_blocking_, ScriptFinder* finder,
+        HttpFlowData* const session_data, HttpCommon::SourceId source_id)
+        : HttpBodyCutter(accelerated_blocking_, finder, session_data, source_id)
+    { }
     HttpEnums::ScanResult cut(const uint8_t*, uint32_t, HttpInfractions*, HttpEventGen*,
         uint32_t flow_target, bool stretch, HttpCommon::HXBodyState) override;
 };
@@ -173,11 +212,12 @@ public:
 class HttpBodyChunkCutter : public HttpBodyCutter
 {
 public:
-    HttpBodyChunkCutter(int64_t maximum_chunk_length_, bool accelerated_blocking,
-        ScriptFinder* finder, HttpEnums::CompressId compression) :
-        HttpBodyCutter(accelerated_blocking, finder, compression),
-        maximum_chunk_length(maximum_chunk_length_)
-        {}
+    HttpBodyChunkCutter(int64_t maximum_chunk_length_, bool accelerated_blocking_, ScriptFinder* finder,
+        HttpFlowData* const session_data, HttpCommon::SourceId source_id)
+        : HttpBodyCutter(accelerated_blocking_, finder, session_data, source_id)
+        , maximum_chunk_length(maximum_chunk_length_)
+    { }
+
     HttpEnums::ScanResult cut(const uint8_t* buffer, uint32_t length,
         HttpInfractions* infractions, HttpEventGen* events, uint32_t flow_target, bool stretch,
         HttpCommon::HXBodyState) override;
@@ -203,11 +243,11 @@ private:
 class HttpBodyHXCutter : public HttpBodyCutter
 {
 public:
-    HttpBodyHXCutter(int64_t expected_length, bool accelerated_blocking, ScriptFinder* finder,
-        HttpEnums::CompressId compression) :
-        HttpBodyCutter(accelerated_blocking, finder, compression),
-            expected_body_length(expected_length)
-        {}
+    HttpBodyHXCutter(int64_t expected_length, bool accelerated_blocking_, ScriptFinder* finder,
+        HttpFlowData* const session_data, HttpCommon::SourceId source_id)
+        : HttpBodyCutter(accelerated_blocking_, finder, session_data, source_id)
+        , expected_body_length(expected_length)
+    { }
     HttpEnums::ScanResult cut(const uint8_t* buffer, uint32_t length, HttpInfractions*,
         HttpEventGen*, uint32_t flow_target, bool stretch, HttpCommon::HXBodyState state) override;
 private:
@@ -216,4 +256,3 @@ private:
 };
 
 #endif
-

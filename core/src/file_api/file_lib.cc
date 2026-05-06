@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2012-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -29,7 +29,7 @@
 
 #include "file_lib.h"
 
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 #include <iostream>
 #include <iomanip>
@@ -43,7 +43,9 @@
 #include "packet_io/packet_tracer.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
+#include "pub_sub/file_events.h"
 #include "pub_sub/intrinsic_event_ids.h"
+#include "time/packet_time.h"
 #include "utils/util.h"
 #ifdef UNIT_TEST
 #include "catch/snort_catch.h"
@@ -144,6 +146,8 @@ void FileInfo::copy(const FileInfo& other, bool clear_data)
     file_capture_enabled = other.file_capture_enabled;
     file_state = other.file_state;
     pending_expire_time = other.pending_expire_time;
+    extracted_cutoff = other.extracted_cutoff;
+    extracted_size = other.extracted_size;
     if (clear_data)
     {
         // only one copy of file capture
@@ -398,7 +402,7 @@ uint8_t* FileInfo::get_file_sig_sha256() const
     return (sha256);
 }
 
-std::string FileInfo::sha_to_string(const uint8_t* sha256)
+std::string FileInfo::sha_to_string(const uint8_t* sha256) const
 {
     uint8_t conv[] = "0123456789ABCDEF";
     const uint8_t* index;
@@ -464,9 +468,14 @@ FileCaptureState FileInfo::reserve_file(FileCapture*& dest)
         return FileCapture::error_capture(FILE_CAPTURE_FAIL);
 
     FileCaptureState state = file_capture->reserve_file(this);
+
+    if (state == FILE_CAPTURE_SUCCESS)
+        extracted_size = file_capture->get_file_capture_size();
+    
     config_file_capture(false);
     dest = file_capture;
     file_capture = nullptr;
+
     return state;
 }
 
@@ -491,28 +500,25 @@ UserFileDataBase* FileInfo::get_file_data() const
     return user_file_data;
 }
 
-FileContext::FileContext ()
+FileContext::FileContext () : start_time(SnortClock::now())
 {
     file_type_context = nullptr;
     file_signature_context = nullptr;
     file_capture = nullptr;
     file_segments = nullptr;
-    if (SnortConfig::get_conf())
-    {
-        inspector = (FileInspect*)InspectorManager::acquire_file_inspector();
+
+    inspector = (FileInspect*)InspectorManager::acquire_file_inspector();
+
+    if (inspector and SnortConfig::get_conf())
         config = inspector->config;
-    }
     else
-    {
-        inspector = nullptr;
         config = nullptr;
-    }
 }
 
 FileContext::~FileContext ()
 {
     if (file_signature_context)
-        snort_free(file_signature_context);
+        EVP_MD_CTX_free((EVP_MD_CTX*)file_signature_context);
 
     if (file_capture)
         stop_file_capture();
@@ -531,9 +537,26 @@ inline void FileContext::finalize_file_type()
     file_type_context = nullptr;
 }
 
+const char* FileContext::get_mime_type() const
+{
+    const FileConfig* conf = get_file_config();
+    if (SNORT_FILE_TYPE_UNKNOWN != file_type_id and SNORT_FILE_TYPE_CONTINUE != file_type_id and conf)
+    {
+        const FileMeta* info = conf->get_rule_from_id(file_type_id);
+        return info != nullptr ? info->type.c_str() : "";
+    }
+
+    return "";
+}
+
+void FileContext::set_source(Flow *flow)
+{
+    source = (flow && flow->service ? std::string(flow->service) : std::string());
+}
+
 void FileContext::log_file_event(Flow* flow, FilePolicyBase* policy)
 {
-    // log file event either when filename is set or if it is a asymmetric flow  
+    // log file event either when filename is set or if it is a asymmetric flow
     if ( is_file_name_set() or !flow->two_way_traffic() )
     {
         bool log_needed = true;
@@ -560,12 +583,39 @@ void FileContext::log_file_event(Flow* flow, FilePolicyBase* policy)
 
         user_file_data_mutex.lock();
 
-        if (policy and log_needed and user_file_data)
+        if (policy and log_needed and user_file_data and !force_adv_log)
             policy->log_file_action(flow, this, FILE_ACTION_DEFAULT);
 
         user_file_data_mutex.unlock();
 
-        if ( config->trace_type )
+        if (processing_complete or force_adv_log or log_needed)
+        {
+            hr_time now = SnortClock::now();
+            duration = (TO_USECS(now - start_time)) / 1000000.0;  // Convert microseconds to seconds
+            set_source(flow);
+
+            FileEvent file_event(*this);
+            DataBus::publish(get_file_adv_pub_id(), FileEventIds::FILE_COMPLETE, file_event, flow);
+
+            std::string filename = file_event.get_filename();
+            size_t fname_len = filename.length();
+            FileCharEncoding encoding = get_character_encoding(filename.c_str(), fname_len);
+
+            FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
+                "File advance log: fuid-%" PRIu64 ", source-%s, mime type-%s, file name-%s,"
+                " duration-%f, is orig-%d, seen bytes-%" PRIu64 ", total bytes-%" PRIu64 ","
+                " timedout-%d, sha256-%s, extracted name-%s, extracted cutoff-%d,"
+                " extracted size-%" PRIu64 "\n", file_event.get_fuid(),
+                file_event.get_source().c_str(), file_event.get_mime_type(),
+                (encoding == SNORT_CHAR_ENCODING_UTF_16LE) ? "" : filename.c_str(), file_event.get_duration(),
+                file_event.get_is_orig(), file_event.get_seen_bytes(),
+                file_event.get_total_bytes(), file_event.get_timedout(),
+                file_event.get_sha256().c_str(), (encoding == SNORT_CHAR_ENCODING_UTF_16LE) ? "" : file_event.get_extracted_name().c_str(),
+                file_event.get_extracted_cutoff(), file_event.get_extracted_size());
+            start_time = SnortClock::now();
+        }
+
+        if ( config->trace_type and !force_adv_log )
             print(std::cout);
     }
 }
@@ -612,6 +662,12 @@ void FileContext::finish_signature_lookup(Packet* p, bool final_lookup, FilePoli
         }
         else
         {
+            if ( processing_complete and (verdict == FILE_VERDICT_UNKNOWN ))
+            {
+                force_adv_log = true;
+                log_file_event(flow, policy);
+                force_adv_log = false;
+            }
             snort_free(sha256);
             sha256 = nullptr;
         }
@@ -655,10 +711,7 @@ void FileInfo::reset()
 {
     verdict = FILE_VERDICT_UNKNOWN;
     processing_complete = false;
-    set_file_size(0);
     reset_sha();
-    if (is_file_name_set())
-        unset_file_name();
     pending_expire_time.tv_sec = 0;
     pending_expire_time.tv_usec = 0;
 }
@@ -690,11 +743,10 @@ void FileContext::reset()
 {
     verdict = FILE_VERDICT_UNKNOWN;
     processing_complete = false;
-    set_file_size(0);
     reset_sha();
-    if (is_file_name_set())
-        unset_file_name();
     remove_segments();
+    start_time = SnortClock::now();
+    force_adv_log = false;
 }
 
 /*
@@ -766,11 +818,14 @@ bool FileContext::process(Packet* p, const uint8_t* file_data, int data_size,
                     file_type_name(get_file_type()).c_str());
             config_file_type(false);
 
-            if (PacketTracer::is_active() and (!(is_file_signature_enabled())))
+            if (!(is_file_signature_enabled()))
             {
                 FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, p,
                    "File: signature config is disabled\n");
-                PacketTracer::log("File: signature config is disabled\n");
+                if (PacketTracer::is_active())
+                {
+                    PacketTracer::log("File: signature config is disabled\n");
+                }
             }
 
             file_stats->files_processed[get_file_type()][get_file_direction()]++;
@@ -841,6 +896,10 @@ bool FileContext::process(Packet* p, const uint8_t* file_data, int data_size,
                     "File: Sig depth exceeded\n");
                 if (PacketTracer::is_active())
                     PacketTracer::log("File: Sig depth exceeded\n");
+
+                force_adv_log = true;
+                log_file_event(flow, policy);
+                force_adv_log = false;
                 return false;
             }
         }
@@ -907,11 +966,11 @@ void FileContext::find_file_type_from_ips(Packet* pkt, const uint8_t* file_data,
         }
     }
     fp_eval_service_group(p, conf->snort_protocol_id);
-    if (set_file_context)
-        files->set_current_file_context(nullptr);
     /* Check whether file transfer is done or type depth is reached */
     if ((position == SNORT_FILE_END) || (position == SNORT_FILE_FULL) || depth_exhausted)
         finalize_file_type();
+    if (set_file_context)
+        files->set_current_file_context(nullptr);
 }
 
 void FileContext::process_file_type(Packet* pkt,const uint8_t* file_data, int data_size,
@@ -938,64 +997,85 @@ void FileContext::process_file_signature_sha256(const uint8_t* file_data, int da
     switch (position)
     {
     case SNORT_FILE_START:
+    {
         if (!file_signature_context)
-            file_signature_context = snort_calloc(sizeof(SHA256_CTX));
-        SHA256_Init((SHA256_CTX*)file_signature_context);
-        SHA256_Update((SHA256_CTX*)file_signature_context, file_data, data_size);
+            file_signature_context = EVP_MD_CTX_new();
+
+        EVP_MD_CTX* ctx = (EVP_MD_CTX*)file_signature_context;
+        EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+        EVP_DigestUpdate(ctx, file_data, data_size);
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
             "position is start of file\n");
         if (file_state.sig_state == FILE_SIG_FLUSH)
         {
-            static uint8_t file_signature_context_backup[sizeof(SHA256_CTX)];
-            sha256 = (uint8_t*)snort_alloc(SHA256_HASH_SIZE);
-            memcpy(file_signature_context_backup, file_signature_context, sizeof(SHA256_CTX));
-
-            SHA256_Final(sha256, (SHA256_CTX*)file_signature_context);
-            memcpy(file_signature_context, file_signature_context_backup, sizeof(SHA256_CTX));
+            if (!sha256)
+                sha256 = (uint8_t*)snort_alloc(SHA256_HASH_SIZE);
+            EVP_MD_CTX* tmp = EVP_MD_CTX_new();
+            if (tmp && EVP_MD_CTX_copy_ex(tmp, ctx) == 1)
+            {
+                unsigned int out_len = 0;
+                EVP_DigestFinal_ex(tmp, sha256, &out_len);
+            }
+            if (tmp)
+                EVP_MD_CTX_free(tmp);
         }
         break;
+    }
 
     case SNORT_FILE_MIDDLE:
+    {
         if (!file_signature_context)
             return;
-        SHA256_Update((SHA256_CTX*)file_signature_context, file_data, data_size);
+        EVP_MD_CTX* ctx = (EVP_MD_CTX*)file_signature_context;
+        EVP_DigestUpdate(ctx, file_data, data_size);
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
             "position is middle of the file\n");
         if (file_state.sig_state == FILE_SIG_FLUSH)
         {
-            static uint8_t file_signature_context_backup[sizeof(SHA256_CTX)];
-            if ( !sha256 )
+            if (!sha256)
                 sha256 = (uint8_t*)snort_alloc(SHA256_HASH_SIZE);
-            memcpy(file_signature_context_backup, file_signature_context, sizeof(SHA256_CTX));
-
-            SHA256_Final(sha256, (SHA256_CTX*)file_signature_context);
-            memcpy(file_signature_context, file_signature_context_backup, sizeof(SHA256_CTX));
+            EVP_MD_CTX* tmp = EVP_MD_CTX_new();
+            if (tmp && EVP_MD_CTX_copy_ex(tmp, ctx) == 1)
+            {
+                unsigned int out_len = 0;
+                EVP_DigestFinal_ex(tmp, sha256, &out_len);
+            }
+            if (tmp)
+                EVP_MD_CTX_free(tmp);
         }
-
         break;
+    }
 
     case SNORT_FILE_END:
+    {
         if (!file_signature_context)
             return;
-        SHA256_Update((SHA256_CTX*)file_signature_context, file_data, data_size);
+        EVP_MD_CTX* ctx = (EVP_MD_CTX*)file_signature_context;
+        EVP_DigestUpdate(ctx, file_data, data_size);
         sha256 = new uint8_t[SHA256_HASH_SIZE];
-        SHA256_Final(sha256, (SHA256_CTX*)file_signature_context);
+        unsigned int out_len = 0;
+        EVP_DigestFinal_ex(ctx, sha256, &out_len);
         file_state.sig_state = FILE_SIG_DONE;
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
             "position is end of the file\n");
         break;
+    }
 
     case SNORT_FILE_FULL:
+    {
         if (!file_signature_context)
-            file_signature_context = snort_calloc(sizeof (SHA256_CTX));
-        SHA256_Init((SHA256_CTX*)file_signature_context);
-        SHA256_Update((SHA256_CTX*)file_signature_context, file_data, data_size);
+            file_signature_context = EVP_MD_CTX_new();
+        EVP_MD_CTX* ctx = (EVP_MD_CTX*)file_signature_context;
+        EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+        EVP_DigestUpdate(ctx, file_data, data_size);
         sha256 = new uint8_t[SHA256_HASH_SIZE];
-        SHA256_Final(sha256, (SHA256_CTX*)file_signature_context);
+        unsigned int out_len = 0;
+        EVP_DigestFinal_ex(ctx, sha256, &out_len);
         file_state.sig_state = FILE_SIG_DONE;
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
             "position is full file\n");
         break;
+    }
 
     default:
         break;
@@ -1035,9 +1115,8 @@ void FileContext::update_file_size(int data_size, FilePosition position)
 {
     processed_bytes += data_size;
 
-    FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL,
-        GET_CURRENT_PACKET,
-        "Updating file size of file_id %lu at position %d with processed_bytes %lu\n",
+    FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL, GET_CURRENT_PACKET,
+        "Updating file size of file_id %" PRIu64 " at position %d with processed_bytes %" PRIu64 "\n",
         file_id, position, processed_bytes);
     if ((position == SNORT_FILE_END)or (position == SNORT_FILE_FULL))
     {
@@ -1049,11 +1128,6 @@ void FileContext::update_file_size(int data_size, FilePosition position)
     {
         file_size = processed_bytes;
     }
-}
-
-uint64_t FileContext::get_processed_bytes()
-{
-    return processed_bytes;
 }
 
 void FileContext::print_file_data(FILE* fp, const uint8_t* data, int len, int max_depth)
@@ -1222,12 +1296,15 @@ TEST_CASE ("reset", "[file_info]")
     info.verdict = FILE_VERDICT_BLOCK;
     info.processing_complete = true;
     info.set_file_name("test", 4);
+    info.set_file_size(123);
 
     info.reset();
 
     CHECK (false == info.processing_complete);
     CHECK (FILE_VERDICT_UNKNOWN == info.verdict);
-    CHECK (false == info.is_file_name_set());
+    CHECK (true == info.is_file_name_set());
+    CHECK (std::string("test") == info.get_file_name());
+    CHECK (123 == info.get_file_size());
 }
 
 TEST_CASE ("re_eval", "[file_info]")

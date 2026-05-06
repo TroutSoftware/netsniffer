@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -78,7 +78,7 @@ static inline FileContext* DCE2_Smb2GetFileContext(DCE2_Smb2SsnData*, DCE2_Smb2F
     }
     bool is_new_context = false;
     if (ftracker->file_name_hash)
-            return file_flows->get_file_context(ftracker->file_name_hash, to_create, is_new_context, ftracker->file_id);
+        return file_flows->get_file_context(ftracker->file_name_hash, to_create, is_new_context, ftracker->file_id);
     return file_flows->get_file_context(ftracker->file_id, to_create, is_new_context);
 }
 
@@ -376,7 +376,16 @@ static void DCE2_Smb2CreateRequest(DCE2_Smb2SsnData* ssd,
             auto rtracker = new DCE2_Smb2RequestTracker(file_name, name_len);
             rtracker->set_session_id(str->session_id);
             rtracker->set_tree_id(ttr->get_tid());
-            ssd->insertRtracker(mid, rtracker);
+            if (!ssd->insertRtracker(mid, rtracker))
+            {
+                dce2_smb_stats.v2_crt_rtrkr_ins_fail++;
+                SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_ERROR_LEVEL,
+                    DetectionEngine::get_current_packet(),
+                    "%s_REQ: insert req tracker failed for mid %" PRIx64 "\n",
+                    smb2_command_string[SMB2_COM_CREATE], mid);
+                delete rtracker;
+                return;
+            }
             uint64_t file_id = 0;
             if (DCE2_IsSmb2DurableReconnect(smb_create_hdr, end, file_id))
             {
@@ -494,6 +503,12 @@ static void DCE2_Smb2CreateResponse(DCE2_Smb2SsnData* ssd,
     }
     else
     {
+        if (ftracker->co_tracker)
+        {
+            DCE2_CoCleanTracker(ftracker->co_tracker);
+            snort_free((void*)ftracker->co_tracker);
+            ftracker->co_tracker = nullptr;
+        }
         ftracker->co_tracker = (DCE2_CoTracker*)snort_calloc(sizeof(DCE2_CoTracker));
         DCE2_CoInitTracker(ftracker->co_tracker);
     }
@@ -656,7 +671,15 @@ void DCE2_Smb2CloseCmd(DCE2_Smb2SsnData* ssd, const Smb2Hdr* smb_hdr,
             auto rtracker = new DCE2_Smb2RequestTracker(fileId_persistent);
             rtracker->set_session_id(str->session_id);
             rtracker->set_tree_id(ttr->get_tid());
-            ssd->insertRtracker(mid, rtracker);
+            if (!ssd->insertRtracker(mid, rtracker))
+            {
+                dce2_smb_stats.v2_cls_rtrkr_ins_fail++;
+                SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_ERROR_LEVEL,
+                    DetectionEngine::get_current_packet(),
+                    "%s_REQ: insert req tracker failed for mid %" PRIx64 "\n",
+                    smb2_command_string[SMB2_COM_CLOSE], mid);
+                delete rtracker;
+            }
         }
 
         if (SMB2_SHARE_TYPE_DISK == ttr->get_share_type() and !ftracker->ignore
@@ -1047,7 +1070,13 @@ static void DCE2_Smb2WriteRequest(DCE2_Smb2SsnData* ssd, const Smb2Hdr* smb_hdr,
         {
             FileContext* file = DCE2_Smb2GetFileContext(ssd, ftracker, true);
             if (file)
-                file->set_file_size(!ftracker->file_size ? UNKNOWN_FILE_SIZE : ftracker->file_size);
+            {
+                //preserve cached file_size when ftracker->file_size=0
+                if (ftracker->file_size != 0)
+                    file->set_file_size(ftracker->file_size);
+                else if (file->get_file_size() == 0)
+                    file->set_file_size(UNKNOWN_FILE_SIZE);
+            }
         }
         if (!DCE2_Smb2ProcessFileData(ssd, file_data, data_size))
             return;

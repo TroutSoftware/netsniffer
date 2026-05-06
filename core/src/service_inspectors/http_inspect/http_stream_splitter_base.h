@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -30,7 +30,8 @@ public:
 
     virtual void prep_partial_flush(snort::Flow* flow, uint32_t num_flush) = 0;
 
-    virtual Status scan(snort::Flow* flow, const uint8_t* data, uint32_t length, uint32_t* flush_offset) = 0;
+    virtual Status scan(snort::Flow* flow, const uint8_t* data, uint32_t length, uint32_t* flush_offset,
+        snort::Packet* pkt = nullptr) = 0;
 protected:
     HttpStreamSplitterBase(bool c2s) : StreamSplitter(c2s) { }
 private:

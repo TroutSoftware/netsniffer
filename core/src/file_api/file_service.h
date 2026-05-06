@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2012-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -64,6 +64,9 @@ public:
 
     static FileCache* get_file_cache() { return file_cache; }
     static DecodeConfig decode_conf;
+
+private:
+    static void reset();
 
 private:
     static std::atomic<bool> file_type_id_enabled;

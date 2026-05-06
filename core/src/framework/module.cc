@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -126,10 +126,7 @@ void Module::main_accumulate_stats()
 void Module::sum_stats(bool dump_stats)
 {
     if ( num_counts < 0 )
-    {
         init_stats();
-        reset_stats();
-    }
 
     PegCount* p = get_counts();
     const PegInfo* q = get_pegs();
@@ -180,6 +177,8 @@ void Module::sum_stats(bool dump_stats)
 
             case CountType::MAX:
                 set_max_peg_count(i, p[i], dump_stats);
+                if (!dump_stats)
+                    p[i] = 0;
                 break;
             }
         }
@@ -220,10 +219,8 @@ void Module::init_stats(bool new_thread)
 
     for ( unsigned thread_index = 0; thread_index < number_of_threads; thread_index++)
     {
-        std::vector<PegCount> stats(num_counts);
-        std::vector<PegCount> dump_stats(num_counts);
-        counts.push_back(stats);
-        dump_stats_counts.push_back(dump_stats);
+        counts.emplace_back(num_counts);
+        dump_stats_counts.emplace_back(num_counts);
         dump_stats_initialized.push_back(0);
     }
     dump_stats_results.resize(num_counts);

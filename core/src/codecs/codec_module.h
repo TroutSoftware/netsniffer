@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -75,7 +75,7 @@ enum CodecSid : uint32_t
     DECODE_EAPKEY_TRUNCATED = 111,
     DECODE_EAP_TRUNCATED = 112,
 
-    DECODE_BAD_PPPOE = 120,
+    DECODE_BAD_PPPOE_DISC = 120,
     DECODE_BAD_VLAN = 130,
     DECODE_BAD_LLC_HEADER = 131,
     DECODE_BAD_LLC_OTHER = 132,
@@ -229,6 +229,7 @@ enum CodecSid : uint32_t
     DECODE_IPV6_SRC_RESERVED,
     DECODE_IPV6_DST_RESERVED,
     DECODE_ICMP6_OPT_ZERO_LENGTH,
+    DECODE_BAD_PPPOE_SESS,
     DECODE_INDEX_MAX
 };
 

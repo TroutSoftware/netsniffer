@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -269,6 +269,8 @@ public:
     void init_tcp_state(TcpSession*);
     void set_splitter(snort::StreamSplitter* ss);
     void set_splitter(const snort::Flow* flow);
+    void set_splitter_with_rescan(snort::StreamSplitter* ss, uint32_t seq);
+    uint32_t get_paf_position() const;
 
     snort::StreamSplitter* get_splitter()
     { return splitter; }
@@ -309,10 +311,7 @@ public:
     // max_remove < 0 means time out all eligible packets.
     // Return whether there are more packets that need to be released.
     static bool release_held_packets(const timeval& cur_time, int max_remove);
-    static void set_held_packet_timeout(const uint32_t ms);
     static bool adjust_expiration(uint32_t new_timeout_ms, const timeval& now);
-    static void thread_init();
-    static void thread_term();
 
     uint32_t rcv_nxt = 0;          // RCV.NXT - receive next
     uint32_t rcv_wnd = 0;          // RCV.WND - receive window

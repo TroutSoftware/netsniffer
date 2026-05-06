@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -37,18 +37,13 @@ struct SnortConfig;
 class ConnectorManager
 {
 public:
-    static void add_plugin(const snort::ConnectorApi* api);
-    static void dump_plugins();
+    static class PlugInterface* get_interface(const snort::ConnectorApi*);
     static void release_plugins();
 
-    static void instantiate(const snort::ConnectorApi*, snort::Module*, snort::SnortConfig*);
     static snort::Connector::Direction is_instantiated(const std::string& name);
     static void update_thread_connector(const std::string& connector_name, int instance_id, snort::Connector* connector);
 
-
-    static void thread_init();
     static void thread_reinit();
-    static void thread_term();
 
     /* get_connector() returns the thread-specific object. */
     static snort::Connector* get_connector(const std::string& name);

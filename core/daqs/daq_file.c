@@ -1,5 +1,5 @@
 /*--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -104,7 +104,7 @@ static void destroy_message_pool(FileContext* fc)
 static int create_message_pool(FileContext* fc, unsigned size)
 {
     FileMsgPool* pool = &fc->pool;
-    pool->pool = calloc(sizeof(FileMsgDesc), size);
+    pool->pool = calloc(size, sizeof(FileMsgDesc));
     if (!pool->pool)
     {
         SET_ERROR(fc->modinst, "%s: Could not allocate %zu bytes for a packet descriptor pool!",

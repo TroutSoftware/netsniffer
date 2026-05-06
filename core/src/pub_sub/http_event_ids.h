@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -39,6 +39,7 @@ struct HttpEventIds
     DOH_BODY,
     END_OF_TRANSACTION,
     HTTP_PUBLISH_LENGTH,
+    MIME_FORM_DATA,
 
     num_ids
 }; };

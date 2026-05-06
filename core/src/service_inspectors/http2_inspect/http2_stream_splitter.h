@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -54,12 +54,16 @@ private:
         uint32_t length, uint32_t* flush_offset, HttpCommon::SourceId source_id, uint8_t type,
         uint8_t frame_flags, uint32_t& data_offset);
     static snort::StreamSplitter::Status implement_scan(Http2FlowData* session_data, const uint8_t* data,
-        uint32_t length, uint32_t* flush_offset, HttpCommon::SourceId source_id);
+        uint32_t length, uint32_t* flush_offset, HttpCommon::SourceId source_id, snort::Packet* pkt);
     static const snort::StreamBuffer implement_reassemble(Http2FlowData* session_data, unsigned total,
         unsigned offset, const uint8_t* data, unsigned len, uint32_t flags,
         HttpCommon::SourceId source_id);
     static bool read_frame_hdr(Http2FlowData* session_data, const uint8_t* data,
         uint32_t length, HttpCommon::SourceId source_id, uint32_t& data_offset);
+    static Http2Enums::InjectionStatus determine_injection_status(Http2FlowData* session_data,
+        uint8_t frame_type, uint32_t stream_id);
+    static void update_injection_status(Http2FlowData* session_data, snort::Packet* pkt,
+        uint8_t frame_type);
 };
 
 

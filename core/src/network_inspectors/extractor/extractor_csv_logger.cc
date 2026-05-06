@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -112,6 +112,18 @@ void CsvExtractorLogger::add_field(const char*, uint64_t v)
 {
     record.push_back(delimiter);
     record.append(to_string(v));
+}
+
+void CsvExtractorLogger::add_field(const char*, double v)
+{
+    const unsigned precision = 6;
+
+    // 20 digits for integer part + '.' + precision digits + '\0'
+    char buf[20 + 1 + precision + 1];
+    snort::SnortSnprintf(buf, sizeof(buf), "%.*f", (int)precision, v);
+
+    record.push_back(delimiter);
+    record.append(buf);
 }
 
 void CsvExtractorLogger::add_field(const char*, const snort::SfIp& v)

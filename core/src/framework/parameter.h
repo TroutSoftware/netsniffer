@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -62,6 +62,7 @@ struct SO_PUBLIC Parameter
         PT_ADDR_LIST,  // Snort 2 ip list in [ ]
         PT_IMPLIED,    // rule option args w/o values eg relative
         PT_STR_LIST,   // string that contains strings
+        PT_DYNAMICS,   // multiple from range which is RangeQuery*
         PT_MAX
     };
     const char* name;

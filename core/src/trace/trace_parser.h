@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -27,7 +27,6 @@
 
 namespace snort
 {
-class Module;
 class Value;
 }
 
@@ -60,5 +59,5 @@ private:
     static std::map<std::string, std::map<std::string, bool>> s_configured_trace_options;
 };
 
-#endif // TRACE_PARSER_H
+#endif
 

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -137,7 +137,7 @@ static POPData* get_session_data(Flow* flow)
 
 static inline PDFJSNorm* acquire_js_ctx(POPData& pop_ssn, const void* data, size_t len)
 {
-    auto reload_id = SnortConfig::get_conf()->get_reload_id();
+    auto reload_id = SnortConfig::get_reload_id();
 
     if (pop_ssn.jsn and pop_ssn.jsn->get_generation_id() == reload_id)
         return pop_ssn.jsn;
@@ -210,11 +210,11 @@ static void POP_SearchInit()
 
 static void POP_SearchFree()
 {
-    if (pop_cmd_search_mpse != nullptr)
-        delete pop_cmd_search_mpse;
+    delete pop_cmd_search_mpse;
+    delete pop_resp_search_mpse;
 
-    if (pop_resp_search_mpse != nullptr)
-        delete pop_resp_search_mpse;
+    pop_cmd_search_mpse = nullptr;
+    pop_resp_search_mpse = nullptr;
 }
 
 static void POP_ResetState(Flow* ssn)
@@ -866,7 +866,7 @@ const InspectApi pop_api =
         sizeof(InspectApi),
         INSAPI_VERSION,
         0,
-        API_RESERVED,
+        PLUGIN_SO_RELOAD,
         API_OPTIONS,
         POP_NAME,
         POP_HELP,

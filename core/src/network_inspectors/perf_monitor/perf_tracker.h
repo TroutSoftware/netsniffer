@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -64,12 +64,13 @@ public:
     bool rotate();
     bool auto_rotate();
     bool is_open() { return fh != nullptr; }
+    unsigned get_flag() { return perf_flag; }
 
     PerfTracker(const PerfTracker&) = delete;
     PerfTracker& operator=(const PerfTracker&) = delete;
 
 protected:
-    PerfTracker(PerfConfig*, const char* tracker_name);
+    PerfTracker(PerfConfig*, const char* tracker_name, unsigned flag);
     virtual void write();
 
     uint64_t max_file_size = 0;
@@ -78,6 +79,7 @@ protected:
 private:
     std::string fname;
     std::string tracker_name;
+    unsigned perf_flag;
     FILE* fh = nullptr;
     time_t cur_time = 0;
 };

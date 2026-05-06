@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -22,21 +22,18 @@
 
 #include "framework/module.h"
 
+class TraceConfig;
 class TraceParser;
 
 class TraceModule : public snort::Module
 {
-private:
-    enum OutputType
-    {
-        OUTPUT_TYPE_STDOUT = 0,
-        OUTPUT_TYPE_SYSLOG,
-        OUTPUT_TYPE_NO_INIT
-    };
-
 public:
     TraceModule();
     ~TraceModule() override;
+
+    void init();
+    void reset();
+    void capture_outputs(TraceConfig*);
 
     const snort::Command* get_commands() const override;
     bool begin(const char*, int, snort::SnortConfig*) override;
@@ -50,15 +47,13 @@ private:
     void generate_params();
 
 private:
-    OutputType log_output_type = OUTPUT_TYPE_NO_INIT;
-    bool local_syslog = false;
-
     std::vector<snort::Parameter> modules_params;
     std::vector<std::vector<snort::Parameter>> module_ranges;
     std::vector<std::string> modules_help;
 
     TraceParser* trace_parser = nullptr;
+    std::string outputs;
 };
 
-#endif  // TRACE_MODULE_H
+#endif
 

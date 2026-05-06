@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -25,7 +25,7 @@
 
 #include "profiler/profiler_defs.h"
 #include "managers/mpse_manager.h"
-#include "managers/module_manager.h"
+#include "managers/plugin_manager.h"
 #include "main/snort_config.h"
 #include "detection/fp_config.h"
 
@@ -115,7 +115,7 @@ bool MpseGroup::create_normal_mpse(const SnortConfig* sc, const char* type)
 
     if (search_api)
     {
-        Module* mod = ModuleManager::get_module(search_api->base.name);
+        Module* mod = PluginManager::get_module(search_api->base.name);
         normal_mpse = search_api->ctor(sc, mod, nullptr);
         normal_mpse->set_api(search_api);
         return true;
@@ -164,7 +164,7 @@ bool MpseGroup::create_offload_mpse(const SnortConfig* sc)
 
     if (offload_search_api and (offload_search_api != search_api))
     {
-        Module* mod = ModuleManager::get_module(offload_search_api->base.name);
+        Module* mod = PluginManager::get_module(offload_search_api->base.name);
         offload_mpse = offload_search_api->ctor(sc, mod, nullptr);
         offload_mpse->set_api(offload_search_api);
         return true;

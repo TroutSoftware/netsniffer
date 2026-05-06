@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -25,7 +25,7 @@
 
 #include "opcua_session.h"
 
-#define OPCUA_LARGE_MSG_SIZE 4096
+#define OPCUA_LARGE_MSG_SIZE 16383
 
 enum opcua_splitter_state_t
 {

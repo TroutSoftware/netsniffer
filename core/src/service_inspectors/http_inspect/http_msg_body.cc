@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -31,8 +31,9 @@
 #include "http_module.h"
 #include "js_norm/js_enum.h"
 #include "pub_sub/dns_payload_event.h"
-#include "pub_sub/http_request_body_event.h"
 #include "pub_sub/http_body_event.h"
+#include "pub_sub/http_form_data_event.h"
+#include "pub_sub/http_request_body_event.h"
 #include "pub_sub/intrinsic_event_ids.h"
 
 #include "http_api.h"
@@ -62,7 +63,6 @@ static void init_decode_infs()
     decode_infs += INF_STACKED_ENCODINGS;
     decode_infs += INF_CONTENT_ENCODING_CHUNKED;
     decode_infs += INF_GZIP_FAILURE;
-    decode_infs += INF_GZIP_OVERRUN;
 }
 
 static int _init_decode_infs __attribute__((unused)) = (static_cast<void>(init_decode_infs()), 0);
@@ -80,6 +80,24 @@ HttpMsgBody::HttpMsgBody(const uint8_t* buffer, const uint16_t buf_size,
 
 void HttpMsgBody::publish(unsigned pub_id)
 {
+    // publish data extracted from MIME
+    if (!mime_fields.empty())
+    {
+        HttpFormDataEvent http_form_data_event(mime_fields, method_id);
+        DataBus::publish(pub_id, HttpEventIds::MIME_FORM_DATA, http_form_data_event, flow);
+
+    #ifdef REG_TEST
+        if (HttpTestManager::use_test_output(HttpTestManager::IN_HTTP))
+        {
+            fprintf(HttpTestManager::get_output_file(),
+                "HttpFormDataEvent event published. Originated from client.\n");
+            fprintf(HttpTestManager::get_output_file(),
+                "Form data URI: %s\n", http_form_data_event.get_form_data_uri().c_str());
+            fflush(HttpTestManager::get_output_file());
+        }
+    #endif
+    }
+
     if (publish_length <= 0)
         return;
 
@@ -143,10 +161,10 @@ void HttpMsgBody::publish(unsigned pub_id)
     }
 
     // publish DOH body if applicable
-    if (get_header(source_id) and (get_header(source_id)->get_content_type() == CT_APPLICATION_DNS) 
+    if (get_header(source_id) and (get_header(source_id)->get_content_type() == CT_APPLICATION_DNS)
         and (publish_octets < BODY_PUBLISH_DEPTH))
     {
-        const auto doh_publish_depth_remaining = BODY_PUBLISH_DEPTH - publish_octets;        
+        const auto doh_publish_depth_remaining = BODY_PUBLISH_DEPTH - publish_octets;
         auto doh_publish_length = (publish_length > doh_publish_depth_remaining) ?
             doh_publish_depth_remaining : publish_length;
         auto doh_last_piece = last_piece ? true : (publish_octets + doh_publish_length >= BODY_PUBLISH_DEPTH);
@@ -334,6 +352,13 @@ void HttpMsgBody::analyze()
         }
 
         detect_data.set(msg_text.length(), msg_text.start());
+
+        // Extract Form Data
+        bool is_request = nullptr != request;
+        bool last_piece = session_data->cutter[source_id] == nullptr or tcp_close;
+
+        if (is_request and last_piece)
+            mime_fields = session_data->mime_state[source_id]->form_data_content();
     }
 
     else if (session_data->file_depth_remaining[source_id] > 0 or
@@ -391,7 +416,7 @@ void HttpMsgBody::analyze()
 
             delete[] partial_detect_buffer;
 
-            if (!session_data->partial_flush[source_id])
+            if (session_data->partial_flush[source_id] == PF_NONE)
             {
                 bookkeeping_regular_flush(partial_detect_length, partial_detect_buffer,
                     partial_js_detect_length, detect_length);
@@ -413,7 +438,7 @@ void HttpMsgBody::analyze()
         }
     }
     body_octets += msg_text.length();
-    if (!session_data->partial_flush[source_id])
+    if (session_data->partial_flush[source_id] == PF_NONE)
         transaction->add_body_len(source_id, detect_data.length());
     partial_inspected_octets = session_data->partial_flush[source_id] ? msg_text.length() : 0;
 }
@@ -566,7 +591,7 @@ HttpJSNorm* HttpMsgBody::acquire_js_ctx()
     if (js_ctx)
     {
         if (js_ctx->get_trans_num() == trans_num and
-            js_ctx->ctx().get_generation_id() == SnortConfig::get_conf()->get_reload_id())
+            js_ctx->ctx().get_generation_id() == SnortConfig::get_reload_id())
             return js_ctx;
 
         delete js_ctx;
@@ -600,23 +625,23 @@ HttpJSNorm* HttpMsgBody::acquire_js_ctx()
     case CT_TEXT_LIVESCRIPT:
         // an external script should be processed from the beginning
         js_ctx = first_body ? new HttpExternalJSNorm(jsn_config, trans_num,
-            SnortConfig::get_conf()->get_reload_id()) : nullptr;
+            SnortConfig::get_reload_id()) : nullptr;
         break;
 
     case CT_APPLICATION_XHTML_XML:
     case CT_TEXT_HTML:
         js_ctx = new HttpInlineJSNorm(jsn_config, trans_num, params->js_norm_param.mpse_otag,
-            params->js_norm_param.mpse_attr, SnortConfig::get_conf()->get_reload_id());
+            params->js_norm_param.mpse_attr, SnortConfig::get_reload_id());
         break;
 
     case CT_APPLICATION_PDF:
-        js_ctx = new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_conf()->get_reload_id());
+        js_ctx = new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_reload_id());
         break;
 
     case CT_APPLICATION_OCTET_STREAM:
         js_ctx = first_body and
             HttpPDFJSNorm::is_pdf(decompressed_file_body.start(), decompressed_file_body.length()) ?
-            new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_conf()->get_reload_id()) : nullptr;
+            new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_reload_id()) : nullptr;
         break;
     }
 
@@ -631,16 +656,15 @@ HttpJSNorm* HttpMsgBody::acquire_js_ctx_mime()
     if (js_ctx)
     {
         if (js_ctx->get_trans_num() == trans_num and
-            js_ctx->ctx().get_generation_id() == SnortConfig::get_conf()->get_reload_id())
+            js_ctx->ctx().get_generation_id() == SnortConfig::get_reload_id())
             return js_ctx;
 
         delete js_ctx;
-        js_ctx = nullptr;
     }
 
     JSNormConfig* jsn_config = get_inspection_policy()->jsn_config;
     js_ctx = HttpPDFJSNorm::is_pdf(decompressed_file_body.start(), decompressed_file_body.length()) ?
-        new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_conf()->get_reload_id()) : nullptr;
+        new HttpPDFJSNorm(jsn_config, trans_num, SnortConfig::get_reload_id()) : nullptr;
 
     session_data->js_ctx_mime[source_id] = js_ctx;
     return js_ctx;
@@ -899,7 +923,7 @@ void HttpMsgBody::clear()
 
     if (request != nullptr)
         request->clear_body_params();
-        
+
     HttpMsgSection::clear();
 }
 
@@ -997,8 +1021,10 @@ const Field& HttpMsgBody::get_decomp_vba_data()
     if (buf && buf_len)
         decompressed_vba_data.set(buf_len, buf, true);
     else
+    {
         decompressed_vba_data.set(STAT_NOT_PRESENT);
-
+        delete[] buf;
+    }
     return decompressed_vba_data;
 }
 

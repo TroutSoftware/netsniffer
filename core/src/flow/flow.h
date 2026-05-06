@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -507,12 +507,13 @@ public:  // FIXIT-M privatize if possible
 
     unsigned network_policy_id = 0;
     struct timeval prev_packet_time = {0, 0};
-    
+
     unsigned inspection_policy_id = 0;
     unsigned ips_policy_id = 0;
     unsigned reload_id = 0;
     uint32_t default_session_timeout = 0;
     uint32_t idle_timeout = 0;
+    uint32_t flow_id = 0;           // Flow ID value provided from the DAQ module or underlying hardware.
 
     struct
     {
@@ -538,7 +539,7 @@ public:  // FIXIT-M privatize if possible
         bool binder_action_block : 1;
         bool in_allowlist : 1; // Set if the flow is in the allowlist
         bool allowed_on_excess : 1; // Set if the flow is allowed on excess
-        bool do_not_decrypt :1; //set when decided to not to decrypt 
+        bool do_not_decrypt :1; //set when decided to not to decrypt
     } flags = {};
 
     int32_t client_intf = 0;
@@ -570,6 +571,9 @@ private:
     void clean();
     std::atomic_ullong inspection_duration{0};
     uint16_t inspected_packet_count{0};
+
+public:
+    uint64_t connection_id = 0;     // Connection ID value provided from a plugin.
 };
 
 inline void Flow::set_to_client_detection(bool enable)
@@ -590,4 +594,3 @@ inline void Flow::set_to_server_detection(bool enable)
 }
 
 #endif
-

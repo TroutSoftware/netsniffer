@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -44,7 +44,7 @@ public:
     void show(const snort::SnortConfig*) const override;
     void tinit() override;
     void tterm() override;
-    void tear_down(snort::SnortConfig*) override;
+    void tear_down(snort::SnortConfig*, bool) override;
     void eval(snort::Packet*) override;
     AppIdContext& get_ctxt()
     { return ctxt; }
@@ -52,12 +52,21 @@ public:
     const AppIdConfig& get_config() const
     { return *config; }
 
+    void request_shadow_traffic(bool b)
+    { enable_shadow_traffic_requested = b; }
+
+    bool shadow_traffic_was_requested() const
+    { return enable_shadow_traffic_requested; }
+
     static unsigned get_pub_id();
+    static unsigned get_shadowtraffic_pub_id();
 
 private:
     AppIdConfig* config = nullptr;
     AppIdContext ctxt;
+    bool enable_shadow_traffic_requested = false;
     static unsigned cached_global_pub_id;
+    static unsigned cached_shadowtraffic_pub_id;
     void third_party_tinit();
     void third_party_tfini();
 };

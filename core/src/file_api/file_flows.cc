@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2012-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -144,11 +144,9 @@ FileFlows* FileFlows::get_file_flows(Flow* flow, bool to_create)
     if (!to_create or fd)
         return fd;
 
-    FileInspect* fi = (FileInspect*)InspectorManager::get_file_inspector();
-
-    if (FileService::is_file_service_enabled() and fi)
+    if (FileService::is_file_service_enabled())
     {
-        fd = new FileFlows(flow, fi);
+        fd = new FileFlows(flow);
         flow->set_flow_data(fd);
         fd->set_file_policy(get_network_policy()->get_base_file_policy());
     }

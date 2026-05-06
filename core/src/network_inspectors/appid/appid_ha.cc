@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -71,7 +71,7 @@ bool AppIdHAAppsClient::consume(Flow*& flow, const FlowKey* key, HAMessage& msg,
         return false;
 
     AppIdInspector* inspector =
-        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE, appid_inspector_api.type));
+        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
 
     if (!inspector or !pkt_thread_odp_ctxt)
         return false;
@@ -79,7 +79,7 @@ bool AppIdHAAppsClient::consume(Flow*& flow, const FlowKey* key, HAMessage& msg,
     AppIdSession* asd = (AppIdSession*)(flow->get_flow_data(AppIdSession::inspector_id));
     const AppIdSessionHAApps* appHA = (const AppIdSessionHAApps*)msg.cursor;
 
-    if (appidDebug->is_enabled())
+    if (appidDebug and appidDebug->is_enabled())
         appidDebug->activate(flow, asd, inspector->get_ctxt().config.log_all_sessions);
 
     Packet* p = CURRENT_PACKET;
@@ -232,14 +232,14 @@ bool AppIdHAHttpClient::consume(Flow*& flow, const FlowKey* key, HAMessage& msg,
         return false;
 
     AppIdInspector* inspector =
-        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE, appid_inspector_api.type));
+        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
 
     if (!inspector or !pkt_thread_odp_ctxt)
         return false;
 
     AppIdSession* asd = appid_api.get_appid_session(*flow);
     AppIdSessionHAHttp* appHA = (AppIdSessionHAHttp*)msg.cursor;
-    if (appidDebug->is_enabled())
+    if (appidDebug and appidDebug->is_enabled())
         appidDebug->activate(flow, asd, inspector->get_ctxt().config.log_all_sessions);
 
     APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "high-avail - Consuming HTTP data - URL %s, host %s\n",
@@ -320,14 +320,14 @@ bool AppIdHATlsHostClient::consume(Flow*& flow, const FlowKey* key, HAMessage& m
         return false;
 
     AppIdInspector* inspector =
-        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE, appid_inspector_api.type));
+        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
 
     if (!inspector or !pkt_thread_odp_ctxt)
         return false;
 
     AppIdSession* asd = appid_api.get_appid_session(*flow);
     AppIdSessionHATlsHost* appHA = (AppIdSessionHATlsHost*)msg.cursor;
-    if (appidDebug->is_enabled())
+    if (appidDebug and appidDebug->is_enabled())
         appidDebug->activate(flow, asd, inspector->get_ctxt().config.log_all_sessions);
 
     APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "high-avail - Consuming TLS host - %s\n", appHA->tls_host);

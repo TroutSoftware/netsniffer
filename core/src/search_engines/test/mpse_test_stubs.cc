@@ -1,5 +1,5 @@
 ////--------------------------------------------------------------------------
-// Copyright (C) 2022-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2022-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -52,7 +52,7 @@ THREAD_LOCAL SnortConfig* snort_conf = &s_conf;
 const SnortConfig* SnortConfig::get_conf()
 { return snort_conf; }
 
-SnortConfig::SnortConfig(const SnortConfig* const, const char*)
+SnortConfig::SnortConfig(const char*)
     : daq_config(nullptr), fast_pattern_config(new FastPatternConfig()), state(&s_state), num_slots(1),
     thread_config(nullptr)
 { }

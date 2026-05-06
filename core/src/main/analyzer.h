@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -92,6 +92,9 @@ public:
 
     void set_pause_after_cnt(uint64_t msg_cnt) { pause_after_cnt = msg_cnt; }
     void set_skip_cnt(uint64_t msg_cnt) { skip_cnt = msg_cnt; }
+#ifdef REG_TEST
+    void exit_after_reload() { wait_for_reload = true; }
+#endif
 
     void execute(snort::AnalyzerCommand*);
 
@@ -108,7 +111,6 @@ public:
     void resume(uint64_t msg_cnt);
     void reload_daq();
     void reinit(const snort::SnortConfig*);
-    void stop_removed(const snort::SnortConfig*);
     void rotate();
     snort::SFDAQInstance* get_daq_instance() { return daq_instance; }
 
@@ -144,6 +146,9 @@ private:
     unsigned id;
     bool exit_requested = false;
     bool idling = false;
+#ifdef REG_TEST
+    bool wait_for_reload = false;
+#endif
     uint64_t exit_after_cnt;
     uint64_t pause_after_cnt = 0;
     uint64_t skip_cnt = 0;

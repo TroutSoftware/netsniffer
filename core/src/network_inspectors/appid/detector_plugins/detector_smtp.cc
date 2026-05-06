@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2005-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -190,7 +190,6 @@ SmtpClientDetector::SmtpClientDetector(ClientDiscovery* cdm)
  *    prefix_len - The number of characters that are the prefix to the version,
  *              including the NUL terminating character.
  */
-// FIXIT-M - refactor this to reduce the number of function parameters
 int SmtpClientDetector::extract_version_and_add_client_app(
     AppId clientId, const int prefix_len, const uint8_t* product, const uint8_t* product_end,
     ClientSMTPData* const client_data, AppIdSession& asd, AppId appId,
@@ -711,7 +710,7 @@ static inline int smtp_validate_reply(const uint8_t* data, uint16_t* offset, uin
         {
             (*offset)++;
             if (*offset >= size)
-                return -1;
+                return 0;  
             if (data[*offset] != 0x0A)
                 return -1;
         }

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -167,6 +167,24 @@ const char* get_instance_file(std::string& file, const char* name)
 
     file += name;
 
+    return file.c_str();
+}
+
+const char* get_main_file(std::string& file, const char* name)
+{
+    const SnortConfig* sc = SnortConfig::get_conf();
+    file = !sc->log_dir.empty() ?  sc->log_dir : "./";
+
+    if ( file.back() != '/' )
+        file += '/';
+
+    if ( !sc->run_prefix.empty() )
+        file += sc->run_prefix;
+
+    if ( !sc->id_zero )
+        file += "main_";
+
+    file += name;
     return file.c_str();
 }
 }

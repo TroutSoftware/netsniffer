@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2020-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2020-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -23,6 +23,7 @@
 
 #include "binding.h"
 
+#include "framework/module.h"
 #include "flow/flow.h"
 #include "flow/flow_key.h"
 #include "log/messages.h"
@@ -78,11 +79,13 @@ void Binding::clear()
     use.name.clear();
 
     use.action = BindUse::BA_INSPECT;
+    use.network_index = 0;
     use.inspection_index = 0;
     use.ips_index = 0;
     use.what = BindUse::BW_NONE;
     use.inspector = nullptr;
     use.global_type = false;
+    use.same_file = false;
 }
 
 void Binding::configure(const SnortConfig* sc)
@@ -106,7 +109,8 @@ void Binding::configure(const SnortConfig* sc)
     if (!use.name.empty())
     {
         const char* name = use.name.c_str();
-        Inspector* ins = InspectorManager::get_inspector(name, use.global_type, sc);
+        Module::Usage muse = (use.global_type ? Module::GLOBAL : Module::INSPECT);
+        Inspector* ins = InspectorManager::get_inspector(name, muse);
 
         if (ins)
         {
@@ -120,8 +124,12 @@ void Binding::configure(const SnortConfig* sc)
                         default: use.what = BindUse::BW_STREAM; break;
                     }
                     break;
-                case IT_WIZARD: use.what = BindUse::BW_WIZARD; break;
-                case IT_SERVICE: use.what = BindUse::BW_GADGET; break;
+                case IT_SERVICE:
+                    if ( !strcmp(ins->get_name(), "wizard") )
+                        use.what = BindUse::BW_WIZARD;
+                    else
+                        use.what = BindUse::BW_GADGET;
+                    break;
                 case IT_PASSIVE: use.what = BindUse::BW_PASSIVE; break;
                 default: break;
             }

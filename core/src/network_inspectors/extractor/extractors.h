@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2024-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2024-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -60,6 +60,8 @@ public:
     using SipField = DataField<const SfIp&, const DataEvent*, const Flow*>;
     using NumGetFn = uint64_t (*) (const DataEvent*, const Flow*);
     using NumField = DataField<uint64_t, const DataEvent*, const Flow*>;
+    using DblGetFn = double (*) (const DataEvent*, const Flow*);
+    using DblField = DataField<double, const DataEvent*, const Flow*>;
     using NtsGetFn = struct timeval (*) (const DataEvent*, const Flow*);
     using NtsField = DataField<struct timeval, const DataEvent*, const Flow*>;
     using StrGetFn = std::pair<const char*, uint16_t> (*) (const DataEvent*, const Flow*);
@@ -137,7 +139,10 @@ protected:
     }
 
     static uint64_t get_uid(const DataEvent*, const Flow* flow)
-    { return ExtractorEvent::get_hash().do_hash((const unsigned char*)flow->key, 0); }
+    {
+        return flow->connection_id ? flow->connection_id
+            : ExtractorEvent::get_hash().do_hash((const unsigned char*)flow->key, 0);
+    }
 
     template<typename T, class... Context>
     void log(const T& fields, Context... context)
@@ -184,6 +189,7 @@ protected:
     std::vector<NtsField> nts_fields;
     std::vector<SipField> sip_fields;
     std::vector<NumField> num_fields;
+    std::vector<DblField> dbl_fields;
     std::vector<BufField> buf_fields;
     std::vector<StrField> str_fields;
 

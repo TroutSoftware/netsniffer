@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2021-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2021-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -24,8 +24,6 @@
 #include "framework/ips_action.h"
 #include "framework/module.h"
 #include "protocols/packet.h"
-
-#include "actions_module.h"
 
 using namespace snort;
 
@@ -68,13 +66,12 @@ class AlertActionModule : public Module
 {
 public:
     AlertActionModule() : Module(module_name, module_help)
-    { ActionsModule::add_action(module_name, alert_pegs); }
+    { register_action_pegs(module_name, alert_pegs); }
 
     bool stats_are_aggregated() const override
     { return true; }
 
-    void show_stats() override
-    { /* These stats are shown by ActionsModule. */ }
+    void show_stats() override { }
 
     const PegInfo* get_pegs() const override
     { return alert_pegs; }

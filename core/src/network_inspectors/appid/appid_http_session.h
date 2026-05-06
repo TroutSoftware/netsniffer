@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2017-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2017-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -32,6 +32,8 @@
 #include "appid_app_descriptor.h"
 #include "appid_types.h"
 #include "application_ids.h"
+
+#define HTTP_FIELD_LEN_LIMIT 2048
 
 class AppIdSession;
 class ChpMatchDescriptor;
@@ -170,13 +172,6 @@ protected:
 
     AppIdSession& asd;
 
-    // FIXIT-M the meta data buffers in this array are only set from
-    // third party (tp_appid_utils.cc) and from http inspect
-    // (appid_http_event_handler.cc). The set_field functions should
-    // only be accessible to those functions/classes, but the process
-    // functions in tp_appid_utils.cc are static. Thus the public
-    // set_field() functions in AppIdHttpSession. We do need set functions
-    // for this array, as old pointers need to be deleted upon set().
     const std::string* meta_data[NUM_METADATA_FIELDS] = { };
 
     bool is_webdav = false;

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2004-2013 Sourcefire, Inc.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -196,9 +196,7 @@ public:
     DnsResponseFqdn()
     {}
 
-    DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, DNSData* dnsSessionData) :
-        data(data), bytes_unused(bytes_unused), dnsSessionData(std::make_shared<DNSData>(*dnsSessionData))
-    {}
+    DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, DNSData* dnsSessionData);
 
     FqdnTtl get_fqdn();
     void update_ttl(uint32_t ttl);

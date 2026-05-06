@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2018-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2018-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -33,8 +33,6 @@ public:
     virtual ~IpsContextData() = default;
 
     static unsigned get_ips_id();
-    // Only unit tests can call this function to clear the id
-    static void clear_ips_id();
 
     template<typename T>
     static T* get(unsigned ips_id)
@@ -54,6 +52,13 @@ protected:
 
 private:
     static unsigned ips_id;
+
+#ifdef UNIT_TEST
+public:
+#endif
+    static void clear_ips_id();
+
+    friend class Snort;
 };
 }
 #endif

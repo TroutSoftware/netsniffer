@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -41,6 +41,7 @@
 #include "main/thread_config.h"
 #include "managers/module_manager.h"
 #include "utils/stats.h"
+#include "utils/util.h"
 
 using namespace snort;
 
@@ -178,13 +179,14 @@ bool MpseRegexOffload::get(Packet*& p)
 ThreadRegexOffload::ThreadRegexOffload(unsigned max) : RegexOffload(max)
 {
     unsigned i = ThreadConfig::get_instance_max();
-    const SnortConfig* sc = SnortConfig::get_conf();
+    SnortConfig* sc = SnortConfig::get_main_conf();
 
     for ( auto* req : idle )
     {
         ModuleManager::add_thread_stats_entry("search_engine");
         ModuleManager::add_thread_stats_entry("detection");
         req->thread = new std::thread(worker, req, sc, i++);
+        SET_THREAD_NAME(req->thread->native_handle(), "snort3.regex");
     }
 }
 
@@ -268,7 +270,7 @@ bool ThreadRegexOffload::get(Packet*& p)
 }
 
 void ThreadRegexOffload::worker(
-    RegexRequest* req, const SnortConfig* initial_config, unsigned id)
+    RegexRequest* req, SnortConfig* initial_config, unsigned id)
 {
     set_instance_id(id);
     SnortConfig::set_conf(initial_config);
@@ -277,7 +279,8 @@ void ThreadRegexOffload::worker(
     {
         {
             std::unique_lock<std::mutex> lock(req->mutex);
-            req->cond.wait_for(lock, std::chrono::seconds(1));
+            req->cond.wait_for(lock, std::chrono::seconds(1),
+                [&]{ return !req->go || req->offload; });
 
             if ( !req->go )
                 break;
@@ -290,7 +293,7 @@ void ThreadRegexOffload::worker(
         assert(req->packet->is_offloaded());
         assert(req->packet->context->searches.items.size() > 0);
 
-        SnortConfig::set_conf(req->packet->context->conf);
+        SnortConfig::set_conf(const_cast<SnortConfig*>(req->packet->context->conf));
         IpsContext* c = req->packet->context;
         Mpse::MpseRespType resp_ret;
 

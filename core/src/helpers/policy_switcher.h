@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2025-2025 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -15,22 +15,31 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //--------------------------------------------------------------------------
+// policy_switcher.h author Russ Combs <rucombs@cisco.com>
 
-#ifndef FILTER_FLOW_CRITERIA_H
-#define FILTER_FLOW_CRITERIA_H
+#ifndef POLICY_SWITCHER_H
+#define POLICY_SWITCHER_H
 
-#include <string>
-#include "sfip/sf_ip.h"
-#include <framework/decode_data.h>
+// use this when processing flows without packets (eg when pruning)
 
-struct FilterFlowCriteria
+#include "main/policy.h"
+
+namespace snort
 {
-	PktType pkt_type;
-    snort::SfIp source_sfip;
-    snort::SfIp destination_sfip;
-	uint16_t source_port = 0;
-	uint16_t destination_port = 0;
-    snort::SfIp source_subnet_sfip;
-    snort::SfIp destination_subnet_sfip;
+    class Flow;
 };
+
+class PolicySwitcher
+{
+public:
+    PolicySwitcher(snort::Flow*);
+    ~PolicySwitcher();
+
+private:
+    NetworkPolicy* con;
+    InspectionPolicy* nap;
+    IpsPolicy* ips;
+};
+
 #endif
+

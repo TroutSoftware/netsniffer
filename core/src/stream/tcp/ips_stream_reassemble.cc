@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -276,7 +276,6 @@ TEST_CASE("IPS Stream Reassemble", "[ips_stream_reassemble][stream_tcp]")
     REQUIRE( reassembler != nullptr );
 
     TcpNormalizerFactory::initialize();
-    TcpReassembler::tinit();
 
     Flow* flow = new Flow;
     Packet* pkt = get_syn_packet(flow);
@@ -314,7 +313,6 @@ TEST_CASE("IPS Stream Reassemble", "[ips_stream_reassemble][stream_tcp]")
     delete flow;
     ips_stream_reassemble->mod_dtor(reassembler);
     TcpNormalizerFactory::term();
-    TcpReassembler::tterm();
 }
 
 #endif

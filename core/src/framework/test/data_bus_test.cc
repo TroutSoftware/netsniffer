@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -34,7 +34,7 @@ using namespace snort;
 //--------------------------------------------------------------------------
 // mocks
 //--------------------------------------------------------------------------
-InspectionPolicy::InspectionPolicy(unsigned int) : framework_policy(nullptr), cloned(false) {}
+InspectionPolicy::InspectionPolicy(unsigned int) : service_group(nullptr) {}
 InspectionPolicy::~InspectionPolicy() = default;
 NetworkPolicy::NetworkPolicy(unsigned int, unsigned int) {}
 NetworkPolicy::~NetworkPolicy() = default;
@@ -48,7 +48,7 @@ THREAD_LOCAL SnortConfig* snort_conf = &s_conf;
 const SnortConfig* SnortConfig::get_conf()
 { return snort_conf; }
 
-SnortConfig::SnortConfig(const SnortConfig* const, const char*)
+SnortConfig::SnortConfig(const char*)
 { global_dbus = new DataBus(); }
 
 SnortConfig::~SnortConfig()

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2016-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2016-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -50,6 +50,8 @@ void FatalError(const char* fmt, ...) { (void)fmt; exit(1); }
 // memory managed by the cache.
 HostCacheIp default_host_cache(LRU_CACHE_INITIAL_SIZE);
 HostCacheSegmentedIp host_cache(4,1024);
+
+void host_cache_module_dump() { }
 
 TEST_GROUP(host_tracker)
 {

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2015-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2015-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -42,7 +42,7 @@
 using namespace snort;
 using namespace std;
 
-PerfTracker::PerfTracker(PerfConfig* config, const char* tracker_name)
+PerfTracker::PerfTracker(PerfConfig* config, const char* tracker_name, unsigned pf)
 {
     max_file_size = config->max_file_size;
 
@@ -67,6 +67,7 @@ PerfTracker::PerfTracker(PerfConfig* config, const char* tracker_name)
     }
 
     this->tracker_name = tracker_name;
+    perf_flag = pf;
 }
 
 PerfTracker::~PerfTracker()

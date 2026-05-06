@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2014-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2014-2026 Cisco and/or its affiliates. All rights reserved.
 // Copyright (C) 2002-2013 Sourcefire, Inc.
 // Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 //
@@ -33,9 +33,6 @@ namespace snort
 {
     struct Packet;
 }
-
-FILE* OpenAlertFile(const char*, bool is_critical=true);
-int RollAlertFile(const char*);
 
 void OpenLogger();
 void CloseLogger();

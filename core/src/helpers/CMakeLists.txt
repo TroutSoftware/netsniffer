@@ -22,6 +22,7 @@ set (HELPERS_INCLUDES
     infractions.h
     json_stream.h
     literal_search.h
+    lockless_ring.h
     memcap_allocator.h
     ring2.h
     scratch_allocator.h
@@ -50,6 +51,8 @@ add_library (helpers OBJECT
     primed_allocator.h
     ring.h
     ring_logic.h
+    policy_switcher.cc
+    policy_switcher.h
     sigsafe.cc
     scratch_allocator.cc
     streambuf.cc

@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------
-// Copyright (C) 2019-2025 Cisco and/or its affiliates. All rights reserved.
+// Copyright (C) 2019-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
 // under the terms of the GNU General Public License Version 2 as published
@@ -36,6 +36,7 @@
 #include "protocols/tcp.h"
 #include "protocols/udp.h"
 #include "protocols/vlan.h"
+#include "stream/base/stream_module.h"
 #include "stream/stream.h"
 #include "utils/util.h"
 #include "flow/expect_cache.h"
@@ -73,11 +74,8 @@ size_t FlowCache::uni_flows_size() const { return 0; }
 size_t FlowCache::uni_ip_flows_size() const { return 0; }
 size_t FlowCache::flows_size() const { return 0; }
 void Flow::init(PktType) { }
-const SnortConfig* SnortConfig::get_conf() { return nullptr; }
+unsigned SnortConfig::get_reload_id() { return 0; }
 void FlowCache::unlink_uni(Flow*) { }
-bool FlowCache::dump_flows(std::fstream&, unsigned, const FilterFlowCriteria&, bool, uint8_t) const { return false; }
-bool FlowCache::dump_flows_summary(FlowsSummary&, const FilterFlowCriteria&) const { return false; }
-bool FlowCache::filter_flows(const Flow&, const FilterFlowCriteria&) const { return true; };
 void Flow::set_client_initiate(Packet*) { }
 void Flow::set_direction(Packet*) { }
 void Flow::set_mpls_layer_per_dir(Packet*) { }
@@ -89,6 +87,7 @@ Flow* HighAvailabilityManager::import(Packet&, FlowKey&) { return nullptr; }
 bool FlowCache::move_to_allowlist(snort::Flow*) { return true; }
 uint64_t FlowCache::get_lru_flow_count(uint8_t) const { return 0; }
 SO_PUBLIC void snort::ts_print(const struct timeval*, char*, bool) { }
+THREAD_LOCAL BaseStats stream_base_stats = {};
 
 namespace snort
 {
@@ -154,20 +153,20 @@ TEST(stale_flow, stale_flow)
     Flow* flow = new Flow;
     FlowCacheConfig fcg;
     FlowCache *cache = new FlowCache(fcg);
-    FlowControl *flow_con = new FlowControl(fcg);
+    FlowControl *flow_control = new FlowControl(fcg);
     DAQ_PktHdr_t dh = { };
 
     dh.flags = DAQ_PKT_FLAG_NEW_FLOW;
     p->pkth = &dh;
-    CHECK(flow_con->stale_flow_cleanup(cache, flow, p) == nullptr);
+    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == nullptr);
 
     dh.flags &= ~DAQ_PKT_FLAG_NEW_FLOW;
-    CHECK(flow_con->stale_flow_cleanup(cache, flow, p) == flow);
+    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == flow);
 
     p->pkth = nullptr;
     delete flow;
     delete p;
-    delete flow_con;
+    delete flow_control;
     delete cache;
 }
 
