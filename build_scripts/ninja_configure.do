@@ -17,3 +17,7 @@ CXXFLAGS="$CXXFLAGS -O2" ./ninja_generate > $BUILD_DIR/release/build.ninja
 
 redo-ifchange $BUILD_DIR/debug/build.ninja
 redo-ifchange $BUILD_DIR/release/build.ninja
+
+ninja -C $BUILD_DIR/debug -t compdb cc > $TMP_FOLDER/compile_commands.plugins
+
+redo-ifchange $TMP_FOLDER/compile_commands.plugins

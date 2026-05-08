@@ -49,6 +49,11 @@ PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
   -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \
   -DCMAKE_LINKER="$LD" )
 
-redo-ifchange $(find $BASE_DIR/snort3 -type f )
+redo-ifchange $(find $BASE_DIR/core -type f )
 redo-ifchange $SNORT_BUILD_DIR/build.ninja
 redo-ifchange $SNORT_BUILD_DIR_DEBUG/build.ninja
+
+cp $SNORT_BUILD_DIR_DEBUG/compile_commands.json $TMP_FOLDER/compile_commands.core
+
+redo-ifchange $TMP_FOLDER/compile_commands.core
+redo-ifchange $SNORT_BUILD_DIR_DEBUG/compile_commands.json
