@@ -23,7 +23,7 @@ while IFS= read -r -d '' FILE; do
   cat <<EOF >> "$OUTPUT"
   {
       "directory": "$FILE_DIR",
-      "command": "$CC $CFLAGS -I. -I$FILE_DIR -I.. -I$LIBDAQ_SRC_DIR/api -c $FILE"
+      "command": "$CC $CFLAGS -I. -I$FILE_DIR -I.. -I$LIBDAQ_SRC_DIR/api -c $FILE",
       "file": "$FILE"
   }
 EOF

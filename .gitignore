@@ -5,6 +5,7 @@ p/
 .do_built.dir/
 envrc
 snort-modules.tar.gz
+compile_commands.json
 .lldb
 
 # packaging info
