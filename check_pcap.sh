@@ -22,7 +22,7 @@ _bwrap() {
         --ro-bind "$ALPINE_OS/sbin" /sbin \
         --bind "$ALPINE_OS/usr" /usr \
         --dir /tmp --proc proc --dev dev --dir /run \
-        --ro-bind "$DEBUG_CORE_BUILD" "/opt/netsniffer" \
+        --bind "$DEBUG_CORE_BUILD" "/opt/netsniffer" \
         --ro-bind "$DEBUG_BUILD" "/opt/netsniffer/plugins" \
         --ro-bind $PCAPS "/PCAPS" \
         --ro-bind $HUB  "/hub" \
