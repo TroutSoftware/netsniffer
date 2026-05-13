@@ -18,6 +18,10 @@ _bwrap() {
         --setenv GONOSUMDB "trout.software" \
         --setenv GOMODCACHE "/go/mods" \
         --setenv GOCACHE "/go/cache" \
+        --setenv TEST_ENV "$TEST_ENV" \
+        --setenv TEST_ENV_DIR "$TEST_DIR_ALPN" \
+        --setenv TEST_ENV_BUILD_DIR "$TEST_DIR_BUILD" \
+        --setenv TEST_ENV_OS_DIR "$TEST_DIR_ALPN_OS" \
         --bind "$TEST_DIR_ALPN_OS/srv" /srv \
         "$@"
 }
@@ -40,6 +44,10 @@ _bwrap_sudo() {
         --setenv GONOSUMDB "trout.software" \
         --setenv GOMODCACHE "/go/mods" \
         --setenv GOCACHE "/go/cache" \
+        --setenv TEST_ENV "$TEST_ENV" \
+        --setenv TEST_ENV_DIR "$TEST_DIR_ALPN" \
+        --setenv TEST_ENV_BUILD_DIR "$TEST_DIR_BUILD" \
+        --setenv TEST_ENV_OS_DIR "$TEST_DIR_ALPN_OS" \
         --bind "$TEST_DIR_ALPN_OS/srv" /srv \
         --dev-bind /dev /dev \
         --cap-add CAP_NET_RAW \

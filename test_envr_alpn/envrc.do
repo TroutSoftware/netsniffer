@@ -3,6 +3,7 @@
 
 cat > $3 <<- EOF
 	# To modify content of this file, edit envrc.do
+	TEST_ENV="$(basename "$(pwd)")"
 	BASE_DIR="$(dirname "$(pwd)")"
 	BUILD_DIR="\$BASE_DIR/p"
 	TEST_DIR_ALPN=\$BUILD_DIR/alpine_build
