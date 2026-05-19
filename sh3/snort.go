@@ -38,7 +38,7 @@ func snort(gdb bool) script.Cmd {
 			var stdoutBuf, stderrBuf strings.Builder
 
 			cargs := []string{"-c", s.Path("cfg.lua"),
-				"--plugin-path", s.Path("p"),
+//				"--plugin-path", s.Path("p"),
 				"--warn-all",
 				"--pcap-list", strings.Join(file_list, " ")}
 			var cmd *exec.Cmd

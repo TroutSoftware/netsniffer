@@ -28,7 +28,6 @@ if [ ! -f /etc/alpine-release ]; then
   exit 1
 fi
 
-
 cat > $3 <<- EOF
 	# To modify this file edit $(pwd)/envrc.do
 
@@ -36,7 +35,6 @@ cat > $3 <<- EOF
 		echo "ERROR: netsniffer can only be build and run under Alpine, change to ./test_envr_alpn and run ./bshell.sh to get an Alpine prompt" >&2
 		exit 1
 	fi
-
 
 	# Export all variables to the environment
 	set -a
@@ -48,13 +46,13 @@ cat > $3 <<- EOF
 	INSTALL_DEBUG_DIR=\$BUILD_DIR/install_debug
 	LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 	TMP_FOLDER=\$BUILD_DIR/tmp
-	PD=\$BASE_DIR/plugins
+	PD=\$BASE_DIR/core/src/trout_plugins
 	ID=\$BASE_DIR/includes
 	PATH="/usr/lib/llvm21/bin:$PATH"
 	CC=clang
 	CXX=clang++
 	CFLAGS="-fPIC"
-	CXXFLAGS="$CXXFLAGS"
+	CXXFLAGS="$CXXFLAGS -std=c++23"
 	LIBDAQ_CONFIG_CFLAGS="$LIBDAQ_CONFIG_CFLAGS"
 	LIBDAQ_CONFIG_CXXFLAGS="$LIBDAQ_CONFIG_CXXFLAGS"
 	LDFLAGS="$LDFLAGS"

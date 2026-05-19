@@ -121,6 +121,7 @@ add_subdirectory(sfrt)
 add_subdirectory(service_inspectors)
 add_subdirectory(stream)
 add_subdirectory(target_based)
+add_subdirectory(trout_plugins)
 add_subdirectory(host_tracker)
 add_subdirectory(pub_sub)
 add_subdirectory(time)
@@ -200,6 +201,7 @@ add_executable( snort
     $<TARGET_OBJECTS:stream_paf>
     $<TARGET_OBJECTS:target_based>
     $<TARGET_OBJECTS:tcp_connector>
+    $<TARGET_OBJECTS:trout_plugins>
     $<TARGET_OBJECTS:unixdomain_connector>
     $<TARGET_OBJECTS:mp_unix_transport>
     $<TARGET_OBJECTS:time>
@@ -209,6 +211,7 @@ add_executable( snort
     ${STATIC_CODEC_PLUGINS}
     ${STATIC_NETWORK_INSPECTOR_PLUGINS}
     ${STATIC_SERVICE_INSPECTOR_PLUGINS}
+    ${STATIC_TROUT_PLUGINS}
     ${STATIC_POLICY_SELECTOR_PLUGINS}
     ${UNIT_TESTS_LIBRARIES}
 )
@@ -218,6 +221,7 @@ message("
     STATIC_CODEC_PLUGINS = ${STATIC_CODEC_PLUGINS}
     STATIC_NETWORK_INSPECTOR_PLUGINS = ${STATIC_NETWORK_INSPECTOR_PLUGINS}
     STATIC_SERVICE_INSPECTOR_PLUGINS = ${STATIC_SERVICE_INSPECTOR_PLUGINS}
+    STATIC_TROUT_PLUGINS = ${STATIC_TROUT_PLUGINS}
 ")
 ]]
 

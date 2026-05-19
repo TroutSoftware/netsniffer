@@ -6,7 +6,6 @@ redo-ifchange .clangd
 
 mkdir -p $TMP_FOLDER
 
-redo-ifchange build_scripts/ninja_configure
 redo-ifchange build_scripts/daq2json
 redo-ifchange build_scripts/snort_config
 
@@ -34,10 +33,6 @@ get_middle $TMP_FOLDER/compile_commands.core | map_paths
 echo ","
 
 get_middle $TMP_FOLDER/compile_commands.daq | map_paths
-
-echo ","
-
-get_middle $TMP_FOLDER/compile_commands.plugins | map_paths
 
 echo "]"
 

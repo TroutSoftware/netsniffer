@@ -4,7 +4,9 @@ redo-ifchange envrc release || exit 1
 
 . ./envrc
 
-echo "$INSTALL_DIR/bin/snort -v --warn-all --plugin-path $BUILD_DIR/release/tm.so $*"
+# Explicitly set the DAQ directory so Snort finds the modules automatically
+DAQ_LIB_DIR="$INSTALL_DIR/lib/daq"
 
-$INSTALL_DIR/bin/snort -v --warn-all --plugin-path $BUILD_DIR/release/tm.so $*
+set -x
+$INSTALL_DIR/bin/snort -v --warn-all --daq-dir $DAQ_LIB_DIR "$@"
 

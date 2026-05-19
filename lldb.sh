@@ -6,11 +6,10 @@ redo-ifchange envrc debug || exit 1
 
 # 1. Define paths for clarity
 SNORT_BIN="$INSTALL_DEBUG_DIR/bin/snort"
-PLUGIN_PATH="$BUILD_DIR/debug/tm.so"
 
 # 2. Build the default arguments list
 # We use "$@" at the end to catch any test-specific flags you pass to the script
-SNORT_ARGS="-v --warn-all --plugin-path $PLUGIN_PATH $@"
+SNORT_ARGS="-v --warn-all $@"
 
 echo "Starting LLDB with: $SNORT_BIN $SNORT_ARGS"
 

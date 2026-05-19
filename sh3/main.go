@@ -157,6 +157,7 @@ func main() {
 		if err := os.Mkdir(filepath.Join(test_dir, "p"), 0755); err != nil {
 			errf("cannot create temporary structure: %s", err)
 		}
+		/*
 		mod := "p/release/tm.so"
 		if debug {
 			mod = "p/debug/tm.so"
@@ -164,11 +165,11 @@ func main() {
 		if err := os.Symlink(filepath.Join(wd, mod), filepath.Join(test_dir, "p", "tm.so")); err != nil {
 			errf("cannot symlink %s: %s", mod, err)
 		}
-
+		*/
 		// optionally include testdata folder
 		if _, err := os.Stat(filepath.Dir(tscrpt) + "/testdata"); err == nil {
 			if err := os.Symlink(filepath.Dir(tscrpt)+"/testdata", filepath.Join(test_dir, "testdata")); err != nil {
-				errf("cannot symlink %s: %s", mod, err)
+				errf("cannot symlink for /testdata: %s", err)
 			}
 		}
 

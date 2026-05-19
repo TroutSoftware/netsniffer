@@ -1,6 +1,11 @@
+## 2026-05-19
+
+- Moved Trout code into src/trout_plugins
+- Added the Trout plugins to the build system and plugin loading
+
 ## 2026-05-05
 
-- Merged with version 3.12.2.0 from https://github.com/snort3/snort3 
+- Merged with version 3.12.2.0 from https://github.com/snort3/snort3
 
 commit 14aeb09f5a0856812dbe08ead3c21f99e8860aa0 (tag: 3.12.2.0, upstream/master, origin/master, origin/HEAD, master)
 Author: Priyanka Gurudev <prbg@cisco.com>

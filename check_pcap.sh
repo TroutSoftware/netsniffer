@@ -34,17 +34,16 @@ config=$1
 if [ ! -e $HUB/alerts/$config ]; then echo "no such config $HUB/alerts/$config"; exit 1; fi
 pcap=$(awk '$0 ~ "-- PCAP: " {print $3} ' $HUB/alerts/$config)
 
-_bwrap /opt/netsniffer/bin/snort --warn-all --plugin-path /opt/netsniffer/plugins/tm.so \
+_bwrap /opt/netsniffer/bin/snort --warn-all \
   -r "/PCAPS/$pcap" -c "/hub/alerts/$config" -A talos
 
-# 
-# 
-# 
-# 
-# 
+#
+#
+#
+#
+#
 # $INSTALL_DEBUG_DIR/bin/snort \
 #     -v \
 #     --warn-all \
 #     --daq-dir "$DAQ_LIB_DIR" \
-#     --plugin-path "$BUILD_DIR/debug/tm.so" \
-#    
+#

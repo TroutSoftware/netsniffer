@@ -53,6 +53,7 @@
 #include "service_inspectors/service_inspectors.h"
 #include "stream/stream_inspectors.h"
 #include "tracer/trace_loader.h"
+#include "trout_plugins/trout_plugins.h"
 
 #include "action_manager.h"
 #include "codec_manager.h"
@@ -614,6 +615,7 @@ void PluginManager::load_plugins(const std::string& paths)
     load_network_inspectors();
     load_service_inspectors();
     load_trace_loggers();
+    load_trout_plugins();
 
     // dynamic plugins
     if ( !paths.empty() )

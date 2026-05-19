@@ -4,11 +4,9 @@ redo-ifchange envrc
 
 . ./envrc
 
-SRC_DIRS="plugins includes"
+redo-ifchange $PD
 
-redo-ifchange $SRC_DIRS
-
-FIND_CMD="find $SRC_DIRS -type f \( -name '*.cc' -o -name '*.h' \) -print0"
+FIND_CMD="find $PD -type f \( -name '*.cc' -o -name '*.h' \) -print0"
 
 eval "$FIND_CMD" | xargs -0 clang-format -i
 
