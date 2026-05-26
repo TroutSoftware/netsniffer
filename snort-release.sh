@@ -8,5 +8,5 @@ redo-ifchange envrc release || exit 1
 DAQ_LIB_DIR="$INSTALL_DIR/lib/daq"
 
 set -x
-$INSTALL_DIR/bin/snort -v --warn-all --daq-dir $DAQ_LIB_DIR "$@"
+_env_build $INSTALL_DIR/bin/snort -v --warn-all --daq-dir $DAQ_LIB_DIR "$@"
 

@@ -7,6 +7,7 @@ redo-ifchange ../envrc snort_config snort_vars.rc libdaq_install
 
 exec >&2
 
-(cd "$SNORT_BUILD_DIR" || exit 1; ninja install)
+cd "$SNORT_BUILD_DIR" || exit 1
+_env_build "ninja install"
 
 

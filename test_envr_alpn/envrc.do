@@ -11,12 +11,14 @@ cat > $3 <<- EOF
 	TEST_DIR_ALPN_OS=\$TEST_DIR_ALPN/os
 	TEST_DIR_BUILD=\$TEST_DIR_ALPN/p
 	REDO_CACHE_ALPN_FOLDER=\$TEST_DIR_ALPN/alpine_redo_db
+	GO_RUNTIME="\$TEST_DIR_ALPN/go_runtime"
 
 	# Make sure some folders are existing
-	[ -d \$REDO_CACHE_ALPN_FOLDER ] || mkdir -p \$REDO_CACHE_ALPN_FOLDER
-	[ -d \$TEST_DIR_ALPN_DOWNLOAD ] || mkdir -p \$TEST_DIR_ALPN_DOWNLOAD
-	[ -d \$TEST_DIR_BUILD ] || mkdir -p \$TEST_DIR_BUILD
-	[ -d \$REDO_CACHE_ALPN_FOLDER ] || mkdir -p \$REDO_CACHE_ALPN_FOLDER
+	mkdir -p \$REDO_CACHE_ALPN_FOLDER \
+	         \$TEST_DIR_ALPN_DOWNLOAD \
+	         \$TEST_DIR_BUILD \
+	         \$REDO_CACHE_ALPN_FOLDER \
+	         \$GO_RUNTIME
 
 EOF
 

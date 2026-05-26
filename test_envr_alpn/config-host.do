@@ -16,3 +16,5 @@ redo-ifchange envrc packages-host
 
 cat packages-host| grep -v "^#" | xargs ./test_package_installed.sh || \
   (echo "Please install mentioned packages from $TEST_DIR_ALPN/packages-host" >&2 && exit 1)
+
+echo "Success" | redo-stamp

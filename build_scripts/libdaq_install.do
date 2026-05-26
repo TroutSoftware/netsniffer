@@ -8,7 +8,7 @@ redo-ifchange ../envrc libdaq_vars.rc libdaq_config
 
 cd $LIBDAQ_BUILD_DIR
 
-make install
+_env_build "make install"
 
 # We depend on all the generated files
 find $LIBDAQ_BUILD_DIR -type f | xargs redo-ifchange

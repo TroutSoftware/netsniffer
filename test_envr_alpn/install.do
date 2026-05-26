@@ -1,6 +1,6 @@
 exec >install.log
 
-redo-ifchange envrc packages-alpine fetch build-lib.rc config-host
+redo-ifchange envrc fetch packages-alpine build-lib.rc config-host alpine_modified
 
 . ./envrc
 . ./build-lib.rc
@@ -14,3 +14,5 @@ install -D -m 644 /etc/resolv.conf $TEST_DIR_ALPN_OS/etc/resolv.conf
 
 cat packages-alpine| grep -v "^#" | xargs unshare --map-auto --map-root chroot $TEST_DIR_ALPN_OS apk add # > install.log
 
+
+echo INSTALL RAN >&2

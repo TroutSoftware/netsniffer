@@ -1,6 +1,55 @@
 
 
+_bwrap_base() {
+echo "BWRAP STARTING IN: $(pwd)"
+    $BWRAP_PREFIX bwrap \
+        --ro-bind "$TEST_DIR_ALPN_OS" / \
+        --tmpfs /home \
+        --bind "$BASE_DIR" "$BASE_DIR" \
+        --bind "$REDO_CACHE_ALPN_FOLDER" "$BASE_DIR"/.redo \
+        --chdir "$(pwd)" \
+        --tmpfs /tmp \
+        --proc proc \
+        --dev dev \
+        --dir /run \
+        --setenv TEST_ENV "$TEST_ENV" \
+        --setenv TEST_ENV_DIR "$TEST_DIR_ALPN" \
+        --setenv TEST_ENV_BUILD_DIR "$TEST_DIR_BUILD" \
+        --setenv TEST_ENV_OS_DIR "$TEST_DIR_ALPN_OS" \
+        --setenv PATH "/usr/lib/llvm21/bin:/usr/bin:/bin" \
+        "$@"
+}
+
+_bwrap_base_target() {
+    $BWRAP_PREFIX bwrap \
+        --clearenv \
+        --ro-bind "$TEST_DIR_ALPN_OS" \
+        --setenv PATH "/usr/bin:/bin:$(go env GOROOT)/bin" \
+        --tmpfs /tmp \
+        --proc proc \
+        --dev dev \
+        --bind "$BASE_DIR" "$BASE_DIR" --chdir "$BASE_DIR" \
+        --bind "$REDO_CACHE_ALPN_FOLDER" "$BASE_DIR"/.redo \
+        --bind "$TEST_DIR_BUILD" "$BASE_DIR"/p \
+        --bind "$GO_RUNTIME" /go \
+        --setenv GOPROXY "https://proxy.devit.trout.software,https://proxy.golang.org" \
+        --setenv GONOSUMDB "trout.software" \
+        --setenv GOMODCACHE "/go/mods" \
+        --setenv GOCACHE "/go/cache" \
+        --setenv TEST_ENV "$TEST_ENV" \
+        --setenv TEST_ENV_DIR "$TEST_DIR_ALPN" \
+        --setenv TEST_ENV_BUILD_DIR "$TEST_DIR_BUILD" \
+        --setenv TEST_ENV_OS_DIR "$TEST_DIR_ALPN_OS" \
+        --bind "$TEST_DIR_ALPN_OS/srv" /srv \
+        "$@"
+}
+
 _bwrap() {
+echo "BWRAP launch parameters: $(pwd)\$ $@" >&2
+    BWRAP_PREFIX="" _bwrap_base -- "$@"
+}
+
+_bwrap_old() {
     bwrap --tmpfs / \
         --clearenv \
         --setenv PATH "$PATH:$(go env GOROOT)/bin" \
@@ -23,10 +72,19 @@ _bwrap() {
         --setenv TEST_ENV_BUILD_DIR "$TEST_DIR_BUILD" \
         --setenv TEST_ENV_OS_DIR "$TEST_DIR_ALPN_OS" \
         --bind "$TEST_DIR_ALPN_OS/srv" /srv \
-        "$@"
+        -- "$@"
 }
 
 _bwrap_sudo() {
+  BWRAP_PREFIX="sudo" _bwrap_base \
+        --dev-bind /dev /dev \
+        --cap-add CAP_NET_RAW \
+        --cap-add CAP_NET_ADMIN \
+        --share-net \
+        -- "$@"
+}
+
+_bwrap_sudo_old() {
     sudo bwrap --tmpfs / \
         --clearenv \
         --setenv PATH "$PATH:$(go env GOROOT)/bin" \
@@ -53,7 +111,7 @@ _bwrap_sudo() {
         --cap-add CAP_NET_RAW \
         --cap-add CAP_NET_ADMIN \
         --share-net \
-        "$@"
+        -- "$@"
 }
 
 
