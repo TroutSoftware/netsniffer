@@ -24,6 +24,26 @@ should be used, as that doesn't pack the data in any way:
   trout_netflow2 = { logger = 'logger_tcp' }
 ---
 
+About the exclude parameter:
+    What matches the exclude parameter will be ignored by netflow2
+
+    The format of the value exclude can be set to is the same as used in the binder
+
+    Ex exclude a single range:
+    trout_netflow2 = {... exclude = '10.67.21.0/16' }
+
+    Ex exclude multiple ranges:
+    trout_netflow2 = {... exclude = '10.67.21.0/16 192.168.1.0/24' }
+
+    Ex multiline, ! means negate so all in 192.168.1.0/24 except 192.168.1.1 etc:
+    trout_netflow2 = {...,
+                      exclude = [[
+                        192.168.1.0/24
+                        !192.168.1.1
+                        10.67.21.0/16
+                      ]]
+
+
 The socket_read program in the sandbox folder can be used as a target
 for the stream.  Build it by typing "make" in the folder with the source
 file and a "main" executable will be created, launch this with
