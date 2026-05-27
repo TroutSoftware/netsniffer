@@ -30,7 +30,7 @@ PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
   -DCMAKE_LINKER="$LD" )
 
 (cd "$SNORT_SRC_DIR" || exit 1;
-PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
+  PKG_CONFIG_PATH="$INSTALL_DIR_DEBUG/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \
   -S "$SNORT_SRC_DIR" \
   -B "$SNORT_BUILD_DIR_DEBUG" \
   -G Ninja \

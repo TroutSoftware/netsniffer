@@ -2,8 +2,11 @@
 #define settings_dc4a83d5
 
 // Snort includes
+#include "parser/parse_ip.h"
+#include "sfip/sf_ipvar.h"
 
 // System includes
+#include <memory>
 
 // Global includes
 #include "../includes/log_framework.h"
@@ -30,6 +33,10 @@ class Settings {
   uint32_t flush_interval_ms;
   uint32_t template_resend_interval_s;
   uint32_t source_id;
+  struct SfipDeleter {
+    void operator()(sfip_var_t *p) const { sfvar_free(p); }
+  };
+  std::unique_ptr<sfip_var_t, SfipDeleter> exclude;
 
 public:
   LioLi::Logger &get_logger();
@@ -43,6 +50,7 @@ public:
   uint32_t get_template_resend_interval_s();
   uint32_t get_source_id();
   std::string get_logger_name();
+  bool check_exclude(const snort::SfIp &ip_to_check);
 };
 
 } // namespace trout_netflow2

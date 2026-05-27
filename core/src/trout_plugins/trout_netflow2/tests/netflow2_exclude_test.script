@@ -1,0 +1,19 @@
+
+pcap testdata/google_http.pcap
+stdout 'pkts_excluded: 8'
+cmp output.hex testdata/netflow2_exclude_test.expected.hex
+
+-- cfg.lua --
+
+stream = {}
+stream_tcp = {}
+stream_udp = {}
+
+serializer_hex = {}
+
+logger_file = { serializer = 'serializer_hex',
+                file_name = 'output.hex'}
+
+trout_netflow2 = { logger = 'logger_file',
+                   testmode = true,
+                   exclude = '10.67.21.0/16 !10.67.21.59' }

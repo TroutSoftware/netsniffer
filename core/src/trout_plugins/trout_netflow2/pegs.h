@@ -21,6 +21,7 @@ struct Pegs {
     PegCount flows_seen = 0;         // Updated by inspector
     PegCount pkts_without_flow = 0;  // Updated by inspector
     PegCount pkts_seen = 0;          // Updated by inspector
+    PegCount pkts_excluded = 0;      // Updated by inspector
     PegCount total_bytes = 0;        // Updated by cache
     PegCount service_change = 0;     // Updated by cache
     PegCount services_seen = 0;      // Updated by inspector

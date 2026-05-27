@@ -48,6 +48,9 @@ const snort::Parameter module_params[] = {
     {"undefined_ip_protocol_number", snort::Parameter::PT_INT, "0:255", "0",
      "Set the value exported in the PROTOCOL (4) field, when the flow is not "
      "ip packet based"},
+    {"exclude", snort::Parameter::PT_ADDR_LIST, nullptr, nullptr,
+     "list of ip's to exclude (in binder format)"},
+
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
@@ -82,6 +85,8 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
     settings->extended_console_logging = val.get_bool();
   } else if (val.is("undefined_ip_protocol_number")) {
     settings->undefined_ip_protocol_number = val.get_uint8();
+  } else if (val.is("exclude")) {
+    settings->exclude.reset(sfip_var_from_string(val.get_string(), s_name));
   } else {
     // fail if we didn't get something we knew about
     return false;

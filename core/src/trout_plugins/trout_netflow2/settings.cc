@@ -4,6 +4,7 @@
 #endif
 
 // Snort includes
+#include "sfip/sf_ipvar.h"
 
 // System includes
 
@@ -51,5 +52,12 @@ uint32_t Settings::get_template_resend_interval_s() {
 uint32_t Settings::get_source_id() { return source_id; }
 
 std::string Settings::get_logger_name() { return logger_name; }
+
+bool Settings::check_exclude(const snort::SfIp &ip_to_check) {
+  if (!exclude) {
+    return false;
+  }
+  return sfvar_ip_in(exclude.get(), &ip_to_check);
+}
 
 } // namespace trout_netflow2

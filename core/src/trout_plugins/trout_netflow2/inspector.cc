@@ -49,6 +49,14 @@ void Inspector::eval(snort::Packet *p) {
 
   Pegs::s_peg_counts.pkts_seen++;
 
+  if (p->has_ip()) {
+    if (settings->check_exclude(*p->ptrs.ip_api.get_src()) ||
+        settings->check_exclude(*p->ptrs.ip_api.get_dst())) {
+      Pegs::s_peg_counts.pkts_excluded++;
+      return;
+    }
+  }
+
   if (p->flow) {
     PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
 
