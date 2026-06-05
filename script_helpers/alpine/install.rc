@@ -1,0 +1,52 @@
+# This file downloads and unpacks an Alpine image, then installs packages for it
+
+. "$OS_SCRIPT_FOLDER"/bwrap_generator.rc
+
+echo "Checking host configuration..." >&2
+[ -f /etc/apparmor.d/usr.bin.bwrap ]  || (\
+  echo "Please copy the file 'bwrap' from $OS_SCRIPT_FOLDER to /etc/apparmor.d/usr.bin.bwrap and restart apparmor 'sudo /etc/init.d/apparmor restart'" >&2 \
+  && exit 1)
+
+[ -f /etc/apparmor.d/usr.bin.unshare ]  || (\
+  echo "Please copy the file 'usr.bin.unshare' from $OS_SCRIPT_FOLDER to /etc/apparmor.d/usr.bin.unshare and restart apparmor 'sudo /etc/init.d/apparmor restart'" >&2 \
+  && exit 1)
+
+cat "$OS_SCRIPT_FOLDER/packages-host" | grep -v "^#" | xargs "$SOURCE_SCRIPT_FOLDER/test_package_installed.sh" || \
+  (echo "Please install mentioned packages from $SOURCE_SCRIPT_FOLDER/packages-host" >&2 && exit 1)
+
+
+ALPN_URL=https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64
+ALPN_VERSION=3.23.2
+ALPN_FILE_NAME=alpine-minirootfs-${ALPN_VERSION}-x86_64.tar.gz
+
+mkdir -p "$DOWNLOAD_CACHE"
+
+# If archive doesn't exist, download it, if that fails, delete incomplete download
+if [ ! -f "$DOWNLOAD_CACHE/$ALPN_FILE_NAME" ]; then
+  echo "Downloading alpine image..." >&2
+    curl -sSL $ALPN_URL/$ALPN_FILE_NAME > $DOWNLOAD_CACHE/$ALPN_FILE_NAME || \
+    (rm $DOWNLOAD_CACHE/$ALPN_FILE_NAME; echo "Download of Apline failed..." >&2; exit 1)
+fi
+
+echo "Unpacking alpine image to \"$OS_FOLDER\"" >&2
+mkdir -p $OS_FOLDER && ( \
+  tar -C $OS_FOLDER -xzf $DOWNLOAD_CACHE/$ALPN_FILE_NAME || \
+  (rm -r $OS_FOLDER; echo "Unpack of Alpine failed" >&2; exit 2))
+
+echo "Installing required packages in Alpine..." >&2
+
+# properly handle resolv changes
+install -D -m 644 /etc/resolv.conf "$OS_FOLDER/etc/resolv.conf"
+
+#_bwrap_writable_launch sh
+ALPINE_APK_INSTALL_SCRIPT="$BASE_BUILD_FOLDER/alpine_install.sh"
+cat << EOF > $ALPINE_APK_INSTALL_SCRIPT
+cat "$OS_SCRIPT_FOLDER/packages" | \\
+    grep -v "^#" | xargs \\
+    apk --cache-dir "$DOWNLOAD_CACHE" add >> alpine_install.log
+EOF
+chmod a+x $ALPINE_APK_INSTALL_SCRIPT
+
+_bwrap_writable_launch  "$ALPINE_APK_INSTALL_SCRIPT"
+
+echo "Alpine image created"

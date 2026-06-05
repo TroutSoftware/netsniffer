@@ -1,0 +1,88 @@
+#!/bin/sh
+
+# Fail if anything fail
+set -e
+
+# Defaults:
+
+ME="$0"
+SOURCE_SCRIPT_FOLDER="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_FOLDER="$(cd "$SOURCE_SCRIPT_FOLDER"/.. && pwd)"
+CONFIG_FILE="setup.rc"
+
+if [ ! -f "$CONFIG_FILE" ]; then
+  echo "$ME need to run in a folder where $CONFIG_FILE exists, use setup.sh from source folder to generate" >&2
+  exit 1
+fi
+
+. ./$CONFIG_FILE
+
+BASE_BUILD_FOLDER="$(pwd)"
+BUILD_HELPER_FOLDER="$BASE_BUILD_FOLDER/helper_scripts"
+INSTALL_FOLDER="$BASE_BUILD_FOLDER/install"
+
+
+
+CC=clang
+CXX=clang++
+CFLAGS="-fPIC"
+#CXXFLAGS="$CFLAGS -stdlib=libstdc++ -fvisibility=default -fexceptions -frtti -std=c++23"
+CXXFLAGS="$CFLAGS -stdlib=libc++ -fvisibility=default -fexceptions -frtti -std=c++23"
+LD_LIBRARY_PATH="/usr/lib/llvm21/lib"
+#LDFLAGS="-fuse-ld=lld -nodefaultlibs --rtlib=compiler-rt --unwindlib=libunwind -L/usr/lib/llvm21/lib -lc++ -lc++abi -lunwind -lm -lc -rdynamic"
+LDFLAGS="-fuse-ld=lld --rtlib=compiler-rt --unwindlib=libunwind -L/usr/lib/llvm21/lib -lc++ -lc++abi -lunwind -lm -lc -rdynamic"
+LD=ld.lld
+AR=llvm-ar
+NM=llvm-nm
+RANLIB=llvm-ranlib
+STRIP=llvm-strip
+
+
+echo "Populating build tree in \"$BASE_BUILD_FOLDER\"" >&2
+echo "Source code used from tree under \"$SOURCE_FOLDER\"" >&2
+echo "Helper scripts will live in \"$BUILD_HELPER_FOLDER\"" >&2
+
+# Create bwrap script if needed
+if [ ! "$TARGET" = "HOST" ]; then
+  case "$TARGET" in
+    ALPINE)
+      echo "Alpine bwrap wrappers will be added" >&2
+      OS_FOLDER="$BASE_BUILD_FOLDER/alpine_image"
+      OS_SCRIPT_FOLDER="$SOURCE_SCRIPT_FOLDER/alpine"
+      # Install Alpine in the $OS_FOLDER folder
+      . "$OS_SCRIPT_FOLDER"/install.rc
+
+      ;;
+    *)
+      echo "Unknown target TARGET=$TARGET" >&2
+      exit 1
+      ;;
+  esac
+else
+
+_launch_to_stdout() {
+  echo "Launching native"
+}
+
+_network_launch_to_stdout() {
+  echo "Network launching native"
+}
+
+fi
+
+. $SOURCE_SCRIPT_FOLDER/build_libdaq.rc
+
+. $SOURCE_SCRIPT_FOLDER/configure_core.rc
+
+
+SHELL_LAUNCH_SCRIPT="$BASE_BUILD_FOLDER/shell.sh"
+{
+_launch_to_stdout
+cat << EOF
+  sh
+EOF
+} > $SHELL_LAUNCH_SCRIPT
+
+chmod +x "$SHELL_LAUNCH_SCRIPT"
+
+

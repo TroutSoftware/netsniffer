@@ -1,0 +1,49 @@
+# This file builds libdaq
+
+
+# Config Libdaq, as it uses autotools, we create a copy of the folder
+
+if [ $MODE = "DEBUG" ]; then
+  CFLAGS="$CFLAGS -Og -glldb"
+  CXXFLAGS="$CXXFLAGS -Og -glldb"
+fi
+
+echo "Configuring libdaq..."
+LIBDAQ_CONFIGURE_SCRIPT="$BASE_BUILD_FOLDER/libdaq_configure.sh"
+{
+cat <<EOF
+  cp -r "$SOURCE_FOLDER/daq" "$BASE_BUILD_FOLDER/daq"
+EOF
+  _launch_to_stdout
+cat <<EOF
+  sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
+  \\
+  ./bootstrap; \\
+  \\
+  CC="$CC --rtlib=compiler-rt --unwindlib=libunwind" \\
+  CXX="$CXX --rtlib=compiler-rt --unwindlib=libunwind" \\
+  CFLAGS="$CFLAGS" \\
+  CXXFLAGS="$CXXFLAGS" \\
+  LDFLAGS="$LDFLAGS" \\
+  ./configure \\
+    --prefix="$INSTALL_FOLDER" \\
+    --enable-shared \\
+    --enable-static'
+EOF
+} > "$LIBDAQ_CONFIGURE_SCRIPT"
+chmod a+x $LIBDAQ_CONFIGURE_SCRIPT
+
+"$LIBDAQ_CONFIGURE_SCRIPT" >"$LIBDAQ_CONFIGURE_SCRIPT.log" 2>&1
+
+LIBDAQ_INSTALL_SCRIPT="$BASE_BUILD_FOLDER/libdaq_install.sh"
+{
+  _launch_to_stdout
+cat <<EOF
+  sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
+  make install'
+EOF
+} > "$LIBDAQ_INSTALL_SCRIPT"
+chmod a+x $LIBDAQ_INSTALL_SCRIPT
+
+echo "Building and installing libdaq..."
+"$LIBDAQ_INSTALL_SCRIPT" >"$LIBDAQ_INSTALL_SCRIPT.log" 2>&1

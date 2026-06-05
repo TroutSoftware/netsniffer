@@ -1,0 +1,49 @@
+# This file generates a bwrap command to launch alpine
+
+_bwrap_writable_launch() {
+bwrap --bind "$OS_FOLDER" / \
+      --tmpfs /home \
+      --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \
+      --bind "$DOWNLOAD_CACHE" "$DOWNLOAD_CACHE" \
+      --bind "$BASE_BUILD_FOLDER" "$BASE_BUILD_FOLDER" \
+      --chdir "$BASE_BUILD_FOLDER" \
+      --tmpfs /tmp \
+      --proc /proc \
+      --dev /dev \
+      --setenv PATH "/usr/bin:/bin:/sbin" \
+      -- "$@"
+}
+
+_bwrap_base_to_stdout() {
+cat <<EOF
+    $BWRAP_PREFIX bwrap \\
+        --ro-bind "$OS_FOLDER" / \\
+        --tmpfs /home \\
+        --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \\
+        --bind "$BASE_BUILD_FOLDER" "$BASE_BUILD_FOLDER" \\
+        --chdir "$BASE_BUILD_FOLDER" \\
+        --tmpfs /tmp \\
+        --proc /proc \\
+        --dev /dev \\
+        --dir /run \\
+        --setenv PATH "/usr/lib/llvm21/bin:/usr/bin:/bin" \\
+EOF
+}
+
+_launch_to_stdout() {
+_bwrap_base_to_stdout
+cat <<EOF
+  -- \\
+EOF
+}
+
+_network_launch_to_stdout() {
+_bwarp_base_to_stdout
+cat <<EOF
+        --dev-bind /dev /dev \\
+        --cap-add CAP_NET_RAW \\
+        --cap-add CAP_NET_ADMIN \\
+        --share-net \\
+        -- \\
+EOF
+}
