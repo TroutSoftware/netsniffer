@@ -26,10 +26,8 @@ INSTALL_FOLDER="$BASE_BUILD_FOLDER/install"
 CC=clang
 CXX=clang++
 CFLAGS="-fPIC"
-#CXXFLAGS="$CFLAGS -stdlib=libstdc++ -fvisibility=default -fexceptions -frtti -std=c++23"
 CXXFLAGS="$CFLAGS -stdlib=libc++ -fvisibility=default -fexceptions -frtti -std=c++23"
 LD_LIBRARY_PATH="/usr/lib/llvm21/lib"
-#LDFLAGS="-fuse-ld=lld -nodefaultlibs --rtlib=compiler-rt --unwindlib=libunwind -L/usr/lib/llvm21/lib -lc++ -lc++abi -lunwind -lm -lc -rdynamic"
 LDFLAGS="-fuse-ld=lld --rtlib=compiler-rt --unwindlib=libunwind -L/usr/lib/llvm21/lib -lc++ -lc++abi -lunwind -lm -lc -rdynamic"
 LD=ld.lld
 AR=llvm-ar
@@ -37,10 +35,10 @@ NM=llvm-nm
 RANLIB=llvm-ranlib
 STRIP=llvm-strip
 
-
 echo "Populating build tree in \"$BASE_BUILD_FOLDER\"" >&2
 echo "Source code used from tree under \"$SOURCE_FOLDER\"" >&2
-echo "Helper scripts will live in \"$BUILD_HELPER_FOLDER\"" >&2
+echo "Build scripts are placed in \"$BASE_BUILD_FOLDER\"" >&2
+#echo "Helper scripts will live in \"$BUILD_HELPER_FOLDER\"" >&2
 
 # Create bwrap script if needed
 if [ ! "$TARGET" = "HOST" ]; then
@@ -60,15 +58,18 @@ if [ ! "$TARGET" = "HOST" ]; then
   esac
 else
 
+# Dummy functions for when we don't need e.g. bwrap
 _launch_to_stdout() {
-  echo "Launching native"
+  return 0
 }
 
 _network_launch_to_stdout() {
-  echo "Network launching native"
+  return 0
 }
 
 fi
+
+
 
 . $SOURCE_SCRIPT_FOLDER/build_libdaq.rc
 

@@ -45,41 +45,49 @@ chmod +x "$CORE_CONFIGURE_SCRIPT"
 #ninja install
 
 
-CORE_BUILD_SCRIPT="$BASE_BUILD_FOLDER/core_build.sh"
+CORE_BUILD_SCRIPT="core_build.sh"
 {
 _launch_to_stdout
 cat << EOF
   ninja -C "$CORE_BUILD_FOLDER" \$@
 EOF
-} > $CORE_BUILD_SCRIPT
+} > "$BASE_BUILD_FOLDER/$CORE_BUILD_SCRIPT"
 
-chmod +x "$CORE_BUILD_SCRIPT"
+chmod +x "$BASE_BUILD_FOLDER/$CORE_BUILD_SCRIPT"
 
-#"$CORE_BUILD_SCRIPT" >"$CORE_BUILD_SCRIPT.log" 2>&1
+
 
 echo "To build, run: $CORE_BUILD_SCRIPT"
 
-CORE_INSTALL_SCRIPT="$BASE_BUILD_FOLDER/core_install.sh"
+CORE_INSTALL_SCRIPT="core_install.sh"
 {
 cat << EOF
   $CORE_BUILD_SCRIPT install
 EOF
-} > $CORE_INSTALL_SCRIPT
+} > "$BASE_BUILD_FOLDER/$CORE_INSTALL_SCRIPT"
 
-chmod +x "$CORE_INSTALL_SCRIPT"
+chmod +x "$BASE_BUILD_FOLDER/$CORE_INSTALL_SCRIPT"
 
 echo "To install, run: $CORE_INSTALL_SCRIPT"
 
-SNORT_LAUNCH_SCRIPT="$BASE_BUILD_FOLDER/snort.sh"
+SNORT_LAUNCH_SCRIPT="snort.sh"
 {
+cat << EOF
+$BASE_BUILD_FOLDER/$CORE_BUILD_SCRIPT
+EOF
 _launch_to_stdout
 cat << EOF
-  sh -c \
-'LD_LIBRARY_PATH="$INSTALL_FOLDER/lib" \
-"$CORE_BUILD_FOLDER"/src/snort -v --warn-all --daq-dir "$INSTALL_FOLDER/lib/daq" \$@ '
+  sh -c \\
+  'LD_LIBRARY_PATH="$INSTALL_FOLDER/lib" \\
+  "$CORE_BUILD_FOLDER"/src/snort \\
+  -v \\
+  --warn-all \\
+  --daq-dir "$INSTALL_FOLDER/lib/daq" \\
+  \$@' \\
+  sh "\$@"
 EOF
-} > $SNORT_LAUNCH_SCRIPT
+} > "$BASE_BUILD_FOLDER/$SNORT_LAUNCH_SCRIPT"
 
-chmod +x "$SNORT_LAUNCH_SCRIPT"
+chmod +x "$BASE_BUILD_FOLDER/$SNORT_LAUNCH_SCRIPT"
 
 echo "To launch snort, run: $SNORT_LAUNCH_SCRIPT"
