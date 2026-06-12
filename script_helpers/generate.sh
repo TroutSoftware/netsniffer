@@ -72,12 +72,9 @@ _network_launch_to_stdout() {
 
 fi
 
-
-
 . $SOURCE_SCRIPT_FOLDER/build_libdaq.rc
 
 . $SOURCE_SCRIPT_FOLDER/configure_core.rc
-
 
 SHELL_LAUNCH_SCRIPT="$BASE_BUILD_FOLDER/shell.sh"
 {
