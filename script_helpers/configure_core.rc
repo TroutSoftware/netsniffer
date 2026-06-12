@@ -24,22 +24,22 @@ set -e
 EOF
 _launch_to_stdout
 cat << EOF
-  sh -c '\\
-  PKG_CONFIG_PATH="$INSTALL_FOLDER/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \\
-  -S "$SOURCE_FOLDER/core" \\
-  -B "$CORE_BUILD_FOLDER" \\
-  -G Ninja \\
-  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \\
-  -DCMAKE_INSTALL_PREFIX="$INSTALL_FOLDER" \\
-  -DCMAKE_BUILD_TYPE=$CORE_BUILD_MODE \\
-  -DENABLE_STDLOG=ON \\
-  -DENABLE_STATIC_DAQ=ON \\
-  -DCMAKE_C_COMPILER="$CC" \\
-  -DCMAKE_CXX_COMPILER="$CXX" \\
-  -DCMAKE_CXX_FLAGS="$CXXFLAGS" \\
-  -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \\
-  -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \\
-  -DCMAKE_LINKER="$LD"'
+    sh -c '\\
+    PKG_CONFIG_PATH="$INSTALL_FOLDER/lib/pkgconfig:$PKG_CONFIG_PATH" cmake \\
+    -S "$SOURCE_FOLDER/core" \\
+    -B "$CORE_BUILD_FOLDER" \\
+    -G Ninja \\
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \\
+    -DCMAKE_INSTALL_PREFIX="$INSTALL_FOLDER" \\
+    -DCMAKE_BUILD_TYPE=$CORE_BUILD_MODE \\
+    -DENABLE_STDLOG=ON \\
+    -DENABLE_STATIC_DAQ=ON \\
+    -DCMAKE_C_COMPILER="$CC" \\
+    -DCMAKE_CXX_COMPILER="$CXX" \\
+    -DCMAKE_CXX_FLAGS="$CXXFLAGS" \\
+    -DCMAKE_EXE_LINKER_FLAGS="$LDFLAGS" \\
+    -DCMAKE_SHARED_LINKER_FLAGS="$LDFLAGS" \\
+    -DCMAKE_LINKER="$LD"'
 EOF
 } > $CORE_CONFIGURE_SCRIPT
 
@@ -62,7 +62,7 @@ EOF
 
 _launch_to_stdout
 cat << EOF
-  ninja -C "$CORE_BUILD_FOLDER" \$@
+    ninja -C "$CORE_BUILD_FOLDER" \$@
 EOF
 } > "$BASE_BUILD_FOLDER/$CORE_BUILD_SCRIPT"
 
@@ -95,15 +95,25 @@ echo "To install, run: $CORE_INSTALL_SCRIPT"
 
 _snort_cmd_to_stdout() {
 cat << EOF
-  sh -c \\
-  '$@; \\
-  LD_LIBRARY_PATH="$INSTALL_FOLDER/lib" \\
-  "$CORE_BUILD_FOLDER"/src/snort \\
-  -v \\
-  --warn-all \\
-  --daq-dir "$INSTALL_FOLDER/lib/daq" \\
-  \$@' \\
-  sh "\\\$@"
+    sh -c \\
+EOF
+if [ $# -gt 0 ]; then
+cat << EOF
+    '$@; \\
+EOF
+else
+cat << EOF
+    '\\
+EOF
+fi
+cat << EOF
+    LD_LIBRARY_PATH="$INSTALL_FOLDER/lib" \\
+    "$CORE_BUILD_FOLDER/src/snort" \\
+    -v \\
+    --warn-all \\
+    --daq-dir "$INSTALL_FOLDER/lib/daq" \\
+    \$@' \\
+    sh "\$@"
 EOF
 }
 

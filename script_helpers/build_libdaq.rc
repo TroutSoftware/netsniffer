@@ -16,19 +16,19 @@ cat <<EOF
 EOF
   _launch_to_stdout
 cat <<EOF
-  sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
-  \\
-  ./bootstrap; \\
-  \\
-  CC="$CC --rtlib=compiler-rt --unwindlib=libunwind" \\
-  CXX="$CXX --rtlib=compiler-rt --unwindlib=libunwind" \\
-  CFLAGS="$CFLAGS" \\
-  CXXFLAGS="$CXXFLAGS" \\
-  LDFLAGS="$LDFLAGS" \\
-  ./configure \\
-    --prefix="$INSTALL_FOLDER" \\
-    --enable-shared \\
-    --enable-static'
+    sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
+    \\
+    ./bootstrap; \\
+    \\
+    CC="$CC --rtlib=compiler-rt --unwindlib=libunwind" \\
+    CXX="$CXX --rtlib=compiler-rt --unwindlib=libunwind" \\
+    CFLAGS="$CFLAGS" \\
+    CXXFLAGS="$CXXFLAGS" \\
+    LDFLAGS="$LDFLAGS" \\
+    ./configure \\
+      --prefix="$INSTALL_FOLDER" \\
+      --enable-shared \\
+     --enable-static'
 EOF
 } > "$LIBDAQ_CONFIGURE_SCRIPT"
 chmod a+x $LIBDAQ_CONFIGURE_SCRIPT
@@ -48,8 +48,8 @@ set -e
 EOF
   _launch_to_stdout
 cat <<EOF
-  sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
-  make install'
+    sh -c 'cd "$BASE_BUILD_FOLDER/daq"; \\
+    make install'
 EOF
 } > "$LIBDAQ_INSTALL_SCRIPT"
 chmod a+x $LIBDAQ_INSTALL_SCRIPT
