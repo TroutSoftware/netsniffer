@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Script that initialised a new working folder
+
 # Fail if anything fail
 set -e
 
