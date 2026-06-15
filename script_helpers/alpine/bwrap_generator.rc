@@ -26,7 +26,7 @@ bwrap \\
     --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \\
     --bind "$BASE_BUILD_FOLDER" "$BASE_BUILD_FOLDER" \\
     --chdir "$BASE_BUILD_FOLDER" \\
-    --setenv PATH "/usr/lib/llvm21/bin:/usr/bin:/bin" \\
+    --setenv PATH "/usr/lib/llvm21/bin:/usr/bin:/bin:/sbin" \\
 EOF
 }
 

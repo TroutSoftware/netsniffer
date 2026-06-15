@@ -37,4 +37,4 @@ readline-dev
 
 lldb libc++-dev llvm-libunwind-dev compiler-rt clang21-dev lld python3-dev py3-setuptools perl-dev slang-dev llvm21-dev numactl-dev capstone-dev libtraceevent-dev
 
-apenwarr-redo patch strace
+strace py3-lldb
