@@ -1,17 +1,8 @@
 p/
-.redo/*
-*.did
-.do_built
-.do_built.dir/
-envrc
-snort-modules.tar.gz
+cache/
 compile_commands.json
 .lldb
 .clangd
 
-# packaging info
-*.deb
-deb/snort-trout_*
 
-# Things we want to keep
-!.redo/.anchor
+

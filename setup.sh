@@ -8,12 +8,13 @@ set -e
 # Defaults:
 
 ME="$0"
-SCRIPT_FOLDER="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_FOLDER="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_SCRIPT_FOLDER="$SOURCE_FOLDER/script_helpers"
 
 MODE=DEBUG
 TARGET=ALPINE
-OUTPUT=./p
-DOWNLOAD_CACHE=./cache
+OUTPUT="$SOURCE_FOLDER/p"
+DOWNLOAD_CACHE="$SOURCE_FOLDER/cache"
 
 _echo_help() {
   echo "$ME --mode=[DEBUG|RELEASE] --target=[ALPINE|HOST] --output=<build_folder> --download_cache=<download_folder>" >&2
@@ -60,5 +61,5 @@ DOWNLOAD_CACHE=$DOWNLOAD_CACHE
 EOF
 
 cd "$OUTPUT"
-$SCRIPT_FOLDER/generate.sh
-
+$SOURCE_FOLDER/generate.sh
+echo "Change folder to \"$OUTPUT\" to use scripts"

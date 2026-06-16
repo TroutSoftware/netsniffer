@@ -8,8 +8,9 @@ set -e
 # Defaults:
 
 ME="$0"
-SOURCE_SCRIPT_FOLDER="$(cd "$(dirname "$0")" && pwd)"
-SOURCE_FOLDER="$(cd "$SOURCE_SCRIPT_FOLDER"/.. && pwd)"
+SOURCE_FOLDER="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_SCRIPT_FOLDER="$SOURCE_FOLDER/script_helpers"
+
 CONFIG_FILE="setup.rc"
 
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -20,11 +21,12 @@ fi
 . ./$CONFIG_FILE
 
 BASE_BUILD_FOLDER="$(pwd)"
-BUILD_HELPER_FOLDER="$BASE_BUILD_FOLDER/helper_scripts"
+BUILD_TOOLS_FOLDER="$BASE_BUILD_FOLDER/tools"
 INSTALL_FOLDER="$BASE_BUILD_FOLDER/install"
 TROUT_PLUGINS="$SOURCE_FOLDER/core/src/trout_plugins"
 
-
+mkdir -p "$BUILD_TOOLS_FOLDER"
+mkdir -p "$INSTALL_FOLDER"
 
 CC=clang
 CXX=clang++
@@ -41,7 +43,6 @@ STRIP=llvm-strip
 echo "Populating build tree in \"$BASE_BUILD_FOLDER\"" >&2
 echo "Source code used from tree under \"$SOURCE_FOLDER\"" >&2
 echo "Build scripts are placed in \"$BASE_BUILD_FOLDER\"" >&2
-#echo "Helper scripts will live in \"$BUILD_HELPER_FOLDER\"" >&2
 
 # Create bwrap script if needed
 if [ ! "$TARGET" = "HOST" ]; then
@@ -95,7 +96,7 @@ EOF
 
 chmod +x "$SHELL_LAUNCH_SCRIPT"
 
-SHELL_GENERATE_AND_EXEC_LAUNCH_SCRIPT="$BASE_BUILD_FOLDER/genexec.sh"
+SHELL_GENERATE_AND_EXEC_LAUNCH_SCRIPT="$BUILD_TOOLS_FOLDER/genexec.sh"
 {
 cat << EOF_GENEXEC
 #!/bin/sh

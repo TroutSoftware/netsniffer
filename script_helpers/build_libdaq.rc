@@ -9,7 +9,7 @@ if [ $MODE = "DEBUG" ]; then
 fi
 
 echo "Configuring libdaq..."
-LIBDAQ_CONFIGURE_SCRIPT="$BASE_BUILD_FOLDER/libdaq_configure.sh"
+LIBDAQ_CONFIGURE_SCRIPT="$BUILD_TOOLS_FOLDER/libdaq_configure.sh"
 {
 cat <<EOF
   cp -r "$SOURCE_FOLDER/daq" "$BASE_BUILD_FOLDER/daq"
@@ -35,7 +35,7 @@ chmod a+x $LIBDAQ_CONFIGURE_SCRIPT
 
 "$LIBDAQ_CONFIGURE_SCRIPT" >"$LIBDAQ_CONFIGURE_SCRIPT.log" 2>&1
 
-LIBDAQ_INSTALL_SCRIPT="$BASE_BUILD_FOLDER/libdaq_install.sh"
+LIBDAQ_INSTALL_SCRIPT="$BUILD_TOOLS_FOLDER/libdaq_install.sh"
 {
 cat << EOF
 #!/bin/sh
