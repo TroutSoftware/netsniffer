@@ -23,7 +23,6 @@ Usage
 
 Options
   --run, -r         Only run tests matching REGEXP
-  --debug, -d       Use debug build (by default release ones)
   --break-on-error  Terminate on the first error encountered
   --chdir, -C       Change do DIR before executing the script
 
@@ -33,12 +32,9 @@ Each script consists of a txtar archive with the files required to run the test.
 All archives are extracted to a temporary folder (given a temporary directory T,
 a file rule/lua.rule in the archive will be copied at T/rule/lua.rule).
 Furthermore:
- - the "p/install/{bin,lib,include}" directory is symlinked at T/{bin,lib,include}
-   (snort and dependencies are available in PATH and LDPATH).
- - the "p/release/tm.so" is copied to "T/p/tm.so" (unless --debug is given)
  - the "pcaps" directory is symlinked at T/pcaps, and can be referred in scripts.
 
-The test is then executed in the T directory (and must only refer to local files).
+The test is then executed in the T directory (the test script must only refer to local files).
 `
 
 func main() {
@@ -47,18 +43,13 @@ func main() {
 	var (
 		only   string
 		wd     string
-		debug  bool
-		gdb    bool
 		notest bool
 		tdir   string
 	)
 	flag.StringVar(&only, "run", "", "Only run script matching this regular expression")
 	flag.StringVar(&only, "r", "", "Only run script matching this regular expression")
-	flag.BoolVar(&debug, "debug", false, "Use the debug binary")
-	flag.BoolVar(&debug, "d", false, "Use the debug binary")
 	flag.StringVar(&wd, "C", "", "Change to dir")
 	flag.StringVar(&wd, "chdir", "", "Change to dir")
-	flag.BoolVar(&gdb, "gdb", false, "Attach debugger")
 	flag.BoolVar(&notest, "notest", false, "No test")
 	flag.StringVar(&tdir, "tdir", "", "tdir")
 	break_on_err := flag.Bool("break-on-error", false, "Set if test run should be aborted on first error")
@@ -74,7 +65,7 @@ func main() {
 	tests_skipped := 0
 
 	ng := script.NewEngine()
-	ng.Cmds["pcap"] = snort(gdb)
+	ng.Cmds["pcap"] = snort()
 	ng.Cmds["skip"] = Skip()
 	ng.Cmds["cmp"] = Eq()
 
@@ -147,25 +138,6 @@ func main() {
 			}
 		}
 
-		// symlink snort (/bin, …) and trout module (/p/tm.so)
-		links := []string{"bin", "include", "lib"}
-		for _, l := range links {
-			if err := os.Symlink(filepath.Join(wd, "p/install", l), filepath.Join(test_dir, l)); err != nil {
-				errf("cannot symlink %s: %s", l, err)
-			}
-		}
-		if err := os.Mkdir(filepath.Join(test_dir, "p"), 0755); err != nil {
-			errf("cannot create temporary structure: %s", err)
-		}
-		/*
-		mod := "p/release/tm.so"
-		if debug {
-			mod = "p/debug/tm.so"
-		}
-		if err := os.Symlink(filepath.Join(wd, mod), filepath.Join(test_dir, "p", "tm.so")); err != nil {
-			errf("cannot symlink %s: %s", mod, err)
-		}
-		*/
 		// optionally include testdata folder
 		if _, err := os.Stat(filepath.Dir(tscrpt) + "/testdata"); err == nil {
 			if err := os.Symlink(filepath.Dir(tscrpt)+"/testdata", filepath.Join(test_dir, "testdata")); err != nil {
@@ -178,7 +150,7 @@ func main() {
 		}
 
 		// execute script, check output
-		env := []string{fmt.Sprintf("LD_LIBRARY_PATH=%s", filepath.Join(test_dir, "/lib"))}
+		env := []string{}
 		st, err := script.NewState(context.Background(), test_dir, env)
 		if err != nil {
 			errf("cannot start new script: %s", err)

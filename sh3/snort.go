@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"path/filepath"
 	"rsc.io/script"
 )
 
@@ -16,7 +17,7 @@ var daq_path = "/lib"
 
 // snort runs snort against PCAP files.
 // A default configuration, optionally in multiple files, is attached from the txtar by the runner.
-func snort(gdb bool) script.Cmd {
+func snort() script.Cmd {
 	return script.Command(
 		script.CmdUsage{
 			Summary: "run snort against pcap files",
@@ -37,26 +38,29 @@ func snort(gdb bool) script.Cmd {
 
 			var stdoutBuf, stderrBuf strings.Builder
 
-			cargs := []string{"-c", s.Path("cfg.lua"),
-//				"--plugin-path", s.Path("p"),
-				"--warn-all",
+			exePath, err := os.Executable()
+			if err != nil {
+				return nil, err
+			}
+
+			runDir := filepath.Dir(exePath)
+			scriptPath := filepath.Join(runDir, "genexec.sh")
+
+			cargs := []string{
+				s.Getwd(),
+				"run_test.sh",
+				"-c", s.Path("cfg.lua"),
 				"--pcap-list", strings.Join(file_list, " ")}
 			var cmd *exec.Cmd
-			if gdb {
-				cmd = exec.CommandContext(s.Context(), "gdb", append([]string{"--args", s.Path("bin/snort")}, cargs...)...)
-				cmd.Stdin = os.Stdin
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-			} else {
-				cmd = exec.CommandContext(s.Context(), s.Path("bin/snort"), cargs...)
-				cmd.Stdout = &stdoutBuf
-				cmd.Stderr = &stderrBuf
-			}
+
+			cmd = exec.CommandContext(s.Context(), scriptPath, cargs...)
+			cmd.Stdout = &stdoutBuf
+			cmd.Stderr = &stderrBuf
 
 			cmd.Dir = s.Getwd()
 			cmd.Env = s.Environ()
 
-			err := cmd.Start()
+			err = cmd.Start()
 			if err != nil {
 				return nil, err
 			}

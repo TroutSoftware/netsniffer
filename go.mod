@@ -24,4 +24,4 @@ require (
 	golang.org/x/sys v0.32.0 // indirect
 )
 
-tool github.com/TroutSoftware/snort-modules/sh3
+
