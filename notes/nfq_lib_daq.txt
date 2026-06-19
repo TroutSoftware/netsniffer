@@ -1,0 +1,41 @@
+Notes on the nfq daq, and its ability to filter packets
+-------------------------------------------------------
+Valid for libdaq v3.0.27
+
+(Source code found in <netsniffer>/daq/modules/nfq/daq_nfq.c)
+
+The NFQ Daq runs on top of the Linux netfilter packet filtering
+framework.
+
+The NFQ Daq uses libmnl to communicate with the Linux netfilter.
+
+The Linux netfilter framework default to failing closed, so packages
+that aren't queued (/processed) will be rejected, this can be changed
+with the "fail_open" option [MKR: Untested] so they are instead accepted
+and processed/forwarded by the kernel.
+
+NFQ DAQ Operation
+-----------------
+
+A packet received from a daq from snort will result in snort sending a
+message (msg_finalize) back to the daq with a verdict of what should be
+done with the packet
+
+'''
+static int nfq_daq_msg_finalize(void *handle, const DAQ_Msg_t *msg, DAQ_Verdict verdict)
+'''
+
+The possible message verdicts snort can emmit are: Pass, Block, Replace,
+Whitelist, Blacklist, Ignore
+
+For the 3 last ones, Whitelist and Ignore are translated to a Pass, and
+Blacklist is translated to a Block
+
+This is important, as the intent from snort is that the White- and
+Black-lists are flow based accepts/blocks, but for the NFQ daq, snort
+will continue to be presented with packages from these flows
+
+The NFQ passes the Pass, Block and Replace verdicts directly to the
+Linux netfilter without further passing (though an mnl_socket)
+
+
