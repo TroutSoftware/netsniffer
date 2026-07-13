@@ -6,6 +6,7 @@ bwrap --bind "$OS_FOLDER" / \
       --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \
       --bind "$DOWNLOAD_CACHE" "$DOWNLOAD_CACHE" \
       --bind "$BASE_BUILD_FOLDER" "$BASE_BUILD_FOLDER" \
+      --ro-bind /sys /sys \
       --chdir "$BASE_BUILD_FOLDER" \
       --tmpfs /tmp \
       --proc /proc \
@@ -23,6 +24,7 @@ bwrap \\
     --proc /proc \\
     --dev /dev \\
     --dir /run \\
+    --ro-bind /sys /sys \\
     --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \\
     --bind "$BASE_BUILD_FOLDER" "$BASE_BUILD_FOLDER" \\
     --chdir "$BASE_BUILD_FOLDER" \\
