@@ -34,3 +34,11 @@ add_library( trout_plugins OBJECT
     trout_plugins.cc
     trout_plugins.h
 )
+
+target_compile_options( trout_plugins PRIVATE
+   -Wall
+   -Wextra
+   -Werror
+   -Wpedantic
+   -pedantic-errors
+)
