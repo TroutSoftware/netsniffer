@@ -1,7 +1,8 @@
 # This file generates a bwrap command to launch alpine
 
 _bwrap_writable_launch() {
-bwrap --bind "$OS_FOLDER" / \
+bwrap --clearenv \
+      --bind "$OS_FOLDER" / \
       --tmpfs /home \
       --bind "$SOURCE_FOLDER" "$SOURCE_FOLDER" \
       --bind "$DOWNLOAD_CACHE" "$DOWNLOAD_CACHE" \
@@ -18,6 +19,7 @@ bwrap --bind "$OS_FOLDER" / \
 _bwrap_base_to_stdout() {
 cat <<EOF
 bwrap \\
+    --clearenv \\
     --ro-bind "$OS_FOLDER" / \\
     --tmpfs /home \\
     --tmpfs /tmp \\
