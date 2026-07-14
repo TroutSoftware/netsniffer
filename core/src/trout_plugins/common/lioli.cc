@@ -126,6 +126,7 @@ public:
         break;
       default:
         assert(false); // We don't know how to replace
+        replacer = '?';  // Failsafe in case asserts are optimized out
       }
 
       outstring +=

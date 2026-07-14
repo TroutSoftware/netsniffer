@@ -1,3 +1,14 @@
+
+
+add_compile_options(
+   -Wall
+   -Wextra
+   -Werror
+   -Wpedantic
+   -pedantic-errors
+)
+
+
 add_subdirectory(alert_lioli)
 add_subdirectory(arp_monitor)
 add_subdirectory(capture_pcap)
@@ -35,10 +46,3 @@ add_library( trout_plugins OBJECT
     trout_plugins.h
 )
 
-target_compile_options( trout_plugins PRIVATE
-   -Wall
-   -Wextra
-   -Werror
-   -Wpedantic
-   -pedantic-errors
-)
