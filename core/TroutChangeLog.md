@@ -1,3 +1,7 @@
+## 2026-07-17
+
+- Fixed compiler warning in src/time/clock_defs.h
+
 ## 2026-05-19
 
 - Moved Trout code into src/trout_plugins
