@@ -40,6 +40,11 @@ NM=llvm-nm
 RANLIB=llvm-ranlib
 STRIP=llvm-strip
 
+if [ $MODE = "DEBUG" ]; then
+  CFLAGS="$CFLAGS -Og -glldb"
+  CXXFLAGS="$CXXFLAGS -Og -glldb"
+fi
+
 echo "Populating build tree in \"$BASE_BUILD_FOLDER\"" >&2
 echo "Source code used from tree under \"$SOURCE_FOLDER\"" >&2
 echo "Build scripts are placed in \"$BASE_BUILD_FOLDER\"" >&2
@@ -74,6 +79,8 @@ _network_launch_to_stdout() {
 fi
 
 . $SOURCE_SCRIPT_FOLDER/build_libdaq.rc
+
+. $SOURCE_SCRIPT_FOLDER/build_luajit.rc
 
 . $SOURCE_SCRIPT_FOLDER/configure_core.rc
 

@@ -3,11 +3,6 @@
 
 # Config Libdaq, as it uses autotools, we create a copy of the folder
 
-if [ $MODE = "DEBUG" ]; then
-  CFLAGS="$CFLAGS -Og -glldb"
-  CXXFLAGS="$CXXFLAGS -Og -glldb"
-fi
-
 echo "Configuring libdaq..."
 LIBDAQ_CONFIGURE_SCRIPT="$BUILD_TOOLS_FOLDER/libdaq_configure.sh"
 {
