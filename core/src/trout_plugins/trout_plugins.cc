@@ -38,6 +38,7 @@
 #include "log/serializer_python.h"
 #include "log/serializer_raw.h"
 #include "log/serializer_txt.h"
+#include "mqtt/plugin_def.h"
 #include "smnp/inspector.h"
 #include "trout_netflow/trout_netflow.h"
 #include "trout_netflow2/plugin_def.h"
@@ -62,6 +63,7 @@ const snort::BaseApi *trout_plugins[] = {
   &logger_pipe::inspect_api.base,
   &logger_stdout::inspect_api.base,
   &logger_tcp::inspect_api.base,
+  &mqtt_plugin::inspect_api.base,
   &serializer_bill::inspect_api.base,
   &serializer_bin::inspect_api.base,
   &serializer_csv::inspect_api.base,

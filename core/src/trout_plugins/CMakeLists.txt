@@ -19,6 +19,7 @@ add_subdirectory(discovery)
 add_subdirectory(icmp_logger)
 add_subdirectory(includes)
 add_subdirectory(log)
+add_subdirectory(mqtt)
 add_subdirectory(smnp)
 add_subdirectory(trout_netflow)
 add_subdirectory(trout_netflow2)
@@ -32,8 +33,9 @@ set(STATIC_TROUT_PLUGINS
     $<TARGET_OBJECTS:dhcp_option>
     $<TARGET_OBJECTS:discovery>
     $<TARGET_OBJECTS:icmp_logger>
-    $<TARGET_OBJECTS:trout_log>
+    $<TARGET_OBJECTS:mqtt_plugin>
     $<TARGET_OBJECTS:smnp>
+    $<TARGET_OBJECTS:trout_log>
     $<TARGET_OBJECTS:trout_includes>
     $<TARGET_OBJECTS:trout_netflow>
     $<TARGET_OBJECTS:trout_netflow2>
