@@ -5,6 +5,7 @@
 
 // Snort includes
 #include <protocols/packet.h>
+#include <stream/stream_splitter.h>
 
 // System includes
 
@@ -14,12 +15,24 @@
 #include "inspector.h"
 #include "module.h"
 #include "pegs.h"
+#include "stream_splitter.h"
 
 // Debug includes
+#include <iostream>
 
 namespace mqtt_plugin {
 
-void Inspector::eval(snort::Packet * /*p*/) {}
+void Inspector::eval(snort::Packet *p) {
+  assert(p);
+  std::cerr << "MKRTEST: eval called with pkt len " << p->pktlen
+            << " datalen " << p->dsize << std::endl;
+}
+
+
+snort::StreamSplitter* Inspector::get_splitter(bool to_server) {
+  std::cerr << "MKRTEST get_splitter called with " << std::boolalpha << to_server << std::endl;
+  return new StreamSplitter(to_server);
+}
 
 Inspector::Inspector(Module *module) : settings(module->get_settings()) {}
 

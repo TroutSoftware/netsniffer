@@ -28,6 +28,8 @@ class Module : public snort::Module {
 
   Usage get_usage() const override;
 
+  bool is_bindable() const override { return true; }
+
   // Pegs
   const PegInfo *get_pegs() const override;
   PegCount *get_counts() const override;

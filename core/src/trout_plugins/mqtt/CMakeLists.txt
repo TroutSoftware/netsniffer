@@ -9,6 +9,8 @@ set( FILE_LIST
     plugin_def.h
     settings.cc
     settings.h
+    stream_splitter.cc
+    stream_splitter.h
 )
 
 add_library( mqtt_plugin OBJECT ${FILE_LIST})

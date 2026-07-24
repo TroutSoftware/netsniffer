@@ -23,6 +23,8 @@ private:
 
   void eval(snort::Packet *) override;
 
+  snort::StreamSplitter* get_splitter(bool to_server) override;
+
 public:
   Inspector(Module *module);
   ~Inspector();

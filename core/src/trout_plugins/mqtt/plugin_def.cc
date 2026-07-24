@@ -31,11 +31,11 @@ const snort::InspectApi inspect_api = {
       Module::ctor,
       Module::dtor
     },
-    snort::IT_PACKET,
+    snort::IT_SERVICE,
 
-    PROTO_BIT__ALL, // protocol filter
+    PROTO_BIT__TCP, // protocol filter (MQTT is TCP based)
     nullptr,        // buffers
-    nullptr,        // service
+    "mqtt",         // service
     nullptr,        // init
     nullptr,        // term
     nullptr,        // tinit
