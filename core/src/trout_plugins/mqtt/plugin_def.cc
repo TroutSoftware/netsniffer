@@ -32,8 +32,9 @@ const snort::InspectApi inspect_api = {
       Module::dtor
     },
     snort::IT_SERVICE,
-
-    PROTO_BIT__TCP, // protocol filter (MQTT is TCP based)
+    PROTO_BIT__PDU, // protocol filter (MQTT is TCP based, but in snort
+                    // terms it is PDU, as it consumes PAF-generated
+                    // PDU's through the splitter )
     nullptr,        // buffers
     "mqtt",         // service
     nullptr,        // init
