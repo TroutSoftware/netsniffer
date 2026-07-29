@@ -1,4 +1,6 @@
 set( FILE_LIST
+    flow_data.cc
+    flow_data.h
     inspector.cc
     inspector.h
     module.cc

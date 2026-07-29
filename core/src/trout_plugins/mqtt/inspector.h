@@ -6,6 +6,7 @@
 
 // System includes
 #include <memory>
+#include <string>
 
 // Global includes
 
@@ -24,6 +25,9 @@ private:
   void eval(snort::Packet *) override;
 
   snort::StreamSplitter* get_splitter(bool to_server) override;
+
+  // Used to reject the packet as being MQTT
+  void reject(snort::Packet *, std::string reason);
 
 public:
   Inspector(Module *module);
