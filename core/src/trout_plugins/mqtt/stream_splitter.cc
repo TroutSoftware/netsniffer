@@ -16,6 +16,7 @@
 #include "stream_splitter.h"
 
 // Debug includes
+#include <iostream>
 
 namespace mqtt_plugin {
 
@@ -46,6 +47,8 @@ StreamSplitter::Status StreamSplitter::scan(
   assert(data);
   assert(fp);
 
+std::cerr << "MKRTEST splitter got " << len << " bytes" << std::endl;
+
   // For detailed description of the remaning length and terms,
   // see "2 MQTT Control Packet format" in the OASIS MQTT 5.0 standard
   std::span<const uint8_t> raw(data, len);
@@ -57,6 +60,7 @@ StreamSplitter::Status StreamSplitter::scan(
       case State::initial:
         decode_shift=0;
         decoded_remaining_length=0;
+        msg_type = static_cast<MsgType>(c >> 4);
         state = State::parsing_remaining_length;
         continue;
 
@@ -76,14 +80,15 @@ StreamSplitter::Status StreamSplitter::scan(
             // We are at the end
             if (decoded_remaining_length) {
               state = State::waiting_for_end;
-              // TODO: Add sanity check for lenght vs type of message
+
+            // TODO: Make some sanity check on length here
 
               continue;
             } else {
-               // There is no more data
-               state = State::initial;
-               *fp = split_pos;
-               return FLUSH;
+              // There is no more data
+              state = State::initial;
+              *fp = split_pos;
+              return FLUSH;
             }
           }
 
@@ -102,7 +107,26 @@ StreamSplitter::Status StreamSplitter::scan(
           // We have the data we need in the current buffer
           *fp = split_pos + decoded_remaining_length;
 
+/*
+    enum Status
+    {
+        ABORT,   // non-paf operation
+        START,   // internal use only
+        SEARCH,  // searching for next flush point
+        FLUSH,   // flush at given offset
+        LIMIT,   // flush to given offset upon reaching paf_max
+        SKIP,    // skip ahead to given offset
+        LIMITED, // previously did limit flush
+        STOP     // stop paf scan loop
+    };
+*/
           state = State::initial;
+
+//std::cerr << "MKRTEST splitter LIMIT" << std::endl;
+//          *fp = 3;
+//          return LIMIT;
+
+
           return FLUSH;
         }
 

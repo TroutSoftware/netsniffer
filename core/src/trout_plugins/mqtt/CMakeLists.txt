@@ -5,6 +5,7 @@ set( FILE_LIST
     inspector.h
     module.cc
     module.h
+    mqtt_protocol_defs.h
     pegs.cc
     pegs.h
     plugin_def.cc

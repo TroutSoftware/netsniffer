@@ -17,7 +17,11 @@ namespace mqtt_plugin {
 
 struct FlowData {
   uint8_t protocol_level=0;    // MQTT version: 3 = 3.1, 4 = 3.1.1, 5 = 5.0
-
+  unsigned flow_no;
+  FlowData() {
+    static unsigned flow_count = 0;
+    flow_no = ++flow_count;
+  }
 };
 
 using PacketFlowData = Common::FlowData<FlowData>;

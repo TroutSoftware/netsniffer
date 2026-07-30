@@ -9,6 +9,7 @@
 // Global includes
 
 // Local includes
+#include "mqtt_protocol_defs.h"
 
 // Debug includes
 
@@ -17,8 +18,10 @@ namespace mqtt_plugin {
 
 class StreamSplitter : public snort::StreamSplitter
 {
-  std::uint_fast8_t decode_shift=0;       // The number of
+  std::uint_fast8_t decode_shift=0;       // Used when decoding the length field
   uint32_t decoded_remaining_length = 0;  // The decoded value of the remaining length
+                                          // (will decrease as data is received)
+  MsgType msg_type = MsgType::Reserved;   // Valid after initial state
 
   enum class State {
     initial,
