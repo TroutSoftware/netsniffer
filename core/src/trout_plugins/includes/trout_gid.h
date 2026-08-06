@@ -11,6 +11,6 @@
 // Debug includes
 
 namespace Common {
-const static unsigned trout_gid = 8000;
+constexpr static unsigned trout_gid = 8000;
 } // namespace Common
 #endif // #ifndef trout_gid_d9f2096b

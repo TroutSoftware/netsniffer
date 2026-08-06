@@ -22,3 +22,7 @@ Range for APR Monitor plugin
 ### SID 1070-1100
 
 Range for icmp_logger
+
+### SID 1110-1150
+
+Range for mqtt

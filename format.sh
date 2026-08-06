@@ -1,7 +1,8 @@
 set -e
 
+echo "The format command is not currently implemented"
 
-FIND_CMD="find core/src/service_inspectors -type f \( -name '*.cc' -o -name '*.h' \) -print0"
+#FIND_CMD="find core/src/service_inspectors -type f \( -name '*.cc' -o -name '*.h' \) -print0"
 
-eval "$FIND_CMD" | xargs -0 clang-format -i
+#eval "$FIND_CMD" | xargs -0 clang-format -i
 

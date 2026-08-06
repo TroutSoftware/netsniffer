@@ -11,11 +11,19 @@
 // Local includes
 #include "inspector.h"
 #include "module.h"
+#include "mqtt_protocol_defs.h"
 #include "plugin_def.h"
 
 // Debug includes
 
+
+
+
 namespace mqtt_plugin {
+
+    static const char* buffers[] = {
+          "mqtt_field",
+          nullptr };
 
 // clang-format off
 const snort::InspectApi inspect_api = {
@@ -35,7 +43,7 @@ const snort::InspectApi inspect_api = {
     PROTO_BIT__PDU, // protocol filter (MQTT is TCP based, but in snort
                     // terms it is PDU, as it consumes PAF-generated
                     // PDU's through the splitter )
-    nullptr,        // buffers
+    buffers, //StickyBuffers::get_buffers(), //nullptr,        // buffers
     "mqtt",         // service
     nullptr,        // init
     nullptr,        // term

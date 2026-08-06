@@ -12,6 +12,7 @@
 // Local includes
 #include "module.h"
 #include "pegs.h"
+#include "rules.h"
 
 // Debug includes
 
@@ -62,6 +63,10 @@ const PegInfo *Module::get_pegs() const { return Pegs::s_pegs; }
 PegCount *Module::get_counts() const {
   return reinterpret_cast<PegCount *>(&Pegs::s_peg_counts);
 }
+
+unsigned Module::get_gid() const { return gid; }
+const snort::RuleMap *Module::get_rules() const { return s_rules; }
+
 
 Module::Module()
     : snort::Module(get_module_name(), get_module_help(), module_params) {}

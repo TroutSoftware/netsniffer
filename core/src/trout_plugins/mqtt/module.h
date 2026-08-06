@@ -30,6 +30,9 @@ class Module : public snort::Module {
 
   bool is_bindable() const override { return true; }
 
+  unsigned get_gid() const override;
+  const snort::RuleMap *get_rules() const override;
+
   // Pegs
   const PegInfo *get_pegs() const override;
   PegCount *get_counts() const override;

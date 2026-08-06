@@ -5,12 +5,15 @@
 
 // System includes
 #include<cstddef>
+#include<optional>
 #include<span>
+#include<string_view>
 #include<tuple>
 
 // Global includes
 
 // Local includes
+#include"../wrappers/c_string_type.h"
 
 // Debug includes
 
@@ -35,9 +38,54 @@ enum class MsgType {
   AUTH=15
 };
 
+
+
+using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
+
+template <typename T>
+concept StickyBufferEntryConcept =
+requires {
+  {T::get_cstring() } -> std::same_as<const char *>;
+  {T::getter() } -> std::same_as<StickyBufferGetter>;
+};
+
+template <trout::templates::FixedString buffer_name, StickyBufferGetter Func>
+struct StickyBufferEntry : public trout::templates::CStringType<buffer_name> {
+  constexpr static StickyBufferGetter getter() {
+    return Func;
+  }
+};
+static_assert(StickyBufferEntryConcept<StickyBufferEntry<"",nullptr>>,
+              "StickyBufferEntry is not compliant with StickyBufferEntryConcept");
+
+template <StickyBufferEntryConcept... entry_list>
+struct StickyBufferDef {
+  constexpr static const char** get_buffers() {
+//    static const std::array bufferList{
+//        entry_list::get_cstring()..., // Expands the list for all buffer names
+//        nullptr };
+    static const char* buffers[] = {
+          entry_list::get_cstring()..., // Expands the list for all buffer names
+          nullptr };
+//    return bufferList.data();
+    return buffers;
+  }
+};
+
+
+
+bool getVersion(snort::Packet*, snort::InspectionBuffer&);
+bool getQos(snort::Packet*, snort::InspectionBuffer&);
+
+
+using StickyBuffers = StickyBufferDef< StickyBufferEntry<"MQTT_PROTOCOL_VERSION", getVersion>,
+                                       StickyBufferEntry<"MQTT_QoS", getQos>>;
+
+
+
 inline std::tuple<uint32_t, bool> decode_var_int(std::span<const uint8_t> &data, std::size_t &read_pos) {
-  static const uint8_t MSB = 0b1000'0000;
-  static const uint8_t NOT_MSB = 0b0111'1111;
+  static constexpr uint8_t MSB = 0b1000'0000;
+  static constexpr uint8_t NOT_MSB = 0b0111'1111;
 
   uint32_t result = 0;
 
@@ -54,6 +102,46 @@ inline std::tuple<uint32_t, bool> decode_var_int(std::span<const uint8_t> &data,
   }
 
   return {0, false};
+}
+
+inline std::string to_string(std::span<const uint8_t> s) {
+  return std::string{reinterpret_cast<const char*>(s.data()), s.size()};
+}
+
+inline std::string_view to_string_view(std::span<const uint8_t> s) {
+  return std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
+}
+
+inline std::optional<std::span<const uint8_t>> decode_span_16(std::span<const uint8_t> &data, uint32_t &read_pos) {
+  if (read_pos > data.size()) {
+    return std::nullopt;
+  }
+
+  uint32_t remaining = data.size() - read_pos;
+  if (remaining < 2) {
+    return std::nullopt;
+  }
+
+  uint16_t len = data[read_pos++];
+  len <<= 8;
+  len |= data[read_pos++];
+
+  remaining += 2;
+
+  if (remaining < len) {
+    read_pos+=remaining;
+    return std::nullopt;
+  }
+
+  if (len == 0) {
+    return std::span<const uint8_t>{};
+  }
+
+  auto start_of_span = &data[read_pos];
+
+  read_pos += len;
+
+  return std::span<const uint8_t>{start_of_span, len};
 }
 
 } // namespace mqtt_plugin
