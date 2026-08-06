@@ -51,74 +51,101 @@ static_assert(
         sizeof(PegCounts) / sizeof(PegCount),
     "Entries in s_pegs doesn't match number of entries in s_peg_counts");
 
-using GetterFuncSignature = snort::IpsOption::EvalStatus(*)(Cursor &c, snort::Packet *p);
+using GetterFuncSignature = snort::IpsOption::EvalStatus(*)(Cursor &, PacketFlowData *);
 
-snort::IpsOption::EvalStatus dummyGetter(Cursor &, snort::Packet *) {
+snort::IpsOption::EvalStatus dummyGetter(Cursor &, PacketFlowData*) {
   return snort::IpsOption::NO_MATCH;
 }
 
-snort::IpsOption::EvalStatus client_id_getter(Cursor &c, snort::Packet *p) {
-  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
-  assert(flow_data);
-
-  // We can only read ClientID from a Connect command
-  if (flow_data->msg_type != MsgType::CONNECT) {
-    return snort::IpsOption::NO_MATCH;
-  }
-
-  if ( p->flow && p->flow->gadget )
-  {
-      snort::Inspector* gadget = p->flow->gadget;
-      snort::InspectionBuffer buf;
-
-      if ( gadget->get_buf(s_name, p, buf) ) {
-std::cerr << "MKRTEST got named buffer" << std::endl;
-}
-else
-{
-std::cerr << "MKRTEST didn't get named buffer" << std::endl;
-}
-}
-
-  // Encoding depends on protocol level
-  switch (flow_data->protocol_level) {
-    case 3: { // MQTT 3.1
-      constexpr uint32_t var_header_size = 12;      // See 3.1 spec
-
-      if (p->dsize <= var_header_size + 2) { // payload size is at least 2 bytes
-        // TODO: Mark package as invalid MQTT / truncated
-std::cerr << "MKRTEST: Connect client_id truncated" << std::endl;
-        return snort::IpsOption::NO_MATCH;
-      }
-
-      std::span<const uint8_t> payload(p->data+var_header_size, p->dsize-var_header_size);
-
-      size_t read_pos = 0;
-      uint32_t client_id_len = 0;
-      bool success;
-
-      std::tie(client_id_len, success) = decode_var_int(payload, read_pos);
-
-//      flow_data->remaining_from_header;
-//      flow_data->variable_header_start;
-      c.set(s_name, payload.data() + read_pos, client_id_len);
-
-      return snort::IpsOption::MATCH;
-    }
-
-    default:
-      std::cerr << "MKRTEST: protocol " << flow_data->protocol_level << " not implemented for ClientID" << std::endl;
-      //TODO: Add snort warning
-
+snort::IpsOption::EvalStatus client_id_getter(Cursor &c, PacketFlowData *flow_data) {
+  if(flow_data->client_id.size()) {
+    c.set("MQTT.ClientID", flow_data->client_id.data(), flow_data->client_id.size());
+    return snort::IpsOption::MATCH;
   }
 
   // We found no match
   return snort::IpsOption::NO_MATCH;
 }
 
+snort::IpsOption::EvalStatus connect_will_topic_getter(Cursor &c, PacketFlowData *flow_data) {
+  if (auto* p = std::get_if<ConnectMsg>(&(flow_data->cur_msg))) {
+    auto val = p->will_topic;
+    if (val) {
+      c.set("MQTT.Connect.WillTopic", val->data(), val->size());
+      return snort::IpsOption::MATCH;
+    }
+  }
+
+  // We found no match
+  return snort::IpsOption::NO_MATCH;
+}
+
+snort::IpsOption::EvalStatus connect_will_message_getter(Cursor &c, PacketFlowData *flow_data) {
+  if (auto* p = std::get_if<ConnectMsg>(&(flow_data->cur_msg))) {
+    auto val = p->will_message;
+    if (val) {
+      c.set("MQTT.Connect.WillMessage", val->data(), val->size());
+      return snort::IpsOption::MATCH;
+    }
+  }
+
+  // We found no match
+  return snort::IpsOption::NO_MATCH;
+}
+
+snort::IpsOption::EvalStatus connect_user_name_getter(Cursor &c, PacketFlowData *flow_data) {
+  if (auto* p = std::get_if<ConnectMsg>(&(flow_data->cur_msg))) {
+    auto val = p->user_name;
+    if (val) {
+      c.set("MQTT.Connect.UserName", val->data(), val->size());
+      return snort::IpsOption::MATCH;
+    }
+  }
+
+  // We found no match
+  return snort::IpsOption::NO_MATCH;
+}
+
+snort::IpsOption::EvalStatus connect_password_getter(Cursor &c, PacketFlowData *flow_data) {
+  if (auto* p = std::get_if<ConnectMsg>(&(flow_data->cur_msg))) {
+    auto val = p->password;
+    if (val) {
+      c.set("MQTT.Connect.PassWord", val->data(), val->size());
+      return snort::IpsOption::MATCH;
+    }
+  }
+
+  // We found no match
+  return snort::IpsOption::NO_MATCH;
+}
+
+snort::IpsOption::EvalStatus connect_extra_getter(Cursor &c, PacketFlowData *flow_data) {
+  if (auto* p = std::get_if<ConnectMsg>(&(flow_data->cur_msg))) {
+    auto val = p->extra;
+    if (val) {
+      c.set("MQTT.Connect.Extra", val->data(), val->size());
+      return snort::IpsOption::MATCH;
+    }
+  }
+
+  // We found no match
+  return snort::IpsOption::NO_MATCH;
+}
+
+
+
 namespace {
 static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
-  {"ClientID", client_id_getter}
+  {"ClientID", client_id_getter},   // Valid for all messages
+
+  // Valid for Connect message, fields will return NO_MATCH if not found in message
+  // NOTE: messages can be present but empty and will retrun MATCH in that case
+  {"Connect.WillTopic", connect_will_topic_getter},
+  {"Connect.WillMessage", connect_will_message_getter},
+  {"Connect.UserName", connect_user_name_getter},
+  {"Connect.Password", connect_password_getter},
+  {"Connect.Extra", connect_extra_getter},
+
 };
 } // namespace {
 
@@ -200,9 +227,9 @@ class IpsOption : public snort::IpsOption {
   }
 
   EvalStatus eval(Cursor &c, snort::Packet *p) override {
-      return getterFunc(c, p);
-
-    //return MATCH;
+    assert(p);
+    PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
+    return getterFunc(c, flow_data);
   }
 
   snort::CursorActionType get_cursor_type() const override {

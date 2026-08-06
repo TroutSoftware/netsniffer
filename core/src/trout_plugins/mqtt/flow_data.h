@@ -4,6 +4,7 @@
 // Snort includes
 
 // System includes
+#include <variant>
 
 // Global includes
 #include "../includes/flow_data.h"
@@ -19,9 +20,12 @@ struct FlowData {
   bool in_sync = true;
   uint8_t protocol_level = 0;    // MQTT version: 3 = 3.1, 4 = 3.1.1, 5 = 5.0
   MsgType msg_type = MsgType::Reserved;
-  uint32_t remaining_from_header = 0;
-  uint32_t variable_header_start = 0;
-  std::string client_id;
+  uint32_t remaining_from_header = 0;   // Used during parsing
+  uint32_t variable_header_start = 0;   // Used during parsing
+  std::vector<uint8_t> client_id;       // Populated from the connect message
+  std::variant<std::monostate,          // Must be first entry, as it will then be the default
+               ConnectMsg> cur_msg;
+
 };
 
 using PacketFlowData = Common::FlowData<FlowData>;

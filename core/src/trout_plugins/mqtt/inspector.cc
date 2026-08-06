@@ -84,20 +84,7 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData *flow_data) {
 
     const auto protocol_level = flow_data->protocol_level;
 
-    struct connect_struct {
-      bool user_name_flag = false;
-      bool password_flag = false;
-      bool will_retain = false;
-      uint8_t will_qos = 0;
-      bool will_flag = false;
-      bool clean_session = 0;
-      uint16_t keep_alive_timer = 0;
-      std::optional<std::string_view> will_topic;
-      std::optional<std::string_view> will_message;
-      std::optional<std::string_view> user_name;
-      std::optional<std::string_view> password;
-      std::optional<std::span<const uint8_t>> extra;
-    } connect;
+    ConnectMsg connect;
 
     if (protocol_level == 3) {
       if (remaining_from_header < 1 + read_pos) {
@@ -133,7 +120,7 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData *flow_data) {
         return;
       }
 
-      flow_data->client_id = to_string(*client_id);
+      flow_data->client_id = to_vector(*client_id);
 
       if (connect.will_flag) {
         auto will_topic = decode_span_16(data, read_pos);
@@ -150,26 +137,18 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData *flow_data) {
           return;
         }
 
-        connect.will_topic = to_string_view(*will_topic);
-        connect.will_message = to_string_view(*will_message);
+        connect.will_topic = *will_topic;
+        connect.will_message = *will_message;
       }
 
       if (connect.user_name_flag) {
-        auto user_name = decode_span_16(data, read_pos);
-
         // It is not illegal in 3.1 to have a missing user_name, even the flag was set
-        if (user_name) {
-          connect.user_name = to_string_view(*user_name);
-        }
+        connect.user_name = decode_span_16(data, read_pos);
       }
 
       if (connect.password_flag) {
-        auto password = decode_span_16(data, read_pos);
-
         // It is not illegal in 3.1 to have a missing password, even the flag was set
-        if (password) {
-          connect.password = to_string_view(*password);
-        }
+        connect.password = decode_span_16(data, read_pos);
       }
 
       // If at this point the read_pos is not equal to the total length
@@ -181,6 +160,8 @@ std::cerr << "MKRTEST: Got extra data in connect msg" << std::endl;
       } else {
 std::cerr << "MKRTEST: Connect fully parsed" << std::endl;
       }
+
+      flow_data->cur_msg = connect;
     }
 
 }
@@ -276,6 +257,15 @@ std::cerr << "MKRTEST: Don't know how to handle msg type: " << (int)msg_type << 
   }
 
 
+}
+
+void Inspector::clear(snort::Packet*p) {
+  assert(p);
+  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
+
+  // Some cur_msg's refer to the packet data, so we should cleanup
+  // when the packet is being destructed
+  flow_data->cur_msg = std::monostate{};
 }
 
 

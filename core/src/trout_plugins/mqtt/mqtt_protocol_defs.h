@@ -1,6 +1,8 @@
 #ifndef mqtt_protocol_defs_D4A91F6B
 #define mqtt_protocol_defs_D4A91F6B
 
+// This file contains helpers and definitions for parsing MQTT messages
+
 // Snort includes
 
 // System includes
@@ -9,6 +11,7 @@
 #include<span>
 #include<string_view>
 #include<tuple>
+#include<vector>
 
 // Global includes
 
@@ -38,8 +41,22 @@ enum class MsgType {
   AUTH=15
 };
 
+struct ConnectMsg {
+  bool user_name_flag = false;
+  bool password_flag = false;
+  bool will_retain = false;
+  uint8_t will_qos = 0;
+  bool will_flag = false;
+  bool clean_session = 0;
+  uint16_t keep_alive_timer = 0;
+  std::optional<std::span<const uint8_t>> will_topic;
+  std::optional<std::span<const uint8_t>> will_message;
+  std::optional<std::span<const uint8_t>> user_name;
+  std::optional<std::span<const uint8_t>> password;
+  std::optional<std::span<const uint8_t>> extra;
+};
 
-
+// TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
 
 template <typename T>
@@ -110,6 +127,10 @@ inline std::string to_string(std::span<const uint8_t> s) {
 
 inline std::string_view to_string_view(std::span<const uint8_t> s) {
   return std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
+}
+
+inline std::vector<uint8_t> to_vector(std::span<const uint8_t> s) {
+  return {s.begin(), s.end()};
 }
 
 inline std::optional<std::span<const uint8_t>> decode_span_16(std::span<const uint8_t> &data, uint32_t &read_pos) {

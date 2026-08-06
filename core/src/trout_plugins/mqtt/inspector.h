@@ -35,6 +35,7 @@ private:
   void queue(SID sid) { snort::DetectionEngine::queue_event(gid, U(sid)); }
 
   void eval(snort::Packet *) override;
+  void clear(snort::Packet*) override;
 
   snort::StreamSplitter* get_splitter(bool to_server) override;
 
