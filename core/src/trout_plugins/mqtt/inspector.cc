@@ -260,12 +260,16 @@ std::cerr << "MKRTEST: Don't know how to handle msg type: " << (int)msg_type << 
 }
 
 void Inspector::clear(snort::Packet*p) {
+std::cerr << "MKRTEST clear called on packet" << std::endl;
   assert(p);
   PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
 
   // Some cur_msg's refer to the packet data, so we should cleanup
   // when the packet is being destructed
   flow_data->cur_msg = std::monostate{};
+
+  // Msg type is no longer relevant
+  flow_data->msg_type = MsgType::Reserved;
 }
 
 

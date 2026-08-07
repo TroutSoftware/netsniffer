@@ -47,7 +47,7 @@ struct ConnectMsg {
   bool will_retain = false;
   uint8_t will_qos = 0;
   bool will_flag = false;
-  bool clean_session = 0;
+  bool clean_session = false;
   uint16_t keep_alive_timer = 0;
   std::optional<std::span<const uint8_t>> will_topic;
   std::optional<std::span<const uint8_t>> will_message;
