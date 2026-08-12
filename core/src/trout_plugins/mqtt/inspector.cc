@@ -55,114 +55,213 @@ enum class MsgType {
 };
 */
 
-void Inspector::decode_connect(snort::Packet *p, PacketFlowData *flow_data) {
-    std::span<const uint8_t> data(p->data, p->dsize);
-    auto remaining_from_header = flow_data->remaining_from_header;
-    auto read_pos = flow_data->variable_header_start;
+void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
+  const std::span<const uint8_t> data(p->data, p->dsize);
+  //const auto remaining_from_header = flow_data.remaining_from_header;
+  auto read_pos = flow_data.variable_header_start;
 
-    // Check the version and markers for that version
-    constexpr uint8_t MQTT3_1_ID[]   = {0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p', 0x03}; // from 3.1 spec
-    constexpr uint8_t MQTT3_1_1_ID[] = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x04}; // from 3.1.1 spec
-    constexpr uint8_t MQTT5_0_ID[]   = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x05}; // from 5.0 spec
+  // Check the version and markers for that version
+  constexpr uint8_t MQTT3_1_ID[]   = {0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p', 0x03}; // from 3.1 spec
+  constexpr uint8_t MQTT3_1_1_ID[] = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x04}; // from 3.1.1 spec
+  constexpr uint8_t MQTT5_0_ID[]   = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x05}; // from 5.0 spec
 
-    if (remaining_from_header >= sizeof(MQTT3_1_ID) &&
-        (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_ID)), std::span{MQTT3_1_ID}))) {
-      flow_data->protocol_level = 3;
-      read_pos += sizeof(MQTT3_1_ID);
-    } else if (remaining_from_header >= sizeof(MQTT3_1_1_ID) &&
-        (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_1_ID)), std::span{MQTT3_1_1_ID}))) {
-      flow_data->protocol_level = 4;
-      read_pos += sizeof(MQTT3_1_1_ID);
-    } else if (remaining_from_header >= sizeof(MQTT5_0_ID) &&
-        (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT5_0_ID)), std::span{MQTT5_0_ID}))) {
-      flow_data->protocol_level = 5;
-      read_pos += sizeof(MQTT5_0_ID);
-    } else {
-      reject(p, "Doesn't contain a valid/known MQTT protocol");
+  if (data.size() >= read_pos + sizeof(MQTT3_1_ID) &&
+      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_ID)), std::span{MQTT3_1_ID}))) {
+    flow_data.protocol_level = 3;
+    read_pos += sizeof(MQTT3_1_ID);
+  } else if (data.size() >= read_pos + sizeof(MQTT3_1_1_ID) &&
+      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_1_ID)), std::span{MQTT3_1_1_ID}))) {
+    flow_data.protocol_level = 4;
+    read_pos += sizeof(MQTT3_1_1_ID);
+  } else if (data.size() >= read_pos + sizeof(MQTT5_0_ID) &&
+      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT5_0_ID)), std::span{MQTT5_0_ID}))) {
+    flow_data.protocol_level = 5;
+    read_pos += sizeof(MQTT5_0_ID);
+  } else {
+    reject(p, "Doesn't contain a valid/known MQTT protocol");
+    return;
+  }
+
+  const auto protocol_level = flow_data.protocol_level;
+
+  ConnectMsg connect;
+
+  if (protocol_level == 3) {
+    if (data.size() <= read_pos) {
+      queue(SID::connect_message_malformed);
+      return;
+    }
+    connect.user_name_flag = data[read_pos] & (1<<7);
+    connect.password_flag = data[read_pos] & (1<<6);
+    connect.will_retain = data[read_pos] & (1<<5);
+    connect.will_qos = (data[read_pos] >> 3) & 0b11;
+    connect.will_flag = data[read_pos] & (1<<2);
+    connect.clean_session = data[read_pos] & (1<<1);
+    read_pos++;
+
+    // QoS is only allowed to be 0,1,2
+    if (connect.will_qos >= 3) {
+      queue(SID::connect_message_malformed);
+    }
+
+    if (data.size() < 2 + read_pos) {
+      queue(SID::connect_message_malformed);
       return;
     }
 
-    const auto protocol_level = flow_data->protocol_level;
+    connect.keep_alive_timer = data[read_pos++];
+    connect.keep_alive_timer <<= 8;
+    connect.keep_alive_timer |= data[read_pos++];
 
-    ConnectMsg connect;
+    auto client_id = decode_span_16(data, read_pos);
 
-    if (protocol_level == 3) {
-      if (remaining_from_header < 1 + read_pos) {
-        queue(SID::connect_message_malformed);
-        return;
-      }
-      connect.user_name_flag = data[read_pos] & (1<<7);
-      connect.password_flag = data[read_pos] & (1<<6);
-      connect.will_retain = data[read_pos] & (1<<5);
-      connect.will_qos = (data[read_pos] >> 3) & 0b11;
-      connect.will_flag = data[read_pos] & (1<<2);
-      connect.clean_session = data[read_pos] & (1<<1);
-      read_pos++;
-
-      // QoS is only allowed to be 0,1,2
-      if (connect.will_qos >= 3) {
-        queue(SID::connect_message_malformed);
-      }
-
-      if (remaining_from_header < 2 + read_pos) {
-        queue(SID::connect_message_malformed);
-        return;
-      }
-
-      connect.keep_alive_timer = data[read_pos++];
-      connect.keep_alive_timer <<= 8;
-      connect.keep_alive_timer |= data[read_pos++];
-
-      auto client_id = decode_span_16(data, read_pos);
-
-      if (!client_id || client_id->size() < 1) {
-        queue(SID::connect_message_malformed);
-        return;
-      }
-
-      flow_data->client_id = to_vector(*client_id);
-
-      if (connect.will_flag) {
-        auto will_topic = decode_span_16(data, read_pos);
-        auto will_message = decode_span_16(data, read_pos);  // legal to have zero length
-
-        if (!will_topic || !will_message || will_topic->size() < 1) {
-          queue(SID::connect_message_malformed);
-          return;
-        }
-
-        // 3.1 standard states all bytes in the Will Message must be 7-bit
-        if (std::ranges::any_of(*will_message, [](uint8_t c) { return c > 0x7F; })) {
-          queue(SID::connect_message_malformed);
-          return;
-        }
-
-        connect.will_topic = *will_topic;
-        connect.will_message = *will_message;
-      }
-
-      if (connect.user_name_flag) {
-        // It is not illegal in 3.1 to have a missing user_name, even the flag was set
-        connect.user_name = decode_span_16(data, read_pos);
-      }
-
-      if (connect.password_flag) {
-        // It is not illegal in 3.1 to have a missing password, even the flag was set
-        connect.password = decode_span_16(data, read_pos);
-      }
-
-      // If at this point the read_pos is not equal to the total length
-      // something is spooky
-      if(read_pos <= remaining_from_header) {
-std::cerr << "MKRTEST: Got extra data in connect msg" << std::endl;
-        connect.extra = data.subspan(read_pos, remaining_from_header - read_pos);
-        queue(SID::message_has_extra_data);
-      } else {
-std::cerr << "MKRTEST: Connect fully parsed" << std::endl;
-      }
-
-      flow_data->cur_msg = connect;
+    if (!client_id || client_id->size() < 1) {
+      queue(SID::connect_message_malformed);
+      return;
     }
+
+    flow_data.client_id = to_vector(*client_id);
+
+    if (connect.will_flag) {
+      auto will_topic = decode_span_16(data, read_pos);
+      auto will_message = decode_span_16(data, read_pos);  // legal to have zero length
+
+      if (!will_topic || !will_message || will_topic->size() < 1) {
+        queue(SID::connect_message_malformed);
+        return;
+      }
+
+      // 3.1 standard states all bytes in the Will Message must be 7-bit
+      if (std::ranges::any_of(*will_message, [](uint8_t c) { return c > 0x7F; })) {
+        queue(SID::connect_message_malformed);
+      }
+
+      connect.will_topic = *will_topic;
+      connect.will_message = *will_message;
+    }
+
+    if (connect.user_name_flag) {
+      // It is not illegal in 3.1 to have a missing user_name, even the flag was set
+      connect.user_name = decode_span_16(data, read_pos);
+    }
+
+    if (connect.password_flag) {
+      // It is not illegal in 3.1 to have a missing password, even the flag was set
+      connect.password = decode_span_16(data, read_pos);
+    }
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = connect;
+  } else {
+    snort::WarningMessage("MQTT inspector received a connect message but doesn't support protocol level %i\n", protocol_level);
+  }
+
+}
+
+void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
+  const std::span<const uint8_t> data(p->data, p->dsize);
+  //const auto remaining_from_header = flow_data.remaining_from_header;
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    ConnAckMsg connack;
+    if (data.size() >= read_pos + 2) {
+      read_pos++;  // Byte 0 is reserved
+      uint8_t return_code = data[read_pos++];
+
+      if (return_code > 5) {
+        queue(SID::connack_message_malformed);
+      }
+
+      if (return_code != 0) {
+        flow_data.connection_refused = true;
+      }
+    }
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = connack;
+  } else {
+    snort::WarningMessage("MQTT inspector received a connack message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  //const auto remaining_from_header = flow_data.remaining_from_header;
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PublishMsg publish;
+
+    uint8_t flags = data[0] & 0x0F;   // We know it's there
+
+    publish.dup_flag = flags & 0b0000'1000;
+    publish.qos_level = (flags >> 1) & 0b11;
+    publish.retain_flag = flags & 0b1;
+
+    if (publish.qos_level >= 3) {
+      queue(SID::publish_message_malformed);
+      // We won't know if there should be a Message ID or not later...
+      return;
+    }
+
+    auto topic_name = decode_span_16(data, read_pos);
+
+    if (!topic_name) {
+      queue(SID::publish_message_malformed);
+      return;
+    }
+
+    if (topic_name->size() == 0 || topic_name->size() > 0x7FFFF ) {
+      queue(SID::topic_name_invalid);
+    }
+
+    publish.topic_name = *topic_name;
+
+    if (publish.qos_level != 0) {
+      if (read_pos + 2 < data.size()) {
+        queue(SID::publish_message_malformed);
+        return;
+      }
+
+      uint16_t message_identifier = data[read_pos++];
+      message_identifier <<= 8;
+      message_identifier |= data[read_pos++];
+
+      if (message_identifier == 0) {
+        queue(SID::publish_message_malformed);
+      }
+
+      publish.message_identifier = message_identifier;
+    }
+
+    // A payload isn't mandatory, but if it is there it will take the
+    // rest of the message
+    assert(read_pos <= data.size());
+    if (read_pos < data.size()) {
+      publish.payload = data.subspan(read_pos);
+    }
+
+    flow_data.cur_msg = publish;
+  } else {
+    snort::WarningMessage("MQTT inspector received a publish message but doesn't support protocol level %i\n", protocol_level);
+  }
 
 }
 
@@ -202,28 +301,36 @@ void Inspector::eval(snort::Packet *p) {
   PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
   assert(flow_data);
 
-  // Check if stream is considered in sync
-  if (!flow_data->in_sync) {
-    // TODO: Flag out of sync event
-std::cerr << "MKRTEST: Flow out of sync" << std::endl;
+  if (remaining != p->dsize - read_pos) {
+    if (p->is_from_client()) {
+      flow_data->client_in_sync = false;
+    } else {
+      flow_data->server_in_sync = false;
+    }
+  }
+
+  if (p->is_from_client() && !flow_data->client_in_sync) {
+    queue(SID::client_out_of_sync);
     return;
   }
 
-  if (remaining != p->dsize - read_pos) {
-    // TODO: Flag as truncated
-    flow_data->in_sync = false;
-std::cerr << "MKRTEST: Package is missing data, going out of sync" << std::endl;
+  if (p->is_from_server() && !flow_data->server_in_sync) {
+    queue(SID::server_out_of_sync);
     return;
+  }
+
+  if (flow_data->connection_refused) {
+    queue(SID::com_on_refused_connection);
+    // No return, as we can still decode messages
   }
 
   MsgType msg_type = static_cast<MsgType>(data[0] >> 4);
   flow_data->msg_type = msg_type;
 
-  flow_data->remaining_from_header = remaining;
+  //flow_data->remaining_from_header = remaining;
   flow_data->variable_header_start = read_pos;
 
-
-//std::cerr << "MKRTEST: Flow no " << flow_data->flow_no << std::endl;
+std::cerr << "MKRTEST: Flow id " << flow_data->flow_id << std::endl;
 std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
 
   if (flow_data->protocol_level == 0) {
@@ -232,14 +339,20 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
       reject(p, "MQTT communication must start with a CONNECT message");
       return;
     }
-    return decode_connect(p, flow_data);
+    return decode_connect(p, *flow_data);
   }
 
   switch(msg_type) {
+    case MsgType::CONNACK:
+      return decode_connack(p, *flow_data);
+
+    case MsgType::PUBLISH:
+      return decode_publish(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
-    case MsgType::CONNACK:
-    case MsgType::PUBLISH:
+
+
     case MsgType::PUBACK:
     case MsgType::PUBREC:
     case MsgType::PUBREL:
@@ -260,7 +373,6 @@ std::cerr << "MKRTEST: Don't know how to handle msg type: " << (int)msg_type << 
 }
 
 void Inspector::clear(snort::Packet*p) {
-std::cerr << "MKRTEST clear called on packet" << std::endl;
   assert(p);
   PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
 
@@ -270,6 +382,8 @@ std::cerr << "MKRTEST clear called on packet" << std::endl;
 
   // Msg type is no longer relevant
   flow_data->msg_type = MsgType::Reserved;
+
+  flow_data->extra.reset();
 }
 
 

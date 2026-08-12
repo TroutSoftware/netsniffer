@@ -1,0 +1,24 @@
+Notes on snort and how it communicates with the daq about network packages
+--------------------------------------------------------------------------
+Valid for snort version 3.12.2.0
+
+The main communication/event loop for snorts interaction with the daq is in 
+<netsniffer>/core/src/main/analyzer.cc
+
+DAQ_RecvStatus Analyzer::process_messages()
+
+The generic flow is that a message is received from the daq and a response
+is generated for each message (a daq message can both be a network package
+received or some other communication from the daq), for each message an answer
+needs to be eventually generated and sent back to the daq.
+
+There is not guaranteed ordering enforced by snort on the responses, rather they
+are sent back to the daq when snort has processed the given message from the daq
+
+The daq message dispatcher sends network packets for processing at
+
+void Analyzer::process_daq_pkt_msg(DAQ_Msg_h msg, bool retry)
+
+It decodes it through the packet manager
+
+

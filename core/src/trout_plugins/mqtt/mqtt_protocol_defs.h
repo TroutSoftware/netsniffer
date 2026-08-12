@@ -53,7 +53,19 @@ struct ConnectMsg {
   std::optional<std::span<const uint8_t>> will_message;
   std::optional<std::span<const uint8_t>> user_name;
   std::optional<std::span<const uint8_t>> password;
-  std::optional<std::span<const uint8_t>> extra;
+};
+
+struct ConnAckMsg {
+  uint8_t return_code = 0xFF;
+};
+
+struct PublishMsg {
+  bool dup_flag = false;
+  uint8_t qos_level = 0;
+  bool retain_flag = false;
+  std::span<const uint8_t> topic_name;
+  std::optional<uint16_t> message_identifier;  // only for QoS 1 & 2
+  std::optional<std::span<const uint8_t>> payload;
 };
 
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
@@ -78,13 +90,9 @@ static_assert(StickyBufferEntryConcept<StickyBufferEntry<"",nullptr>>,
 template <StickyBufferEntryConcept... entry_list>
 struct StickyBufferDef {
   constexpr static const char** get_buffers() {
-//    static const std::array bufferList{
-//        entry_list::get_cstring()..., // Expands the list for all buffer names
-//        nullptr };
     static const char* buffers[] = {
           entry_list::get_cstring()..., // Expands the list for all buffer names
           nullptr };
-//    return bufferList.data();
     return buffers;
   }
 };
@@ -100,7 +108,7 @@ using StickyBuffers = StickyBufferDef< StickyBufferEntry<"MQTT_PROTOCOL_VERSION"
 
 
 
-inline std::tuple<uint32_t, bool> decode_var_int(std::span<const uint8_t> &data, std::size_t &read_pos) {
+inline std::tuple<uint32_t, bool> decode_var_int(const std::span<const uint8_t> &data, std::size_t &read_pos) {
   static constexpr uint8_t MSB = 0b1000'0000;
   static constexpr uint8_t NOT_MSB = 0b0111'1111;
 
@@ -121,19 +129,19 @@ inline std::tuple<uint32_t, bool> decode_var_int(std::span<const uint8_t> &data,
   return {0, false};
 }
 
-inline std::string to_string(std::span<const uint8_t> s) {
+inline std::string to_string(const std::span<const uint8_t> s) {
   return std::string{reinterpret_cast<const char*>(s.data()), s.size()};
 }
 
-inline std::string_view to_string_view(std::span<const uint8_t> s) {
+inline std::string_view to_string_view(const std::span<const uint8_t> s) {
   return std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
 }
 
-inline std::vector<uint8_t> to_vector(std::span<const uint8_t> s) {
+inline std::vector<uint8_t> to_vector(const std::span<const uint8_t> s) {
   return {s.begin(), s.end()};
 }
 
-inline std::optional<std::span<const uint8_t>> decode_span_16(std::span<const uint8_t> &data, uint32_t &read_pos) {
+inline std::optional<std::span<const uint8_t>> decode_span_16(const std::span<const uint8_t> &data, uint32_t &read_pos) {
   if (read_pos > data.size()) {
     return std::nullopt;
   }

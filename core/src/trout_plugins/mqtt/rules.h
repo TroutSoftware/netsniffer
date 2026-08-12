@@ -18,6 +18,12 @@ namespace mqtt_plugin {
 enum class SID {
   connect_message_malformed = 1110,
   message_has_extra_data = 1111,
+  connack_message_malformed = 1112,
+  com_on_refused_connection = 1113,
+  server_out_of_sync = 1114,
+  client_out_of_sync = 1115,
+  topic_name_invalid = 1116,
+  publish_message_malformed = 1117,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID

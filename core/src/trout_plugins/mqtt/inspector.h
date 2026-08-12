@@ -42,7 +42,9 @@ private:
   // Used to reject the packet as being MQTT
   void reject(snort::Packet *, std::string reason);
 
-  void decode_connect(snort::Packet *p, PacketFlowData *flow_data);
+  void decode_connect(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_connack(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_publish(snort::Packet *p, PacketFlowData &flow_data);
 
 public:
   Inspector(Module *module);

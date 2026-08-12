@@ -13,6 +13,7 @@
 // Global includes
 
 // Local includes
+#include "flow_data.h"
 #include "stream_splitter.h"
 
 // Debug includes
@@ -47,7 +48,10 @@ StreamSplitter::Status StreamSplitter::scan(
   assert(data);
   assert(fp);
 
-std::cerr << "MKRTEST splitter got " << len << " bytes" << std::endl;
+  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
+
+  std::cerr << "MKRTEST: Splitter got flow " << flow_data->flow_id << " with " << len << " bytes" << std::endl;
+
 
   // For detailed description of the remaning length and terms,
   // see "2 MQTT Control Packet format" in the OASIS MQTT 5.0 standard
@@ -107,25 +111,7 @@ std::cerr << "MKRTEST splitter got " << len << " bytes" << std::endl;
           // We have the data we need in the current buffer
           *fp = split_pos + decoded_remaining_length;
 
-/*
-    enum Status
-    {
-        ABORT,   // non-paf operation
-        START,   // internal use only
-        SEARCH,  // searching for next flush point
-        FLUSH,   // flush at given offset
-        LIMIT,   // flush to given offset upon reaching paf_max
-        SKIP,    // skip ahead to given offset
-        LIMITED, // previously did limit flush
-        STOP     // stop paf scan loop
-    };
-*/
           state = State::initial;
-
-//std::cerr << "MKRTEST splitter LIMIT" << std::endl;
-//          *fp = 3;
-//          return LIMIT;
-
 
           return FLUSH;
         }
