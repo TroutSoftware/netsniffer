@@ -58,22 +58,17 @@ snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData&) {
   return snort::IpsOption::NO_MATCH;
 }
 
-snort::IpsOption::EvalStatus msg_connect(Cursor &, PacketFlowData &flow_data) {
-  if (std::get_if<ConnectMsg>(&(flow_data.cur_msg))) {
+
+template<typename T>
+// TODO: Add concept to check if T is valid type to check with std::get_if
+snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
+  if (std::get_if<T>(&(flow_data.cur_msg))) {
     return snort::IpsOption::MATCH;
   }
 
   return snort::IpsOption::NO_MATCH;
 }
-// TODO: Add connect function to get QoS
 
-snort::IpsOption::EvalStatus msg_connack(Cursor &, PacketFlowData &flow_data) {
-  if (std::get_if<ConnAckMsg>(&(flow_data.cur_msg))) {
-    return snort::IpsOption::MATCH;
-  }
-
-  return snort::IpsOption::NO_MATCH;
-}
 
 template<typename T> struct optional_traits;
 template<typename T> struct optional_traits<std::optional<T>>{
@@ -166,8 +161,9 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Flow.ProtocolLevel", uni_getter<&FlowData::protocol_level>},
 
   // Checks message
-  {"Msg.Connect", msg_connect},
-  {"Msg.ConnAck", msg_connack},
+  {"Msg.Connect", uni_msg<ConnectMsg>},
+  {"Msg.ConnAck", uni_msg<ConnAckMsg>},
+  {"Msg.Publish", uni_msg<PublishMsg>},
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
