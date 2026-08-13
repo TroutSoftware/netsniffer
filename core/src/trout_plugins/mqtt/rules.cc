@@ -28,6 +28,7 @@ const snort::RuleMap s_rules[] = {
     {U(SID::topic_name_invalid), "Found illegal topic name"},
     {U(SID::publish_message_malformed), "Publish message malformed"},
     {U(SID::puback_message_malformed), "Puback message malformed"},
+    {U(SID::pubrec_message_malformed), "Pubrec message malformed"},
 };
 
 } // namespace mqtt_plugin {

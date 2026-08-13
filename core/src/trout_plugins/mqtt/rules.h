@@ -25,6 +25,7 @@ enum class SID {
   topic_name_invalid = 1116,
   publish_message_malformed = 1117,
   puback_message_malformed = 1118,
+  pubrec_message_malformed = 1119,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID

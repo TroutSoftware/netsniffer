@@ -165,6 +165,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Msg.ConnAck", uni_msg<ConnAckMsg>},
   {"Msg.Publish", uni_msg<PublishMsg>},
   {"Msg.PubAck", uni_msg<PubAckMsg>},
+  {"Msg.PubRec", uni_msg<PubRecMsg>},
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
@@ -191,7 +192,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
 
   {"PubAck.MessageIdentifier", uni_getter<&PubAckMsg::message_identifier>},
 
-
+  {"PubRec.MessageIdentifier", uni_getter<&PubRecMsg::message_identifier>},
 
 };
 

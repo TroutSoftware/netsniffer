@@ -36,7 +36,8 @@ struct FlowData {
                ConnectMsg,
                ConnAckMsg,
                PublishMsg,
-               PubAckMsg> cur_msg;
+               PubAckMsg,
+               PubRecMsg> cur_msg;
   bool connection_refused = false;      // Connection has been refused by either party
 
 };

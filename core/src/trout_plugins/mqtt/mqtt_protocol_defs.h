@@ -72,6 +72,10 @@ struct PubAckMsg {
   uint16_t message_identifier;
 };
 
+struct PubRecMsg {
+  uint16_t message_identifier;
+};
+
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
 
