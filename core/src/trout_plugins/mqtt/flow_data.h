@@ -35,7 +35,8 @@ struct FlowData {
   std::variant<std::monostate,          // monostate must be first entry, as it will then be the default
                ConnectMsg,
                ConnAckMsg,
-               PublishMsg> cur_msg;
+               PublishMsg,
+               PubAckMsg> cur_msg;
   bool connection_refused = false;      // Connection has been refused by either party
 
 };

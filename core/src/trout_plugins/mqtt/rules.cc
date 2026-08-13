@@ -27,6 +27,7 @@ const snort::RuleMap s_rules[] = {
     {U(SID::client_out_of_sync), "Gave up parsing client data, stream has gone out of sync"},
     {U(SID::topic_name_invalid), "Found illegal topic name"},
     {U(SID::publish_message_malformed), "Publish message malformed"},
+    {U(SID::puback_message_malformed), "Puback message malformed"},
 };
 
 } // namespace mqtt_plugin {

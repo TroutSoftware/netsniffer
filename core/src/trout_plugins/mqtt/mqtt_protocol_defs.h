@@ -68,6 +68,10 @@ struct PublishMsg {
   std::optional<std::span<const uint8_t>> payload;
 };
 
+struct PubAckMsg {
+  uint16_t message_identifier;
+};
+
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
 

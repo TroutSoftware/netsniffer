@@ -265,6 +265,41 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
 
 }
 
+void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  //const auto remaining_from_header = flow_data.remaining_from_header;
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PubAckMsg puback;
+
+    if (read_pos + 2 < data.size()) {
+      queue(SID::puback_message_malformed);
+      return;
+    }
+
+    uint16_t message_identifier = data[read_pos++];
+    message_identifier <<= 8;
+    message_identifier |= data[read_pos++];
+
+    puback.message_identifier = message_identifier;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = puback;
+  } else {
+    snort::WarningMessage("MQTT inspector received a puback message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+
 void Inspector::reject(snort::Packet *p, std::string reason) {
   // TODO: Add logging
   snort::WarningMessage("MQTT inspector received an invalid packet (%s)\n", reason.c_str());
@@ -349,11 +384,14 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
     case MsgType::PUBLISH:
       return decode_publish(p, *flow_data);
 
+    case MsgType::PUBACK:
+      return decode_puback(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
 
 
-    case MsgType::PUBACK:
+
     case MsgType::PUBREC:
     case MsgType::PUBREL:
     case MsgType::PUBCOMP:

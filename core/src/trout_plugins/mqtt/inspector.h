@@ -45,6 +45,7 @@ private:
   void decode_connect(snort::Packet *p, PacketFlowData &flow_data);
   void decode_connack(snort::Packet *p, PacketFlowData &flow_data);
   void decode_publish(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_puback(snort::Packet *p, PacketFlowData &flow_data);
 
 public:
   Inspector(Module *module);
