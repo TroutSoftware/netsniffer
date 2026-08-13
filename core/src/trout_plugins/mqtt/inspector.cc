@@ -344,6 +344,40 @@ void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
   }
 }
 
+void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PubCompMsg pubcomp;
+
+    if (read_pos + 2 < data.size()) {
+      queue(SID::pubcomp_message_malformed);
+      return;
+    }
+
+    uint16_t message_identifier = data[read_pos++];
+    message_identifier <<= 8;
+    message_identifier |= data[read_pos++];
+
+    pubcomp.message_identifier = message_identifier;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = pubcomp;
+  } else {
+    snort::WarningMessage("MQTT inspector received a pubcomp message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+
 void Inspector::reject(snort::Packet *p, std::string reason) {
   // TODO: Add logging
   snort::WarningMessage("MQTT inspector received an invalid packet (%s)\n", reason.c_str());

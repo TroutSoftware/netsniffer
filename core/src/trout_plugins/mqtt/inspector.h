@@ -48,6 +48,7 @@ private:
   void decode_puback(snort::Packet *p, PacketFlowData &flow_data);
   void decode_pubrec(snort::Packet *p, PacketFlowData &flow_data);
   void decode_pubrel(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data);
 
 public:
   Inspector(Module *module);

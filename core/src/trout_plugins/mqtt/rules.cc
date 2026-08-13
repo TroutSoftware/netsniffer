@@ -30,7 +30,7 @@ const snort::RuleMap s_rules[] = {
     {U(SID::puback_message_malformed), "PUBACK message malformed"},
     {U(SID::pubrec_message_malformed), "PUBREC message malformed"},
     {U(SID::pubrel_message_malformed), "PUBREL message malformed"},
-
+    {U(SID::pubcomp_message_malformed), "PUBCOMP message malformed"},
 };
 
 } // namespace mqtt_plugin {
