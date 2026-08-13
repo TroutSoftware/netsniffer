@@ -194,6 +194,10 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
 
   {"PubRec.MessageIdentifier", uni_getter<&PubRecMsg::message_identifier>},
 
+  {"PubRel.Flag.Dup", &uni_getter<&PubRelMsg::dup_flag>},
+  // TODO: Add: PubRelMsg qos compare func
+  {"PubRel.MessageIdentifier", uni_getter<&PubRelMsg::message_identifier>},
+
 };
 
 

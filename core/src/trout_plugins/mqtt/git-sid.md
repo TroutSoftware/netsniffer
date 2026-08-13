@@ -107,3 +107,15 @@ available for the rule engine.
 #### Why
 Ill formed messages can be intentionally created to exploit errors in
 the system or be a sign of an error in the sender code
+
+### 1120
+#### What
+Indicates a pubrel message contained something that didn't follow the
+spec for the given version
+
+If the error is fatal, e.g. prevents futher decoding, decoding will be
+abandoned for the current message, and this is the only indication
+available for the rule engine.
+#### Why
+Ill formed messages can be intentionally created to exploit errors in
+the system or be a sign of an error in the sender code

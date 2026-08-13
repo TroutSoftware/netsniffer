@@ -33,31 +33,8 @@ namespace {
 
 } // namespace
 
-
-/*
-enum class MsgType {
-  Reserved=0,     // Forbidden Reserved
-  CONNECT=1,      // Client to Server Connection request
-  CONNACK=2,      // Server to Client Connect acknowledgment
-  PUBLISH=3,      // Client to Server or Server to Client Publish message
-  PUBACK=4,       // Client to Server or Server to Client Publish acknowledgment (QoS 1)
-  PUBREC=5,       // Client to Server or Server to Client Publish received (QoS 2 delivery part 1)
-  PUBREL=6,       // Client to Server or Server to Client Publish release (QoS 2 delivery part 2)
-  PUBCOMP=7,      // Client to Server or Server to Client Publish complete (QoS 2 delivery part 3)
-  SUBSCRIBE=8,    // Client to Server Subscribe request
-  SUBACK=9,       // Server to Client Subscribe acknowledgment
-  UNSUBSCRIBE=10, // Client to Server Unsubscribe request
-  UNSUBACK=11,    // Server to Client Unsubscribe acknowledgment
-  PINGREQ=12,     // Client to Server PING request
-  PINGRESP=13,    // Server to Client PING response
-  DISCONNECT=14,  // Client to Server or Server to Client Disconnect notification
-  AUTH=15
-};
-*/
-
 void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
   const std::span<const uint8_t> data(p->data, p->dsize);
-  //const auto remaining_from_header = flow_data.remaining_from_header;
   auto read_pos = flow_data.variable_header_start;
 
   // Check the version and markers for that version
@@ -167,7 +144,6 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
 
 void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
   const std::span<const uint8_t> data(p->data, p->dsize);
-  //const auto remaining_from_header = flow_data.remaining_from_header;
   auto read_pos = flow_data.variable_header_start;
   const auto protocol_level = flow_data.protocol_level;
 
@@ -202,18 +178,17 @@ void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
 
 void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
   std::span<const uint8_t> data(p->data, p->dsize);
-  //const auto remaining_from_header = flow_data.remaining_from_header;
   auto read_pos = flow_data.variable_header_start;
   const auto protocol_level = flow_data.protocol_level;
 
   if (protocol_level == 3) {
     PublishMsg publish;
 
-    uint8_t flags = data[0] & 0x0F;   // We know it's there
+    FixedHeaderDecode fh(data[0]);
 
-    publish.dup_flag = flags & 0b0000'1000;
-    publish.qos_level = (flags >> 1) & 0b11;
-    publish.retain_flag = flags & 0b1;
+    publish.dup_flag = fh.dup_flag();
+    publish.qos_level = fh.qos_level();
+    publish.retain_flag = fh.retain_flag();
 
     if (publish.qos_level >= 3) {
       queue(SID::publish_message_malformed);
@@ -267,7 +242,6 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
 
 void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
   std::span<const uint8_t> data(p->data, p->dsize);
-  //const auto remaining_from_header = flow_data.remaining_from_header;
   auto read_pos = flow_data.variable_header_start;
   const auto protocol_level = flow_data.protocol_level;
 
@@ -301,12 +275,11 @@ void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
 
 void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
   std::span<const uint8_t> data(p->data, p->dsize);
-  //const auto remaining_from_header = flow_data.remaining_from_header;
   auto read_pos = flow_data.variable_header_start;
   const auto protocol_level = flow_data.protocol_level;
 
   if (protocol_level == 3) {
-    PubRecMsg puback;
+    PubRecMsg pubrec;
 
     if (read_pos + 2 < data.size()) {
       queue(SID::pubrec_message_malformed);
@@ -317,7 +290,7 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
     message_identifier <<= 8;
     message_identifier |= data[read_pos++];
 
-    puback.message_identifier = message_identifier;
+    pubrec.message_identifier = message_identifier;
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
@@ -327,9 +300,47 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
       queue(SID::message_has_extra_data);
     }
 
-    flow_data.cur_msg = puback;
+    flow_data.cur_msg = pubrec;
   } else {
     snort::WarningMessage("MQTT inspector received a pubrec message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PubRelMsg pubrel;
+
+    FixedHeaderDecode fh(data[0]);
+
+    pubrel.dup_flag = fh.dup_flag();
+    pubrel.qos_level = fh.qos_level();
+
+    if (read_pos + 2 < data.size()) {
+      queue(SID::pubrel_message_malformed);
+      return;
+    }
+
+    uint16_t message_identifier = data[read_pos++];
+    message_identifier <<= 8;
+    message_identifier |= data[read_pos++];
+
+    pubrel.message_identifier = message_identifier;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = pubrel;
+  } else {
+    snort::WarningMessage("MQTT inspector received a pubrel message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -423,10 +434,12 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
     case MsgType::PUBREC:
       return decode_pubrec(p, *flow_data);
 
+    case MsgType::PUBREL:
+      return decode_pubrel(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
 
-    case MsgType::PUBREL:
     case MsgType::PUBCOMP:
     case MsgType::SUBSCRIBE:
     case MsgType::SUBACK:

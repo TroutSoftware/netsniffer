@@ -76,6 +76,13 @@ struct PubRecMsg {
   uint16_t message_identifier;
 };
 
+struct PubRelMsg {
+  bool dup_flag = false;
+  uint8_t qos_level = 0;
+  uint16_t message_identifier;
+};
+
+#if 0
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
 
@@ -107,13 +114,13 @@ struct StickyBufferDef {
 
 
 
-bool getVersion(snort::Packet*, snort::InspectionBuffer&);
-bool getQos(snort::Packet*, snort::InspectionBuffer&);
+//bool getVersion(snort::Packet*, snort::InspectionBuffer&);
+//bool getQos(snort::Packet*, snort::InspectionBuffer&);
 
 
 using StickyBuffers = StickyBufferDef< StickyBufferEntry<"MQTT_PROTOCOL_VERSION", getVersion>,
                                        StickyBufferEntry<"MQTT_QoS", getQos>>;
-
+#endif
 
 
 inline std::tuple<uint32_t, bool> decode_var_int(const std::span<const uint8_t> &data, std::size_t &read_pos) {
@@ -136,6 +143,7 @@ inline std::tuple<uint32_t, bool> decode_var_int(const std::span<const uint8_t> 
 
   return {0, false};
 }
+
 
 inline std::string to_string(const std::span<const uint8_t> s) {
   return std::string{reinterpret_cast<const char*>(s.data()), s.size()};
@@ -180,6 +188,32 @@ inline std::optional<std::span<const uint8_t>> decode_span_16(const std::span<co
 
   return std::span<const uint8_t>{start_of_span, len};
 }
+
+class FixedHeaderDecode {
+  uint8_t byte1;
+public:
+  FixedHeaderDecode(uint8_t byte1) : byte1(byte1) {};
+
+  uint8_t get_msg_type() {
+    return byte1 >> 4;
+  }
+
+  bool dup_flag() {
+   return byte1 & 0b0000'1000;
+  }
+
+  uint8_t qos_level() {
+    return (byte1 >> 1) & 0b11;
+  }
+
+  bool retain_flag() {
+    return byte1 & 0b1;
+  }
+};
+
+
+
+
 
 } // namespace mqtt_plugin
 
