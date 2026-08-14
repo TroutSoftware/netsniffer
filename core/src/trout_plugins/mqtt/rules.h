@@ -31,6 +31,7 @@ enum class SID {
   pubcomp_message_malformed = 1121,
   subscribe_message_malformed = 1122,
   suback_message_malformed = 1123,
+  unsubscribe_message_malformed = 1124,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID

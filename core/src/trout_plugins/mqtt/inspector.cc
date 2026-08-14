@@ -364,10 +364,22 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
     subscribe.dup_flag = fh.dup_flag();
     subscribe.qos_level = fh.qos_level();
 
-    if(!decode_and_check_message_identifier(SID::subscribe_message_malformed,
-                                        subscribe.message_identifier,
-                                        data, read_pos)) {
+    if (subscribe.qos_level >= 3) {
+      queue(SID::subscribe_message_malformed);
+      // We won't know if there should be a Message ID or not later...
       return;
+    }
+
+    if (subscribe.qos_level != 0) {
+      uint16_t message_identifier;
+
+      if(!decode_and_check_message_identifier(SID::subscribe_message_malformed,
+                                          message_identifier,
+                                          data, read_pos)) {
+        return;
+      }
+
+      subscribe.message_identifier = message_identifier;
     }
 
     if (read_pos < data.size()) {
@@ -440,9 +452,70 @@ void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = suback;
   } else {
-    snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
+    snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
   }
 }
+
+void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    UnsubscribeMsg unsubscribe;
+
+    FixedHeaderDecode fh(data[0]);
+
+    unsubscribe.dup_flag = fh.dup_flag();
+    unsubscribe.qos_level = fh.qos_level();
+
+    if (unsubscribe.qos_level >= 3) {
+      queue(SID::unsubscribe_message_malformed);
+      // We won't know if there should be a Message ID or not later...
+      return;
+    }
+
+    if (unsubscribe.qos_level != 0) {
+      uint16_t message_identifier;
+
+      if(!decode_and_check_message_identifier(SID::unsubscribe_message_malformed,
+                                          message_identifier,
+                                          data, read_pos)) {
+        return;
+      }
+
+      unsubscribe.message_identifier = message_identifier;
+    }
+
+    if (read_pos < data.size()) {
+      unsubscribe.payload = data.subspan(read_pos);
+    }
+
+    // Validate the payload
+    while (read_pos < data.size()) {
+      auto topic_name_len = decode_uint16(data, read_pos);
+      if (!topic_name_len) {
+        // No topic name
+        queue(SID::unsubscribe_message_malformed);
+        break;
+      }
+
+      read_pos += *topic_name_len;
+
+      if (read_pos > data.size()) {
+        queue(SID::unsubscribe_message_malformed);
+        break;
+      }
+
+      unsubscribe.unsubscribe_count++;
+    }
+
+    flow_data.cur_msg = unsubscribe;
+  } else {
+    snort::WarningMessage("MQTT inspector received an unsubscribe message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
 
 void Inspector::reject(snort::Packet *p, std::string reason) {
   // TODO: Add logging

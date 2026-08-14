@@ -176,6 +176,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Msg.PubComp", uni_msg<MsgType::PUBCOMP>},
   {"Msg.Subscribe", uni_msg<MsgType::SUBSCRIBE>},
   {"Msg.SubAck", uni_msg<MsgType::SUBACK>},
+  {"Msg.Unsubscribe", uni_msg<MsgType::UNSUBSCRIBE>},
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
@@ -211,7 +212,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"PubComp.MessageIdentifier", uni_getter<&PubCompMsg::message_identifier>},
 
   {"Subscribe.Flag.Dup", uni_getter<&SubscribeMsg::dup_flag>},
-  // TODO: Add: Subscribe qos comaper func
+  // TODO: Add: Subscribe qos comparer func
   {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
   {"Subscribe.SubscribeCount", uni_getter<&SubscribeMsg::subscribe_count>},
   {"Subscribe.Payload", uni_getter<&SubscribeMsg::payload>},
@@ -219,6 +220,13 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"SubAck.MessageIdentifier", uni_getter<&SubAckMsg::message_identifier>},
   {"SubAck.GrantedCount", uni_getter<&SubAckMsg::granted_count>},
   {"SubAck.Payload", uni_getter<&SubAckMsg::payload>},
+
+  {"Unsubscribe.Flag.Dup", uni_getter<&UnsubscribeMsg::dup_flag>},
+  // TODO: Add: Unsubscribe qos comparer func
+  {"Unsubscribe.MessageIdentifier", uni_getter<&UnsubscribeMsg::message_identifier>},
+  {"Unsubscribe.UnsubscribeCount", uni_getter<&UnsubscribeMsg::unsubscribe_count>},
+  {"Unsubscribe.Payload", uni_getter<&UnsubscribeMsg::payload>},
+
 
 };
 

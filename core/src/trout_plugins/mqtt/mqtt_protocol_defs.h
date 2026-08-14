@@ -90,7 +90,7 @@ struct PubCompMsg {
 struct SubscribeMsg {
   bool dup_flag = false;
   uint8_t qos_level = 0;
-  uint16_t message_identifier = 0;
+  std::optional<uint16_t> message_identifier = 0;
   uint32_t subscribe_count = 0;   // Number of subscribe entries in payload
   std::optional<std::span<const uint8_t>> payload;
 };
@@ -98,6 +98,14 @@ struct SubscribeMsg {
 struct SubAckMsg {
   uint16_t message_identifier = 0;
   uint32_t granted_count = 0; // Number of granted subscribtions in payload
+  std::optional<std::span<const uint8_t>> payload;
+};
+
+struct UnsubscribeMsg {
+  bool dup_flag = false;
+  uint8_t qos_level = 0;
+  std::optional<uint16_t> message_identifier = 0;
+  uint32_t unsubscribe_count = 0;   // Number of unsubscribe entries in payload
   std::optional<std::span<const uint8_t>> payload;
 };
 
