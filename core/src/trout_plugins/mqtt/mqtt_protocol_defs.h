@@ -92,7 +92,13 @@ struct SubscribeMsg {
   uint8_t qos_level = 0;
   uint16_t message_identifier = 0;
   uint32_t subscribe_count = 0;   // Number of subscribe entries in payload
-  std::span<const uint8_t> payload;
+  std::optional<std::span<const uint8_t>> payload;
+};
+
+struct SubAckMsg {
+  uint16_t message_identifier = 0;
+  uint32_t granted_count = 0; // Number of granted subscribtions in payload
+  std::optional<std::span<const uint8_t>> payload;
 };
 
 #if 0

@@ -370,7 +370,9 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
       return;
     }
 
-    subscribe.payload = data.subspan(read_pos);
+    if (read_pos < data.size()) {
+      subscribe.payload = data.subspan(read_pos);
+    }
 
     // Validate the payload
     while (read_pos < data.size()) {
@@ -401,6 +403,42 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
     }
 
     flow_data.cur_msg = subscribe;
+  } else {
+    snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    SubAckMsg suback;
+
+    if(!decode_and_check_message_identifier(SID::suback_message_malformed,
+                                        suback.message_identifier,
+                                        data, read_pos)) {
+      return;
+    }
+
+    if (read_pos < data.size()) {
+      suback.payload = data.subspan(read_pos);
+    }
+
+    // We know that read_pos can't be bigger than data.size bc it is checked
+    suback.granted_count = data.size() - read_pos;
+
+    while (read_pos < data.size()) {
+      uint8_t granted_qos = data[read_pos++] & 0b0000'0011;
+
+      if (granted_qos > 2) {
+        queue(SID::suback_message_malformed);
+        break;
+      }
+    }
+
+    flow_data.cur_msg = suback;
   } else {
     snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
   }
@@ -505,10 +543,12 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
     case MsgType::SUBSCRIBE:
       return decode_subscribe(p, *flow_data);
 
+    case MsgType::SUBACK:
+      return decode_suback(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
 
-    case MsgType::SUBACK:
     case MsgType::UNSUBSCRIBE:
     case MsgType::UNSUBACK:
     case MsgType::PINGREQ:
