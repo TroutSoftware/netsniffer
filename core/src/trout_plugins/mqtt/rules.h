@@ -2,6 +2,7 @@
 #define rules_7A3F91C4
 
 // Snort includes
+#include <detection/detection_engine.h>
 
 // System includes
 
@@ -28,11 +29,14 @@ enum class SID {
   pubrec_message_malformed = 1119,
   pubrel_message_malformed = 1120,
   pubcomp_message_malformed = 1121,
+  subscribe_message_malformed = 1122,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID
 
 inline unsigned U(SID sid) { return static_cast<unsigned>(sid); }
+
+inline void queue(SID sid) { snort::DetectionEngine::queue_event(gid, U(sid)); }
 
 extern const snort::RuleMap s_rules[];
 

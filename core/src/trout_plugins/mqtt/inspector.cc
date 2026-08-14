@@ -20,6 +20,7 @@
 #include "module.h"
 #include "mqtt_protocol_defs.h"
 #include "pegs.h"
+#include "rules.h"
 #include "stream_splitter.h"
 
 // Debug includes
@@ -210,19 +211,12 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
     publish.topic_name = *topic_name;
 
     if (publish.qos_level != 0) {
-      if (read_pos + 2 < data.size()) {
-        queue(SID::publish_message_malformed);
+      uint16_t message_identifier = 0;
+      if(!decode_and_check_message_identifier(SID::publish_message_malformed,
+                                          message_identifier,
+                                          data, read_pos)) {
         return;
       }
-
-      uint16_t message_identifier = data[read_pos++];
-      message_identifier <<= 8;
-      message_identifier |= data[read_pos++];
-
-      if (message_identifier == 0) {
-        queue(SID::publish_message_malformed);
-      }
-
       publish.message_identifier = message_identifier;
     }
 
@@ -248,16 +242,11 @@ void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubAckMsg puback;
 
-    if (read_pos + 2 < data.size()) {
-      queue(SID::puback_message_malformed);
+    if(!decode_and_check_message_identifier(SID::puback_message_malformed,
+                                        puback.message_identifier,
+                                        data, read_pos)) {
       return;
     }
-
-    uint16_t message_identifier = data[read_pos++];
-    message_identifier <<= 8;
-    message_identifier |= data[read_pos++];
-
-    puback.message_identifier = message_identifier;
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
@@ -281,16 +270,11 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubRecMsg pubrec;
 
-    if (read_pos + 2 < data.size()) {
-      queue(SID::pubrec_message_malformed);
+    if(!decode_and_check_message_identifier(SID::pubrec_message_malformed,
+                                        pubrec.message_identifier,
+                                        data, read_pos)) {
       return;
     }
-
-    uint16_t message_identifier = data[read_pos++];
-    message_identifier <<= 8;
-    message_identifier |= data[read_pos++];
-
-    pubrec.message_identifier = message_identifier;
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
@@ -319,16 +303,11 @@ void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
     pubrel.dup_flag = fh.dup_flag();
     pubrel.qos_level = fh.qos_level();
 
-    if (read_pos + 2 < data.size()) {
-      queue(SID::pubrel_message_malformed);
+    if(!decode_and_check_message_identifier(SID::pubrel_message_malformed,
+                                        pubrel.message_identifier,
+                                        data, read_pos)) {
       return;
     }
-
-    uint16_t message_identifier = data[read_pos++];
-    message_identifier <<= 8;
-    message_identifier |= data[read_pos++];
-
-    pubrel.message_identifier = message_identifier;
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
@@ -352,16 +331,11 @@ void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubCompMsg pubcomp;
 
-    if (read_pos + 2 < data.size()) {
-      queue(SID::pubcomp_message_malformed);
+    if(!decode_and_check_message_identifier(SID::pubcomp_message_malformed,
+                                        pubcomp.message_identifier,
+                                        data, read_pos)) {
       return;
     }
-
-    uint16_t message_identifier = data[read_pos++];
-    message_identifier <<= 8;
-    message_identifier |= data[read_pos++];
-
-    pubcomp.message_identifier = message_identifier;
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
@@ -377,6 +351,60 @@ void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
   }
 }
 
+void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    SubscribeMsg subscribe;
+
+    FixedHeaderDecode fh(data[0]);
+
+    subscribe.dup_flag = fh.dup_flag();
+    subscribe.qos_level = fh.qos_level();
+
+    if(!decode_and_check_message_identifier(SID::subscribe_message_malformed,
+                                        subscribe.message_identifier,
+                                        data, read_pos)) {
+      return;
+    }
+
+    subscribe.payload = data.subspan(read_pos);
+
+    // Validate the payload
+    while (read_pos < data.size()) {
+      auto topic_name_len = decode_uint16(data, read_pos);
+      if (!topic_name_len) {
+        // No topic name
+        queue(SID::subscribe_message_malformed);
+        break;
+      }
+
+      read_pos += *topic_name_len;
+
+      if (read_pos+1 <= data.size()) {
+        // No Qos
+        queue(SID::subscribe_message_malformed);
+        break;
+      }
+
+      uint8_t topic_qos = data[read_pos++] & 0b0000'0011;
+
+      if (topic_qos > 2) {
+        queue(SID::subscribe_message_malformed);
+        flow_data.connection_refused = true;      // Spec says connection should be closed
+        break;
+      }
+
+      subscribe.subscribe_count++;
+    }
+
+    flow_data.cur_msg = subscribe;
+  } else {
+    snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
 
 void Inspector::reject(snort::Packet *p, std::string reason) {
   // TODO: Add logging
@@ -471,11 +499,15 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
     case MsgType::PUBREL:
       return decode_pubrel(p, *flow_data);
 
+    case MsgType::PUBCOMP:
+      return decode_pubcomp(p, *flow_data);
+
+    case MsgType::SUBSCRIBE:
+      return decode_subscribe(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
 
-    case MsgType::PUBCOMP:
-    case MsgType::SUBSCRIBE:
     case MsgType::SUBACK:
     case MsgType::UNSUBSCRIBE:
     case MsgType::UNSUBACK:

@@ -59,6 +59,12 @@ snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData&) {
 }
 
 
+template<MsgType t>
+snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
+  return (flow_data.msg_type == t)?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
+}
+
+
 template<typename T>
 // TODO: Add concept to check if T is valid type to check with std::get_if
 snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
@@ -161,13 +167,14 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Flow.ProtocolLevel", uni_getter<&FlowData::protocol_level>},
 
   // Checks message
-  {"Msg.Connect", uni_msg<ConnectMsg>},
-  {"Msg.ConnAck", uni_msg<ConnAckMsg>},
-  {"Msg.Publish", uni_msg<PublishMsg>},
-  {"Msg.PubAck", uni_msg<PubAckMsg>},
-  {"Msg.PubRec", uni_msg<PubRecMsg>},
-  {"Msg.PubRel", uni_msg<PubRelMsg>},
-  {"Msg.PubComp", uni_msg<PubCompMsg>},
+  {"Msg.Connect", uni_msg<MsgType::CONNECT>},
+  {"Msg.ConnAck", uni_msg<MsgType::CONNACK>},
+  {"Msg.Publish", uni_msg<MsgType::PUBLISH>},
+  {"Msg.PubAck", uni_msg<MsgType::PUBACK>},
+  {"Msg.PubRec", uni_msg<MsgType::PUBREC>},
+  {"Msg.PubRel", uni_msg<MsgType::PUBREL>},
+  {"Msg.PubComp", uni_msg<MsgType::PUBCOMP>},
+  {"Msg.Subscribe", uni_msg<MsgType::SUBSCRIBE>},
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
@@ -201,6 +208,13 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"PubRel.MessageIdentifier", uni_getter<&PubRelMsg::message_identifier>},
 
   {"PubComp.MessageIdentifier", uni_getter<&PubCompMsg::message_identifier>},
+
+  {"Subscribe.Flag.Dup", uni_getter<&SubscribeMsg::dup_flag>},
+  // TODO: Add: Subscribe qos comaper func
+  {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
+  {"Subscribe.SubscribeCount", uni_getter<&SubscribeMsg::subscribe_count>},
+  {"Subscribe.Payload", uni_getter<&SubscribeMsg::payload>},
+
 };
 
 

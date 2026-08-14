@@ -17,6 +17,7 @@
 
 // Local includes
 #include"../wrappers/c_string_type.h"
+#include"rules.h"
 
 // Debug includes
 
@@ -86,6 +87,14 @@ struct PubCompMsg {
   uint16_t message_identifier;
 };
 
+struct SubscribeMsg {
+  bool dup_flag = false;
+  uint8_t qos_level = 0;
+  uint16_t message_identifier = 0;
+  uint32_t subscribe_count = 0;   // Number of subscribe entries in payload
+  std::span<const uint8_t> payload;
+};
+
 #if 0
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
@@ -125,7 +134,6 @@ struct StickyBufferDef {
 using StickyBuffers = StickyBufferDef< StickyBufferEntry<"MQTT_PROTOCOL_VERSION", getVersion>,
                                        StickyBufferEntry<"MQTT_QoS", getQos>>;
 #endif
-
 
 inline std::tuple<uint32_t, bool> decode_var_int(const std::span<const uint8_t> &data, std::size_t &read_pos) {
   static constexpr uint8_t MSB = 0b1000'0000;
@@ -191,6 +199,34 @@ inline std::optional<std::span<const uint8_t>> decode_span_16(const std::span<co
   read_pos += len;
 
   return std::span<const uint8_t>{start_of_span, len};
+}
+
+inline std::optional<uint16_t> decode_uint16(const std::span<const uint8_t> &data, uint32_t &read_pos) {
+  if (read_pos + 2 < data.size()) {
+    return std::nullopt;
+  }
+
+  uint16_t val = data[read_pos++];
+  val <<= 8;
+  val |= data[read_pos++];
+
+  return val;
+}
+
+inline bool decode_and_check_message_identifier(SID sid, uint16_t &res, const std::span<const uint8_t> &data, uint32_t &read_pos) {
+    auto message_identifier = decode_uint16(data, read_pos);
+
+    if (message_identifier) {
+      res = *message_identifier;
+
+      if (res != 0) {
+        return true;
+      }
+    }
+
+    queue(sid);
+
+    return !!message_identifier;
 }
 
 class FixedHeaderDecode {

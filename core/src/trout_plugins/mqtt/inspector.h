@@ -2,7 +2,6 @@
 #define inspector_8F24C6A1
 
 // Snort includes
-#include <detection/detection_engine.h>
 #include <framework/inspector.h>
 
 // System includes
@@ -13,7 +12,6 @@
 
 // Local includes
 #include "flow_data.h"
-#include "rules.h"
 
 // Debug includes
 #include<iostream>
@@ -32,8 +30,6 @@ private:
   bool get_buf(unsigned id, snort::Packet* /*p*/, snort::InspectionBuffer& /*b*/) override
     { std::cerr << "MKRTEST get_buf called (id=" << id << ")" << std::endl; return true;}
 
-  void queue(SID sid) { snort::DetectionEngine::queue_event(gid, U(sid)); }
-
   void eval(snort::Packet *) override;
   void clear(snort::Packet*) override;
 
@@ -49,6 +45,7 @@ private:
   void decode_pubrec(snort::Packet *p, PacketFlowData &flow_data);
   void decode_pubrel(snort::Packet *p, PacketFlowData &flow_data);
   void decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_subscribe(snort::Packet *p, PacketFlowData &flow_data);
 
 public:
   Inspector(Module *module);
