@@ -48,6 +48,11 @@ private:
   void decode_subscribe(snort::Packet *p, PacketFlowData &flow_data);
   void decode_suback(snort::Packet *p, PacketFlowData &flow_data);
   void decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_unsuback(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_pingreq(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_pingresp(snort::Packet *p, PacketFlowData &flow_data);
+  void decode_disconnect(snort::Packet *p, PacketFlowData &flow_data);
+
 
 public:
   Inspector(Module *module);

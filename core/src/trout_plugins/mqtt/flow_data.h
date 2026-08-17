@@ -42,7 +42,11 @@ struct FlowData {
                PubCompMsg,
                SubscribeMsg,
                SubAckMsg,
-               UnsubscribeMsg
+               UnsubscribeMsg,
+               UnsubAckMsg,
+               PingReqMsg,
+               PingRespMsg,
+               DisconnectMsg
                > cur_msg;
   bool connection_refused = false;      // Connection has been refused by either party
 

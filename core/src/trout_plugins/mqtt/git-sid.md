@@ -157,6 +157,7 @@ Ill formed messages can be intentionally created to exploit errors in
 the system or be a sign of an error in the sender code
 
 ### 1124
+#### What
 Indicates an unsubscribe message contained something that didn't follow the
 spec for the given version
 
@@ -166,3 +167,52 @@ available for the rule engine.
 #### Why
 Ill formed messages can be intentionally created to exploit errors in
 the system or be a sign of an error in the sender code
+
+### 1125
+#### What
+Indicates a unsuback message contained something that didn't follow the
+spec for the given version
+
+If the error is fatal, e.g. prevents futher decoding, decoding will be
+abandoned for the current message, and this is the only indication
+available for the rule engine.
+#### Why
+Ill formed messages can be intentionally created to exploit errors in
+the system or be a sign of an error in the sender code
+
+### 1126
+#### What
+Indicates a pingreq message contained something that didn't follow the
+spec for the given version
+
+If the error is fatal, e.g. prevents futher decoding, decoding will be
+abandoned for the current message, and this is the only indication
+available for the rule engine.
+#### Why
+Ill formed messages can be intentionally created to exploit errors in
+the system or be a sign of an error in the sender code
+
+### 1127
+#### What
+Indicates a pingresp message contained something that didn't follow the
+spec for the given version
+
+If the error is fatal, e.g. prevents futher decoding, decoding will be
+abandoned for the current message, and this is the only indication
+available for the rule engine.
+#### Why
+Ill formed messages can be intentionally created to exploit errors in
+the system or be a sign of an error in the sender code
+
+### 1128
+#### What
+Indicates a disconnect message contained something that didn't follow the
+spec for the given version
+
+If the error is fatal, e.g. prevents futher decoding, decoding will be
+abandoned for the current message, and this is the only indication
+available for the rule engine.
+#### Why
+Ill formed messages can be intentionally created to exploit errors in
+the system or be a sign of an error in the sender code
+

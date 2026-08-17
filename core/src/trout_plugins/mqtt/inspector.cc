@@ -516,6 +516,102 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
   }
 }
 
+void Inspector::decode_unsuback(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    UnsubAckMsg unsuback;
+
+    if(!decode_and_check_message_identifier(SID::unsuback_message_malformed,
+                                        unsuback.message_identifier,
+                                        data, read_pos)) {
+      return;
+    }
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = unsuback;
+  } else {
+    snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+void Inspector::decode_pingreq(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PingReqMsg pingreq;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = pingreq;
+  } else {
+    snort::WarningMessage("MQTT inspector received a pingreq message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+void Inspector::decode_pingresp(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    PingRespMsg pingresp;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = pingresp;
+  } else {
+    snort::WarningMessage("MQTT inspector received a pingresp message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+
+void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
+  std::span<const uint8_t> data(p->data, p->dsize);
+  auto read_pos = flow_data.variable_header_start;
+  const auto protocol_level = flow_data.protocol_level;
+
+  if (protocol_level == 3) {
+    DisconnectMsg disconnect;
+
+    // If at this point the read_pos is not equal to the total length
+    // something is spooky
+    assert(read_pos <= data.size());
+    if(read_pos < data.size()) {
+      flow_data.extra = data.subspan(read_pos);
+      queue(SID::message_has_extra_data);
+    }
+
+    flow_data.cur_msg = disconnect;
+  } else {
+    snort::WarningMessage("MQTT inspector received a disconnect message but doesn't support protocol level %i\n", protocol_level);
+  }
+}
+
+
 
 void Inspector::reject(snort::Packet *p, std::string reason) {
   // TODO: Add logging
@@ -619,14 +715,23 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
     case MsgType::SUBACK:
       return decode_suback(p, *flow_data);
 
+    case MsgType::UNSUBSCRIBE:
+      return decode_unsubscribe(p, *flow_data);
+
+    case MsgType::UNSUBACK:
+      return decode_unsuback(p, *flow_data);
+
+    case MsgType::PINGREQ:
+      return decode_pingreq(p, *flow_data);
+
+    case MsgType::PINGRESP:
+      return decode_pingresp(p, *flow_data);
+
+    case MsgType::DISCONNECT:
+      return decode_disconnect(p, *flow_data);
+
     case MsgType::Reserved:
     case MsgType::CONNECT:
-
-    case MsgType::UNSUBSCRIBE:
-    case MsgType::UNSUBACK:
-    case MsgType::PINGREQ:
-    case MsgType::PINGRESP:
-    case MsgType::DISCONNECT:
     case MsgType::AUTH:
 std::cerr << "MKRTEST: Don't know how to handle msg type: " << (int)msg_type << std::endl;
       return;

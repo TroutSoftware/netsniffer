@@ -109,6 +109,25 @@ struct UnsubscribeMsg {
   std::optional<std::span<const uint8_t>> payload;
 };
 
+struct UnsubAckMsg {
+  uint16_t message_identifier = 0;
+};
+
+struct PingReqMsg {
+
+};
+
+struct PingRespMsg {
+
+};
+
+struct DisconnectMsg {
+
+};
+
+
+
+
 #if 0
 // TODO: Move stickyBuffer code to wrapper folder when it is ready
 using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);

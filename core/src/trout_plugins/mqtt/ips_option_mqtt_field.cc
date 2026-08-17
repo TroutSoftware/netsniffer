@@ -177,6 +177,10 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Msg.Subscribe", uni_msg<MsgType::SUBSCRIBE>},
   {"Msg.SubAck", uni_msg<MsgType::SUBACK>},
   {"Msg.Unsubscribe", uni_msg<MsgType::UNSUBSCRIBE>},
+  {"Msg.UnsubAck", uni_msg<MsgType::UNSUBACK>},
+  {"Msg.PingReq", uni_msg<MsgType::PINGREQ>},
+  {"Msg.PingResp", uni_msg<MsgType::PINGRESP>},
+  {"Msg.Disconnect", uni_msg<MsgType::DISCONNECT>},
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
@@ -227,7 +231,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"Unsubscribe.UnsubscribeCount", uni_getter<&UnsubscribeMsg::unsubscribe_count>},
   {"Unsubscribe.Payload", uni_getter<&UnsubscribeMsg::payload>},
 
-
+  {"UnsubAck.MessageIdentifier", uni_getter<&UnsubAckMsg::message_identifier>},
 };
 
 

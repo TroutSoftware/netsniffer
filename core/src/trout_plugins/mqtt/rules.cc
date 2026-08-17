@@ -34,6 +34,11 @@ const snort::RuleMap s_rules[] = {
     {U(SID::subscribe_message_malformed), "SUBSCRIBE message malformed"},
     {U(SID::suback_message_malformed), "SUBACK message malformed"},
     {U(SID::unsubscribe_message_malformed), "UNSUBSCRIBE message malformed"},
+    {U(SID::unsuback_message_malformed), "UNSUBSCRIBE message malformed"},
+    {U(SID::pingreq_message_malformed), "PINGREQ message malformed"},
+    {U(SID::pingresp_message_malformed), "PINGRESP message malformed"},
+    {U(SID::disconnect_message_malformed), "DISCONNECT message malformed"},
+
 };
 
 } // namespace mqtt_plugin {
