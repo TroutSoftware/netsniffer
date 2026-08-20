@@ -8,6 +8,7 @@
 // System includes
 #include<cstddef>
 #include<optional>
+#include<regex>
 #include<span>
 #include<string_view>
 #include<tuple>
@@ -20,6 +21,8 @@
 #include"rules.h"
 
 // Debug includes
+#include <iostream>
+
 
 namespace mqtt_plugin {
 
@@ -235,7 +238,7 @@ inline std::optional<std::span<const uint8_t>> decode_span_16(const std::span<co
 }
 
 inline std::optional<uint16_t> decode_uint16(const std::span<const uint8_t> &data, uint32_t &read_pos) {
-  if (read_pos + 2 < data.size()) {
+  if ((read_pos + 2) > data.size()) {
     return std::nullopt;
   }
 
@@ -284,8 +287,104 @@ public:
   }
 };
 
+inline bool validate_topic(const std::span<const uint8_t> &span, bool allow_wildcards=true) {
+  //const static std::regex wildcard_topic("[^+#]+[+#]?|[+#]", std::regex::optimize);
 
+  // RegEx string that defines legal topics with wildcards in the MQTT3.1 spec Appendix A
+  // Note: "(?!$)" is a negative look-ahead stating this can't be the end of the string
+  const static std::regex wildcard_topic(R"(/?(?!$)(([^+#/\x00]+|\+)/)*([^+#/\x00]+|[+#]?))", std::regex::optimize);
 
+  // A topic can't have a wildcard or the 0 character in MQTT3.1
+  const static std::regex topic(R"(/?(?!$)([^+#/\x00]+/)*[^+#/\x00]?)", std::regex::optimize);
+
+  // std::regex_match works on chars
+  auto char_span = std::span<const char>(reinterpret_cast<const char*>(span.data()), span.size());
+
+  if (allow_wildcards) {
+    return std::regex_match(char_span.begin(), char_span.end(), wildcard_topic);
+  } else {
+    return std::regex_match(char_span.begin(), char_span.end(), topic);
+  }
+}
+
+class SubscribePayloadDecoder {
+  std::span<const uint8_t> data;
+public:
+  struct ValueType {
+    std::span<const uint8_t> msg_id;
+    uint8_t qos=0;
+  };
+
+  SubscribePayloadDecoder(std::span<const uint8_t> data) : data(data) {}
+
+  class Iterator {
+    const std::span<const uint8_t> data;
+    uint32_t read_pos=0;
+  public:
+    using value_type = std::optional<ValueType>;
+    using difference_type = int32_t;  // We know this is big enough
+    using iterator_category = std::forward_iterator_tag;
+
+    Iterator(std::span<const uint8_t> data) : data(data) {}
+
+    value_type operator*() const {
+      assert(read_pos >= data.size());
+
+      uint32_t local_read_pos = read_pos;
+
+      auto topic_name = decode_span_16(data, local_read_pos);
+
+      if (!topic_name || local_read_pos >= data.size() ) {
+        return std::nullopt;
+      }
+
+      uint8_t qos = data[local_read_pos];
+
+      return ValueType{*topic_name, qos};
+    }
+
+    Iterator& operator++() {
+      assert(read_pos >= data.size());
+
+      auto topic_len = decode_uint16(data, read_pos);
+
+      if (topic_len) {
+        read_pos += *topic_len;  // Skip the topic
+        read_pos += 1;           // Skip the QoS
+      }
+
+      // On any error, become end()
+      if (!topic_len || read_pos > data.size()) {
+        read_pos = data.size();
+      }
+
+      return *this;
+    }
+
+    bool operator==(const Iterator& rhs) const {
+      assert(data == rhs.data);
+      return read_pos == rhs.read_pos;
+    }
+/*
+    bool operator!=(const Iterator& other) const {
+      return read_pos != other.read_pos;
+    }
+*/
+    void move_to_end() {
+      read_pos = data.size();
+    }
+  };
+
+  Iterator begin() {
+    return Iterator(data);
+  }
+
+  Iterator end() {
+    Iterator itr(data);
+    itr.move_to_end();
+    return itr;
+  }
+};
 
 
 } // namespace mqtt_plugin

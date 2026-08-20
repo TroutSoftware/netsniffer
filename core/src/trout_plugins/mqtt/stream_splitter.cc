@@ -48,9 +48,9 @@ StreamSplitter::Status StreamSplitter::scan(
   assert(data);
   assert(fp);
 
-  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
+//  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
 
-  std::cerr << "MKRTEST: Splitter got flow " << flow_data->flow_id << " with " << len << " bytes" << std::endl;
+//  std::cerr << "MKRTEST: Splitter got flow " << flow_data->flow_id << " with " << len << " bytes" << std::endl;
 
 
   // For detailed description of the remaning length and terms,

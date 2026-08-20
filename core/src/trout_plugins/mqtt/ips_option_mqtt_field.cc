@@ -5,12 +5,15 @@
 // Snort includes
 #include <framework/module.h>
 #include <hash/hash_key_operations.h>
+#include <log/messages.h>
 #include <protocols/packet.h>
 
 // System includes
 #include <concepts>
+#include <functional>
 #include <map>
 #include <string>
+#include <typeinfo>
 
 // Global includes
 
@@ -25,6 +28,43 @@
 namespace mqtt_plugin {
 namespace {
 
+using Hash = uint32_t;
+
+template <typename T>
+Hash to_hash(T v) {
+  uint64_t hash = std::hash<T>{}(v);
+  uint32_t a = static_cast<uint32_t>(hash & 0xFFFF'FFFF);
+  uint32_t b = static_cast<uint32_t>(hash >> 32);
+  uint32_t c = 0;
+  mix(a, b, c);
+  finalize(a, b, c);
+  return c;
+
+/*
+  if constexpr (std::same_as_v<T, std::string>) {
+    return to_hash(std::hash<std::string>{}(v);
+  }
+
+  if constexpr (sizeof(T) <= sizeof(Hash)) {
+    return static_cast<Hash>(v);
+  }
+
+  if constexpr (sizeof(T) == 8) {
+    static_assert(sizeof(size_t) <= 8);
+    uint64_t hash = std::hash<T>{}(v);
+    uint32_t a = static_cast<uint32_t>(hash & 0xFFFF'FFFF);
+    uint32_t b = static_cast<uint32_t>(hash >> 32);
+    uint32_t c = 0;
+    mix(a, b, c);
+    finalize(a, b, c);
+    return c;
+  } else {
+    static_assert(false, "size of argument isn't 4 or 8, we don't know how to handle it");
+  }
+*/
+}
+
+
 static const char *s_name = "mqtt_field";
 
 static const char *s_help = "moves cursor to given field";
@@ -32,10 +72,15 @@ static const char *s_help = "moves cursor to given field";
 static const snort::Parameter module_params[] = {
     {"~", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Field requested"},
+    {"match", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "Will be a rule match if match string is in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
+    {"!match", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "Will be a rule match if match string is NOT in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
+
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
-    {CountType::SUM, "invokations", "Number of times a paket was serached"},
+    {CountType::SUM, "invocations", "Number of times a packet was searced"},
     {CountType::SUM, "matches",
      "Number of times the field was found"},
     {CountType::END, nullptr, nullptr}};
@@ -57,7 +102,6 @@ using GetterFuncSignature = snort::IpsOption::EvalStatus(*)(Cursor &, PacketFlow
 snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData&) {
   return snort::IpsOption::NO_MATCH;
 }
-
 
 template<MsgType t>
 snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
@@ -161,7 +205,193 @@ snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data)
   return snort::IpsOption::NO_MATCH;
 }
 
-static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
+
+
+/*
+template <typename T>
+concept MatchClass =
+  requires(const std::string &string, Cursor &c) {
+    { T::validate_match_string(string) } -> std::same_as<bool>;
+    { T::match(c, string) } -> std::same_as<bool>;
+  };
+
+template <MatchClass T>
+*/
+
+class Match {
+  std::string match_string;
+public:
+  const std::string &get_match_string() const {
+    return match_string;
+  }
+
+  virtual bool validate_match_string() = 0;   // Returns false on invalid string format
+  virtual bool match(const Cursor &) = 0;         //
+  virtual ~Match(){};
+
+  template <std::derived_from<Match> T> static std::shared_ptr<Match> factory(std::string &match_string) {
+    auto obj = std::make_shared<T>();
+    obj->match_string = match_string;
+    if (!obj->validate_match_string()) {
+      return nullptr;
+    }
+    return obj;
+  }
+
+  // Should only be overridden if the derived class has data/state
+  // members that will impact matching
+  virtual bool operator==(const Match &rhs) const {
+    return typeid(*this) == typeid(rhs) &&
+           match_string == rhs.match_string;
+  }
+
+  virtual Hash hash() const {
+    Hash a = to_hash(typeid(*this).hash_code());
+    Hash b = to_hash(match_string);
+    Hash c = 0;
+
+    mix(a, b, c);
+    finalize(a, b, c);
+
+    return c;
+  }
+};
+
+using MatchFactory = std::shared_ptr<Match> (*)(std::string &);
+
+
+
+//using MatchFactorySignature = std::shared_ptr<Match> factory();
+/*
+class DefaultMatch {
+public:
+  static bool validate_match_string(const std::string &) {
+    return false;
+  }
+
+  static bool match(const Cursor &, const std::string &) {
+    return false;
+  }
+};
+static_assert(MatchClass<DefaultMatch>);
+*/
+
+
+
+
+class SubscribeMatch : public Match {
+
+public:
+  bool validate_match_string() override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    return validate_topic(match_string, true);
+  }
+
+  bool match(const Cursor &c) override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    // Add the cursor buffer to a container that can split it into individual parts
+    std::span<const uint8_t> span(c.buffer(), c.size());
+    SubscribePayloadDecoder data(span);
+
+    // TODO: We should check somewhere (but not here) that the format of the subscribe topic's are
+    // in a legal format - we don't want to check here as that could lead to checking more than once
+
+    bool same = false;
+
+    for( auto ele: data) {
+      // if ele is not set, we have an incomming packet that was invalid
+      // this is not the place to capture that, the inspector would
+      // already have flagged it
+      if (ele) {
+        auto itr1 = match_string.begin();
+        auto itr1_end = match_string.end();
+        auto itr2 = ele->msg_id.begin();
+        auto itr2_end = ele->msg_id.end();
+
+        // We are assuming the strings are valid
+        while (itr1 != itr1_end && itr2 != itr2_end) {
+          // If the next chars are equal, we don't care about them
+          if (*itr1 == *itr2) {
+            itr1++;
+            itr2++;
+            continue;
+          }
+
+          // If any string matches everything
+          if (*itr1 == '#' || *itr2 == '#') {
+            itr1 = itr1_end;
+            itr2 = itr2_end;
+            same = true;
+            break;
+          }
+
+          if (*itr1 == '+') {
+            while(itr2 != itr2_end && *itr2 != '/') {
+              itr2++;
+            }
+            itr1++;
+            continue;
+          }
+
+          if (*itr2 == '+') {
+            while(itr1 != itr1_end && *itr1 != '/') {
+              itr1++;
+            }
+            itr2++;
+            continue;
+          }
+        }  // while (...
+
+        if (same) {
+          break;
+        }
+
+        if (itr1 == itr1_end && itr2 == itr2_end) {
+          same = true;
+          break;
+        }
+
+        if (itr1 != itr1_end) {
+          if (*itr1 == '/') {
+            itr1++;
+          }
+          if (itr1 == itr1_end || *itr1 == '#') {
+            same = true;
+            break;
+          }
+        } else {
+          assert(itr2 != itr2_end);
+          if (*itr2 == '/') {
+            itr2++;
+          }
+          if (itr2 == itr2_end || *itr2 == '#') {
+            same = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return same;
+  }
+};
+//static_assert(MatchClass<SubscribeMatch>);
+
+
+//template <MatchClass T = DefaultMatch>
+struct FieldDef {
+  GetterFuncSignature getter;
+  MatchFactory match_factory;
+
+  FieldDef(GetterFuncSignature getter, MatchFactory match_factory = nullptr) : getter(getter), match_factory(match_factory) {}
+};
+
+//static const std::map<const std::string, const GetterFuncSignature> mqtt_field_map  {
+static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   {"Flow.ClientID", uni_getter<&FlowData::client_id>},   // Valid for all messages
   {"Flow.ProtocolLevel", uni_getter<&FlowData::protocol_level>},
@@ -198,9 +428,9 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   // TODO: Add: Connect.will_qos uint8_t will_qos = 0;
   {"ConnAck.ReturnCode", uni_getter<&ConnAckMsg::return_code>},
 
-  {"Publish.Flag.Retain", &uni_getter<&PublishMsg::retain_flag>},
-  {"Publish.Flag.Dup", &uni_getter<&PublishMsg::dup_flag>},
-  {"Publish.TopicName", &uni_getter<&PublishMsg::topic_name>},
+  {"Publish.Flag.Retain", uni_getter<&PublishMsg::retain_flag>},
+  {"Publish.Flag.Dup", uni_getter<&PublishMsg::dup_flag>},
+  {"Publish.TopicName", uni_getter<&PublishMsg::topic_name>},
   {"Publish.MessageIdentifier", uni_getter<&PublishMsg::message_identifier>},
   {"Publish.Payload" , uni_getter<&PublishMsg::payload>},
   // TODO: Add: Publish qos compare func
@@ -209,7 +439,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
 
   {"PubRec.MessageIdentifier", uni_getter<&PubRecMsg::message_identifier>},
 
-  {"PubRel.Flag.Dup", &uni_getter<&PubRelMsg::dup_flag>},
+  {"PubRel.Flag.Dup", uni_getter<&PubRelMsg::dup_flag>},
   // TODO: Add: PubRelMsg qos compare func
   {"PubRel.MessageIdentifier", uni_getter<&PubRelMsg::message_identifier>},
 
@@ -219,7 +449,7 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   // TODO: Add: Subscribe qos comparer func
   {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
   {"Subscribe.SubscribeCount", uni_getter<&SubscribeMsg::subscribe_count>},
-  {"Subscribe.Payload", uni_getter<&SubscribeMsg::payload>},
+  {"Subscribe.Payload", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
 
   {"SubAck.MessageIdentifier", uni_getter<&SubAckMsg::message_identifier>},
   {"SubAck.GrantedCount", uni_getter<&SubAckMsg::granted_count>},
@@ -234,42 +464,145 @@ static const std::map<std::string, GetterFuncSignature> mqtt_field_map  {
   {"UnsubAck.MessageIdentifier", uni_getter<&UnsubAckMsg::message_identifier>},
 };
 
+struct MatchRule {
+  std::shared_ptr<Match>  matcher;
+  bool                    invert_result;
+  bool operator==(const MatchRule &rhs) const {
+    return invert_result == rhs.invert_result &&
+           ((!matcher && !rhs.matcher) || (
+           matcher && rhs.matcher &&
+           *matcher == *rhs.matcher));
+  }
 
-class Module : public snort::Module {
+  Hash hash() const {
+    Hash a = (matcher)?matcher->hash():0;
+    Hash b = invert_result;
+    Hash c = 0;
 
+    mix(a, b, c);
+    finalize(a, b, c);
 
+    return c;
+  }
+
+};
+
+struct Settings {
   GetterFuncSignature getter_func = dummy_getter;
   bool invert_result = false;
+  std::vector<MatchRule> match_list;
+
+  // field_name is only added to make snort errors/warnings more
+  // specific / context aware
+  //
+  // The field name isn't part of the hash, or compare evaluation, the
+  // other members capture the state of this settings object
+  std::string field_name;
+
+
+  bool operator==(const Settings &rhs) const {
+    return invert_result == rhs.invert_result &&
+           getter_func == rhs.getter_func &&
+           match_list == rhs.match_list;
+  }
+
+  Hash hash() const {
+    Hash a = to_hash(getter_func);
+    Hash b = invert_result;
+    Hash c = match_list.size();
+
+    mix(a, b, c);
+
+    size_t i = 0;
+
+    while (i + 2 < match_list.size()) {
+      a += match_list[i++].hash();
+      b += match_list[i++].hash();
+      c += match_list[i++].hash();
+
+      mix(a, b, c);
+    }
+
+    if (i != match_list.size()) {
+      a += match_list[i++].hash();
+
+      if (i != match_list.size()) {
+        b += match_list[i++].hash();
+      }
+
+      mix(a, b, c);
+    }
+
+    finalize(a, b, c);
+
+    return c;
+  }
+
+};
+
+class Module : public snort::Module {
+  std::shared_ptr<Settings> settings = std::make_shared<Settings>();
+  std::optional<FieldDef> field;
 
   Module() : snort::Module(s_name, s_help, module_params) {}
 
   bool begin(const char *, int, snort::SnortConfig *) override {
-    getter_func = dummy_getter;
-    invert_result = false;
+    settings = std::make_shared<Settings>();
+    field.reset();
     return true;
   }
 
   bool end(const char *, int, snort::SnortConfig *) override {
-    return getter_func != dummy_getter;
+    field.reset();
+    return settings->getter_func != dummy_getter;
   }
 
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("~")) {
       std::string s = val.get_as_string();
 
+//std::cerr << "MKRTEST: Input is >" << s << "<" << std::endl;
+
       // Check if results should be negated
       if (s.size()>=1 && s[0] == '!') {
-        invert_result = true;
+        settings->invert_result = true;
         s.erase(0, 1);
       }
 
-      auto field = mqtt_field_map.find(s);
+      auto field_itr = mqtt_field_map.find(s);
 
-      if (field == mqtt_field_map.end()) {
+      if (field_itr == mqtt_field_map.end()) {
         return false;
       }
 
-      getter_func = field->second;
+      field = field_itr->second;
+
+      settings->getter_func = field->getter;
+      settings->field_name = val.get_as_string();
+      return true;
+    } else if (val.is("match") || val.is("!match")) {
+      if (!field) {
+        snort::ErrorMessage("match keyword need to be preceeded by a valid field name\n");
+        return false;
+      }
+
+      if (!field->match_factory) {
+        snort::ErrorMessage("match keyword is not supported by %s fields\n", settings->field_name.c_str());
+        return false;
+      }
+
+      // Create a match object
+      std::string match_string = val.get_unquoted_string();
+      std::shared_ptr<Match> matchObj = field->match_factory(match_string);
+
+      if (!matchObj) {
+        snort::ErrorMessage("match string '%s' is invalid\n", match_string.c_str());
+        return false;
+      }
+
+      std::string s = val.get_name();
+      settings->match_list.emplace_back(matchObj, s[0] == '!');
+
       return true;
     }
 
@@ -290,48 +623,56 @@ public:
 
   static void dtor(snort::Module *p) { delete p; }
 
-  GetterFuncSignature get_getter() { return getter_func; }
-  bool get_invert_result() { return invert_result; }
+  std::shared_ptr<Settings> get_settings() { return settings; }
+  //GetterFuncSignature get_getter() { return getter_func; }
+  //bool get_invert_result() { return invert_result; }
 };
 
 class IpsOption : public snort::IpsOption {
-
-  GetterFuncSignature getterFunc;
-  bool invert_result;
+  std::shared_ptr<Settings> settings;
+  //GetterFuncSignature getterFunc;
+  //bool invert_result;
 
   IpsOption(Module &module) : snort::IpsOption(s_name),
-                              getterFunc(module.get_getter()),
-                              invert_result(module.get_invert_result()) {}
+                              settings(module.get_settings())
+                              //getterFunc(module.get_getter()),
+                              //invert_result(module.get_invert_result()) {}
+                              {}
 
   // Hash compare is used as a fast way to compare two instances of IpsOption
   uint32_t hash() const override {
-    static_assert(sizeof(getterFunc) <= 8);
-
-    uint64_t p = static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(getterFunc));
-
-    uint32_t a = static_cast<uint32_t>(p & 0xFFFF'FFFF);
-    uint32_t b = static_cast<uint32_t>(p >> 32);
-    uint32_t c = invert_result;
-
-    mix(a,b,c);
-    finalize(a,b,c);
-
-    return c;
+    return settings->hash();
   }
 
   // If hashes match a real comparison check is made
   bool operator==(const snort::IpsOption &ips) const override {
     const IpsOption &rs = dynamic_cast<const IpsOption &>(ips);
-    return getterFunc == rs.getterFunc &&
-           invert_result == rs.invert_result;
+    return *settings == *rs.settings;
   }
 
   EvalStatus eval(Cursor &c, snort::Packet *p) override {
     assert(p);
     PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
-    EvalStatus result = getterFunc(c, *flow_data);
+    EvalStatus result = settings->getter_func(c, *flow_data);
 
-    if (invert_result) {
+    // Check if a filter should be applied
+    if (result == snort::IpsOption::MATCH && settings->match_list.size() != 0) {
+      for (auto &ele : settings->match_list) {
+        assert( ele.matcher );
+        bool matches = ele.matcher->match(c);
+
+        if (ele.invert_result) {
+          matches = !matches;
+        }
+
+        if (!matches) {
+          result = snort::IpsOption::NO_MATCH;
+          break;
+        }
+      }
+    }
+
+    if (settings->invert_result) {
 std::cerr << "MKRTEST: Inverting result" << std::endl;
       if (result == snort::IpsOption::MATCH) {
         return snort::IpsOption::NO_MATCH;

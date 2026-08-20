@@ -4,6 +4,7 @@
 #endif
 
 // Snort includes
+#include <log/messages.h>
 #include <protocols/packet.h>
 #include <stream/stream_splitter.h>
 
@@ -358,7 +359,6 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
 
   if (protocol_level == 3) {
     SubscribeMsg subscribe;
-
     FixedHeaderDecode fh(data[0]);
 
     subscribe.dup_flag = fh.dup_flag();
@@ -629,8 +629,8 @@ void Inspector::eval(snort::Packet *p) {
   // Wrap the incomming data in a safe container
   std::span<const uint8_t> data(p->data, p->dsize);
 
-  std::cerr << "MKRTEST: eval called with pkt len " << p->pktlen
-            << " datalen " << p->dsize << std::endl;
+//  std::cerr << "MKRTEST: eval called with pkt len " << p->pktlen
+//            << " datalen " << p->dsize << std::endl;
 
 
   std::size_t read_pos = 1;
@@ -644,7 +644,7 @@ void Inspector::eval(snort::Packet *p) {
   }
 
 
-  std::cerr << "MKRTEST: Remaning length is " << remaining << std::endl;
+//  std::cerr << "MKRTEST: Remaning length is " << remaining << std::endl;
 
   PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
   assert(flow_data);
@@ -678,7 +678,7 @@ void Inspector::eval(snort::Packet *p) {
   //flow_data->remaining_from_header = remaining;
   flow_data->variable_header_start = read_pos;
 
-std::cerr << "MKRTEST: Flow id " << flow_data->flow_id << std::endl;
+//std::cerr << "MKRTEST: Flow id " << flow_data->flow_id << std::endl;
 std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
 
   if (flow_data->protocol_level == 0) {
@@ -760,7 +760,7 @@ snort::StreamSplitter* Inspector::get_splitter(bool to_server) {
 }
 
 Inspector::Inspector(Module *module) : settings(module->get_settings()) {
-std::cerr << "MKRTEST MQTT Inspector created" << std::endl;
+//std::cerr << "MKRTEST MQTT Inspector created" << std::endl;
 }
 
 Inspector::~Inspector() {}
