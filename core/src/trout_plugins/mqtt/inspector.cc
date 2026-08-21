@@ -384,34 +384,29 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
 
     if (read_pos < data.size()) {
       subscribe.payload = data.subspan(read_pos);
-    }
+      read_pos += subscribe.payload->size();
 
-    // Validate the payload
-    while (read_pos < data.size()) {
-      auto topic_name_len = decode_uint16(data, read_pos);
-      if (!topic_name_len) {
-        // No topic name
-        queue(SID::subscribe_message_malformed);
-        break;
+      // Validate the payload
+      SubscribePayloadDecoder subscribe_payload_decoder(*subscribe.payload);
+      for (auto topic:subscribe_payload_decoder ) {
+        subscribe.subscribe_count++;
+
+        if (!topic) {
+          queue(SID::subscribe_message_malformed);
+          break;
+        }
+
+        if (topic->qos > 2) {
+          queue(SID::subscribe_message_malformed);
+          flow_data.connection_refused = true;      // Spec says connection should be closed
+          break;
+        }
+
+        if (!validate_topic(topic->msg_id, true)) {
+          queue(SID::subscribe_message_malformed);
+          break;
+        }
       }
-
-      read_pos += *topic_name_len;
-
-      if (read_pos+1 <= data.size()) {
-        // No Qos
-        queue(SID::subscribe_message_malformed);
-        break;
-      }
-
-      uint8_t topic_qos = data[read_pos++] & 0b0000'0011;
-
-      if (topic_qos > 2) {
-        queue(SID::subscribe_message_malformed);
-        flow_data.connection_refused = true;      // Spec says connection should be closed
-        break;
-      }
-
-      subscribe.subscribe_count++;
     }
 
     flow_data.cur_msg = subscribe;

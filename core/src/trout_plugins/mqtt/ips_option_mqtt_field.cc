@@ -240,9 +240,6 @@ public:
     std::span<const uint8_t> span(c.buffer(), c.size());
     SubscribePayloadDecoder data(span);
 
-    // TODO: We should check somewhere (but not here) that the format of the subscribe topic's are
-    // in a legal format - we don't want to check here as that could lead to checking more than once
-
     bool same = false;
 
     for( auto ele: data) {
