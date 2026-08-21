@@ -309,7 +309,7 @@ class SubscribePayloadDecoder {
   std::span<const uint8_t> data;
 public:
   struct ValueType {
-    std::span<const uint8_t> msg_id;
+    std::span<const uint8_t> topic_id;
     uint8_t qos=0;
   };
 
@@ -383,6 +383,134 @@ public:
     return itr;
   }
 };
+
+
+class UnsubscribePayloadDecoder {
+  std::span<const uint8_t> data;
+public:
+
+  UnsubscribePayloadDecoder(std::span<const uint8_t> data) : data(data) {}
+
+  class Iterator {
+    const std::span<const uint8_t> data;
+    uint32_t read_pos=0;
+  public:
+    using value_type = std::optional<std::span<const uint8_t>>;
+    using difference_type = int32_t;  // We know this is big enough
+    using iterator_category = std::forward_iterator_tag;
+
+    Iterator(std::span<const uint8_t> data) : data(data) {}
+
+    value_type operator*() const {
+      assert(read_pos >= data.size());
+
+      uint32_t local_read_pos = read_pos;
+      return decode_span_16(data, local_read_pos);
+    }
+
+    Iterator& operator++() {
+      assert(read_pos >= data.size());
+
+      auto topic_len = decode_uint16(data, read_pos);
+
+      if (topic_len) {
+        read_pos += *topic_len;  // Skip the topic
+      }
+
+      // On any error, become end()
+      if (!topic_len || read_pos > data.size()) {
+        read_pos = data.size();
+      }
+
+      return *this;
+    }
+
+    bool operator==(const Iterator& rhs) const {
+      assert(data == rhs.data);
+      return read_pos == rhs.read_pos;
+    }
+/*
+    bool operator!=(const Iterator& other) const {
+      return read_pos != other.read_pos;
+    }
+*/
+    void move_to_end() {
+      read_pos = data.size();
+    }
+  };
+
+  Iterator begin() {
+    return Iterator(data);
+  }
+
+  Iterator end() {
+    Iterator itr(data);
+    itr.move_to_end();
+    return itr;
+  }
+};
+
+
+// This function assumes the spans a and b are valid MQTT topic strings
+template <bool a_wildcard, bool b_wildcard>
+bool topic_match(const std::span<const uint8_t> &a, const std::span<const uint8_t> &b) {
+  auto aitr = a.begin();
+  auto bitr = b.begin();
+
+  // We are assuming the strings are valid
+  while (aitr != a.end() && bitr != b.end()) {
+    // If the next chars are equal, we don't care about them
+    if (*aitr == *bitr) {
+      aitr++;
+      bitr++;
+      continue;
+    }
+
+    // If any string matches everything
+    if ((a_wildcard && *aitr == '#') || (b_wildcard && *bitr == '#')) {
+      return true;
+    }
+
+    if (a_wildcard && *aitr == '+') {
+      while(bitr != b.end() && *bitr != '/') {
+        bitr++;
+      }
+      aitr++;
+      continue;
+    }
+
+    if (b_wildcard && *bitr == '+') {
+      while(aitr != a.end() && *aitr != '/') {
+        aitr++;
+      }
+      bitr++;
+      continue;
+    }
+  }  // while (...
+
+
+  if (aitr == a.end() && bitr == b.end()) {
+    return true;
+  }
+
+  if (aitr != a.end()) {
+    if (*aitr == '/') {
+      aitr++;
+    }
+    if (aitr == a.end() || (a_wildcard && *aitr == '#')) {
+      return true;
+    }
+  } else {
+    assert(bitr != b.end());
+    if (*bitr == '/') {
+      bitr++;
+    }
+    if (bitr == b.end() || (b_wildcard && *bitr == '#')) {
+      return true;
+    }
+  }
+  return false;
+}
 
 
 } // namespace mqtt_plugin

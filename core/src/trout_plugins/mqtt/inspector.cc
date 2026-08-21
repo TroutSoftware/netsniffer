@@ -402,7 +402,7 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
           break;
         }
 
-        if (!validate_topic(topic->msg_id, true)) {
+        if (!validate_topic(topic->topic_id, true)) {
           queue(SID::subscribe_message_malformed);
           break;
         }
@@ -487,22 +487,19 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
     }
 
     // Validate the payload
-    while (read_pos < data.size()) {
-      auto topic_name_len = decode_uint16(data, read_pos);
-      if (!topic_name_len) {
-        // No topic name
-        queue(SID::unsubscribe_message_malformed);
-        break;
-      }
-
-      read_pos += *topic_name_len;
-
-      if (read_pos > data.size()) {
-        queue(SID::unsubscribe_message_malformed);
-        break;
-      }
-
+    UnsubscribePayloadDecoder unsubscribe_payload_decoder(*unsubscribe.payload);
+    for (auto topic:unsubscribe_payload_decoder ) {
       unsubscribe.unsubscribe_count++;
+
+      if (!topic) {
+        queue(SID::unsubscribe_message_malformed);
+        break;
+      }
+
+      if (!validate_topic(*topic, true)) {
+        queue(SID::unsubscribe_message_malformed);
+        break;
+      }
     }
 
     flow_data.cur_msg = unsubscribe;

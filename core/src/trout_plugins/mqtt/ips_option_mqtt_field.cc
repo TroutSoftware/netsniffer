@@ -188,7 +188,7 @@ public:
   }
 
   virtual bool validate_match_string() = 0;   // Returns false on invalid string format
-  virtual bool match(const Cursor &) = 0;         //
+  virtual bool match(const Cursor &) = 0;
   virtual ~Match(){};
 
   template <std::derived_from<Match> T> static std::shared_ptr<Match> factory(std::string &match_string) {
@@ -221,6 +221,27 @@ public:
 
 using MatchFactory = std::shared_ptr<Match> (*)(std::string &);
 
+class TopicMatch : public Match {
+public:
+  virtual bool validate_match_string() override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    return validate_topic(match_string, true);
+  }
+
+  bool match(const Cursor &c) override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    // Add the cursor buffer to a container that can split it into individual parts
+    std::span<const uint8_t> cursor_string(c.buffer(), c.size());
+
+    return topic_match<true, false>(match_string, cursor_string);
+  }
+
+};
+
 
 class SubscribeMatch : public Match {
 
@@ -240,85 +261,50 @@ public:
     std::span<const uint8_t> span(c.buffer(), c.size());
     SubscribePayloadDecoder data(span);
 
-    bool same = false;
+    for( auto ele: data) {
+      // if ele is not set, we have an incomming packet that was invalid
+      // this is not the place to capture that, the inspector would
+      // already have flagged it
+      if (ele && topic_match<true, true>(match_string, ele->topic_id)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+};
+
+class UnsubscribeMatch : public Match {
+
+public:
+  bool validate_match_string() override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    return validate_topic(match_string, true);
+  }
+
+  bool match(const Cursor &c) override {
+    auto& s = get_match_string();
+    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+
+    // Add the cursor buffer to a container that can split it into individual parts
+    std::span<const uint8_t> span(c.buffer(), c.size());
+    UnsubscribePayloadDecoder data(span);
 
     for( auto ele: data) {
       // if ele is not set, we have an incomming packet that was invalid
       // this is not the place to capture that, the inspector would
       // already have flagged it
-      if (ele) {
-        auto itr1 = match_string.begin();
-        auto itr1_end = match_string.end();
-        auto itr2 = ele->msg_id.begin();
-        auto itr2_end = ele->msg_id.end();
-
-        // We are assuming the strings are valid
-        while (itr1 != itr1_end && itr2 != itr2_end) {
-          // If the next chars are equal, we don't care about them
-          if (*itr1 == *itr2) {
-            itr1++;
-            itr2++;
-            continue;
-          }
-
-          // If any string matches everything
-          if (*itr1 == '#' || *itr2 == '#') {
-            itr1 = itr1_end;
-            itr2 = itr2_end;
-            same = true;
-            break;
-          }
-
-          if (*itr1 == '+') {
-            while(itr2 != itr2_end && *itr2 != '/') {
-              itr2++;
-            }
-            itr1++;
-            continue;
-          }
-
-          if (*itr2 == '+') {
-            while(itr1 != itr1_end && *itr1 != '/') {
-              itr1++;
-            }
-            itr2++;
-            continue;
-          }
-        }  // while (...
-
-        if (same) {
-          break;
-        }
-
-        if (itr1 == itr1_end && itr2 == itr2_end) {
-          same = true;
-          break;
-        }
-
-        if (itr1 != itr1_end) {
-          if (*itr1 == '/') {
-            itr1++;
-          }
-          if (itr1 == itr1_end || *itr1 == '#') {
-            same = true;
-            break;
-          }
-        } else {
-          assert(itr2 != itr2_end);
-          if (*itr2 == '/') {
-            itr2++;
-          }
-          if (itr2 == itr2_end || *itr2 == '#') {
-            same = true;
-            break;
-          }
-        }
+      if (ele && topic_match<true, true>(match_string, *ele)) {
+        return true;
       }
     }
 
-    return same;
+    return false;
   }
 };
+
 
 struct FieldDef {
   GetterFuncSignature getter;
@@ -353,7 +339,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   // Valid for Connect message, fields will return NO_MATCH if not found in message
   // NOTE: messages can be present but empty and will return MATCH in that case
-  {"Connect.WillTopic", uni_getter<&ConnectMsg::will_topic>},
+  {"Connect.WillTopic", {uni_getter<&ConnectMsg::will_topic>, Match::factory<TopicMatch>}},
   {"Connect.WillMessage", uni_getter<&ConnectMsg::will_message>},
   {"Connect.UserName", uni_getter<&ConnectMsg::user_name>},
   {"Connect.Password", uni_getter<&ConnectMsg::password>},
@@ -366,7 +352,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   {"Publish.Flag.Retain", uni_getter<&PublishMsg::retain_flag>},
   {"Publish.Flag.Dup", uni_getter<&PublishMsg::dup_flag>},
-  {"Publish.TopicName", uni_getter<&PublishMsg::topic_name>},
+  {"Publish.Topic", {uni_getter<&PublishMsg::topic_name>, Match::factory<TopicMatch>}},
   {"Publish.MessageIdentifier", uni_getter<&PublishMsg::message_identifier>},
   {"Publish.Payload" , uni_getter<&PublishMsg::payload>},
   // TODO: Add: Publish qos compare func
@@ -386,6 +372,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
   {"Subscribe.SubscribeCount", uni_getter<&SubscribeMsg::subscribe_count>},
   {"Subscribe.Payload", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
+  {"Subscribe.Topic", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
 
   {"SubAck.MessageIdentifier", uni_getter<&SubAckMsg::message_identifier>},
   {"SubAck.GrantedCount", uni_getter<&SubAckMsg::granted_count>},
@@ -395,7 +382,8 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   // TODO: Add: Unsubscribe qos comparer func
   {"Unsubscribe.MessageIdentifier", uni_getter<&UnsubscribeMsg::message_identifier>},
   {"Unsubscribe.UnsubscribeCount", uni_getter<&UnsubscribeMsg::unsubscribe_count>},
-  {"Unsubscribe.Payload", uni_getter<&UnsubscribeMsg::payload>},
+  {"Unsubscribe.Payload", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
+  {"Unsubscribe.Topic", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
 
   {"UnsubAck.MessageIdentifier", uni_getter<&UnsubAckMsg::message_identifier>},
 };
