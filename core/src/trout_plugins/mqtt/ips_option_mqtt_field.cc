@@ -39,29 +39,6 @@ Hash to_hash(T v) {
   mix(a, b, c);
   finalize(a, b, c);
   return c;
-
-/*
-  if constexpr (std::same_as_v<T, std::string>) {
-    return to_hash(std::hash<std::string>{}(v);
-  }
-
-  if constexpr (sizeof(T) <= sizeof(Hash)) {
-    return static_cast<Hash>(v);
-  }
-
-  if constexpr (sizeof(T) == 8) {
-    static_assert(sizeof(size_t) <= 8);
-    uint64_t hash = std::hash<T>{}(v);
-    uint32_t a = static_cast<uint32_t>(hash & 0xFFFF'FFFF);
-    uint32_t b = static_cast<uint32_t>(hash >> 32);
-    uint32_t c = 0;
-    mix(a, b, c);
-    finalize(a, b, c);
-    return c;
-  } else {
-    static_assert(false, "size of argument isn't 4 or 8, we don't know how to handle it");
-  }
-*/
 }
 
 
@@ -108,7 +85,6 @@ snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
   return (flow_data.msg_type == t)?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
 }
 
-
 template<typename T>
 // TODO: Add concept to check if T is valid type to check with std::get_if
 snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
@@ -144,7 +120,6 @@ snort::IpsOption::EvalStatus evaluate(Cursor &c, T &val) {
   c.set("MQTT.integral", reinterpret_cast<const uint8_t*>(&val), sizeof(T));
   return snort::IpsOption::MATCH;
 }
-
 
 template<typename T>
 snort::IpsOption::EvalStatus evaluate(Cursor &c, std::optional<T> &val) {
@@ -205,19 +180,6 @@ snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data)
   return snort::IpsOption::NO_MATCH;
 }
 
-
-
-/*
-template <typename T>
-concept MatchClass =
-  requires(const std::string &string, Cursor &c) {
-    { T::validate_match_string(string) } -> std::same_as<bool>;
-    { T::match(c, string) } -> std::same_as<bool>;
-  };
-
-template <MatchClass T>
-*/
-
 class Match {
   std::string match_string;
 public:
@@ -258,25 +220,6 @@ public:
 };
 
 using MatchFactory = std::shared_ptr<Match> (*)(std::string &);
-
-
-
-//using MatchFactorySignature = std::shared_ptr<Match> factory();
-/*
-class DefaultMatch {
-public:
-  static bool validate_match_string(const std::string &) {
-    return false;
-  }
-
-  static bool match(const Cursor &, const std::string &) {
-    return false;
-  }
-};
-static_assert(MatchClass<DefaultMatch>);
-*/
-
-
 
 
 class SubscribeMatch : public Match {
@@ -379,10 +322,7 @@ public:
     return same;
   }
 };
-//static_assert(MatchClass<SubscribeMatch>);
 
-
-//template <MatchClass T = DefaultMatch>
 struct FieldDef {
   GetterFuncSignature getter;
   MatchFactory match_factory;
@@ -390,7 +330,6 @@ struct FieldDef {
   FieldDef(GetterFuncSignature getter, MatchFactory match_factory = nullptr) : getter(getter), match_factory(match_factory) {}
 };
 
-//static const std::map<const std::string, const GetterFuncSignature> mqtt_field_map  {
 static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   {"Flow.ClientID", uni_getter<&FlowData::client_id>},   // Valid for all messages
@@ -537,7 +476,6 @@ struct Settings {
 
     return c;
   }
-
 };
 
 class Module : public snort::Module {
@@ -560,8 +498,6 @@ class Module : public snort::Module {
   bool set(const char *, snort::Value &val, snort::SnortConfig *) override {
     if (val.is("~")) {
       std::string s = val.get_as_string();
-
-//std::cerr << "MKRTEST: Input is >" << s << "<" << std::endl;
 
       // Check if results should be negated
       if (s.size()>=1 && s[0] == '!') {
@@ -624,20 +560,13 @@ public:
   static void dtor(snort::Module *p) { delete p; }
 
   std::shared_ptr<Settings> get_settings() { return settings; }
-  //GetterFuncSignature get_getter() { return getter_func; }
-  //bool get_invert_result() { return invert_result; }
 };
 
 class IpsOption : public snort::IpsOption {
   std::shared_ptr<Settings> settings;
-  //GetterFuncSignature getterFunc;
-  //bool invert_result;
 
   IpsOption(Module &module) : snort::IpsOption(s_name),
-                              settings(module.get_settings())
-                              //getterFunc(module.get_getter()),
-                              //invert_result(module.get_invert_result()) {}
-                              {}
+                              settings(module.get_settings()) {}
 
   // Hash compare is used as a fast way to compare two instances of IpsOption
   uint32_t hash() const override {
@@ -657,6 +586,8 @@ class IpsOption : public snort::IpsOption {
 
     // Check if a filter should be applied
     if (result == snort::IpsOption::MATCH && settings->match_list.size() != 0) {
+      // We assume no match, until proven otherwise
+      result = snort::IpsOption::NO_MATCH;
       for (auto &ele : settings->match_list) {
         assert( ele.matcher );
         bool matches = ele.matcher->match(c);
@@ -665,15 +596,14 @@ class IpsOption : public snort::IpsOption {
           matches = !matches;
         }
 
-        if (!matches) {
-          result = snort::IpsOption::NO_MATCH;
+        if (matches) {
+          result = snort::IpsOption::MATCH;
           break;
         }
       }
     }
 
     if (settings->invert_result) {
-std::cerr << "MKRTEST: Inverting result" << std::endl;
       if (result == snort::IpsOption::MATCH) {
         return snort::IpsOption::NO_MATCH;
       }
