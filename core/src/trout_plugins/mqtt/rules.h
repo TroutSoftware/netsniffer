@@ -36,6 +36,9 @@ enum class SID {
   pingreq_message_malformed = 1126,
   pingresp_message_malformed = 1127,
   disconnect_message_malformed = 1128,
+  unsupported_version = 1129,
+  reserved_message = 1130,
+  connect_message_misplaced = 1131,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID

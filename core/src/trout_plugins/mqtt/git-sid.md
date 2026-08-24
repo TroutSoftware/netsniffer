@@ -216,3 +216,28 @@ available for the rule engine.
 Ill formed messages can be intentionally created to exploit errors in
 the system or be a sign of an error in the sender code
 
+### 1129
+#### What
+Indicates a message was received, but the inspector doesn't support the
+MQTT version the message was sent in.  This doesn't say anything about
+the content being malformed or not
+
+#### Why
+Indication to the rule engine that the message exists, but can't be
+processed
+
+### 1130
+#### What
+A reserved message was received, for the given protocol version the
+message received in not legal
+#### Why
+Indicates someone sent a message that wasn't allowed under the given
+protocol, this can be to explore undefined behavior on the receiver, or
+indicate a software error on the sender side
+
+### 1131
+#### What
+A 2'nd connect message was seen in a flow
+#### Why
+A second connect message is a violation of the protocol and should lead
+to a termination of the connection

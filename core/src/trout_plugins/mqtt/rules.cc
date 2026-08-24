@@ -38,7 +38,9 @@ const snort::RuleMap s_rules[] = {
     {U(SID::pingreq_message_malformed), "PINGREQ message malformed"},
     {U(SID::pingresp_message_malformed), "PINGRESP message malformed"},
     {U(SID::disconnect_message_malformed), "DISCONNECT message malformed"},
-
+    {U(SID::unsupported_version), "Flow is in a protocol version we don't support"},
+    {U(SID::reserved_message), "Reserved message (for the given version) found in stream"},
+    {U(SID::connect_message_misplaced), "Connect message was seen, but not as the first message"},
 };
 
 } // namespace mqtt_plugin {

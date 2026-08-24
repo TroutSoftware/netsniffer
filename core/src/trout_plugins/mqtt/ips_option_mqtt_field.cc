@@ -80,21 +80,16 @@ snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData&) {
   return snort::IpsOption::NO_MATCH;
 }
 
-template<MsgType t>
+template<MsgType t, uint8_t from_version = 0>
 snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
-  return (flow_data.msg_type == t)?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
-}
-
-template<typename T>
-// TODO: Add concept to check if T is valid type to check with std::get_if
-snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
-  if (std::get_if<T>(&(flow_data.cur_msg))) {
-    return snort::IpsOption::MATCH;
+  if constexpr (from_version != 0) {
+    if (from_version > flow_data.protocol_level ) {
+      return snort::IpsOption::NO_MATCH;
+    }
   }
 
-  return snort::IpsOption::NO_MATCH;
+  return (flow_data.msg_type == t)?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
 }
-
 
 template<typename T> struct optional_traits;
 template<typename T> struct optional_traits<std::optional<T>>{
@@ -333,6 +328,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   {"Msg.PingReq", uni_msg<MsgType::PINGREQ>},
   {"Msg.PingResp", uni_msg<MsgType::PINGRESP>},
   {"Msg.Disconnect", uni_msg<MsgType::DISCONNECT>},
+  {"Msg.Auth", uni_msg<MsgType::AUTH, 5>},     // Only for 5.0
 
   // Common message data
   {"Msg.Extra", uni_getter<&FlowData::extra>},
@@ -503,7 +499,7 @@ class Module : public snort::Module {
       return true;
     } else if (val.is("match") || val.is("!match")) {
       if (!field) {
-        snort::ErrorMessage("match keyword need to be preceeded by a valid field name\n");
+        snort::ErrorMessage("match keyword need to be preceded by a valid field name\n");
         return false;
       }
 

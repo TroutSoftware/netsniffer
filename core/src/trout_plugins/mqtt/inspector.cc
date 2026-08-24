@@ -139,7 +139,8 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = connect;
   } else {
-    snort::WarningMessage("MQTT inspector received a connect message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a connect message but doesn't support protocol level %i\n", protocol_level);
   }
 
 }
@@ -174,7 +175,8 @@ void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = connack;
   } else {
-    snort::WarningMessage("MQTT inspector received a connack message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a connack message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -230,7 +232,8 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = publish;
   } else {
-    snort::WarningMessage("MQTT inspector received a publish message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a publish message but doesn't support protocol level %i\n", protocol_level);
   }
 
 }
@@ -259,7 +262,8 @@ void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = puback;
   } else {
-    snort::WarningMessage("MQTT inspector received a puback message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a puback message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -287,7 +291,8 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = pubrec;
   } else {
-    snort::WarningMessage("MQTT inspector received a pubrec message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a pubrec message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -320,7 +325,8 @@ void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = pubrel;
   } else {
-    snort::WarningMessage("MQTT inspector received a pubrel message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a pubrel message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -348,7 +354,8 @@ void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = pubcomp;
   } else {
-    snort::WarningMessage("MQTT inspector received a pubcomp message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a pubcomp message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -411,7 +418,8 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = subscribe;
   } else {
-    snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -447,7 +455,8 @@ void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = suback;
   } else {
-    snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -504,7 +513,8 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
 
     flow_data.cur_msg = unsubscribe;
   } else {
-    snort::WarningMessage("MQTT inspector received an unsubscribe message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received an unsubscribe message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -532,7 +542,8 @@ void Inspector::decode_unsuback(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = unsuback;
   } else {
-    snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -554,7 +565,8 @@ void Inspector::decode_pingreq(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = pingreq;
   } else {
-    snort::WarningMessage("MQTT inspector received a pingreq message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a pingreq message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -576,7 +588,8 @@ void Inspector::decode_pingresp(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = pingresp;
   } else {
-    snort::WarningMessage("MQTT inspector received a pingresp message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a pingresp message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -599,7 +612,8 @@ void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
 
     flow_data.cur_msg = disconnect;
   } else {
-    snort::WarningMessage("MQTT inspector received a disconnect message but doesn't support protocol level %i\n", protocol_level);
+    queue(SID::unsupported_version);
+    //snort::WarningMessage("MQTT inspector received a disconnect message but doesn't support protocol level %i\n", protocol_level);
   }
 }
 
@@ -723,10 +737,25 @@ std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
       return decode_disconnect(p, *flow_data);
 
     case MsgType::Reserved:
-    case MsgType::CONNECT:
-    case MsgType::AUTH:
-std::cerr << "MKRTEST: Don't know how to handle msg type: " << (int)msg_type << std::endl;
+      flow_data->connection_refused = true;
+      queue(SID::reserved_message);
       return;
+
+    case MsgType::AUTH:
+      if (flow_data->protocol_level == 5) {
+        queue(SID::unsupported_version);
+      } else {
+        flow_data->connection_refused = true;
+        queue(SID::reserved_message);
+      }
+      return;
+
+    case MsgType::CONNECT:
+      queue(SID::connect_message_misplaced);
+      flow_data->connection_refused = true;
+      // We decode the message even it is illegal positioned, there
+      // might be something in it a rule writer want to look for
+      return decode_connect(p, *flow_data);
   }
 
 
