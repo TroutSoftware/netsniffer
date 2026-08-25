@@ -4,6 +4,7 @@
 
 // Snort includes
 #include <framework/module.h>
+#include <framework/range.h>
 #include <hash/hash_key_operations.h>
 #include <log/messages.h>
 #include <protocols/packet.h>
@@ -183,7 +184,7 @@ public:
   }
 
   virtual bool validate_match_string() = 0;   // Returns false on invalid string format
-  virtual bool match(const Cursor &) = 0;
+  virtual bool match(const Cursor&, const PacketFlowData&) = 0;
   virtual ~Match(){};
 
   template <std::derived_from<Match> T> static std::shared_ptr<Match> factory(std::string &match_string) {
@@ -216,6 +217,67 @@ public:
 
 using MatchFactory = std::shared_ptr<Match> (*)(std::string &);
 
+
+template <typename T>
+requires (
+  // These types found in MQTT can safely be assigned to an int64_t
+  std::same_as<T, uint8_t> ||
+  std::same_as<T, uint16_t> ||
+  std::same_as<T, uint32_t>
+)
+std::optional<int64_t> get_val(const T &val){
+  return val;
+}
+
+template<typename T>
+std::optional<int64_t> get_val(const std::optional<T> &val) {
+  if (val) {
+    return get_val(*val);
+  }
+  return std::nullopt;
+}
+
+
+template<auto member>
+// TODO: Make the requires work
+//requires IsMsgType<member>
+class RangeMatch : public Match {
+  snort::RangeCheck rc;
+  bool valid = false;
+public:
+  RangeMatch() {
+    rc.init();
+  }
+
+  virtual bool validate_match_string() override {
+    valid = rc.parse(get_match_string().c_str());
+    return valid;
+  }
+
+  bool match(const Cursor&, const PacketFlowData& flow_data) override {
+
+    std::optional<int64_t> val;
+
+    if constexpr (IsFlowDataMember<member>) {
+      val = get_val(&flow_data->*member);
+    } else {
+      using ClassType = ClassTypeFinder<decltype(member)>::ClassType;
+
+      if (auto p = std::get_if<ClassType>(&(flow_data.cur_msg))) {
+        val = get_val(p->*member);
+      }
+    }
+    return val && rc.eval(*val);
+  }
+
+  Hash hash() const override {
+    return rc.hash();
+  }
+
+};
+
+
+
 class TopicMatch : public Match {
 public:
   virtual bool validate_match_string() override {
@@ -225,7 +287,7 @@ public:
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor &c) override {
+  bool match(const Cursor &c, const PacketFlowData&) override {
     auto& s = get_match_string();
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
@@ -248,7 +310,7 @@ public:
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor &c) override {
+  bool match(const Cursor& c, const PacketFlowData& ) override {
     auto& s = get_match_string();
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
@@ -279,7 +341,7 @@ public:
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor &c) override {
+  bool match(const Cursor &c, const PacketFlowData&) override {
     auto& s = get_match_string();
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
@@ -311,7 +373,7 @@ struct FieldDef {
 static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   {"Flow.ClientID", uni_getter<&FlowData::client_id>},   // Valid for all messages
-  {"Flow.ProtocolLevel", uni_getter<&FlowData::protocol_level>},
+  {"Flow.ProtocolLevel", {uni_getter<&FlowData::protocol_level>, Match::factory<RangeMatch<&FlowData::protocol_level>>}},
 
   // Checks message
   {"Msg.Connect", uni_msg<MsgType::CONNECT>},
@@ -342,42 +404,42 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   // Connect flags will return MATCH if found, NO_MATCH if not found, flags will not move cursor
   {"Connect.Flag.WillRetain", uni_getter<&ConnectMsg::will_retain>},
   {"Connect.Flag.CleanSession", uni_getter<&ConnectMsg::clean_session>},
+  {"Connect.WillQoS", {uni_getter<&ConnectMsg::will_qos>, Match::factory<RangeMatch<&ConnectMsg::will_qos>>}},
 
-  // TODO: Add: Connect.will_qos uint8_t will_qos = 0;
-  {"ConnAck.ReturnCode", uni_getter<&ConnAckMsg::return_code>},
+  {"ConnAck.ReturnCode", {uni_getter<&ConnAckMsg::return_code>, Match::factory<RangeMatch<&ConnAckMsg::return_code>>}},
 
   {"Publish.Flag.Retain", uni_getter<&PublishMsg::retain_flag>},
   {"Publish.Flag.Dup", uni_getter<&PublishMsg::dup_flag>},
   {"Publish.Topic", {uni_getter<&PublishMsg::topic_name>, Match::factory<TopicMatch>}},
   {"Publish.MessageIdentifier", uni_getter<&PublishMsg::message_identifier>},
   {"Publish.Payload" , uni_getter<&PublishMsg::payload>},
-  // TODO: Add: Publish qos compare func
+  {"Publish.QoS", {uni_getter<&PublishMsg::qos_level>, Match::factory<RangeMatch<&PublishMsg::qos_level>>}},
 
   {"PubAck.MessageIdentifier", uni_getter<&PubAckMsg::message_identifier>},
 
   {"PubRec.MessageIdentifier", uni_getter<&PubRecMsg::message_identifier>},
 
   {"PubRel.Flag.Dup", uni_getter<&PubRelMsg::dup_flag>},
-  // TODO: Add: PubRelMsg qos compare func
+  {"PubRel.QoS", {uni_getter<&PubRelMsg::qos_level>, Match::factory<RangeMatch<&PubRelMsg::qos_level>>}},
   {"PubRel.MessageIdentifier", uni_getter<&PubRelMsg::message_identifier>},
 
   {"PubComp.MessageIdentifier", uni_getter<&PubCompMsg::message_identifier>},
 
   {"Subscribe.Flag.Dup", uni_getter<&SubscribeMsg::dup_flag>},
-  // TODO: Add: Subscribe qos comparer func
+  {"Subscribe.QoS", {uni_getter<&SubscribeMsg::qos_level>, Match::factory<RangeMatch<&SubscribeMsg::qos_level>>}},
   {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
-  {"Subscribe.SubscribeCount", uni_getter<&SubscribeMsg::subscribe_count>},
+  {"Subscribe.SubscribeCount", {uni_getter<&SubscribeMsg::subscribe_count>, Match::factory<RangeMatch<&SubscribeMsg::subscribe_count>>}},
   {"Subscribe.Payload", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
   {"Subscribe.Topic", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
 
   {"SubAck.MessageIdentifier", uni_getter<&SubAckMsg::message_identifier>},
-  {"SubAck.GrantedCount", uni_getter<&SubAckMsg::granted_count>},
+  {"SubAck.GrantedCount", {uni_getter<&SubAckMsg::granted_count>, Match::factory<RangeMatch<&SubAckMsg::granted_count>>}},
   {"SubAck.Payload", uni_getter<&SubAckMsg::payload>},
 
   {"Unsubscribe.Flag.Dup", uni_getter<&UnsubscribeMsg::dup_flag>},
-  // TODO: Add: Unsubscribe qos comparer func
+  {"Unsubscribe.QoS", {uni_getter<&UnsubscribeMsg::qos_level>, Match::factory<RangeMatch<&UnsubscribeMsg::qos_level>>}},
   {"Unsubscribe.MessageIdentifier", uni_getter<&UnsubscribeMsg::message_identifier>},
-  {"Unsubscribe.UnsubscribeCount", uni_getter<&UnsubscribeMsg::unsubscribe_count>},
+  {"Unsubscribe.UnsubscribeCount", {uni_getter<&UnsubscribeMsg::unsubscribe_count>, Match::factory<RangeMatch<&UnsubscribeMsg::unsubscribe_count>>}},
   {"Unsubscribe.Payload", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
   {"Unsubscribe.Topic", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
 
@@ -571,7 +633,7 @@ class IpsOption : public snort::IpsOption {
       result = snort::IpsOption::NO_MATCH;
       for (auto &ele : settings->match_list) {
         assert( ele.matcher );
-        bool matches = ele.matcher->match(c);
+        bool matches = ele.matcher->match(c, *flow_data);
 
         if (ele.invert_result) {
           matches = !matches;
