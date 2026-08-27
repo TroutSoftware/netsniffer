@@ -22,35 +22,6 @@
 
 namespace trout::templates {
 
-// Concept to validate a c-style string can be extracted from the class
-template <class T>
-concept ConstexprGetCStringConcept = requires(const std::string_view &string) {
-  { T::get_cstring() } -> std::same_as<const char *>;
-  { T::is(string) } -> std::same_as<bool>;
-
-  // Check get_cstring are consteval/consexpr
-  typename std::bool_constant<(T::get_cstring(), true)>;
-};
-
-// Concept for clases that can fill snort parameter name fields
-class GenericNameBaseClass {};
-
-template <class T>
-concept NameConcept =
-    ConstexprGetCStringConcept<T> && std::derived_from<T, GenericNameBaseClass>;
-
-template <class T> struct CheckIsName : std::bool_constant<NameConcept<T>> {};
-
-// Concept for classes that can fill snort parameter help text fields
-class GenericHelpTextBaseClass {};
-
-template <class T>
-concept HelpTextConcept = ConstexprGetCStringConcept<T> &&
-                          std::derived_from<T, GenericHelpTextBaseClass>;
-
-template <class T>
-struct CheckIsHelpText : std::bool_constant<HelpTextConcept<T>> {};
-
 // Concept for classes that can fill snort parameter type fields
 class GenericTypeBaseClass {};
 
@@ -62,7 +33,7 @@ concept TypeConcept = std::derived_from<T, GenericTypeBaseClass> &&
                         // The snort type used during registration
                         {
                           T::get_type()
-                        } -> std::same_as<snort::Parameter::Type>;
+                        } /*-> std::same_as<snort::Parameter::Type>*/;
 
                         // Non-static functions called on instances of the type
 

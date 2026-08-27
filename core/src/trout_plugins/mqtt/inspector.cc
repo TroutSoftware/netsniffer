@@ -16,6 +16,7 @@
 // Global includes
 
 // Local includes
+#include "client_id_monitor.h"
 #include "flow_data.h"
 #include "inspector.h"
 #include "module.h"
@@ -94,12 +95,17 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
 
     auto client_id = decode_span_16(data, read_pos);
 
-    if (!client_id || client_id->size() < 1) {
+    if (!client_id || client_id->size() < 1 || client_id->size() > 23) {
       queue(SID::connect_message_malformed);
       return;
     }
 
     flow_data.client_id = to_vector(*client_id);
+
+    assert(p && p->flow);
+    if (!settings->get<"client_id_cache_min_size">().check(*client_id, p->flow->client_ip)) {
+      queue(SID::new_ip_for_client_id);
+    }
 
     if (connect.will_flag) {
       auto will_topic = decode_span_16(data, read_pos);

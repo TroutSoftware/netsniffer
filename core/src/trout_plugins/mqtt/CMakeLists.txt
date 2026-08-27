@@ -1,4 +1,6 @@
 set( FILE_LIST
+    client_id_monitor.cc
+    client_id_monitor.h
     flow_data.cc
     flow_data.h
     inspector.cc

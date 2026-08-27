@@ -27,6 +27,9 @@ void Inspector::eval(snort::Packet *p) {
     if (!known_hash.active().has(p->pkth->flow_id)) {
       // TODO: Look at this package, and determine if we should send data on it
       //       after we have send it, mark it in both active and passive list
+
+      // Peg test code
+      Pegs::s_peg_counts.flows_detected++;
     }
   }
   // TODO: increase peg for packets without flow id's
@@ -47,6 +50,7 @@ Inspector::Inspector(Module *module) : settings(module->get_settings()) {
 Inspector::~Inspector() {}
 
 snort::Inspector *Inspector::ctor(snort::Module *module) {
+  std::cerr << "MKRTEST: Discovery inspector created" << std::endl;
   return new Inspector(dynamic_cast<Module *>(module));
 }
 

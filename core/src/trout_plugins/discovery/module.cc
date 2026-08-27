@@ -11,10 +11,6 @@
 
 // Global includes
 
-// TMP template includes, move to global
-#include "parameter_param.h"
-#include "parameter_param_list.h"
-
 // Local includes
 #include "module.h"
 #include "pegs.h"

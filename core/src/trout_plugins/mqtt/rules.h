@@ -39,6 +39,7 @@ enum class SID {
   unsupported_version = 1129,
   reserved_message = 1130,
   connect_message_misplaced = 1131,
+  new_ip_for_client_id = 1132,
 };
 
 constexpr unsigned gid = Common::trout_gid; // Module wide GID

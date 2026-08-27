@@ -4,6 +4,12 @@ set( FILE_LIST
     dummy.cc
     help_text.h
     name.h
+    parameter_concepts.h
+    parameter_param.h
+    parameter_param_default_value.h
+    parameter_param_list.h
+    parameter_param_range.h
+    parameter_param_types.h
 
 )
 

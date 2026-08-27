@@ -16,10 +16,11 @@
 // Global includes
 
 // Local includes
+#include "concepts.h"
+#include "name.h"
+#include "help_text.h"
 #include "parameter_concepts.h"
 #include "parameter_param_default_value.h"
-#include "parameter_param_help_text.h"
-#include "parameter_param_name.h"
 #include "parameter_param_range.h"
 #include "parameter_param_types.h"
 
@@ -46,7 +47,7 @@ template <ParamElementsConcept... list> class Param {
   static_assert(count_of_help_text_elements == 1,
                 "You need to supply excactly one HelpText parameter");
   static_assert(count_of_type_elements == 1,
-                "You need to supply exactly one Type paramer");
+                "You need to supply exactly one Type parameter");
 
   // Optional fields
   static_assert(count_of_default_value_elements <= 1,
@@ -129,8 +130,8 @@ public:
     return false;
   }
 
-  // Retrieve value
-  auto get() { return std::get<FindType<CheckIsType>>(data).get(); }
+  // Retrieve value, we use decltype to ensure references survive
+  decltype(auto) get() { return std::get<FindType<CheckIsType>>(data).get(); }
 };
 
 }; // namespace trout::templates

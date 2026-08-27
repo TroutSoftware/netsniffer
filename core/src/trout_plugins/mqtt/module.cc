@@ -25,13 +25,6 @@ const char *s_name =
 const char *s_help =
     "mqtt inspector"; // TODO: Replace with help text for your plugin
 
-// TODO: Sample parameteres, replace with your own
-const snort::Parameter module_params[] = {
-    {"logger", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "Set logger output should be sent to"},
-    {"testmode", snort::Parameter::PT_BOOL, nullptr, "false",
-     "Testmode will make deterministic (fake) timestamps"},
-    {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 } // namespace
 
@@ -45,17 +38,7 @@ bool Module::begin(const char *, int, snort::SnortConfig *) {
 bool Module::end(const char *, int, snort::SnortConfig *) { return true; }
 
 bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
-  // TODO: Update this so it matches the actual parameters in module_params[]
-  if (val.is("logger") && val.get_as_string().size() > 0) {
-    settings->logger_name = val.get_as_string();
-  } else if (val.is("testmode")) {
-    settings->testmode = val.get_bool();
-  } else {
-    // fail if we didn't get something we knew about
-    return false;
-  }
-
-  return true;
+  return settings->set(val.get_name(), val);
 }
 
 const PegInfo *Module::get_pegs() const { return Pegs::s_pegs; }
@@ -69,7 +52,7 @@ const snort::RuleMap *Module::get_rules() const { return s_rules; }
 
 
 Module::Module()
-    : snort::Module(get_module_name(), get_module_help(), module_params) {}
+    : snort::Module(get_module_name(), get_module_help(), Settings::generate_snort_def()) {}
 
 Module::~Module() {}
 

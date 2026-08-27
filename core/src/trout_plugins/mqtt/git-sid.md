@@ -241,3 +241,13 @@ A 2'nd connect message was seen in a flow
 #### Why
 A second connect message is a violation of the protocol and should lead
 to a termination of the connection
+
+### 1132
+#### What
+Either a new client id was seen, or it was seen with a different IP than
+last time
+#### Why
+Having a client move IP, having multiple clients with the same client
+id, or just having a client show up, is something that can signs of
+misconfigurations, evil intent or just valuable in mapping resources on
+the network

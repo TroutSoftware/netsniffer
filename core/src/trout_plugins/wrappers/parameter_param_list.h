@@ -54,7 +54,7 @@ public:
     return (std::get<list>(data).set(sname, val) || ...);
   }
 
-  template <FixedString name> auto get() {
+  template <FixedString name> decltype(auto) get() {
     using TypeToFind = FindParameterType<name>;
     return std::get<TypeToFind>(data).get();
   }

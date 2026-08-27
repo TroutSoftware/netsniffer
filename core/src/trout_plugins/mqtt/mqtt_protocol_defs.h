@@ -201,7 +201,7 @@ inline std::string_view to_string_view(const std::span<const uint8_t> s) {
   return std::string_view{reinterpret_cast<const char*>(s.data()), s.size()};
 }
 
-inline std::vector<uint8_t> to_vector(const std::span<const uint8_t> s) {
+inline std::vector<uint8_t> to_vector(const std::span<const uint8_t> &s) {
   return {s.begin(), s.end()};
 }
 

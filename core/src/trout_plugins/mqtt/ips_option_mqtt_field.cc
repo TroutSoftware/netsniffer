@@ -97,7 +97,8 @@ template<typename T> struct optional_traits<std::optional<T>>{
   using ContainedType = T;
 };
 
-snort::IpsOption::EvalStatus evaluate(Cursor &/*c*/, bool val) {
+snort::IpsOption::EvalStatus evaluate(Cursor &c, bool &val) {
+  c.set("MQTT.bool", reinterpret_cast<const uint8_t*>(&val), sizeof(bool));
   return val?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
 }
 
@@ -371,7 +372,7 @@ struct FieldDef {
 };
 
 static const std::map<const std::string, const FieldDef> mqtt_field_map  {
-
+// clang-format off
   {"Flow.ClientID", uni_getter<&FlowData::client_id>},   // Valid for all messages
   {"Flow.ProtocolLevel", {uni_getter<&FlowData::protocol_level>, Match::factory<RangeMatch<&FlowData::protocol_level>>}},
 
@@ -399,12 +400,12 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   // NOTE: messages can be present but empty and will return MATCH in that case
   {"Connect.WillTopic", {uni_getter<&ConnectMsg::will_topic>, Match::factory<TopicMatch>}},
   {"Connect.WillMessage", uni_getter<&ConnectMsg::will_message>},
+  {"Connect.WillQoS", {uni_getter<&ConnectMsg::will_qos>, Match::factory<RangeMatch<&ConnectMsg::will_qos>>}},
   {"Connect.UserName", uni_getter<&ConnectMsg::user_name>},
   {"Connect.Password", uni_getter<&ConnectMsg::password>},
   // Connect flags will return MATCH if found, NO_MATCH if not found, flags will not move cursor
   {"Connect.Flag.WillRetain", uni_getter<&ConnectMsg::will_retain>},
   {"Connect.Flag.CleanSession", uni_getter<&ConnectMsg::clean_session>},
-  {"Connect.WillQoS", {uni_getter<&ConnectMsg::will_qos>, Match::factory<RangeMatch<&ConnectMsg::will_qos>>}},
 
   {"ConnAck.ReturnCode", {uni_getter<&ConnAckMsg::return_code>, Match::factory<RangeMatch<&ConnAckMsg::return_code>>}},
 
@@ -444,6 +445,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   {"Unsubscribe.Topic", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
 
   {"UnsubAck.MessageIdentifier", uni_getter<&UnsubAckMsg::message_identifier>},
+// clang-format on
 };
 
 struct MatchRule {
