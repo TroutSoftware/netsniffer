@@ -42,6 +42,7 @@ const snort::RuleMap s_rules[] = {
     {U(SID::reserved_message), "Reserved message (for the given version) found in stream"},
     {U(SID::connect_message_misplaced), "Connect message was seen, but not as the first message"},
     {U(SID::new_ip_for_client_id), "A client ID was either seen for the first time, or seen on a new IP"},
+    {0, nullptr}
 };
 
 } // namespace mqtt_plugin {
