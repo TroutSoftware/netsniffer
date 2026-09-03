@@ -13,6 +13,7 @@
 #include <concepts>
 #include <functional>
 #include <map>
+#include <regex>
 #include <string>
 #include <typeinfo>
 
@@ -277,8 +278,6 @@ public:
 
 };
 
-
-
 class TopicMatch : public Match {
 public:
   virtual bool validate_match_string() override {
@@ -293,11 +292,76 @@ public:
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
     // Add the cursor buffer to a container that can split it into individual parts
-    std::span<const uint8_t> cursor_string(c.buffer(), c.size());
+    std::span<const uint8_t> cursor_string(c.start(), c.length());
 
     return topic_match<true, false>(match_string, cursor_string);
   }
 
+};
+
+class RegExMatch : public Match {
+  std::optional<std::regex> regex;
+public:
+  virtual bool validate_match_string() override {
+    auto& s = get_match_string();
+
+    try {
+      regex = std::regex(s.begin(), s.end());
+    } catch (...) {
+      return false;
+    }
+
+    return true;
+  }
+
+
+  bool run_regex(const char *p, size_t size) {
+    if (!regex && !validate_match_string()) {
+      return false;
+    }
+
+    assert(regex);
+    
+    std::span<const char> match_string(p, size);
+
+    return std::regex_match(match_string.begin(), match_string.end(), *regex);        
+  }
+
+  bool run_regex(const uint8_t *p, size_t size) {
+    return run_regex(reinterpret_cast<const char *>(p), size);
+  }
+
+  bool run_regex(std::span<const uint8_t> data) {
+    return run_regex(data.data(), data.size());
+  }
+
+  bool match(const Cursor &c, const PacketFlowData&) override {
+
+    assert(regex);
+        
+    return run_regex(c.start(), c.length());        
+  }
+
+};
+
+class SubscribeRegExMatch : public RegExMatch {
+public:
+  bool match(const Cursor& c, const PacketFlowData& ) override {
+
+    std::span<const uint8_t> span(c.start(), c.length());
+    SubscribePayloadDecoder data(span);
+
+    for( auto ele: data) {
+      // if ele is not set, we have an incomming packet that was invalid
+      // this is not the place to capture that, the inspector would
+      // already have flagged it
+      if (ele && run_regex(ele->topic_id)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 };
 
 
@@ -316,7 +380,7 @@ public:
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
     // Add the cursor buffer to a container that can split it into individual parts
-    std::span<const uint8_t> span(c.buffer(), c.size());
+    std::span<const uint8_t> span(c.start(), c.length());
     SubscribePayloadDecoder data(span);
 
     for( auto ele: data) {
@@ -331,6 +395,27 @@ public:
     return false;
   }
 };
+
+class UnubscribeRegExMatch : public RegExMatch {
+public:
+  bool match(const Cursor& c, const PacketFlowData& ) override {
+
+    std::span<const uint8_t> span(c.start(), c.length());
+    UnsubscribePayloadDecoder data(span);
+
+    for( auto ele: data) {
+      // if ele is not set, we have an incomming packet that was invalid
+      // this is not the place to capture that, the inspector would
+      // already have flagged it
+      if (ele && run_regex(*ele)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+};
+
 
 class UnsubscribeMatch : public Match {
 

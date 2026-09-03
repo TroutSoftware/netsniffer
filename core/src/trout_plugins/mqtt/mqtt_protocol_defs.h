@@ -290,10 +290,10 @@ public:
 inline bool validate_topic(const std::span<const uint8_t> &span, bool allow_wildcards=true) {
   // RegEx string that defines legal topics with wildcards in the MQTT3.1 spec Appendix A
   // Note: "(?!$)" is a negative look-ahead stating this can't be the end of the string
-  const static std::regex wildcard_topic(R"(/?(?!$)(([^+#/\x00]+|\+)/)*([^+#/\x00]+|[+#]?))", std::regex::optimize);
+  const static std::regex wildcard_topic(R"(/?(?!$)(([^+#/\x00]+|\+)/)*([^+#/\x00]+|[+#]?))", std::regex::optimize | std::regex::nosubs);
 
   // A topic can't have a wildcard or the 0 character in MQTT3.1
-  const static std::regex topic(R"(/?(?!$)([^+#/\x00]+/)*[^+#/\x00]?)", std::regex::optimize);
+  const static std::regex topic(R"(/?(?!$)([^+#/\x00]+/)*[^+#/\x00]?)", std::regex::optimize | std::regex::nosubs);
 
   // std::regex_match works on chars
   auto char_span = std::span<const char>(reinterpret_cast<const char*>(span.data()), span.size());
