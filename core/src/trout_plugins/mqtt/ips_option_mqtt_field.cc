@@ -50,11 +50,20 @@ static const char *s_help = "moves cursor to given field";
 
 static const snort::Parameter module_params[] = {
     {"~", snort::Parameter::PT_STRING, nullptr, nullptr,
-     "Field requested"},
+     "Field requested (E.g. \"mqtt_field: Flow.ClientID;\")"},
     {"match", snort::Parameter::PT_STRING, nullptr, nullptr,
     "Will be a rule match if match string is in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
     {"!match", snort::Parameter::PT_STRING, nullptr, nullptr,
     "Will be a rule match if match string is NOT in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
+    {"range_match", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "For numeric fields, will be a rule match if value matches match string (Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" (beween 10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )" },
+    {"!range_match", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "For numeric fields, will be a rule match if value DOESN'T matches match string (Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" (beween 10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )" },
+    {"regex", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "Will be a rule match if match string is in the field or topic list (Matches are done as complete string matches with modified ECMAScript regex)" },
+    {"!regex", snort::Parameter::PT_STRING, nullptr, nullptr,
+    "Will be a rule match if match string is NOT in the field or topic list (Matches are done as complete string matches with modified ECMAScript regex)" },
+    
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
@@ -198,6 +207,10 @@ public:
     return obj;
   }
 
+  static std::string get_name() {
+    return "match";
+  }
+
   // Should only be overridden if the derived class has data/state
   // members that will impact matching
   virtual bool operator==(const Match &rhs) const {
@@ -247,6 +260,10 @@ class RangeMatch : public Match {
   snort::RangeCheck rc;
   bool valid = false;
 public:
+  static std::string get_name() {
+    return "range_match";
+  }
+  
   RangeMatch() {
     rc.init();
   }
@@ -302,6 +319,10 @@ public:
 class RegExMatch : public Match {
   std::optional<std::regex> regex;
 public:
+  static std::string get_name() {
+    return "regex";
+  }
+
   virtual bool validate_match_string() override {
     auto& s = get_match_string();
 
@@ -396,8 +417,8 @@ public:
   }
 };
 
-class UnubscribeRegExMatch : public RegExMatch {
-public:
+class UnsubscribeRegExMatch : public RegExMatch {
+public:  
   bool match(const Cursor& c, const PacketFlowData& ) override {
 
     std::span<const uint8_t> span(c.start(), c.length());
@@ -418,8 +439,7 @@ public:
 
 
 class UnsubscribeMatch : public Match {
-
-public:
+public: 
   bool validate_match_string() override {
     auto& s = get_match_string();
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
@@ -449,87 +469,102 @@ public:
 };
 
 
+
 struct FieldDef {
   GetterFuncSignature getter;
-  MatchFactory match_factory;
+  struct Element {
+    MatchFactory mf;
+    std::string name;
+  };
+  std::vector<Element> match_factory_list;  
 
-  FieldDef(GetterFuncSignature getter, MatchFactory match_factory = nullptr) : getter(getter), match_factory(match_factory) {}
+  template <typename T>
+    requires std::derived_from<T, Match>
+  static Element m() {  // Using a short func name as it is used frequently below
+    return {Match::factory<T>, T::get_name()};
+  }
+
+  FieldDef(GetterFuncSignature getter) : getter(getter) {}
+  FieldDef(GetterFuncSignature getter, Element match_factory) : getter(getter), match_factory_list{match_factory} {}
+  FieldDef(GetterFuncSignature getter, std::vector<Element> match_factory_list) : getter(getter), match_factory_list(std::move(match_factory_list)) {}
 };
+
+
 
 static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 // clang-format off
-  {"Flow.ClientID", uni_getter<&FlowData::client_id>},   // Valid for all messages
-  {"Flow.ProtocolLevel", {uni_getter<&FlowData::protocol_level>, Match::factory<RangeMatch<&FlowData::protocol_level>>}},
+  {"Flow.ClientID",                 {uni_getter<&FlowData::client_id>,                FieldDef::m<RegExMatch>()}},   // Valid for all messages
+  {"Flow.ProtocolLevel",            {uni_getter<&FlowData::protocol_level>,           FieldDef::m<RangeMatch<&FlowData::protocol_level>>()}},
 
   // Checks message
-  {"Msg.Connect", uni_msg<MsgType::CONNECT>},
-  {"Msg.ConnAck", uni_msg<MsgType::CONNACK>},
-  {"Msg.Publish", uni_msg<MsgType::PUBLISH>},
-  {"Msg.PubAck", uni_msg<MsgType::PUBACK>},
-  {"Msg.PubRec", uni_msg<MsgType::PUBREC>},
-  {"Msg.PubRel", uni_msg<MsgType::PUBREL>},
-  {"Msg.PubComp", uni_msg<MsgType::PUBCOMP>},
-  {"Msg.Subscribe", uni_msg<MsgType::SUBSCRIBE>},
-  {"Msg.SubAck", uni_msg<MsgType::SUBACK>},
-  {"Msg.Unsubscribe", uni_msg<MsgType::UNSUBSCRIBE>},
-  {"Msg.UnsubAck", uni_msg<MsgType::UNSUBACK>},
-  {"Msg.PingReq", uni_msg<MsgType::PINGREQ>},
-  {"Msg.PingResp", uni_msg<MsgType::PINGRESP>},
-  {"Msg.Disconnect", uni_msg<MsgType::DISCONNECT>},
-  {"Msg.Auth", uni_msg<MsgType::AUTH, 5>},     // Only for 5.0
+  {"Msg.Connect",                    uni_msg<MsgType::CONNECT>},
+  {"Msg.ConnAck",                    uni_msg<MsgType::CONNACK>},
+  {"Msg.Publish",                    uni_msg<MsgType::PUBLISH>},
+  {"Msg.PubAck",                     uni_msg<MsgType::PUBACK>},
+  {"Msg.PubRec",                     uni_msg<MsgType::PUBREC>},
+  {"Msg.PubRel",                     uni_msg<MsgType::PUBREL>},
+  {"Msg.PubComp",                    uni_msg<MsgType::PUBCOMP>},
+  {"Msg.Subscribe",                  uni_msg<MsgType::SUBSCRIBE>},
+  {"Msg.SubAck",                     uni_msg<MsgType::SUBACK>},
+  {"Msg.Unsubscribe",                uni_msg<MsgType::UNSUBSCRIBE>},
+  {"Msg.UnsubAck",                   uni_msg<MsgType::UNSUBACK>},
+  {"Msg.PingReq",                    uni_msg<MsgType::PINGREQ>},
+  {"Msg.PingResp",                   uni_msg<MsgType::PINGRESP>},
+  {"Msg.Disconnect",                 uni_msg<MsgType::DISCONNECT>},
+  {"Msg.Auth",                       uni_msg<MsgType::AUTH, 5>},     // Only for 5.0
 
   // Common message data
-  {"Msg.Extra", uni_getter<&FlowData::extra>},
+  {"Msg.Extra",                      uni_getter<&FlowData::extra>},
 
   // Valid for Connect message, fields will return NO_MATCH if not found in message
   // NOTE: messages can be present but empty and will return MATCH in that case
-  {"Connect.WillTopic", {uni_getter<&ConnectMsg::will_topic>, Match::factory<TopicMatch>}},
-  {"Connect.WillMessage", uni_getter<&ConnectMsg::will_message>},
-  {"Connect.WillQoS", {uni_getter<&ConnectMsg::will_qos>, Match::factory<RangeMatch<&ConnectMsg::will_qos>>}},
-  {"Connect.UserName", uni_getter<&ConnectMsg::user_name>},
-  {"Connect.Password", uni_getter<&ConnectMsg::password>},
+  {"Connect.WillTopic",             {uni_getter<&ConnectMsg::will_topic>,            {FieldDef::m<TopicMatch>(), FieldDef::m<RegExMatch>()}}},
+  {"Connect.WillMessage",           {uni_getter<&ConnectMsg::will_message>,           FieldDef::m<RegExMatch>()}},
+  {"Connect.WillQoS",               {uni_getter<&ConnectMsg::will_qos>,               FieldDef::m<RangeMatch<&ConnectMsg::will_qos>>()}},
+  {"Connect.UserName",              {uni_getter<&ConnectMsg::user_name>,              FieldDef::m<RegExMatch>()}},
+  {"Connect.Password",              {uni_getter<&ConnectMsg::password>,               FieldDef::m<RegExMatch>()}},
   // Connect flags will return MATCH if found, NO_MATCH if not found, flags will not move cursor
-  {"Connect.Flag.WillRetain", uni_getter<&ConnectMsg::will_retain>},
-  {"Connect.Flag.CleanSession", uni_getter<&ConnectMsg::clean_session>},
+  {"Connect.Flag.WillRetain",        uni_getter<&ConnectMsg::will_retain>},
+  {"Connect.Flag.CleanSession",      uni_getter<&ConnectMsg::clean_session>},
 
-  {"ConnAck.ReturnCode", {uni_getter<&ConnAckMsg::return_code>, Match::factory<RangeMatch<&ConnAckMsg::return_code>>}},
+  {"ConnAck.ReturnCode",            {uni_getter<&ConnAckMsg::return_code>,            FieldDef::m<RangeMatch<&ConnAckMsg::return_code>>()}},
 
-  {"Publish.Flag.Retain", uni_getter<&PublishMsg::retain_flag>},
-  {"Publish.Flag.Dup", uni_getter<&PublishMsg::dup_flag>},
-  {"Publish.Topic", {uni_getter<&PublishMsg::topic_name>, Match::factory<TopicMatch>}},
-  {"Publish.MessageIdentifier", uni_getter<&PublishMsg::message_identifier>},
-  {"Publish.Payload" , uni_getter<&PublishMsg::payload>},
-  {"Publish.QoS", {uni_getter<&PublishMsg::qos_level>, Match::factory<RangeMatch<&PublishMsg::qos_level>>}},
+  {"Publish.Flag.Retain",            uni_getter<&PublishMsg::retain_flag>},
+  {"Publish.Flag.Dup",               uni_getter<&PublishMsg::dup_flag>},
+  {"Publish.Topic",                 {uni_getter<&PublishMsg::topic_name>,            {FieldDef::m<TopicMatch>(), FieldDef::m<RegExMatch>()}}},
+  {"Publish.MessageIdentifier",      uni_getter<&PublishMsg::message_identifier>},
+  {"Publish.Payload" ,              {uni_getter<&PublishMsg::payload>,                FieldDef::m<RegExMatch>()}},
+  {"Publish.QoS",                   {uni_getter<&PublishMsg::qos_level>,              FieldDef::m<RangeMatch<&PublishMsg::qos_level>>()}},
 
-  {"PubAck.MessageIdentifier", uni_getter<&PubAckMsg::message_identifier>},
+  {"PubAck.MessageIdentifier",       uni_getter<&PubAckMsg::message_identifier>},
 
-  {"PubRec.MessageIdentifier", uni_getter<&PubRecMsg::message_identifier>},
+  {"PubRec.MessageIdentifier",       uni_getter<&PubRecMsg::message_identifier>},
 
-  {"PubRel.Flag.Dup", uni_getter<&PubRelMsg::dup_flag>},
-  {"PubRel.QoS", {uni_getter<&PubRelMsg::qos_level>, Match::factory<RangeMatch<&PubRelMsg::qos_level>>}},
-  {"PubRel.MessageIdentifier", uni_getter<&PubRelMsg::message_identifier>},
+  {"PubRel.Flag.Dup",                uni_getter<&PubRelMsg::dup_flag>},
+  {"PubRel.QoS",                    {uni_getter<&PubRelMsg::qos_level>,               FieldDef::m<RangeMatch<&PubRelMsg::qos_level>>()}},
+  {"PubRel.MessageIdentifier",       uni_getter<&PubRelMsg::message_identifier>},
 
-  {"PubComp.MessageIdentifier", uni_getter<&PubCompMsg::message_identifier>},
+  {"PubComp.MessageIdentifier",      uni_getter<&PubCompMsg::message_identifier>},
 
-  {"Subscribe.Flag.Dup", uni_getter<&SubscribeMsg::dup_flag>},
-  {"Subscribe.QoS", {uni_getter<&SubscribeMsg::qos_level>, Match::factory<RangeMatch<&SubscribeMsg::qos_level>>}},
-  {"Subscribe.MessageIdentifier", uni_getter<&SubscribeMsg::message_identifier>},
-  {"Subscribe.SubscribeCount", {uni_getter<&SubscribeMsg::subscribe_count>, Match::factory<RangeMatch<&SubscribeMsg::subscribe_count>>}},
-  {"Subscribe.Payload", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
-  {"Subscribe.Topic", {uni_getter<&SubscribeMsg::payload>, Match::factory<SubscribeMatch>}},
+  {"Subscribe.Flag.Dup",             uni_getter<&SubscribeMsg::dup_flag>},
+  {"Subscribe.QoS",                 {uni_getter<&SubscribeMsg::qos_level>,            FieldDef::m<RangeMatch<&SubscribeMsg::qos_level>>()}},
+  {"Subscribe.MessageIdentifier",    uni_getter<&SubscribeMsg::message_identifier>},
+  {"Subscribe.SubscribeCount",      {uni_getter<&SubscribeMsg::subscribe_count>,      FieldDef::m<RangeMatch<&SubscribeMsg::subscribe_count>>()}},
+  {"Subscribe.Payload",             {uni_getter<&SubscribeMsg::payload>,             {FieldDef::m<SubscribeMatch>(), FieldDef::m<SubscribeRegExMatch>()}}},
+  {"Subscribe.Topic",               {uni_getter<&SubscribeMsg::payload>,             {FieldDef::m<SubscribeMatch>(), FieldDef::m<SubscribeRegExMatch>()}}},
 
-  {"SubAck.MessageIdentifier", uni_getter<&SubAckMsg::message_identifier>},
-  {"SubAck.GrantedCount", {uni_getter<&SubAckMsg::granted_count>, Match::factory<RangeMatch<&SubAckMsg::granted_count>>}},
-  {"SubAck.Payload", uni_getter<&SubAckMsg::payload>},
+  {"SubAck.MessageIdentifier",       uni_getter<&SubAckMsg::message_identifier>},
+  {"SubAck.GrantedCount",           {uni_getter<&SubAckMsg::granted_count>,           FieldDef::m<RangeMatch<&SubAckMsg::granted_count>>()}},
+  {"SubAck.Payload",                 uni_getter<&SubAckMsg::payload>},
 
-  {"Unsubscribe.Flag.Dup", uni_getter<&UnsubscribeMsg::dup_flag>},
-  {"Unsubscribe.QoS", {uni_getter<&UnsubscribeMsg::qos_level>, Match::factory<RangeMatch<&UnsubscribeMsg::qos_level>>}},
-  {"Unsubscribe.MessageIdentifier", uni_getter<&UnsubscribeMsg::message_identifier>},
-  {"Unsubscribe.UnsubscribeCount", {uni_getter<&UnsubscribeMsg::unsubscribe_count>, Match::factory<RangeMatch<&UnsubscribeMsg::unsubscribe_count>>}},
-  {"Unsubscribe.Payload", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
-  {"Unsubscribe.Topic", {uni_getter<&UnsubscribeMsg::payload>, Match::factory<UnsubscribeMatch>}},
+  {"Unsubscribe.Flag.Dup",           uni_getter<&UnsubscribeMsg::dup_flag>},
+  {"Unsubscribe.QoS",               {uni_getter<&UnsubscribeMsg::qos_level>,          FieldDef::m<RangeMatch<&UnsubscribeMsg::qos_level>>()}},
+  {"Unsubscribe.MessageIdentifier",  uni_getter<&UnsubscribeMsg::message_identifier>},
+  {"Unsubscribe.UnsubscribeCount",  {uni_getter<&UnsubscribeMsg::unsubscribe_count>,  FieldDef::m<RangeMatch<&UnsubscribeMsg::unsubscribe_count>>()}},
+  {"Unsubscribe.Payload",           {uni_getter<&UnsubscribeMsg::payload>,           {FieldDef::m<UnsubscribeMatch>(), FieldDef::m<UnsubscribeRegExMatch>()}}},
+  {"Unsubscribe.Topic",             {uni_getter<&UnsubscribeMsg::payload>,           {FieldDef::m<UnsubscribeMatch>(), FieldDef::m<UnsubscribeRegExMatch>()}}},
 
-  {"UnsubAck.MessageIdentifier", uni_getter<&UnsubAckMsg::message_identifier>},
+  {"UnsubAck.MessageIdentifier",     uni_getter<&UnsubAckMsg::message_identifier>},
 // clang-format on
 };
 
@@ -645,31 +680,58 @@ class Module : public snort::Module {
 
       settings->getter_func = field->getter;
       settings->field_name = val.get_as_string();
+
+      
       return true;
-    } else if (val.is("match") || val.is("!match")) {
+    } else {
       if (!field) {
-        snort::ErrorMessage("match keyword need to be preceded by a valid field name\n");
+        snort::ErrorMessage("matching keywords need to be preceded by a valid field name\n");
         return false;
       }
 
-      if (!field->match_factory) {
+      if (field->match_factory_list.empty()) {
         snort::ErrorMessage("match keyword is not supported by %s fields\n", settings->field_name.c_str());
         return false;
       }
-
-      // Create a match object
-      std::string match_string = val.get_unquoted_string();
-      std::shared_ptr<Match> matchObj = field->match_factory(match_string);
-
-      if (!matchObj) {
-        snort::ErrorMessage("match string '%s' is invalid\n", match_string.c_str());
+  
+      std::string s = val.get_name();
+      if (s.size() == 0) {
+        snort::ErrorMessage("keyword can't be empty\n");
         return false;
       }
+      bool negate = s[0] == '!';
+      if (negate) {
+        s.erase(0, 1);  // Remove the '!'
+        if (s.size() == 0) {
+          snort::ErrorMessage("keyword can't be empty, ! means negate\n");
+          return false;
+        }
+      }
+        
+      for (auto& ele : field->match_factory_list) {
 
-      std::string s = val.get_name();
-      settings->match_list.emplace_back(matchObj, s[0] == '!');
+        if (s == ele.name) {
 
-      return true;
+          std::string match_string = val.get_unquoted_string();
+          std::shared_ptr<Match> matchObj = ele.mf(match_string);
+          
+          if (!matchObj) {
+            snort::ErrorMessage("match string '%s' is invalid\n", match_string.c_str());
+            return false;
+          }
+
+          settings->match_list.emplace_back(matchObj, negate);
+          return true;
+        }
+      }
+
+      snort::ErrorMessage("ERROR: The mqtt_field %s supports: ", settings->field_name.c_str());
+      for (auto& ele : field->match_factory_list) {
+        snort::ErrorMessage("%s ", ele.name.c_str());
+      }
+      snort::ErrorMessage("\n");
+      
+      return false;
     }
 
     // fail if we didn't get something valid
