@@ -691,7 +691,7 @@ void Inspector::eval(snort::Packet *p) {
   flow_data->variable_header_start = read_pos;
 
 //std::cerr << "MKRTEST: Flow id " << flow_data->flow_id << std::endl;
-std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
+//std::cerr << "MKRTEST: got msg_type " << (data[0] >> 4) << std::endl;
 
   if (flow_data->protocol_level == 0) {
     // Our first packet must be a connect, otherwise we reject it from being MQTT

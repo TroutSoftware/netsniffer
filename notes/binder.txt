@@ -1,0 +1,67 @@
+# Binding order
+
+## Document overview
+
+This is a short explanation of what the order of the rules given to the
+binder means.
+
+The reader is assumed to have general knowledge of the binder and its
+purpose.
+
+The below is based on snort version 3.12.2.0
+
+## General rules
+
+Note, if a new service is assigned to a flow or an inspector (e.g. by a wizard)
+the binder will re-run with the new service name set.
+
+Note, snort has default handling for pkt types:
+  * IP (stream_ip) 
+  * TCP (stream_tcp)
+  * UDP (stream_udp)
+  * ICMP (stream_icmp)
+  * USER (stream_user)
+  * FILE (stream_file)
+(If the inspectors are initialized in the snort config, e.g. have "stream_ip = {}")
+
+### The when = { .... } part of a rule
+The rules given to the binder are checked when a new packet/flow is seen
+or when a new service type is assigned to an existing packet/flow. A
+rule scan always run from the top to the end of the rule list, possible
+breaking the iteration when certain "terminating conditions" are met.
+
+Multiple rules can match in the same scan, but some rules will terminate
+a scan
+
+### The use = { ... } part of a rule
+
+The use part of a rule can match inspectors with flows, internally the
+binder operates with the following types:
+
+  CLIENT, SERVER, STREAM, WIZARD, GADGET, PASSIVE
+
+The CLIENT and SERVER are directional versions of the generic STREAM, a
+STREAM is a short hand for both CLIENT and SERVER.
+
+CLIENT and SERVER (and hence STREAM) are identified by having the
+service type IT_STREAM, multiple rules can try to set the CLIENT and
+SERVER, but only the first rule that matches will set either.
+
+So if the first rule match sets the CLIENT to inspector A, and a second
+rule match, that sets the STREAM to inspector B, then the CLIENT will
+remain at A and the second STREAM rule will only set the SERVER to B,
+not overriding the previous set CLIENT (it remains set to A)
+
+The WIZARD type is identified by the inspector literally having the name
+'wizard' and the type IT_SERVICE.  If a wizard rule is matched, it will
+stop the scan, and hence ignore any later matches to other rules.
+
+The GADGET type are what we would consider "normal" protocol inspectors,
+(of type IT_SERVICE), like the wizard, meeting a GADGET type will stop
+the search for further rules.
+
+The last type PASSIVE, i.e. services that doesn't look directly at
+packages (has type IT_PASSIVE) is a non-search breaking type, it's
+unclear to me what the purpose would be to list a passive inspector in
+the binder.
+

@@ -1,6 +1,6 @@
 #set document(title: [TroutSoftware/netsniffer — Build & Test Reference])
 
-NOTE: The content of this file is depreacted and no longer holds true
+NOTE: The content of this file is deprecated and no longer holds true
 
 == Overview
 netsniffer is a set of Snort 3 plugins and rules.
