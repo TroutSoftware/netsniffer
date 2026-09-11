@@ -1,11 +1,9 @@
-#ifndef parameter_param_882F60D4
-#define parameter_param_882F60D4
+#ifndef pegs_peg_75876C5E
+#define pegs_peg_75876C5E
 
 ////////////////////////////////////////////////////////////////////////
 //
-// The Param template is defining a non-specialized parameter (ie. a
-// standard parameter, like a bool, integer etc.., but not like a
-// logger, or other "inteligent" parameters)
+// The Peg template is defining a peg, it's name, type and help text
 //
 ////////////////////////////////////////////////////////////////////////
 
@@ -17,29 +15,23 @@
 
 // Local includes
 #include "concepts.h"
-#include "name.h"
 #include "help_text.h"
-#include "parameter_concepts.h"
-#include "parameter_param_default_value.h"
-#include "parameter_param_range.h"
-#include "parameter_param_types.h"
+#include "name.h"
+#include "pegs_concepts.h"
+#include "pegs_peg_types.h"
 
 // Debug includes
 
 namespace trout::templates {
 
-template <ParamElementsConcept... list> class Param {
+template <PegsElementsConcept... list> class Peg {
   [[maybe_unused]] static const auto count_of_all_elements = sizeof...(list);
   [[maybe_unused]] static const auto count_of_name_elements =
       (0 + ... + NameConcept<list>);
   [[maybe_unused]] static const auto count_of_help_text_elements =
       (0 + ... + HelpTextConcept<list>);
   [[maybe_unused]] static const auto count_of_type_elements =
-      (0 + ... + ParameterTypeConcept<list>);
-  [[maybe_unused]] static const auto count_of_default_value_elements =
-      (0 + ... + DefaultValueConcept<list>);
-  [[maybe_unused]] static const auto count_of_range_elements =
-      (0 + ... + RangeConcept<list>);
+      (0 + ... + PegsTypeConcept<list>);
 
   // Required fields
   static_assert(count_of_name_elements == 1,
@@ -49,12 +41,8 @@ template <ParamElementsConcept... list> class Param {
   static_assert(count_of_type_elements == 1,
                 "You need to supply exactly one Type parameter");
 
-  // Optional fields
-  static_assert(count_of_default_value_elements <= 1,
-                "You can't specify more than one default parameter");
-  static_assert(count_of_range_elements <= 1,
-                "You can't supply more than one range parameter");
 
+  // TODO: Move generic template helpers to separate header
   // Templates for finding specific element type
   template <template <typename> class Predicate, typename... Ts>
   struct FindMatch {
@@ -75,52 +63,34 @@ template <ParamElementsConcept... list> class Param {
     return FindType<CheckIsName>::get_cstring();
   }
 
-  static consteval snort::Parameter::Type get_type() {
-    return FindType<CheckIsParameterType>::get_type();
+  static consteval CountType get_type() {
+    return FindType<CheckIsPegsType>::get_type();
   }
 
   static consteval const char *get_help_text() {
     return FindType<CheckIsHelpText>::get_cstring();
   }
 
-  // Extractor functions for elements where we might need a default value and
-  // know there can only be one
-  static consteval void *get_range() {
-    if constexpr (count_of_range_elements) {
-      return FindType<CheckIsRange>::get_range();
-    } else {
-      return nullptr;
-    }
-  }
-
-  static consteval const char *get_default_value() {
-    if constexpr (count_of_default_value_elements) {
-      return FindType<CheckIsDefaultValue>::get_cstring();
-    } else {
-      return nullptr;
-    }
-  }
-
   // Create an instance of each of our parameters
-  std::tuple<list...> data;
+//  std::tuple<list...> data;
 
 public:
   // Static functions operating on the type it self
-
-  static snort::Parameter generate_snort_def() {
-    return snort::Parameter{get_name(), get_type(), get_range(),
-                            get_default_value(), get_help_text()};
+  static consteval PegInfo generate_snort_def() {
+    return PegInfo{get_type(), get_name(), get_help_text()};
   }
 
   template <FixedString name> static consteval bool is() {
     return CStringType<name>::is(std::string_view(get_name()));
   }
 
+  using GetTypeType = FindType<CheckIsPegsType>;
+
   // template <FixedString name>
   // static constexpr bool am = FindType<CheckIsName>::am<name>;
 
   // Non-static functions operating on instances of the type
-
+/*
   // Function that sets the value of this parameter to val, if name matches
   bool set(const std::string_view &name, snort::Value &val) {
     if (std::get<FindType<CheckIsName>>(data).is(name)) {
@@ -132,8 +102,10 @@ public:
 
   // Retrieve value, we use decltype to ensure references survive
   decltype(auto) get() { return std::get<FindType<CheckIsParameterType>>(data).get(); }
+*/  
 };
 
 }; // namespace trout::templates
 
-#endif // #ifndef parameter_param_882F60D4
+#endif // #ifndef pegs_peg_75876C5E
+

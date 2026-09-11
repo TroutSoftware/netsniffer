@@ -50,6 +50,15 @@ concept HelpTextConcept = ConstexprGetCStringConcept<T> &&
 template <class T>
 struct CheckIsHelpText : std::bool_constant<HelpTextConcept<T>> {};
 
+// Concept for general type fields,
+// Note: this should only be used by the snort wrapper system
+class GenericTypeBaseClass {};
+
+template <class T>
+concept TypeConcept = std::derived_from<T, GenericTypeBaseClass>;
+
+template <class T> struct CheckIsType : std::bool_constant<TypeConcept<T>> {};
+
 } // namespace trout::templates
 
 #endif  // #ifndef concepts_5D82E4B7

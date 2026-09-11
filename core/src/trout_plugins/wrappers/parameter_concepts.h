@@ -17,23 +17,22 @@
 // Global includes
 
 // Local includes
+#include "concepts.h"
 
 // Debug includes
 
 namespace trout::templates {
 
 // Concept for classes that can fill snort parameter type fields
-class GenericTypeBaseClass {};
-
 template <class T>
-concept TypeConcept = std::derived_from<T, GenericTypeBaseClass> &&
+concept ParameterTypeConcept = TypeConcept<T> &&
                       requires(T t, snort::Value &sv) {
                         // Static function(s) called on the type
 
                         // The snort type used during registration
                         {
                           T::get_type()
-                        } /*-> std::same_as<snort::Parameter::Type>*/;
+                        } -> std::same_as<snort::Parameter::Type>;
 
                         // Non-static functions called on instances of the type
 
@@ -44,7 +43,7 @@ concept TypeConcept = std::derived_from<T, GenericTypeBaseClass> &&
                         { t.get() };
                       };
 
-template <class T> struct CheckIsType : std::bool_constant<TypeConcept<T>> {};
+template <class T> struct CheckIsParameterType : std::bool_constant<ParameterTypeConcept<T>> {};
 
 // Concept for classes that can fill the snort parameter default value fields
 class GenericDefaultValueBaseClass {};
@@ -74,7 +73,7 @@ template <class T> struct CheckIsRange : std::bool_constant<RangeConcept<T>> {};
 // Concept for what can be accepted in a parameter declaration
 template <class T>
 concept ParamElementsConcept =
-    NameConcept<T> || HelpTextConcept<T> || TypeConcept<T> ||
+    NameConcept<T> || HelpTextConcept<T> || ParameterTypeConcept<T> ||
     DefaultValueConcept<T> || RangeConcept<T>;
 
 // Concept for something that can generate snort::Parameter

@@ -17,6 +17,7 @@
 
 // Local includes
 #include "c_string_type.h"
+#include "concepts.h"
 
 // Debug includes
 

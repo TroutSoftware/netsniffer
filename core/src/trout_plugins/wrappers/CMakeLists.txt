@@ -10,6 +10,9 @@ set( FILE_LIST
     parameter_param_list.h
     parameter_param_range.h
     parameter_param_types.h
+    pegs_peg.h
+    pegs_peg_types.h
+    type.h
 
 )
 

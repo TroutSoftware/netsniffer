@@ -18,6 +18,7 @@
 // Global includes
 
 // Local includes
+#include "type.h"
 
 // Debug includes
 
@@ -98,14 +99,14 @@ public:
 
 // Simple Type containing class
 template <ParameterType type>
-class Type : public GenericTypeBaseClass, public ParamStorage<type> {
+class Type<type> : public GenericTypeBaseClass, public ParamStorage<type> {
 public:
   static consteval snort::Parameter::Type get_type() {
     return static_cast<snort::Parameter::Type>(std::to_underlying(type));
   }
 };
 
-static_assert(TypeConcept<Type<ParameterType::Bool>>,
+static_assert(ParameterTypeConcept<Type<ParameterType::Bool>>,
               "Type is not compliant with ConceptType");
 
 }; // namespace trout::templates
