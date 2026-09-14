@@ -25,7 +25,6 @@ namespace mqtt_plugin {
 
 class ClientIDMonitor {
   uint32_t min_size = 1;
-  //std::shared_ptr<Settings> settings;
 
   // We need our own compare func for the maps so we don't need to
   // create vectors to do the lookup

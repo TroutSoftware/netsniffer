@@ -25,7 +25,7 @@ using Pegs = PegList< Peg<  Name<"client_id_cache_max_size">,
                          >
                     >;
 ---
-Pegs are updated with logic that relects their type (MAX, NOW, SUM)
+Pegs are updated with logic that reflects their type (MAX, NOW, SUM)
 
 So for a SUM you do: Pegs::get<"some_sum_peg_name">().inc(); // Note no object to keep track of
 
@@ -47,8 +47,8 @@ only working with snort threads
 ## Parameters
 
 There is a lot of boiler plate code for common parameters with the
-parameters templates, the parameters and settings are incoorporated,
-with a single definiton like:
+parameters templates, the parameters and settings are Incorporated,
+with a single definition like:
 
 using namespace trout::templates;
 // clang-format off

@@ -12,6 +12,7 @@
 // Local includes
 #include "client_id_monitor.h"
 #include "mqtt_protocol_defs.h"
+#include "pegs.h"
 
 // Debug includes
 
@@ -46,6 +47,7 @@ bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::Sf
         return true;
       }
 
+      Pegs::get<"client_id_reassigned_ip">().inc();
       in_current->second = sf_ip;
       return false;
     }
@@ -63,18 +65,19 @@ bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::Sf
         }
 
         result.position->second = sf_ip;
+        Pegs::get<"client_id_cache_max_size">().max(map_current.size());
         return false;
       }
     } else {
+      Pegs::get<"client_id_cache_purged">().add(map_previous.size());
+      
       map_previous.clear();
       map_previous.swap(map_current);
-
-      // TODO: Add peg for how much map_previous contained before being cleared
     }
 
     std::vector<uint8_t> vector_client_id = to_vector(client_id);
     map_current.emplace(std::move(vector_client_id), sf_ip);
-
+    Pegs::get<"client_id_cache_max_size">().max(map_current.size());
     return false;
   }
 }

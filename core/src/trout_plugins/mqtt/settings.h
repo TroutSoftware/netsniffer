@@ -38,7 +38,7 @@ public:
   }
 };
 
-static_assert(TypeConcept<ClientIDMonitorType>,
+static_assert(ParameterTypeConcept<ClientIDMonitorType>,
               "ClientIDMonitorType is not compliant with ConceptType");
 
 

@@ -8,12 +8,26 @@ Default Trout GID
 
 ## SID 1110-1150
 
+
+enum class SID {
+  message_malformed = 1110,
+  message_has_extra_data = 1111,  
+  com_on_refused_connection = 1113,
+  server_out_of_sync = 1114,
+  client_out_of_sync = 1115,
+  topic_name_invalid = 1116,
+  unsupported_version = 1129,
+  reserved_message = 1130,
+  connect_message_misplaced = 1131,
+  new_ip_for_client_id = 1132,
+};
+
 ### 1110
 #### What
-Indicates the connect message has the magic string and version, but the
-content of the message didn't follow the spec for the given version.
+Indicates the a message contained something that didn't follow the
+specification.
 
-If the error is fatal, e.g. prevents futher decoding, decoding will be
+If the error is fatal, e.g. prevents further decoding, decoding will be
 abandoned for the current message, and this is the only indication
 available for the rule engine.
 #### Why
@@ -26,18 +40,6 @@ Indicates a message was longer than the defined data
 #### Why
 A message that have spare bytes, not defined to contain data could be
 trying to hide a data transfer
-
-### 1112
-#### What
-Indicates a connack message contained something that didn't follow the
-spec for the given version.
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
 
 ### 1113
 #### What
@@ -71,150 +73,6 @@ The topic name in a message wasn't legal (e.g. size 0 or above 32,767)
 #### Why
 A message with an unsupported length could be an attempt to make a
 buffer overflow or crash a server or client
-
-### 1117
-#### What
-Indicates a publish message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1118
-#### What
-Indicates a puback message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1119
-#### What
-Indicates a pubrec message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1120
-#### What
-Indicates a pubrel message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1121
-#### What
-Indicates a pubcomp message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1122
-#### What
-Indicates a subscribe message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1123
-#### What
-Indicates a suback message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1124
-#### What
-Indicates an unsubscribe message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1125
-#### What
-Indicates a unsuback message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1126
-#### What
-Indicates a pingreq message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1127
-#### What
-Indicates a pingresp message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
-
-### 1128
-#### What
-Indicates a disconnect message contained something that didn't follow the
-spec for the given version
-
-If the error is fatal, e.g. prevents futher decoding, decoding will be
-abandoned for the current message, and this is the only indication
-available for the rule engine.
-#### Why
-Ill formed messages can be intentionally created to exploit errors in
-the system or be a sign of an error in the sender code
 
 ### 1129
 #### What

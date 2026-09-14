@@ -41,10 +41,12 @@ bool Module::set(const char *, snort::Value &val, snort::SnortConfig *) {
   return settings->set(val.get_name(), val);
 }
 
-const PegInfo *Module::get_pegs() const { return Pegs::s_pegs; }
+const PegInfo *Module::get_pegs() const {
+  return Pegs::generate_snort_peg_info_def();
+}
 
 PegCount *Module::get_counts() const {
-  return reinterpret_cast<PegCount *>(&Pegs::s_peg_counts);
+  return Pegs::generate_snort_peg_count_def();
 }
 
 unsigned Module::get_gid() const { return gid; }

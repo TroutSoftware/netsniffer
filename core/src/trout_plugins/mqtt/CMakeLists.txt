@@ -9,17 +9,15 @@ set( FILE_LIST
     ips_option_mqtt_field.h
     module.cc
     module.h
-    mqtt_protocol_defs.h
-    pegs.cc
+    mqtt_protocol_defs.h    
     pegs.h
     plugin_def.cc
     plugin_def.h
     rules.cc
-    rules.h
-    settings.cc
+    rules.h    
     settings.h
     stream_splitter.cc
-    stream_splitter.h
+    stream_splitter.h    
 )
 
 add_library( mqtt_plugin OBJECT ${FILE_LIST})

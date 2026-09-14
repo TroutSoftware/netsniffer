@@ -102,7 +102,12 @@ public:
   
   void inc() {
     count++;
-  }  
+  }
+
+  void add(PegCount value) {
+    assert(value >= 0);   // Don't use add to subtract
+    count += value;
+  }
 };
 
 template <>

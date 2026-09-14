@@ -25,8 +25,6 @@ template <PegDefinitionConcept... list> class PegList {
   static const auto count_of_all_pegs = sizeof...(list);
 
   static_assert(count_of_all_pegs > 0, "You must specify at least one peg in a PegList");
-//  std::tuple<list...>
-//      data; // Stores the actual parameters, and any state associated with it
 
   // TODO: Move generic helper template to separate header
   template <FixedString name, typename... Ts> struct FindParameter {
@@ -48,6 +46,7 @@ template <PegDefinitionConcept... list> class PegList {
       return recursive_find_index<name, index + 1, remaining...>();
     } else {
       static_assert(false, "Couldn't find a peg with that name");
+      return 0;
     }
   }
 

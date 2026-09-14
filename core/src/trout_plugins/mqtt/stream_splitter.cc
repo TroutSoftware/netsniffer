@@ -14,6 +14,7 @@
 
 // Local includes
 #include "flow_data.h"
+#include "pegs.h"
 #include "stream_splitter.h"
 
 // Debug includes
@@ -32,6 +33,7 @@ StreamSplitter::Status StreamSplitter::scan_fail(snort::Packet*p) {
     p->flow->set_service(p, 0);
   } else {
     snort::WarningMessage("MQTT Stream splitter received a Packet without flow, and failed\n");
+    
   }
 
   return ABORT;
@@ -48,15 +50,10 @@ StreamSplitter::Status StreamSplitter::scan(
   assert(data);
   assert(fp);
 
-//  PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
-
-//  std::cerr << "MKRTEST: Splitter got flow " << flow_data->flow_id << " with " << len << " bytes" << std::endl;
-
-
-  // For detailed description of the remaning length and terms,
+  // For detailed description of the remaining length and terms,
   // see "2 MQTT Control Packet format" in the OASIS MQTT 5.0 standard
   std::span<const uint8_t> raw(data, len);
-  uint32_t split_pos=0;
+  uint32_t split_pos=0;  // The pos of the first byte after this message
 
   for (const auto c : raw) {
     split_pos++;
@@ -92,6 +89,11 @@ StreamSplitter::Status StreamSplitter::scan(
               // There is no more data
               state = State::initial;
               *fp = split_pos;
+
+              if (len != split_pos) {
+                Pegs::get<"multimsg_packages">().inc();
+              }
+
               return FLUSH;
             }
           }
@@ -106,6 +108,7 @@ StreamSplitter::Status StreamSplitter::scan(
         break;
 
       case State::waiting_for_end:
+        assert(decode_remaining_length > 0);
         decoded_remaining_length--;
         if (decoded_remaining_length <= len - split_pos) {
           // We have the data we need in the current buffer
@@ -113,15 +116,23 @@ StreamSplitter::Status StreamSplitter::scan(
 
           state = State::initial;
 
+          if (decoded_remaining_length != len - split_pos) {
+            Pegs::get<"multimsg_packages">().inc();
+          }
+
           return FLUSH;
         }
 
         decoded_remaining_length -= (len - split_pos);
 
-        return SEARCH;
+        break;
     }
   }
 
+  if (state != State::initial) {
+    Pegs::get<"split_packages">().inc();
+  }    
+        
   return SEARCH;
 }
 
