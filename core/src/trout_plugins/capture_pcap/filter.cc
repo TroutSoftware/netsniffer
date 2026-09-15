@@ -17,6 +17,10 @@
 
 // Debug includes
 
+// We are using the deprecated bpf_filter as a temporary fix, we ignore
+// the warning about it
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 namespace capture_pcap {
 
 Filter::Filter(std::string &&filter_string, std::shared_ptr<Settings> settings,
