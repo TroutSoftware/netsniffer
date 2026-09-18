@@ -32,7 +32,7 @@ static const snort::Parameter module_params[] = {
 using namespace trout::templates;
 
 // clang-format off
-using Pegs = PegList<  
+using Pegs = PegList<
   Peg<Name<"clear_events">, Type<PegType::SUM>, HelpText<"How many times clear was reached in a rule">>,
   Peg<Name<"did_clear">,    Type<PegType::SUM>, HelpText<"How many times data was purged">>,
   Peg<Name<"no_flow">,      Type<PegType::SUM>, HelpText<"Packets without flows">>
@@ -75,7 +75,7 @@ class IpsOption : public snort::IpsOption {
   }
 
   EvalStatus eval(Cursor &, snort::Packet *p) override {
-    Pegs::get<"clear_events">().inc();    
+    Pegs::get<"clear_events">().inc();
 
     if (!p->flow) {
       Pegs::get<"no_flow">().inc();
@@ -87,10 +87,10 @@ class IpsOption : public snort::IpsOption {
 
     if (!flow_data->empty()) {
       Pegs::get<"did_clear">().inc();
-    } 
+    }
 
     flow_data->clear();
-    
+
     return MATCH;
   }
 

@@ -88,7 +88,7 @@ bool Path::empty() {
 void Path::clear() {
   if (empty()) {
     return;
-  }  
+  }
   if (is_absolute()) {
     absolute.clear();
     relative.clear();

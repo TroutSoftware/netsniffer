@@ -25,17 +25,17 @@ ips = {
 log tcp any any -> any any (
   flags:S;
   lioli_clear;
-  
+
   lioli_tag: $.tag "Tag test";
 
   lioli_tag: $.tag.nested "Nested ";
   lioli_tag: $.tag.nested "test";
 
   lioli_tag: $.principal.append "Append test";
-  
+
   lioli_clear;
 
   lioli_tag: $.tag.clear "clear test";
-  
+
   sid:3000000;
 )
