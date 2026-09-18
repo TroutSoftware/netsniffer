@@ -1,0 +1,39 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000000100\"no msg in rule\"209.85.202.100:8010.67.21.59:48872clear test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000000
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"no msg in rule\"
+-endpoint: 209.85.202.100:80
+--addr: 209.85.202.100:80
+---ip: 209.85.202.100
+---port: 80
+-principal: 10.67.21.59:48872
+--addr: 10.67.21.59:48872
+---ip: 10.67.21.59
+---port: 48872
+-tag: clear test
+--clear: clear test
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000000100\"no msg in rule\"172.253.116.147:8010.67.21.59:55904clear test
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000000
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"no msg in rule\"
+-endpoint: 172.253.116.147:80
+--addr: 172.253.116.147:80
+---ip: 172.253.116.147
+---port: 80
+-principal: 10.67.21.59:55904
+--addr: 10.67.21.59:55904
+---ip: 10.67.21.59
+---port: 55904
+-tag: clear test
+--clear: clear test
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------

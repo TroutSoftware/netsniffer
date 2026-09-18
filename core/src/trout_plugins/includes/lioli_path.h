@@ -33,6 +33,12 @@ public:
 
   bool operator==(const Path &path) const;
 
+  // clears the content, but stays absolute or relative
+  void clear();
+
+  // True if the Path is currently empty
+  bool empty();
+
   constexpr static std::string regex_node_name() {
     return "\\$|#?\\w[\\w\\d]*";
   }

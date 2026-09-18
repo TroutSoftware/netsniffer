@@ -15,6 +15,7 @@
 // Local includes
 #include "alert_lioli/alert_lioli.h"
 #include "alert_lioli/ips_lioli_bind.h"
+#include "alert_lioli/ips_lioli_clear.h"
 #include "alert_lioli/ips_lioli_tag.h"
 #include "arp_monitor/plugin_def.h"
 #include "capture_pcap/plugin_def.h"
@@ -58,6 +59,7 @@ const snort::BaseApi *trout_plugins[] = {
   &icmp_logger::inspect_api.base,
   &ip_filter::ips_option.base,
   &ips_lioli_bind::ips_option.base,
+  &ips_lioli_clear::ips_option.base,
   &ips_lioli_tag::ips_option.base,
   &logger_file::inspect_api.base,
   &logger_null::inspect_api.base,

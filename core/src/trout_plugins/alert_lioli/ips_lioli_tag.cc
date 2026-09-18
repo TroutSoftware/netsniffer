@@ -154,7 +154,7 @@ class IpsOption : public snort::IpsOption {
   }
 
   snort::CursorActionType get_cursor_type() const override {
-    return snort::CAT_ADJUST;
+    return snort::CAT_NONE;
   }
 
 public:
@@ -180,7 +180,7 @@ const snort::IpsApi ips_option = {{
                                       Module::ctor,
                                       Module::dtor,
                                   },
-                                  snort::OPT_TYPE_DETECTION,
+                                  snort::OPT_TYPE_LOGGING,
                                   0,
                                   PROTO_BIT__TCP,
                                   nullptr,

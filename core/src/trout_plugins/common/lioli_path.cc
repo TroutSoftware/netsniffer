@@ -81,6 +81,27 @@ bool Path::operator==(const Path &path) const {
   return false;
 }
 
+bool Path::empty() {
+  return relative.size() <= 1 && absolute.size() <= 1;
+}
+
+void Path::clear() {
+  if (empty()) {
+    return;
+  }  
+  if (is_absolute()) {
+    absolute.clear();
+    relative.clear();
+    auto r = absolute.emplace("$", Tree());
+    me = r.first;
+  } else { // is releative
+    absolute.clear();
+    relative.clear();
+    auto r = relative.emplace("", Tree());
+    me = r.first;
+  }
+}
+
 const static std::regex valid_node_name(Path::regex_node_name(),
                                         std::regex::optimize);
 
