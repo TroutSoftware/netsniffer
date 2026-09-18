@@ -4,8 +4,6 @@
 
 dash
 
-# make libarchive-tools  cmake g++ pkgconf flex  libpcap-dev libarchive-dev libmnl-dev  ninja-build
-
 ca-certificates
 
 # common build deps

@@ -193,7 +193,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "%d of %d tests passed %d skipped\n", tests_succeed, test_count, tests_skipped)
 
 	if 0 != tests_failed {
-		fmt.Fprintf(os.Stderr, "One or more tests FAILED!!!!\n")
+		fmt.Fprintln(os.Stderr, fail.Render("One or more tests FAILED!!!!"))
 	} else {
 		fmt.Fprintln(os.Stderr, pass.Render("--All tests are green--"))
 	}
