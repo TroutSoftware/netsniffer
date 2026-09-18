@@ -125,7 +125,7 @@ class IpsOption : public snort::IpsOption {
   EvalStatus eval(Cursor &c, snort::Packet *p) override {
     if (!p->flow) {
       s_peg_counts.no_flow++;
-      return NO_MATCH;
+      return MATCH;
     }
 
     alert_lioli::FlowData *flow_data =
