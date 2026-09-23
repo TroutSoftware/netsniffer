@@ -1,0 +1,72 @@
+# Alerts & Logs
+
+Alerts and logs are triggered by ips rules in the configuration files
+
+## The ips_lioli_* ips modules
+
+The lioli_* ips rules (defined in the ips_lioli_* ips modules) modify
+the lioli tree that is stored in the flow data of the packet the rule
+is evaluated on.  The modification happens when the line is executed by
+the snort engine, this can happen even the rule is not firing.
+
+As there is a delay between a rule firing and the firing being handled
+by the logging/alert system, multiple rules firing or even being
+evaluated in short succession can modify the flow lioli tree.
+
+This means that a lioli_clear in a rule, even if it is not firing, can
+remove data from the lioli tree in the flow added by a rule that fired
+previously and still queued for processing in the alert/log system.
+
+Due to this shared tree, it is advised to only add lioli_* rules at the
+end of each log/alert ips rule, so rules that aren't firing won't
+modify the tree, both for performance and to prevent data from rules
+that haven't reached the alert/log module from being modified.
+
+### lioli_bind
+The ips rule lioli_bind is a pure logging related rule that doesn't
+have influence on a rule firing or not.  Adding a lioli_bind will add
+the data at the current cursor position to a specfic place in the lioli
+tree, e.g.:
+  
+  log ip any any -> any any (
+    msg:"This is a log of an http header";
+
+    http_header: field host;
+    lioli_bind: $.host;
+  )
+
+The above wil add the value of the host field to the $.host node in the
+lioli tree.
+
+
+### lioli_tag
+The ips rule lioli_tag ads a fixed value on the specified position in
+the lioli tree, e.g.:
+
+  alert mqtt (
+    lioli_tag: $.path.to.node "MQTT packet detected";
+  )
+
+Will add the string "MQTT packet detected" to the $.path.to.node
+position in the flows tree.
+
+If multiple tags add content to the same position, the contents will be
+concatenated in an unspecified order.
+
+The difference between a lioli_tag and a msg rule, is that the lioli_tag
+is a flow thing, where the msg is a rule thing
+
+### lioli_clear
+The ips rule lioli_clear will clear the lioli tree in the flow, this can
+be used to remove content that was added by previous rules, but note
+this will remove any data in the tree, even for rules queued after
+firing but not yet processed by the alert/logging module.
+
+Example use:
+
+  log tcp any any -> any any (
+    lioli_clear;
+    lioli_tag: $.note "TCP packet seen";
+  )
+
+
