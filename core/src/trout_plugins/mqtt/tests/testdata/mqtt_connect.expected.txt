@@ -1,0 +1,134 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000000100\"mqtt connect seen\"Client 3.110.0.2.16:188310.0.2.1:4800\x03
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000000
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt connect seen\"
+-clientid: Client 3.1
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4800
+--addr: 10.0.2.1:4800
+---ip: 10.0.2.1
+---port: 4800
+-protocol_level: \x03
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1129800000\"Msg with unsupported protocol version\"10.0.2.16:188310.0.2.1:4801\x04
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1129
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"Msg with unsupported protocol version\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4801
+--addr: 10.0.2.1:4801
+---ip: 10.0.2.1
+---port: 4801
+-protocol_level: \x04
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000000100\"mqtt connect seen\"10.0.2.16:188310.0.2.1:4801\x04
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000000
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt connect seen\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4801
+--addr: 10.0.2.1:4801
+---ip: 10.0.2.1
+---port: 4801
+-protocol_level: \x04
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1129800000\"Msg with unsupported protocol version\"10.0.2.16:188310.0.2.1:4801\x04
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1129
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"Msg with unsupported protocol version\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4801
+--addr: 10.0.2.1:4801
+---ip: 10.0.2.1
+---port: 4801
+-protocol_level: \x04
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1129800000\"Msg with unsupported protocol version\"10.0.2.16:188310.0.2.1:4802\x05
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1129
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"Msg with unsupported protocol version\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4802
+--addr: 10.0.2.1:4802
+---ip: 10.0.2.1
+---port: 4802
+-protocol_level: \x05
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000000100\"mqtt connect seen\"10.0.2.16:188310.0.2.1:4802\x05
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000000
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt connect seen\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4802
+--addr: 10.0.2.1:4802
+---ip: 10.0.2.1
+---port: 4802
+-protocol_level: \x05
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1129800000\"Msg with unsupported protocol version\"10.0.2.16:188310.0.2.1:4802\x05
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1129
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"Msg with unsupported protocol version\"
+-clientid: 
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4802
+--addr: 10.0.2.1:4802
+---ip: 10.0.2.1
+---port: 4802
+-protocol_level: \x05
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------

@@ -471,21 +471,23 @@ bool topic_match(const std::span<const uint8_t> &a, const std::span<const uint8_
       return true;
     }
 
-    if (a_wildcard && *aitr == '+') {
-      while(bitr != b.end() && *bitr != '/') {
+    if (a_wildcard && *aitr == '+' && bitr != b.end() && *bitr != '/') {
+      do {
         bitr++;
-      }
+      } while(bitr != b.end() && *bitr != '/');
       aitr++;
       continue;
     }
 
-    if (b_wildcard && *bitr == '+') {
-      while(aitr != a.end() && *aitr != '/') {
+    if (b_wildcard && *bitr == '+' && aitr != a.end() && *aitr != '/') {
+      do {
         aitr++;
-      }
+      } while(aitr != a.end() && *aitr != '/');
       bitr++;
       continue;
     }
+
+    break;
   }  // while (...
 
 

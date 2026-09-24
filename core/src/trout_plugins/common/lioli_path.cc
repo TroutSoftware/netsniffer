@@ -77,12 +77,13 @@ bool Path::operator==(const Path &path) const {
         return false;
       }
     }
+    return true;
   }
   return false;
 }
 
 bool Path::empty() {
-  return relative.size() <= 1 && absolute.size() <= 1;
+  return is_empty; 
 }
 
 void Path::clear() {
@@ -100,6 +101,7 @@ void Path::clear() {
     auto r = relative.emplace("", Tree());
     me = r.first;
   }
+  is_empty = true;
 }
 
 const static std::regex valid_node_name(Path::regex_node_name(),
@@ -121,32 +123,37 @@ bool Path::is_absolute() const { return is_absolute(me->first); }
 bool Path::is_relative() const { return is_relative(me->first); }
 
 Path &Path::operator<<(const std::string &text) {
+  is_empty = false;
   me->second << text;
   return *this;
 }
 
 Path &Path::operator<<(const int number) {
+  is_empty = false;
   me->second << number;
   return *this;
 }
 
 Path &Path::operator<<(const Tree &tree) {
+  is_empty = false;
   me->second << tree;
   return *this;
 }
 
 Path &Path::operator<<(Tree &&tree) {
+  is_empty = false;
   me->second << std::move(tree);
   return *this;
 }
 
 Path &Path::operator<<(const Path &path) {
-
+  is_empty = false;
   Path tmp = path;
   return *this << std::move(tmp);
 }
 
 Path &Path::operator<<(Path &&path) {
+  is_empty = false;
   // Relative path should be prefixed with our name, if we are absolute,
   // relative paths also becomes absolute
   Map &target = (is_absolute() ? absolute : relative);

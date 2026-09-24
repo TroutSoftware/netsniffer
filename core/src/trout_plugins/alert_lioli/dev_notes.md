@@ -12,6 +12,9 @@ detection engine queues logs and alerts from the ips rule system, before
 forwarding them to the loggers in batches - this means alerts and logs
 can get lost if the queue runs full before it is emptied.
 
+(At this point I can't rule out that a batch is limited to a single
+packet or flow)
+
 The queue log size can be configured with the event_queue module, e.g.:
 
   event_queue = {
@@ -23,6 +26,8 @@ The default queue size can contain 3 alerts/logs.
 Unfortunately the writer of this text has not been able to identify any
 pegs counting the number of discarded alerts/logs.
 
+## Detection
+
 There is a limit to the number of rules (of a given type) that a single
 package can result in queuing (so there are multiple rules matching a
 given package, then there is a limit on how many of these matches that
@@ -33,9 +38,17 @@ packet - the number can be set with:
     max_queue_events = 100;
   }
 
-Note: The x rules are determined by priority, the priority is determined
-by the SID of the rule - if other factors like GID is involved too is
-unknown at this point.  
+The default value is 5 events per packet - note that this size is larger
+than what can actually be queued with the default value in the
+event_queue.log that defaults to 3 
+
+Note: The x rules are determined by priority, from doing experiments the
+priority seem to be determined by the SID of the rule - if other factors
+like GID is involved too is unknown at this point.
+
+Note: Limiting this number won't affect if the rules are actually
+evaluated, it will only impact if the matches are queued for the log/
+alert system
 
 ## The ips_lioli_* ips modules
 

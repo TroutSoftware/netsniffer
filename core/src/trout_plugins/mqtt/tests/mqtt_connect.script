@@ -1,0 +1,58 @@
+pcap testdata/test_connect.pcap
+cmp output.txt testdata/mqtt_connect.expected.txt
+
+stdout 'client_id_cache_max_size: 1'
+stdout 'flow_count: 3'
+stdout 'new_ip_client_id: 1'
+stdout 'messages: 6'
+stdout 'protocol_3_1: 1'
+stdout 'protocol_3_1_1: 1'
+stdout 'protocol_5_0: 1'
+stdout 'protocol_unsuported: 2'
+stdout 'protocol_unsuported_msg: 4'
+stdout 'scan_count: 6'
+
+
+-- cfg.lua --
+
+stream = {}
+stream_tcp = {}
+
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+alert_lioli = { logger = 'logger_file',
+                testmode = true }
+
+
+mqtt = { client_id_cache_min_size = 5}
+
+binder = {
+           { 
+             when = { proto = "tcp", ports = "1883" },
+             use  = { type = "mqtt" }
+           },          
+         }
+
+ips = {
+        rules = [[
+          log mqtt (
+            msg: "mqtt connect seen";
+
+            mqtt_field: Msg.Connect;
+            mqtt_field: Flow.ClientID;
+            lioli_bind: $.clientid;
+            mqtt_field: Flow.ProtocolLevel;
+            lioli_bind: $.protocol_level;
+
+            sid:3000000;
+            )
+          log ip any any -> any any (
+            msg: "Msg with unsupported protocol version";           
+            gid: 8000;
+            sid: 1129;
+          )
+        ]]
+      }

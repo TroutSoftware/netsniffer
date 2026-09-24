@@ -50,6 +50,8 @@ StreamSplitter::Status StreamSplitter::scan(
   assert(data);
   assert(fp);
 
+  Pegs::get<"scan_count">().inc();
+
   // For detailed description of the remaining length and terms,
   // see "2 MQTT Control Packet format" in the OASIS MQTT 5.0 standard
   std::span<const uint8_t> raw(data, len);

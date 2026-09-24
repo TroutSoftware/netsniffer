@@ -1,0 +1,732 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000014100\"mqtt match level1/level2\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000014
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match level1/level2\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000012100\"mqtt match A/B/C, !match A/B/C\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000012
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C, !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000011100\"mqtt match A/+/C\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000011
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000010100\"mqtt match A/+/C/\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000010
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C/\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000009100\"mqtt match C/A/B/C/D/E\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000009
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match C/A/B/C/D/E\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000008100\"mqtt match +/#\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000008
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match +/#\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000006100\"mqtt match A/B/C\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000006
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000004100\"mqtt match #\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000004
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match #\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000001100\"mqtt subscribe seen with count match 4<=>5\"10.0.2.16:188310.0.2.1:1
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000001
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt subscribe seen with count match 4<=>5\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:1
+--addr: 10.0.2.1:1
+---ip: 10.0.2.1
+---port: 1
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000012100\"mqtt match A/B/C, !match A/B/C\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000012
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C, !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000011100\"mqtt match A/+/C\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000011
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000010100\"mqtt match A/+/C/\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000010
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C/\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000008100\"mqtt match +/#\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000008
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match +/#\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000006100\"mqtt match A/B/C\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000006
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000005100\"mqtt match match D, match /D\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000005
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match match D, match /D\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000004100\"mqtt match #\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000004
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match #\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000001100\"mqtt subscribe seen with count match 4<=>5\"10.0.2.16:188310.0.2.1:2
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000001
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt subscribe seen with count match 4<=>5\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:2
+--addr: 10.0.2.1:2
+---ip: 10.0.2.1
+---port: 2
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000013100\"mqtt !match A/B/C\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000013
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000012100\"mqtt match A/B/C, !match A/B/C\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000012
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C, !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000011100\"mqtt match A/+/C\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000011
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000010100\"mqtt match A/+/C/\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000010
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C/\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000008100\"mqtt match +/#\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000008
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match +/#\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000007100\"mqtt match /A/B/C\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000007
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match /A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000005100\"mqtt match match D, match /D\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000005
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match match D, match /D\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000004100\"mqtt match #\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000004
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match #\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000001100\"mqtt subscribe seen with count match 4<=>5\"10.0.2.16:188310.0.2.1:3
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000001
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt subscribe seen with count match 4<=>5\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:3
+--addr: 10.0.2.1:3
+---ip: 10.0.2.1
+---port: 3
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000013100\"mqtt !match A/B/C\"10.0.2.16:188310.0.2.1:4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000013
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4
+--addr: 10.0.2.1:4
+---ip: 10.0.2.1
+---port: 4
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000012100\"mqtt match A/B/C, !match A/B/C\"10.0.2.16:188310.0.2.1:4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000012
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C, !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4
+--addr: 10.0.2.1:4
+---ip: 10.0.2.1
+---port: 4
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000007100\"mqtt match /A/B/C\"10.0.2.16:188310.0.2.1:4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000007
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match /A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4
+--addr: 10.0.2.1:4
+---ip: 10.0.2.1
+---port: 4
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000004100\"mqtt match #\"10.0.2.16:188310.0.2.1:4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000004
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match #\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4
+--addr: 10.0.2.1:4
+---ip: 10.0.2.1
+---port: 4
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000002100\"mqtt subscribe seen with count match =1\"10.0.2.16:188310.0.2.1:4
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000002
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt subscribe seen with count match =1\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4
+--addr: 10.0.2.1:4
+---ip: 10.0.2.1
+---port: 4
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000014100\"mqtt match level1/level2\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000014
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match level1/level2\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000012100\"mqtt match A/B/C, !match A/B/C\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000012
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C, !match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000011100\"mqtt match A/+/C\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000011
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000010100\"mqtt match A/+/C/\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000010
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/+/C/\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000009100\"mqtt match C/A/B/C/D/E\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000009
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match C/A/B/C/D/E\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000008100\"mqtt match +/#\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000008
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match +/#\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000007100\"mqtt match /A/B/C\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000007
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match /A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000006100\"mqtt match A/B/C\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000006
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match A/B/C\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000005100\"mqtt match match D, match /D\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000005
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match match D, match /D\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000004100\"mqtt match #\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000004
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match #\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000003100\"mqtt match /something/unique\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000003
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt match /something/unique\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z3000002100\"mqtt subscribe seen with count match =1\"10.0.2.16:188310.0.2.1:5
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 3000002
+-gid: 1
+-rev: 0
+-priority: 0
+-log: \"mqtt subscribe seen with count match =1\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:5
+--addr: 10.0.2.1:5
+---ip: 10.0.2.1
+---port: 5
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------

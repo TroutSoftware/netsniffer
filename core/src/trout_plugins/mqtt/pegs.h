@@ -33,8 +33,10 @@ using Pegs = PegList<
   Peg<Name<"protocol_3_1">,             Type<PegType::SUM>, HelpText<"MQTT 3.1 protocol connections seen">>,
   Peg<Name<"protocol_3_1_1">,           Type<PegType::SUM>, HelpText<"MQTT 3.1.1 protocol connections seen">>,
   Peg<Name<"protocol_5_0">,             Type<PegType::SUM>, HelpText<"MQTT 5.0 protocol connections seen">>,
-  Peg<Name<"protocol_unsuported">,      Type<PegType::SUM>, HelpText<"Unsupported protocols seen (i.e. sum of 3.1.1 and 5.0)">>,
+  Peg<Name<"protocol_unsuported">,      Type<PegType::SUM>, HelpText<"Unsupported protocols seen (i.e. sum of 3.1.1 and 5.0) (counted once per flow)">>,
+  Peg<Name<"protocol_unsuported_msg">,  Type<PegType::SUM>, HelpText<"Messages with unsupported protocols seen (counted once per msg)">>,
   Peg<Name<"rejected_flow_count">,      Type<PegType::SUM>, HelpText<"Flows that couldn't be passed as mqtt">>,
+  Peg<Name<"scan_count">,               Type<PegType::SUM>, HelpText<"Times the splitter was called with data">>,
   Peg<Name<"split_packages">,           Type<PegType::SUM>, HelpText<"MQTT messages that was split across several network packages">>
 >;
 // clang-format on                    

@@ -128,6 +128,13 @@ snort::IpsOption::EvalStatus evaluate(Cursor &c, T &val) {
   return snort::IpsOption::MATCH;
 }
 
+template <typename T>
+requires std::is_enum_v<T>
+snort::IpsOption::EvalStatus evaluate(Cursor &c, T &val) {
+  c.set("MQTT.enum", reinterpret_cast<const uint8_t*>(&val), sizeof(T));
+  return snort::IpsOption::MATCH;
+}
+
 template<typename T>
 snort::IpsOption::EvalStatus evaluate(Cursor &c, std::optional<T> &val) {
   if (val) {
@@ -515,6 +522,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
 
   // Common message data
   {"Msg.Extra",                      uni_getter<&FlowData::extra>},
+  {"Msg.Type",                       uni_getter<&FlowData::msg_type>},
 
   // Valid for Connect message, fields will return NO_MATCH if not found in message
   // NOTE: messages can be present but empty and will return MATCH in that case

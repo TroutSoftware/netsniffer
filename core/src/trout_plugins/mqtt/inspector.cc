@@ -151,8 +151,8 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = connect;
   } else {
     Pegs::get<"protocol_unsuported">().inc();
+    Pegs::get<"protocol_unsuported_msg">().inc();
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a connect message but doesn't support protocol level %i\n", protocol_level);
   }
 
 }
@@ -189,7 +189,7 @@ void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = connack;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a connack message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -246,7 +246,7 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = publish;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a publish message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 
 }
@@ -277,7 +277,7 @@ void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = puback;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a puback message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -307,7 +307,7 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = pubrec;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a pubrec message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -342,7 +342,7 @@ void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = pubrel;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a pubrel message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -372,7 +372,7 @@ void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = pubcomp;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a pubcomp message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -436,7 +436,7 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = subscribe;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a subscribe message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -473,7 +473,7 @@ void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = suback;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -531,7 +531,7 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
     flow_data.cur_msg = unsubscribe;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received an unsubscribe message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -561,7 +561,7 @@ void Inspector::decode_unsuback(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = unsuback;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a suback message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -585,7 +585,7 @@ void Inspector::decode_pingreq(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = pingreq;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a pingreq message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -609,7 +609,7 @@ void Inspector::decode_pingresp(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = pingresp;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a pingresp message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -634,7 +634,7 @@ void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.cur_msg = disconnect;
   } else {
     queue(SID::unsupported_version);
-    //snort::WarningMessage("MQTT inspector received a disconnect message but doesn't support protocol level %i\n", protocol_level);
+    Pegs::get<"protocol_unsuported_msg">().inc();
   }
 }
 
@@ -652,6 +652,8 @@ void Inspector::reject(snort::Packet *p, std::string reason) {
 void Inspector::eval(snort::Packet *p) {
   assert(p);
   assert(p->data);
+
+std::cerr << "MKRTEST: Mqtt got package" << std::endl;
 
   Pegs::get<"messages">().inc();
 
@@ -770,6 +772,7 @@ void Inspector::eval(snort::Packet *p) {
     case MsgType::AUTH:
       if (flow_data->protocol_level == 5) {
         queue(SID::unsupported_version);
+        Pegs::get<"protocol_unsuported_msg">().inc();
       } else {
         flow_data->connection_refused = true;
         queue(SID::reserved_message);
@@ -807,7 +810,6 @@ snort::StreamSplitter* Inspector::get_splitter(bool to_server) {
 }
 
 Inspector::Inspector(Module *module) : settings(module->get_settings()) {
-//std::cerr << "MKRTEST MQTT Inspector created" << std::endl;
 }
 
 Inspector::~Inspector() {}

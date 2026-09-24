@@ -1,0 +1,159 @@
+pcap testdata/mqtt_subscribe.pcap
+cmp output.txt testdata/mqtt_match.expected.txt
+
+
+stdout 'logs_generated: 43'
+stdout 'scan_count: 25'
+stdout 'flow_count: 5'
+stdout 'messages: 25'
+
+
+-- cfg.lua --
+
+event_queue = { log = 100; }
+search_engine = { max_queue_events = 100; }
+stream = {}
+stream_tcp = {}
+
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+alert_lioli = { logger = 'logger_file',
+                testmode = true }
+
+mqtt = { client_id_cache_min_size = 5}
+
+binder = {
+           { 
+             when = { proto = "tcp", ports = "1883" },
+             use  = { type = "mqtt" }
+           },          
+         }
+
+ips = {
+        rules = [[
+          log mqtt (
+            msg: "mqtt subscribe seen with count match 1<>4";
+
+            mqtt_field: Subscribe.SubscribeCount, range_match "1<>4";
+
+            sid:3000000;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with count match 4<=>5";
+
+            mqtt_field: Subscribe.SubscribeCount, range_match "4<=>5";
+
+            sid:3000001;
+          )
+
+          
+          log mqtt (          
+            msg: "mqtt subscribe seen with count match =1";
+
+            mqtt_field: Subscribe.SubscribeCount, range_match "=1";
+
+            sid:3000002;
+          )
+
+          log mqtt (
+            msg: "mqtt match /something/unique";
+
+            mqtt_field: Subscribe.Topic, match "/something/unique";
+
+            sid:3000003;
+          )
+
+          log mqtt (
+            msg: "mqtt match #";
+
+            mqtt_field: Subscribe.Topic, match "#";
+
+            sid:3000004;
+          )
+
+          log mqtt (
+            msg: "mqtt match match D, match /D";
+
+            mqtt_field: Subscribe.Topic, match "D", match "/D";
+
+            sid:3000005;
+          )
+
+          log mqtt (
+            msg: "mqtt match A/B/C";
+
+            mqtt_field: Subscribe.Topic, match "A/B/C";
+
+            sid:3000006;
+          )
+
+          log mqtt (
+            msg: "mqtt match /A/B/C";
+
+            mqtt_field: Subscribe.Topic, match "/A/B/C";
+
+            sid:3000007;
+          )
+
+          log mqtt (
+            msg: "mqtt match +/#";
+
+            mqtt_field: Subscribe.Topic, match "+/#";
+
+            sid:3000008;
+          )
+
+          log mqtt (
+            msg: "mqtt match C/A/B/C/D/E";
+
+            mqtt_field: Subscribe.Topic, match "C/A/B/C/D/E";
+
+            sid:3000009;
+          )
+
+          log mqtt (
+            msg: "mqtt match A/+/C/";
+
+            mqtt_field: Subscribe.Topic, match "A/+/C/";
+
+            sid:3000010;
+          )
+
+          log mqtt (
+            msg: "mqtt match A/+/C";
+
+            mqtt_field: Subscribe.Topic, match "A/+/C";
+
+            sid:3000011;
+          )
+
+          log mqtt (
+            msg: "mqtt match A/B/C, !match A/B/C";
+
+            mqtt_field: Subscribe.Topic, match "A/B/C", !match "A/B/C";
+
+            sid:3000012;
+          )
+
+          log mqtt (
+            msg: "mqtt !match A/B/C";
+
+            mqtt_field: Subscribe.Topic, !match "A/B/C";
+
+            sid:3000013;
+          )
+
+          log mqtt (
+            msg: "mqtt match level1/level2";
+
+            mqtt_field: Subscribe.Topic, match "level1/level2";
+
+            sid:3000014;
+          )
+
+        ]]
+      }

@@ -18,6 +18,7 @@
 namespace LioLi {
 
 class Path {
+  bool is_empty = true;
   using Map = std::map<std::string, Tree>;
   Map relative;
   Map absolute;
