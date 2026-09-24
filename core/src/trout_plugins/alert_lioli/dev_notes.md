@@ -18,10 +18,24 @@ The queue log size can be configured with the event_queue module, e.g.:
     log = 100;
   }
 
-The default queue size can contain 3 alerts/logs.
+The default queue size can contain 3 alerts/logs.  
 
 Unfortunately the writer of this text has not been able to identify any
 pegs counting the number of discarded alerts/logs.
+
+There is a limit to the number of rules (of a given type) that a single
+package can result in queuing (so there are multiple rules matching a
+given package, then there is a limit on how many of these matches that
+will be queued for the alert system) this number defaults to 5 rules per
+packet - the number can be set with:
+
+  search_engine = {
+    max_queue_events = 100;
+  }
+
+Note: The x rules are determined by priority, the priority is determined
+by the SID of the rule - if other factors like GID is involved too is
+unknown at this point.  
 
 ## The ips_lioli_* ips modules
 
