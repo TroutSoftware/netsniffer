@@ -20,11 +20,9 @@
 // outside of this file)
 namespace {
 
-const char *s_name =
-    "mqtt"; // TODO: Replace with the name of the plugin
+const char *s_name = "mqtt"; // TODO: Replace with the name of the plugin
 const char *s_help =
     "mqtt inspector"; // TODO: Replace with help text for your plugin
-
 
 } // namespace
 
@@ -52,9 +50,9 @@ PegCount *Module::get_counts() const {
 unsigned Module::get_gid() const { return gid; }
 const snort::RuleMap *Module::get_rules() const { return s_rules; }
 
-
 Module::Module()
-    : snort::Module(get_module_name(), get_module_help(), Settings::generate_snort_def()) {}
+    : snort::Module(get_module_name(), get_module_help(),
+                    Settings::generate_snort_def()) {}
 
 Module::~Module() {}
 

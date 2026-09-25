@@ -18,7 +18,7 @@ namespace mqtt_plugin {
 
 enum class SID {
   message_malformed = 1110,
-  message_has_extra_data = 1111,  
+  message_has_extra_data = 1111,
   com_on_refused_connection = 1113,
   server_out_of_sync = 1114,
   client_out_of_sync = 1115,

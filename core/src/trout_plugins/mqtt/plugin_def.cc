@@ -16,12 +16,9 @@
 
 // Debug includes
 
-
 namespace mqtt_plugin {
 
-    static const char* buffers[] = {
-          "mqtt_field",
-          nullptr };
+static const char *buffers[] = {"mqtt_field", nullptr};
 
 // clang-format off
 const snort::InspectApi inspect_api = {

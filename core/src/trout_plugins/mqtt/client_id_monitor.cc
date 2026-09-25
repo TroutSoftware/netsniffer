@@ -18,10 +18,10 @@
 
 namespace mqtt_plugin {
 
-ClientIDMonitor::ClientIDMonitor(uint32_t min_size) :
-  min_size(min_size) {}
+ClientIDMonitor::ClientIDMonitor(uint32_t min_size) : min_size(min_size) {}
 
-bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::SfIp &sf_ip) {
+bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id,
+                            snort::SfIp &sf_ip) {
   // First part is happy path, we don't modify anything and just need
   // a shared lock
   {
@@ -70,7 +70,7 @@ bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::Sf
       }
     } else {
       Pegs::get<"client_id_cache_purged">().add(map_previous.size());
-      
+
       map_previous.clear();
       map_previous.swap(map_current);
     }
@@ -81,6 +81,5 @@ bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::Sf
     return false;
   }
 }
-
 
 } // namespace mqtt_plugin

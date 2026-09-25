@@ -31,8 +31,7 @@ namespace {
 
 using Hash = uint32_t;
 
-template <typename T>
-Hash to_hash(T v) {
+template <typename T> Hash to_hash(T v) {
   uint64_t hash = std::hash<T>{}(v);
   uint32_t a = static_cast<uint32_t>(hash & 0xFFFF'FFFF);
   uint32_t b = static_cast<uint32_t>(hash >> 32);
@@ -42,7 +41,6 @@ Hash to_hash(T v) {
   return c;
 }
 
-
 static const char *s_name = "mqtt_field";
 
 static const char *s_help = "moves cursor to given field";
@@ -51,25 +49,33 @@ static const snort::Parameter module_params[] = {
     {"~", snort::Parameter::PT_STRING, nullptr, nullptr,
      "Field requested (E.g. \"mqtt_field: Flow.ClientID;\")"},
     {"match", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "Will be a rule match if match string is in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
+     "Will be a rule match if match string is in the MQTT topic list (Matches "
+     "are done with # and + wildcards, following the MQTT rules)"},
     {"!match", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "Will be a rule match if match string is NOT in the MQTT topic list (Matches are done with # and + wildcards, following the MQTT rules)" },
+     "Will be a rule match if match string is NOT in the MQTT topic list "
+     "(Matches are done with # and + wildcards, following the MQTT rules)"},
     {"range_match", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "For numeric fields, will be a rule match if value matches match string (Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" (beween 10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )" },
+     "For numeric fields, will be a rule match if value matches match string "
+     "(Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" (beween "
+     "10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )"},
     {"!range_match", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "For numeric fields, will be a rule match if value DOESN'T matches match string (Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" (beween 10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )" },
+     "For numeric fields, will be a rule match if value DOESN'T matches match "
+     "string (Matches are done with eg \">3\", \"=1\", \"<=100\", \"10<>20\" "
+     "(beween 10 and 20), \"10<=>20\" (between/eqaul to 10 and/or 20) )"},
     {"regex", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "Will be a rule match if match string is in the field or topic list (Matches are done as complete string matches with modified ECMAScript regex)" },
+     "Will be a rule match if match string is in the field or topic list "
+     "(Matches are done as complete string matches with modified ECMAScript "
+     "regex)"},
     {"!regex", snort::Parameter::PT_STRING, nullptr, nullptr,
-    "Will be a rule match if match string is NOT in the field or topic list (Matches are done as complete string matches with modified ECMAScript regex)" },
-    
+     "Will be a rule match if match string is NOT in the field or topic list "
+     "(Matches are done as complete string matches with modified ECMAScript "
+     "regex)"},
 
     {nullptr, snort::Parameter::PT_MAX, nullptr, nullptr, nullptr}};
 
 const PegInfo s_pegs[] = {
     {CountType::SUM, "invocations", "Number of times a packet was searced"},
-    {CountType::SUM, "matches",
-     "Number of times the field was found"},
+    {CountType::SUM, "matches", "Number of times the field was found"},
     {CountType::END, nullptr, nullptr}};
 
 // This must match the s_pegs[] array
@@ -84,34 +90,37 @@ static_assert(
         sizeof(PegCounts) / sizeof(PegCount),
     "Entries in s_pegs doesn't match number of entries in s_peg_counts");
 
-using GetterFuncSignature = snort::IpsOption::EvalStatus(*)(Cursor &, PacketFlowData &);
+using GetterFuncSignature = snort::IpsOption::EvalStatus (*)(Cursor &,
+                                                             PacketFlowData &);
 
-snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData&) {
+snort::IpsOption::EvalStatus dummy_getter(Cursor &, PacketFlowData &) {
   return snort::IpsOption::NO_MATCH;
 }
 
-template<MsgType t, uint8_t from_version = 0>
+template <MsgType t, uint8_t from_version = 0>
 snort::IpsOption::EvalStatus uni_msg(Cursor &, PacketFlowData &flow_data) {
   if constexpr (from_version != 0) {
-    if (from_version > flow_data.protocol_level ) {
+    if (from_version > flow_data.protocol_level) {
       return snort::IpsOption::NO_MATCH;
     }
   }
 
-  return (flow_data.msg_type == t)?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
+  return (flow_data.msg_type == t) ? snort::IpsOption::MATCH
+                                   : snort::IpsOption::NO_MATCH;
 }
 
-template<typename T> struct optional_traits;
-template<typename T> struct optional_traits<std::optional<T>>{
+template <typename T> struct optional_traits;
+template <typename T> struct optional_traits<std::optional<T>> {
   using ContainedType = T;
 };
 
 snort::IpsOption::EvalStatus evaluate(Cursor &c, bool &val) {
-  c.set("MQTT.bool", reinterpret_cast<const uint8_t*>(&val), sizeof(bool));
-  return val?snort::IpsOption::MATCH:snort::IpsOption::NO_MATCH;
+  c.set("MQTT.bool", reinterpret_cast<const uint8_t *>(&val), sizeof(bool));
+  return val ? snort::IpsOption::MATCH : snort::IpsOption::NO_MATCH;
 }
 
-snort::IpsOption::EvalStatus evaluate(Cursor &c, std::span<const uint8_t> &val) {
+snort::IpsOption::EvalStatus evaluate(Cursor &c,
+                                      std::span<const uint8_t> &val) {
   c.set("MQTT.span", val.data(), val.size());
   return snort::IpsOption::MATCH;
 }
@@ -121,20 +130,20 @@ snort::IpsOption::EvalStatus evaluate(Cursor &c, std::vector<uint8_t> &val) {
   return snort::IpsOption::MATCH;
 }
 
-template<std::integral T>
+template <std::integral T>
 snort::IpsOption::EvalStatus evaluate(Cursor &c, T &val) {
-  c.set("MQTT.integral", reinterpret_cast<const uint8_t*>(&val), sizeof(T));
+  c.set("MQTT.integral", reinterpret_cast<const uint8_t *>(&val), sizeof(T));
   return snort::IpsOption::MATCH;
 }
 
 template <typename T>
-requires std::is_enum_v<T>
+  requires std::is_enum_v<T>
 snort::IpsOption::EvalStatus evaluate(Cursor &c, T &val) {
-  c.set("MQTT.enum", reinterpret_cast<const uint8_t*>(&val), sizeof(T));
+  c.set("MQTT.enum", reinterpret_cast<const uint8_t *>(&val), sizeof(T));
   return snort::IpsOption::MATCH;
 }
 
-template<typename T>
+template <typename T>
 snort::IpsOption::EvalStatus evaluate(Cursor &c, std::optional<T> &val) {
   if (val) {
     return evaluate(c, *val);
@@ -142,48 +151,44 @@ snort::IpsOption::EvalStatus evaluate(Cursor &c, std::optional<T> &val) {
   return snort::IpsOption::NO_MATCH;
 }
 
+template <typename> struct ClassTypeFinder;
 
-template<typename> struct ClassTypeFinder;
-
-template<typename M, typename C> struct ClassTypeFinder<M C::*> {
+template <typename M, typename C> struct ClassTypeFinder<M C::*> {
   using ClassType = C;
   using MemberType = M;
 };
 
-template<auto member>
+template <auto member>
 concept IsFlowDataMember =
-  std::same_as<FlowData, typename ClassTypeFinder<decltype(member)>::ClassType>;
+    std::same_as<FlowData,
+                 typename ClassTypeFinder<decltype(member)>::ClassType>;
 
-template<auto member>
-requires IsFlowDataMember<member>
-snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data)
-{
+template <auto member>
+  requires IsFlowDataMember<member>
+snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data) {
   return evaluate(c, &flow_data->*member);
 }
 
-template<typename T, typename V, size_t... I>
+template <typename T, typename V, size_t... I>
 constexpr size_t count_t_in_v_helper(std::index_sequence<I...>) {
   return (size_t{std::same_as<T, std::variant_alternative_t<I, V>>} + ...);
 }
 
-template<typename T, typename V>
-constexpr size_t count_t_in_v() {
-  return count_t_in_v_helper<T, V> (
-    std::make_index_sequence<std::variant_size_v<V>>{} );
+template <typename T, typename V> constexpr size_t count_t_in_v() {
+  return count_t_in_v_helper<T, V>(
+      std::make_index_sequence<std::variant_size_v<V>>{});
 };
 
-template<auto T>
-concept IsMsgType =
-requires (PacketFlowData &flow_data) {
+template <auto T>
+concept IsMsgType = requires(PacketFlowData &flow_data) {
   (count_t_in_v_helper<T, decltype(flow_data.cur_msg)>() == 1);
 };
 
-template<auto member>
+template <auto member>
 // TODO: Make the requires work
-//requires IsMsgType<member>
-snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data)
-{
-  //using MemberType = ClassTypeFinder<decltype(member)>::MemberType;
+// requires IsMsgType<member>
+snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data) {
+  // using MemberType = ClassTypeFinder<decltype(member)>::MemberType;
   using ClassType = ClassTypeFinder<decltype(member)>::ClassType;
 
   if (auto p = std::get_if<ClassType>(&(flow_data.cur_msg))) {
@@ -195,16 +200,17 @@ snort::IpsOption::EvalStatus uni_getter(Cursor &c, PacketFlowData &flow_data)
 
 class Match {
   std::string match_string;
+
 public:
-  const std::string &get_match_string() const {
-    return match_string;
-  }
+  const std::string &get_match_string() const { return match_string; }
 
-  virtual bool validate_match_string() = 0;   // Returns false on invalid string format
-  virtual bool match(const Cursor&, const PacketFlowData&) = 0;
-  virtual ~Match(){};
+  virtual bool
+  validate_match_string() = 0; // Returns false on invalid string format
+  virtual bool match(const Cursor &, const PacketFlowData &) = 0;
+  virtual ~Match() {};
 
-  template <std::derived_from<Match> T> static std::shared_ptr<Match> factory(std::string &match_string) {
+  template <std::derived_from<Match> T>
+  static std::shared_ptr<Match> factory(std::string &match_string) {
     auto obj = std::make_shared<T>();
     obj->match_string = match_string;
     if (!obj->validate_match_string()) {
@@ -213,15 +219,12 @@ public:
     return obj;
   }
 
-  static std::string get_name() {
-    return "match";
-  }
+  static std::string get_name() { return "match"; }
 
   // Should only be overridden if the derived class has data/state
   // members that will impact matching
   virtual bool operator==(const Match &rhs) const {
-    return typeid(*this) == typeid(rhs) &&
-           match_string == rhs.match_string;
+    return typeid(*this) == typeid(rhs) && match_string == rhs.match_string;
   }
 
   virtual Hash hash() const {
@@ -238,19 +241,16 @@ public:
 
 using MatchFactory = std::shared_ptr<Match> (*)(std::string &);
 
-
 template <typename T>
-requires (
-  // These types found in MQTT can safely be assigned to an int64_t
-  std::same_as<T, uint8_t> ||
-  std::same_as<T, uint16_t> ||
-  std::same_as<T, uint32_t>
-)
-std::optional<int64_t> get_val(const T &val){
+  requires(
+      // These types found in MQTT can safely be assigned to an int64_t
+      std::same_as<T, uint8_t> || std::same_as<T, uint16_t> ||
+      std::same_as<T, uint32_t>)
+std::optional<int64_t> get_val(const T &val) {
   return val;
 }
 
-template<typename T>
+template <typename T>
 std::optional<int64_t> get_val(const std::optional<T> &val) {
   if (val) {
     return get_val(*val);
@@ -258,28 +258,24 @@ std::optional<int64_t> get_val(const std::optional<T> &val) {
   return std::nullopt;
 }
 
-
-template<auto member>
+template <auto member>
 // TODO: Make the requires work
-//requires IsMsgType<member>
+// requires IsMsgType<member>
 class RangeMatch : public Match {
   snort::RangeCheck rc;
   bool valid = false;
+
 public:
-  static std::string get_name() {
-    return "range_match";
-  }
-  
-  RangeMatch() {
-    rc.init();
-  }
+  static std::string get_name() { return "range_match"; }
+
+  RangeMatch() { rc.init(); }
 
   virtual bool validate_match_string() override {
     valid = rc.parse(get_match_string().c_str());
     return valid;
   }
 
-  bool match(const Cursor&, const PacketFlowData& flow_data) override {
+  bool match(const Cursor &, const PacketFlowData &flow_data) override {
 
     std::optional<int64_t> val;
 
@@ -295,45 +291,44 @@ public:
     return val && rc.eval(*val);
   }
 
-  Hash hash() const override {
-    return rc.hash();
-  }
-
+  Hash hash() const override { return rc.hash(); }
 };
 
 class TopicMatch : public Match {
 public:
   virtual bool validate_match_string() override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor &c, const PacketFlowData&) override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+  bool match(const Cursor &c, const PacketFlowData &) override {
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
-    // Add the cursor buffer to a container that can split it into individual parts
+    // Add the cursor buffer to a container that can split it into individual
+    // parts
     std::span<const uint8_t> cursor_string(c.start(), c.length());
 
     return topic_match<true, false>(match_string, cursor_string);
   }
-
 };
 
 class RegExMatch : public Match {
   std::optional<std::regex> regex;
+
 public:
-  static std::string get_name() {
-    return "regex";
-  }
+  static std::string get_name() { return "regex"; }
 
   virtual bool validate_match_string() override {
     // bail if we have already validated
-    if (regex) return true;
-    
-    auto& s = get_match_string();
+    if (regex)
+      return true;
+
+    auto &s = get_match_string();
 
     try {
       regex = std::regex(s.begin(), s.end());
@@ -344,17 +339,16 @@ public:
     return true;
   }
 
-
   bool run_regex(const char *p, size_t size) {
     if (!regex && !validate_match_string()) {
       return false;
     }
 
     assert(regex);
-    
+
     std::span<const char> match_string(p, size);
 
-    return std::regex_match(match_string.begin(), match_string.end(), *regex);        
+    return std::regex_match(match_string.begin(), match_string.end(), *regex);
   }
 
   bool run_regex(const uint8_t *p, size_t size) {
@@ -365,22 +359,21 @@ public:
     return run_regex(data.data(), data.size());
   }
 
-  bool match(const Cursor &c, const PacketFlowData&) override {
+  bool match(const Cursor &c, const PacketFlowData &) override {
     assert(regex);
 
-    return run_regex(c.start(), c.length());        
+    return run_regex(c.start(), c.length());
   }
-
 };
 
 class SubscribeRegExMatch : public RegExMatch {
 public:
-  bool match(const Cursor& c, const PacketFlowData& ) override {
+  bool match(const Cursor &c, const PacketFlowData &) override {
 
     std::span<const uint8_t> span(c.start(), c.length());
     SubscribePayloadDecoder data(span);
 
-    for( auto ele: data) {
+    for (auto ele : data) {
       // if ele is not set, we have an incomming packet that was invalid
       // this is not the place to capture that, the inspector would
       // already have flagged it
@@ -393,26 +386,28 @@ public:
   }
 };
 
-
 class SubscribeMatch : public Match {
 
 public:
   bool validate_match_string() override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor& c, const PacketFlowData& ) override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+  bool match(const Cursor &c, const PacketFlowData &) override {
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
-    // Add the cursor buffer to a container that can split it into individual parts
+    // Add the cursor buffer to a container that can split it into individual
+    // parts
     std::span<const uint8_t> span(c.start(), c.length());
     SubscribePayloadDecoder data(span);
 
-    for( auto ele: data) {
+    for (auto ele : data) {
       // if ele is not set, we have an incomming packet that was invalid
       // this is not the place to capture that, the inspector would
       // already have flagged it
@@ -427,12 +422,12 @@ public:
 
 class UnsubscribeRegExMatch : public RegExMatch {
 public:
-  bool match(const Cursor& c, const PacketFlowData& ) override {
+  bool match(const Cursor &c, const PacketFlowData &) override {
 
     std::span<const uint8_t> span(c.start(), c.length());
     UnsubscribePayloadDecoder data(span);
 
-    for( auto ele: data) {
+    for (auto ele : data) {
       // if ele is not set, we have an incomming packet that was invalid
       // this is not the place to capture that, the inspector would
       // already have flagged it
@@ -445,25 +440,27 @@ public:
   }
 };
 
-
 class UnsubscribeMatch : public Match {
 public:
   bool validate_match_string() override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
     return validate_topic(match_string, true);
   }
 
-  bool match(const Cursor &c, const PacketFlowData&) override {
-    auto& s = get_match_string();
-    std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());
+  bool match(const Cursor &c, const PacketFlowData &) override {
+    auto &s = get_match_string();
+    std::span<const uint8_t> match_string(
+        reinterpret_cast<const uint8_t *>(s.data()), s.size());
 
-    // Add the cursor buffer to a container that can split it into individual parts
+    // Add the cursor buffer to a container that can split it into individual
+    // parts
     std::span<const uint8_t> span(c.buffer(), c.size());
     UnsubscribePayloadDecoder data(span);
 
-    for( auto ele: data) {
+    for (auto ele : data) {
       // if ele is not set, we have an incomming packet that was invalid
       // this is not the place to capture that, the inspector would
       // already have flagged it
@@ -476,31 +473,29 @@ public:
   }
 };
 
-
-
 struct FieldDef {
   GetterFuncSignature getter;
   struct Element {
     MatchFactory mf;
     std::string name;
   };
-  std::vector<Element> match_factory_list;  
+  std::vector<Element> match_factory_list;
 
   template <typename T>
     requires std::derived_from<T, Match>
-  static Element m() {  // Using a short func name as it is used frequently below
+  static Element m() { // Using a short func name as it is used frequently below
     return {Match::factory<T>, T::get_name()};
   }
 
   FieldDef(GetterFuncSignature getter) : getter(getter) {}
-  FieldDef(GetterFuncSignature getter, Element match_factory) : getter(getter), match_factory_list{match_factory} {}
-  FieldDef(GetterFuncSignature getter, std::vector<Element> match_factory_list) : getter(getter), match_factory_list(std::move(match_factory_list)) {}
+  FieldDef(GetterFuncSignature getter, Element match_factory)
+      : getter(getter), match_factory_list{match_factory} {}
+  FieldDef(GetterFuncSignature getter, std::vector<Element> match_factory_list)
+      : getter(getter), match_factory_list(std::move(match_factory_list)) {}
 };
 
-
-
-static const std::map<const std::string, const FieldDef> mqtt_field_map  {
-// clang-format off
+static const std::map<const std::string, const FieldDef> mqtt_field_map{
+    // clang-format off
   {"Flow.ClientID",                 {uni_getter<&FlowData::client_id>,                FieldDef::m<RegExMatch>()}},   // Valid for all messages
   {"Flow.ProtocolLevel",            {uni_getter<&FlowData::protocol_level>,           FieldDef::m<RangeMatch<&FlowData::protocol_level>>()}},
 
@@ -574,21 +569,20 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map  {
   {"Unsubscribe.Topic",             {uni_getter<&UnsubscribeMsg::payload>,           {FieldDef::m<UnsubscribeMatch>(), FieldDef::m<UnsubscribeRegExMatch>()}}},
 
   {"UnsubAck.MessageIdentifier",     uni_getter<&UnsubAckMsg::message_identifier>},
-// clang-format on
+    // clang-format on
 };
 
 struct MatchRule {
-  std::shared_ptr<Match>  matcher;
-  bool                    invert_result;
+  std::shared_ptr<Match> matcher;
+  bool invert_result;
   bool operator==(const MatchRule &rhs) const {
     return invert_result == rhs.invert_result &&
-           ((!matcher && !rhs.matcher) || (
-           matcher && rhs.matcher &&
-           *matcher == *rhs.matcher));
+           ((!matcher && !rhs.matcher) ||
+            (matcher && rhs.matcher && *matcher == *rhs.matcher));
   }
 
   Hash hash() const {
-    Hash a = (matcher)?matcher->hash():0;
+    Hash a = (matcher) ? matcher->hash() : 0;
     Hash b = invert_result;
     Hash c = 0;
 
@@ -597,7 +591,6 @@ struct MatchRule {
 
     return c;
   }
-
 };
 
 struct Settings {
@@ -612,11 +605,9 @@ struct Settings {
   // other members capture the state of this settings object
   std::string field_name;
 
-
   bool operator==(const Settings &rhs) const {
     return invert_result == rhs.invert_result &&
-           getter_func == rhs.getter_func &&
-           match_list == rhs.match_list;
+           getter_func == rhs.getter_func && match_list == rhs.match_list;
   }
 
   Hash hash() const {
@@ -674,7 +665,7 @@ class Module : public snort::Module {
       std::string s = val.get_as_string();
 
       // Check if results should be negated
-      if (s.size()>=1 && s[0] == '!') {
+      if (s.size() >= 1 && s[0] == '!') {
         settings->invert_result = true;
         s.erase(0, 1);
       }
@@ -690,19 +681,20 @@ class Module : public snort::Module {
       settings->getter_func = field->getter;
       settings->field_name = val.get_as_string();
 
-      
       return true;
     } else {
       if (!field) {
-        snort::ErrorMessage("matching keywords need to be preceded by a valid field name\n");
+        snort::ErrorMessage(
+            "matching keywords need to be preceded by a valid field name\n");
         return false;
       }
 
       if (field->match_factory_list.empty()) {
-        snort::ErrorMessage("match keyword is not supported by %s fields\n", settings->field_name.c_str());
+        snort::ErrorMessage("match keyword is not supported by %s fields\n",
+                            settings->field_name.c_str());
         return false;
       }
-  
+
       std::string s = val.get_name();
       if (s.size() == 0) {
         snort::ErrorMessage("keyword can't be empty\n");
@@ -710,22 +702,23 @@ class Module : public snort::Module {
       }
       bool negate = s[0] == '!';
       if (negate) {
-        s.erase(0, 1);  // Remove the '!'
+        s.erase(0, 1); // Remove the '!'
         if (s.size() == 0) {
           snort::ErrorMessage("keyword can't be empty, ! means negate\n");
           return false;
         }
       }
-        
-      for (auto& ele : field->match_factory_list) {
+
+      for (auto &ele : field->match_factory_list) {
 
         if (s == ele.name) {
 
           std::string match_string = val.get_unquoted_string();
           std::shared_ptr<Match> matchObj = ele.mf(match_string);
-          
+
           if (!matchObj) {
-            snort::ErrorMessage("match string '%s' is invalid\n", match_string.c_str());
+            snort::ErrorMessage("match string '%s' is invalid\n",
+                                match_string.c_str());
             return false;
           }
 
@@ -734,12 +727,13 @@ class Module : public snort::Module {
         }
       }
 
-      snort::ErrorMessage("ERROR: The mqtt_field %s supports: ", settings->field_name.c_str());
-      for (auto& ele : field->match_factory_list) {
+      snort::ErrorMessage("ERROR: The mqtt_field %s supports: ",
+                          settings->field_name.c_str());
+      for (auto &ele : field->match_factory_list) {
         snort::ErrorMessage("%s ", ele.name.c_str());
       }
       snort::ErrorMessage("\n");
-      
+
       return false;
     }
 
@@ -766,13 +760,11 @@ public:
 class IpsOption : public snort::IpsOption {
   std::shared_ptr<Settings> settings;
 
-  IpsOption(Module &module) : snort::IpsOption(s_name),
-                              settings(module.get_settings()) {}
+  IpsOption(Module &module)
+      : snort::IpsOption(s_name), settings(module.get_settings()) {}
 
   // Hash compare is used as a fast way to compare two instances of IpsOption
-  uint32_t hash() const override {
-    return settings->hash();
-  }
+  uint32_t hash() const override { return settings->hash(); }
 
   // If hashes match a real comparison check is made
   bool operator==(const snort::IpsOption &ips) const override {
@@ -790,7 +782,7 @@ class IpsOption : public snort::IpsOption {
       // We assume no match, until proven otherwise
       result = snort::IpsOption::NO_MATCH;
       for (auto &ele : settings->match_list) {
-        assert( ele.matcher );
+        assert(ele.matcher);
         bool matches = ele.matcher->match(c, *flow_data);
 
         if (ele.invert_result) {
@@ -817,7 +809,7 @@ class IpsOption : public snort::IpsOption {
 
   snort::CursorActionType get_cursor_type() const override {
     return snort::CAT_SET_OTHER;
-    //return snort::CAT_ADJUST;
+    // return snort::CAT_ADJUST;
   }
 
 public:

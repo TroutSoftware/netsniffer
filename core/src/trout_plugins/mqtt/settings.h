@@ -19,7 +19,7 @@ namespace mqtt_plugin {
 using namespace trout::templates;
 
 class ClientIDMonitorType : public GenericTypeBaseClass {
-   std::unique_ptr<ClientIDMonitor> client_id_monitor;
+  std::unique_ptr<ClientIDMonitor> client_id_monitor;
 
 public:
   static consteval snort::Parameter::Type get_type() {
@@ -41,7 +41,6 @@ public:
 static_assert(ParameterTypeConcept<ClientIDMonitorType>,
               "ClientIDMonitorType is not compliant with ConceptType");
 
-
 // clang-format off
 using Settings = ParamList< Param<  Name<"client_id_cache_min_size">,
                                     ClientIDMonitorType,
@@ -49,7 +48,6 @@ using Settings = ParamList< Param<  Name<"client_id_cache_min_size">,
                                     DefaultValue<"1000">,
                                     HelpText<"Minimum size for list of Client ID's used to detect new client ID's / Client id's with a changed IP">>>;
 // clang-format on
-
 
 } // namespace mqtt_plugin
 

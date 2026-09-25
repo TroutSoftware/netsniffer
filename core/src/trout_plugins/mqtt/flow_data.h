@@ -26,11 +26,12 @@ struct FlowData {
 
   bool server_in_sync = true;
   bool client_in_sync = true;
-  uint8_t protocol_level = 0;    // MQTT version: 3 = 3.1, 4 = 3.1.1, 5 = 5.0
+  uint8_t protocol_level = 0; // MQTT version: 3 = 3.1, 4 = 3.1.1, 5 = 5.0
   MsgType msg_type = MsgType::Reserved;
-  uint32_t variable_header_start = 0;   // Used during parsing
-  std::optional<std::span<const uint8_t>> extra;  // extra data that couldn't be parsed
-  std::vector<uint8_t> client_id;       // Populated from the connect message
+  uint32_t variable_header_start = 0; // Used during parsing
+  std::optional<std::span<const uint8_t>>
+      extra;                      // extra data that couldn't be parsed
+  std::vector<uint8_t> client_id; // Populated from the connect message
 
   // clang-format off
   std::variant<std::monostate,          // monostate must be first entry, as it will then be the default
@@ -50,12 +51,12 @@ struct FlowData {
                DisconnectMsg
                > cur_msg;
   // clang-format on
-  bool connection_refused = false;      // Connection has been refused by either party
-
+  bool connection_refused =
+      false; // Connection has been refused by either party
 };
 
 using PacketFlowData = Common::FlowData<FlowData>;
 
-} // namespace trout_netflow2
+} // namespace mqtt_plugin
 
 #endif // #ifndef flow_data_7A3F91C4

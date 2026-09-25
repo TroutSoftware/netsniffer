@@ -61,4 +61,4 @@ template <class T> struct CheckIsType : std::bool_constant<TypeConcept<T>> {};
 
 } // namespace trout::templates
 
-#endif  // #ifndef concepts_5D82E4B7
+#endif // #ifndef concepts_5D82E4B7

@@ -17,8 +17,8 @@
 
 // Local includes
 #include "concepts.h"
-#include "name.h"
 #include "help_text.h"
+#include "name.h"
 #include "parameter_concepts.h"
 #include "parameter_param_default_value.h"
 #include "parameter_param_range.h"
@@ -131,7 +131,9 @@ public:
   }
 
   // Retrieve value, we use decltype to ensure references survive
-  decltype(auto) get() { return std::get<FindType<CheckIsParameterType>>(data).get(); }
+  decltype(auto) get() {
+    return std::get<FindType<CheckIsParameterType>>(data).get();
+  }
 };
 
 }; // namespace trout::templates

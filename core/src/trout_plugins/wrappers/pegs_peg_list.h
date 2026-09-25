@@ -24,7 +24,8 @@ namespace trout::templates {
 template <PegDefinitionConcept... list> class PegList {
   static const auto count_of_all_pegs = sizeof...(list);
 
-  static_assert(count_of_all_pegs > 0, "You must specify at least one peg in a PegList");
+  static_assert(count_of_all_pegs > 0,
+                "You must specify at least one peg in a PegList");
 
   // TODO: Move generic helper template to separate header
   template <FixedString name, typename... Ts> struct FindParameter {
@@ -39,7 +40,8 @@ template <PegDefinitionConcept... list> class PegList {
   template <FixedString name>
   using FindParameterType = typename FindParameter<name, list...>::type;
 
-  template <FixedString name, size_t index, typename T, typename... remaining> static consteval size_t recursive_find_index() {
+  template <FixedString name, size_t index, typename T, typename... remaining>
+  static consteval size_t recursive_find_index() {
     if constexpr (T::template is<name>()) {
       return index;
     } else if constexpr (sizeof...(remaining) > 0) {
@@ -49,7 +51,6 @@ template <PegDefinitionConcept... list> class PegList {
       return 0;
     }
   }
-
 
 public:
   static const PegInfo *generate_snort_peg_info_def() {
@@ -68,16 +69,16 @@ public:
     return peg_counts;
   }
 
-  //template <FixedString name> decltype(auto) get() {
-  template <FixedString name> static auto get() {    
+  // template <FixedString name> decltype(auto) get() {
+  template <FixedString name> static auto get() {
     using PegToFind = FindParameterType<name>;
     using PegType = PegToFind::GetTypeType;
 
     size_t index = get_index<name>();
 
     return PegType(generate_snort_peg_count_def()[index]);
-    
-    //return std::get<TypeToFind>(data).get();
+
+    // return std::get<TypeToFind>(data).get();
   }
 
   template <FixedString name> static consteval size_t get_index() {

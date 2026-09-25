@@ -1,1 +1,1 @@
-void dummy(){};
+void dummy() {};

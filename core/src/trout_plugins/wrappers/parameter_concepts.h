@@ -25,25 +25,24 @@ namespace trout::templates {
 
 // Concept for classes that can fill snort parameter type fields
 template <class T>
-concept ParameterTypeConcept = TypeConcept<T> &&
-                      requires(T t, snort::Value &sv) {
-                        // Static function(s) called on the type
+concept ParameterTypeConcept =
+    TypeConcept<T> && requires(T t, snort::Value &sv) {
+      // Static function(s) called on the type
 
-                        // The snort type used during registration
-                        {
-                          T::get_type()
-                        } -> std::same_as<snort::Parameter::Type>;
+      // The snort type used during registration
+      { T::get_type() } -> std::same_as<snort::Parameter::Type>;
 
-                        // Non-static functions called on instances of the type
+      // Non-static functions called on instances of the type
 
-                        // Set function to read data from snort
-                        { t.set(sv) } -> std::same_as<void>;
-                        // Get function, used to retrieve the value during
-                        // runtime
-                        { t.get() };
-                      };
+      // Set function to read data from snort
+      { t.set(sv) } -> std::same_as<void>;
+      // Get function, used to retrieve the value during
+      // runtime
+      { t.get() };
+    };
 
-template <class T> struct CheckIsParameterType : std::bool_constant<ParameterTypeConcept<T>> {};
+template <class T>
+struct CheckIsParameterType : std::bool_constant<ParameterTypeConcept<T>> {};
 
 // Concept for classes that can fill the snort parameter default value fields
 class GenericDefaultValueBaseClass {};

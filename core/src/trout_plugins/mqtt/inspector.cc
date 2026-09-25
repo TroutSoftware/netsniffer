@@ -29,33 +29,35 @@
 
 namespace mqtt_plugin {
 
-namespace {
-
-
-
-} // namespace
+namespace {} // namespace
 
 void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
   const std::span<const uint8_t> data(p->data, p->dsize);
   auto read_pos = flow_data.variable_header_start;
 
   // Check the version and markers for that version
-  constexpr uint8_t MQTT3_1_ID[]   = {0x00, 0x06, 'M', 'Q', 'I', 's', 'd', 'p', 0x03}; // from 3.1 spec
-  constexpr uint8_t MQTT3_1_1_ID[] = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x04}; // from 3.1.1 spec
-  constexpr uint8_t MQTT5_0_ID[]   = {0x00, 0x04, 'M', 'Q', 'T', 'T', 0x05}; // from 5.0 spec
+  constexpr uint8_t MQTT3_1_ID[] = {0x00, 0x06, 'M', 'Q', 'I',
+                                    's',  'd',  'p', 0x03}; // from 3.1 spec
+  constexpr uint8_t MQTT3_1_1_ID[] = {0x00, 0x04, 'M', 'Q',
+                                      'T',  'T',  0x04}; // from 3.1.1 spec
+  constexpr uint8_t MQTT5_0_ID[] = {0x00, 0x04, 'M', 'Q',
+                                    'T',  'T',  0x05}; // from 5.0 spec
 
   if (data.size() >= read_pos + sizeof(MQTT3_1_ID) &&
-      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_ID)), std::span{MQTT3_1_ID}))) {
+      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_ID)),
+                          std::span{MQTT3_1_ID}))) {
     Pegs::get<"protocol_3_1">().inc();
     flow_data.protocol_level = 3;
     read_pos += sizeof(MQTT3_1_ID);
   } else if (data.size() >= read_pos + sizeof(MQTT3_1_1_ID) &&
-      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_1_ID)), std::span{MQTT3_1_1_ID}))) {
+             (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT3_1_1_ID)),
+                                 std::span{MQTT3_1_1_ID}))) {
     Pegs::get<"protocol_3_1_1">().inc();
     flow_data.protocol_level = 4;
     read_pos += sizeof(MQTT3_1_1_ID);
   } else if (data.size() >= read_pos + sizeof(MQTT5_0_ID) &&
-      (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT5_0_ID)), std::span{MQTT5_0_ID}))) {
+             (std::ranges::equal(data.subspan(read_pos, sizeof(MQTT5_0_ID)),
+                                 std::span{MQTT5_0_ID}))) {
     Pegs::get<"protocol_5_0">().inc();
     flow_data.protocol_level = 5;
     read_pos += sizeof(MQTT5_0_ID);
@@ -70,15 +72,15 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
 
   if (protocol_level == 3) {
     if (data.size() <= read_pos) {
-      queue(SID::message_malformed);            
+      queue(SID::message_malformed);
       return;
     }
-    connect.user_name_flag = data[read_pos] & (1<<7);
-    connect.password_flag = data[read_pos] & (1<<6);
-    connect.will_retain = data[read_pos] & (1<<5);
+    connect.user_name_flag = data[read_pos] & (1 << 7);
+    connect.password_flag = data[read_pos] & (1 << 6);
+    connect.will_retain = data[read_pos] & (1 << 5);
     connect.will_qos = (data[read_pos] >> 3) & 0b11;
-    connect.will_flag = data[read_pos] & (1<<2);
-    connect.clean_session = data[read_pos] & (1<<1);
+    connect.will_flag = data[read_pos] & (1 << 2);
+    connect.clean_session = data[read_pos] & (1 << 1);
     read_pos++;
 
     // QoS is only allowed to be 0,1,2
@@ -105,14 +107,16 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
     flow_data.client_id = to_vector(*client_id);
 
     assert(p && p->flow);
-    if (!settings->get<"client_id_cache_min_size">().check(*client_id, p->flow->client_ip)) {
+    if (!settings->get<"client_id_cache_min_size">().check(
+            *client_id, p->flow->client_ip)) {
       Pegs::get<"new_ip_client_id">().inc();
       queue(SID::new_ip_for_client_id);
     }
 
     if (connect.will_flag) {
       auto will_topic = decode_span_16(data, read_pos);
-      auto will_message = decode_span_16(data, read_pos);  // legal to have zero length
+      auto will_message =
+          decode_span_16(data, read_pos); // legal to have zero length
 
       if (!will_topic || !will_message || will_topic->size() < 1) {
         queue(SID::message_malformed);
@@ -120,7 +124,8 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
       }
 
       // 3.1 standard states all bytes in the Will Message must be 7-bit
-      if (std::ranges::any_of(*will_message, [](uint8_t c) { return c > 0x7F; })) {
+      if (std::ranges::any_of(*will_message,
+                              [](uint8_t c) { return c > 0x7F; })) {
         queue(SID::message_malformed);
       }
 
@@ -129,19 +134,21 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
     }
 
     if (connect.user_name_flag) {
-      // It is not illegal in 3.1 to have a missing user_name, even the flag was set
+      // It is not illegal in 3.1 to have a missing user_name, even the flag was
+      // set
       connect.user_name = decode_span_16(data, read_pos);
     }
 
     if (connect.password_flag) {
-      // It is not illegal in 3.1 to have a missing password, even the flag was set
+      // It is not illegal in 3.1 to have a missing password, even the flag was
+      // set
       connect.password = decode_span_16(data, read_pos);
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -153,7 +160,6 @@ void Inspector::decode_connect(snort::Packet *p, PacketFlowData &flow_data) {
     Pegs::get<"protocol_unsuported_msg">().inc();
     queue(SID::unsupported_version);
   }
-
 }
 
 void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
@@ -164,7 +170,7 @@ void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     ConnAckMsg connack;
     if (data.size() >= read_pos + 2) {
-      read_pos++;  // Byte 0 is reserved
+      read_pos++; // Byte 0 is reserved
       uint8_t return_code = data[read_pos++];
 
       if (return_code > 5) {
@@ -179,7 +185,7 @@ void Inspector::decode_connack(snort::Packet *p, PacketFlowData &flow_data) {
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -219,7 +225,7 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
       return;
     }
 
-    if (topic_name->size() == 0 || topic_name->size() > 0x7FFFF ) {
+    if (topic_name->size() == 0 || topic_name->size() > 0x7FFFF) {
       queue(SID::topic_name_invalid);
     }
 
@@ -227,9 +233,8 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
 
     if (publish.qos_level != 0) {
       uint16_t message_identifier = 0;
-      if(!decode_and_check_message_identifier(SID::message_malformed,
-                                          message_identifier,
-                                          data, read_pos)) {
+      if (!decode_and_check_message_identifier(
+              SID::message_malformed, message_identifier, data, read_pos)) {
         return;
       }
       publish.message_identifier = message_identifier;
@@ -247,7 +252,6 @@ void Inspector::decode_publish(snort::Packet *p, PacketFlowData &flow_data) {
     queue(SID::unsupported_version);
     Pegs::get<"protocol_unsuported_msg">().inc();
   }
-
 }
 
 void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
@@ -258,16 +262,16 @@ void Inspector::decode_puback(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubAckMsg puback;
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        puback.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             puback.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -288,16 +292,16 @@ void Inspector::decode_pubrec(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubRecMsg pubrec;
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        pubrec.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             pubrec.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -323,16 +327,16 @@ void Inspector::decode_pubrel(snort::Packet *p, PacketFlowData &flow_data) {
     pubrel.dup_flag = fh.dup_flag();
     pubrel.qos_level = fh.qos_level();
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        pubrel.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             pubrel.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -353,16 +357,16 @@ void Inspector::decode_pubcomp(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     PubCompMsg pubcomp;
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        pubcomp.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             pubcomp.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -396,9 +400,8 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
     if (subscribe.qos_level != 0) {
       uint16_t message_identifier;
 
-      if(!decode_and_check_message_identifier(SID::message_malformed,
-                                          message_identifier,
-                                          data, read_pos)) {
+      if (!decode_and_check_message_identifier(
+              SID::message_malformed, message_identifier, data, read_pos)) {
         return;
       }
 
@@ -411,7 +414,7 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
 
       // Validate the payload
       SubscribePayloadDecoder subscribe_payload_decoder(*subscribe.payload);
-      for (auto topic:subscribe_payload_decoder ) {
+      for (auto topic : subscribe_payload_decoder) {
         subscribe.subscribe_count++;
 
         if (!topic) {
@@ -421,7 +424,8 @@ void Inspector::decode_subscribe(snort::Packet *p, PacketFlowData &flow_data) {
 
         if (topic->qos > 2) {
           queue(SID::message_malformed);
-          flow_data.connection_refused = true;      // Spec says connection should be closed
+          flow_data.connection_refused =
+              true; // Spec says connection should be closed
           break;
         }
 
@@ -447,9 +451,9 @@ void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     SubAckMsg suback;
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        suback.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             suback.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
@@ -476,7 +480,8 @@ void Inspector::decode_suback(snort::Packet *p, PacketFlowData &flow_data) {
   }
 }
 
-void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) {
+void Inspector::decode_unsubscribe(snort::Packet *p,
+                                   PacketFlowData &flow_data) {
   std::span<const uint8_t> data(p->data, p->dsize);
   auto read_pos = flow_data.variable_header_start;
   const auto protocol_level = flow_data.protocol_level;
@@ -498,9 +503,8 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
     if (unsubscribe.qos_level != 0) {
       uint16_t message_identifier;
 
-      if(!decode_and_check_message_identifier(SID::message_malformed,
-                                          message_identifier,
-                                          data, read_pos)) {
+      if (!decode_and_check_message_identifier(
+              SID::message_malformed, message_identifier, data, read_pos)) {
         return;
       }
 
@@ -513,7 +517,7 @@ void Inspector::decode_unsubscribe(snort::Packet *p, PacketFlowData &flow_data) 
 
     // Validate the payload
     UnsubscribePayloadDecoder unsubscribe_payload_decoder(*unsubscribe.payload);
-    for (auto topic:unsubscribe_payload_decoder ) {
+    for (auto topic : unsubscribe_payload_decoder) {
       unsubscribe.unsubscribe_count++;
 
       if (!topic) {
@@ -542,16 +546,16 @@ void Inspector::decode_unsuback(snort::Packet *p, PacketFlowData &flow_data) {
   if (protocol_level == 3) {
     UnsubAckMsg unsuback;
 
-    if(!decode_and_check_message_identifier(SID::message_malformed,
-                                        unsuback.message_identifier,
-                                        data, read_pos)) {
+    if (!decode_and_check_message_identifier(SID::message_malformed,
+                                             unsuback.message_identifier, data,
+                                             read_pos)) {
       return;
     }
 
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -575,7 +579,7 @@ void Inspector::decode_pingreq(snort::Packet *p, PacketFlowData &flow_data) {
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -599,7 +603,7 @@ void Inspector::decode_pingresp(snort::Packet *p, PacketFlowData &flow_data) {
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -612,7 +616,6 @@ void Inspector::decode_pingresp(snort::Packet *p, PacketFlowData &flow_data) {
   }
 }
 
-
 void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
   std::span<const uint8_t> data(p->data, p->dsize);
   auto read_pos = flow_data.variable_header_start;
@@ -624,7 +627,7 @@ void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
     // If at this point the read_pos is not equal to the total length
     // something is spooky
     assert(read_pos <= data.size());
-    if(read_pos < data.size()) {
+    if (read_pos < data.size()) {
       flow_data.extra = data.subspan(read_pos);
       Pegs::get<"msg_with_extra_data">().inc();
       queue(SID::message_has_extra_data);
@@ -637,11 +640,10 @@ void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
   }
 }
 
-
-
 void Inspector::reject(snort::Packet *p, std::string reason) {
 
-  snort::WarningMessage("MQTT inspector received an invalid packet (%s)\n", reason.c_str());
+  snort::WarningMessage("MQTT inspector received an invalid packet (%s)\n",
+                        reason.c_str());
 
   if (p->flow) {
     p->flow->set_service(p, 0);
@@ -703,11 +705,12 @@ void Inspector::eval(snort::Packet *p) {
   MsgType msg_type = static_cast<MsgType>(data[0] >> 4);
   flow_data->msg_type = msg_type;
 
-  //flow_data->remaining_from_header = remaining;
+  // flow_data->remaining_from_header = remaining;
   flow_data->variable_header_start = read_pos;
 
   if (flow_data->protocol_level == 0) {
-    // Our first packet must be a connect, otherwise we reject it from being MQTT
+    // Our first packet must be a connect, otherwise we reject it from being
+    // MQTT
     if (msg_type != MsgType::CONNECT) {
       reject(p, "MQTT communication must start with a CONNECT message");
       Pegs::get<"rejected_flow_count">().inc();
@@ -717,73 +720,71 @@ void Inspector::eval(snort::Packet *p) {
     return decode_connect(p, *flow_data);
   }
 
-  switch(msg_type) {
-    case MsgType::CONNACK:
-      return decode_connack(p, *flow_data);
+  switch (msg_type) {
+  case MsgType::CONNACK:
+    return decode_connack(p, *flow_data);
 
-    case MsgType::PUBLISH:
-      return decode_publish(p, *flow_data);
+  case MsgType::PUBLISH:
+    return decode_publish(p, *flow_data);
 
-    case MsgType::PUBACK:
-      return decode_puback(p, *flow_data);
+  case MsgType::PUBACK:
+    return decode_puback(p, *flow_data);
 
-    case MsgType::PUBREC:
-      return decode_pubrec(p, *flow_data);
+  case MsgType::PUBREC:
+    return decode_pubrec(p, *flow_data);
 
-    case MsgType::PUBREL:
-      return decode_pubrel(p, *flow_data);
+  case MsgType::PUBREL:
+    return decode_pubrel(p, *flow_data);
 
-    case MsgType::PUBCOMP:
-      return decode_pubcomp(p, *flow_data);
+  case MsgType::PUBCOMP:
+    return decode_pubcomp(p, *flow_data);
 
-    case MsgType::SUBSCRIBE:
-      return decode_subscribe(p, *flow_data);
+  case MsgType::SUBSCRIBE:
+    return decode_subscribe(p, *flow_data);
 
-    case MsgType::SUBACK:
-      return decode_suback(p, *flow_data);
+  case MsgType::SUBACK:
+    return decode_suback(p, *flow_data);
 
-    case MsgType::UNSUBSCRIBE:
-      return decode_unsubscribe(p, *flow_data);
+  case MsgType::UNSUBSCRIBE:
+    return decode_unsubscribe(p, *flow_data);
 
-    case MsgType::UNSUBACK:
-      return decode_unsuback(p, *flow_data);
+  case MsgType::UNSUBACK:
+    return decode_unsuback(p, *flow_data);
 
-    case MsgType::PINGREQ:
-      return decode_pingreq(p, *flow_data);
+  case MsgType::PINGREQ:
+    return decode_pingreq(p, *flow_data);
 
-    case MsgType::PINGRESP:
-      return decode_pingresp(p, *flow_data);
+  case MsgType::PINGRESP:
+    return decode_pingresp(p, *flow_data);
 
-    case MsgType::DISCONNECT:
-      return decode_disconnect(p, *flow_data);
+  case MsgType::DISCONNECT:
+    return decode_disconnect(p, *flow_data);
 
-    case MsgType::Reserved:
+  case MsgType::Reserved:
+    flow_data->connection_refused = true;
+    queue(SID::reserved_message);
+    return;
+
+  case MsgType::AUTH:
+    if (flow_data->protocol_level == 5) {
+      queue(SID::unsupported_version);
+      Pegs::get<"protocol_unsuported_msg">().inc();
+    } else {
       flow_data->connection_refused = true;
       queue(SID::reserved_message);
-      return;
+    }
+    return;
 
-    case MsgType::AUTH:
-      if (flow_data->protocol_level == 5) {
-        queue(SID::unsupported_version);
-        Pegs::get<"protocol_unsuported_msg">().inc();
-      } else {
-        flow_data->connection_refused = true;
-        queue(SID::reserved_message);
-      }
-      return;
-
-    case MsgType::CONNECT:
-      queue(SID::connect_message_misplaced);
-      flow_data->connection_refused = true;
-      // We decode the message even it is illegal positioned, there
-      // might be something in it a rule writer want to look for
-      return decode_connect(p, *flow_data);
+  case MsgType::CONNECT:
+    queue(SID::connect_message_misplaced);
+    flow_data->connection_refused = true;
+    // We decode the message even it is illegal positioned, there
+    // might be something in it a rule writer want to look for
+    return decode_connect(p, *flow_data);
   }
-
-
 }
 
-void Inspector::clear(snort::Packet*p) {
+void Inspector::clear(snort::Packet *p) {
   assert(p);
   PacketFlowData *flow_data = PacketFlowData::get_from_flow(p->flow);
 
@@ -797,13 +798,11 @@ void Inspector::clear(snort::Packet*p) {
   flow_data->extra.reset();
 }
 
-
-snort::StreamSplitter* Inspector::get_splitter(bool to_server) {
+snort::StreamSplitter *Inspector::get_splitter(bool to_server) {
   return new StreamSplitter(to_server);
 }
 
-Inspector::Inspector(Module *module) : settings(module->get_settings()) {
-}
+Inspector::Inspector(Module *module) : settings(module->get_settings()) {}
 
 Inspector::~Inspector() {}
 

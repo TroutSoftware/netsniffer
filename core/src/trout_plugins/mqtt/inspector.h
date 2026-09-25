@@ -15,7 +15,7 @@
 #include "settings.h"
 
 // Debug includes
-#include<iostream>
+#include <iostream>
 
 namespace mqtt_plugin {
 class Module;
@@ -25,9 +25,9 @@ private:
   std::shared_ptr<Settings> settings;
 
   void eval(snort::Packet *) override;
-  void clear(snort::Packet*) override;
+  void clear(snort::Packet *) override;
 
-  snort::StreamSplitter* get_splitter(bool to_server) override;
+  snort::StreamSplitter *get_splitter(bool to_server) override;
 
   // Used to reject the packet as being MQTT
   void reject(snort::Packet *, std::string reason);
@@ -46,7 +46,6 @@ private:
   void decode_pingreq(snort::Packet *p, PacketFlowData &flow_data);
   void decode_pingresp(snort::Packet *p, PacketFlowData &flow_data);
   void decode_disconnect(snort::Packet *p, PacketFlowData &flow_data);
-
 
 public:
   Inspector(Module *module);

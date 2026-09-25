@@ -41,7 +41,6 @@ template <PegsElementsConcept... list> class Peg {
   static_assert(count_of_type_elements == 1,
                 "You need to supply exactly one Type parameter");
 
-
   // TODO: Move generic template helpers to separate header
   // Templates for finding specific element type
   template <template <typename> class Predicate, typename... Ts>
@@ -72,7 +71,7 @@ template <PegsElementsConcept... list> class Peg {
   }
 
   // Create an instance of each of our parameters
-//  std::tuple<list...> data;
+  //  std::tuple<list...> data;
 
 public:
   // Static functions operating on the type it self
@@ -90,22 +89,22 @@ public:
   // static constexpr bool am = FindType<CheckIsName>::am<name>;
 
   // Non-static functions operating on instances of the type
-/*
-  // Function that sets the value of this parameter to val, if name matches
-  bool set(const std::string_view &name, snort::Value &val) {
-    if (std::get<FindType<CheckIsName>>(data).is(name)) {
-      std::get<FindType<CheckIsParameterType>>(data).set(val);
-      return true;
+  /*
+    // Function that sets the value of this parameter to val, if name matches
+    bool set(const std::string_view &name, snort::Value &val) {
+      if (std::get<FindType<CheckIsName>>(data).is(name)) {
+        std::get<FindType<CheckIsParameterType>>(data).set(val);
+        return true;
+      }
+      return false;
     }
-    return false;
-  }
 
-  // Retrieve value, we use decltype to ensure references survive
-  decltype(auto) get() { return std::get<FindType<CheckIsParameterType>>(data).get(); }
-*/  
+    // Retrieve value, we use decltype to ensure references survive
+    decltype(auto) get() { return
+    std::get<FindType<CheckIsParameterType>>(data).get(); }
+  */
 };
 
 }; // namespace trout::templates
 
 #endif // #ifndef pegs_peg_75876C5E
-

@@ -39,7 +39,6 @@ using Pegs = PegList<
 >;
 // clang-format on
 
-
 class Module : public snort::Module {
 
   Module() : snort::Module(s_name, s_help, module_params) {}
@@ -65,14 +64,10 @@ class IpsOption : public snort::IpsOption {
   IpsOption(Module &) : snort::IpsOption(s_name) {}
 
   // We always do the same thing
-  uint32_t hash() const override {
-    return 0;
-  }
+  uint32_t hash() const override { return 0; }
 
   // If hashes match a real comparison check is made
-  bool operator==(const snort::IpsOption &) const override {
-    return true;
-  }
+  bool operator==(const snort::IpsOption &) const override { return true; }
 
   EvalStatus eval(Cursor &, snort::Packet *p) override {
     Pegs::get<"clear_events">().inc();

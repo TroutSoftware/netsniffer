@@ -82,9 +82,7 @@ bool Path::operator==(const Path &path) const {
   return false;
 }
 
-bool Path::empty() {
-  return is_empty; 
-}
+bool Path::empty() { return is_empty; }
 
 void Path::clear() {
   if (empty()) {

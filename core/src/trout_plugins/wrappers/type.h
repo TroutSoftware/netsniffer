@@ -22,12 +22,11 @@
 namespace trout::templates {
 
 // Simple Type class
-template <auto>
-class Type : public GenericTypeBaseClass {
-  static_assert(false, "'type' is not implemented for the specified type/value, did you forget to include the correct header file?");
+template <auto> class Type : public GenericTypeBaseClass {
+  static_assert(false,
+                "'type' is not implemented for the specified type/value, did "
+                "you forget to include the correct header file?");
 };
-
-
 
 }; // namespace trout::templates
 
