@@ -518,7 +518,7 @@ static const std::map<const std::string, const FieldDef> mqtt_field_map{
 
   // Common message data
   {"Msg.Extra",                      uni_getter<&FlowData::extra>},
-  {"Msg.Type",                       uni_getter<&FlowData::msg_type>},             
+  {"Msg.Type",                       uni_getter<&FlowData::msg_type>},
 
   // Valid for Connect message, fields will return NO_MATCH if not found in message
   // NOTE: messages can be present but empty and will return MATCH in that case

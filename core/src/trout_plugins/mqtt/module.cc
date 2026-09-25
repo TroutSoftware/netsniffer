@@ -20,9 +20,8 @@
 // outside of this file)
 namespace {
 
-const char *s_name = "mqtt"; // TODO: Replace with the name of the plugin
-const char *s_help =
-    "mqtt inspector"; // TODO: Replace with help text for your plugin
+const char *s_name = "mqtt";
+const char *s_help = "mqtt inspector";
 
 } // namespace
 

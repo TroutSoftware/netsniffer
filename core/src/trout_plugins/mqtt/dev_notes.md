@@ -7,31 +7,30 @@ The inspector knows about MQTT 3.1, 3.1.1 and 5.0 standards (protocol
 versions 3, 4 and 5) other protocol numbers will be rejected, however
 it can only interpret messages (beyond the msg type ID) from version 3.1
 
-
 ## Examples of alerts:
 
       ---
-    
+
       alert mqtt (
         mqtt_field: Subscribe.Topic, !regex ".*factory.*";
         sid: 3100010;
       )
-    
+
       generates an alert on all subscribe messages with topics that doesn't contain the string "factory"
-    
+
       ---
-    
+
       alert mqtt (
         mqtt_field: !Flow.ClientID, regex "chef";
         mqtt_field: Subscribe.Topic, match "kitchen/#";
         sid: 3100011;
       )
-    
+
       generates an alert on all subscribe messages to the kitchen topic tree, as long as the client isn't the chef
 
       ---
-      
-      alert mqtt (        
+
+      alert mqtt (
         mqtt_field: Subscribe.Topic, match "kitchen/#", regex "A/\\+/B";
         sid: 3200011;
       )
@@ -39,21 +38,21 @@ it can only interpret messages (beyond the msg type ID) from version 3.1
       generates an alert on subscriptions to topics starting with "kitchen/", "+", "#" or being the exact string A/+/B, note the double escape needed in the regex
 
       ---
-      
-      alert mqtt (        
+
+      alert mqtt (
         mqtt_field: Subscribe.Topic, regex "A/C/B|A/B(/.*)?";
         sid: 3100011;
       )
 
       generates an alert on subscriptions to topics where the subscribe string is "A/B/C" or starts with the path "A/B"
-          
+
       ---
-    
+
       alert mqtt (
         mqtt_field: ConnAck.ReturnCode, range_match "=4";
         sid: 3100012;
       )
-    
+
       generates an alert on all connection attempts where the username/password was rejected by the server
 
       ---
@@ -100,15 +99,15 @@ e.g.:
 match "A/B/#" - will match topic strings like "A/B", "A/B/C", "A/B/C/D".
 
                 it will also match "#" bc we can construct a string
-                "A/B" that satisfies both                
-                
+                "A/B" that satisfies both
+
                 "+/B/+/D" will match bc a string like "A/B/C/D" would
                 satisfy both
 
                 but not "/+/#" bc no topic string can be created that
                 satisfies both  (one require it starts with a "/" the
                 other that it doesn't)
-                
+
 ### List of regex/match strings
 
 Multiple regex/match checks can be listed in a mqtt_field line, the
@@ -125,7 +124,7 @@ illustrate the point of the explanation.
 To get an "AND" like functionality add multiple mqtt_filed statements to
 the rule, e.g.:
 
-mqtt_field: Subscribe.Topic, regex "factory(/.*)?" 
+mqtt_field: Subscribe.Topic, regex "factory(/.*)?"
 mqtt_field: Subscribe.Topic, regex "location(/.*)?"
 
 will match someone subscribing to both something that starts with
@@ -134,12 +133,12 @@ factory and to something starting with location.
 If on the other hand matches to someone subscribing with wild cards
 would also be accepted it could be written as:
 
-mqtt_field: Subscribe.Topic, match "factory/#" 
+mqtt_field: Subscribe.Topic, match "factory/#"
 mqtt_field: Subscribe.Topic, match "location/#"
 
 to express this with regex would require something like:
 
-mqtt_field: Subscribe.Topic, regex "#|(\\+/?|factory(/.*)?)" 
+mqtt_field: Subscribe.Topic, regex "#|(\\+/?|factory(/.*)?)"
 mqtt_field: Subscribe.Topic, regex "#|(\\+/?|location(/.*)?)"
 
 
@@ -157,7 +156,7 @@ containing the client id of the flow can be accessed in all messages
 Flow.ClientID : The client ID (if set in connect)
 Flow.ProtocolLevel : The protocol level from the spec
                       (3 = 3.1, 4 = 3.1.1, 5 = 5.0)
-                      
+
 ### The type of the message
 
 (This will be set even for 3.1.1 and 5.0 connections)
@@ -167,7 +166,7 @@ specific field in the message - but for message types that don't have
 data like Msg.PingReq, it is an easy way to detect them.
 
 Msg.Type        - Sets cursor at a numeric representation of the type
-Msg.Connect     
+Msg.Connect
 Msg.ConnAck
 Msg.Publish
 Msg.PubAck
@@ -270,11 +269,85 @@ Unsubscribe.QoS
 Unsubscribe.MessageIdentifier
 Unsubscribe.UnsubscribeCount - Number of items in the unsubscribe list
 Unsubscribe.Payload          - Alias for Unsubscribe.Topic
-Unsubscribe.Topic            - As an unsubscribe topic can contain a 
-                               list of topics, the match/regex logic 
+Unsubscribe.Topic            - As an unsubscribe topic can contain a
+                               list of topics, the match/regex logic
                                will be executed on each individual topic
                                in the list
 
 #### UnsubAck fields
- 
+
 UnsubAck.MessageIdentifier
+
+
+## Code overview
+
+### Main parts:
+
+There are 3 main parts of interest in this module
+
+1) stream_splitter(.h|.cc)
+
+The splitter, used to take a TCP stream and splitting it into separate
+MQTT messages
+
+2) ips_option_mqtt_field(.h|.cc)
+
+The ips mqtt_field option, this is the one rule writers interact with,
+this does basic linking between the decoded data structure for the
+message (stored in the flow) and the ips option engine - note we know
+that every flow only runs in one thread, and that a packet (in this case
+from the splitter) is being completely handled by the rule engine before
+the next packet is being processed, hence it's safe to use the flow data
+to store the decoded package and why there aren't any thread protection.
+
+The thing that links everything together in the ips mqtt_field option is
+the mqtt_field_map table that can be found in the .cc file, it links the
+name exposed to the rule writer with the dcoded data in the flow and the
+various match/regex/match_range matching functions, the rest of the file
+is either to use or help generate the table.
+
+3) inspector(.h|.cc)
+
+The MQTT inspector that parses the individual MQTT messages - each
+message type has a decode_<msg_type> function, where the decoder for
+that message lives, the rest is mainly glue.
+
+### Library like stuff:
+
+1) client_id_monitor(.h|.cc)
+
+The logic that keeps track of ip addresses vs MQTT ClientId's is handled
+in client_id_monitor(.h|.cc) note the interface to this is very simple
+it is just given the ClinetId and an IP, it then returns true or false,
+depending on it being a new combo or not - it is selfcontained, and can
+be shared between several threads/flows, hence it has mutex protection
+
+2) mqtt_protocol_defs.h
+
+Contains data structures for the individual message types and stateless
+helper functions
+
+### The rest - mostly snort glue and definitions:
+
+1) flowdata(.h|.cc)
+The data that is attached to the flow and used to hold state information
+(like the protocol ID/version of the MQTT data) and to transfer data
+between the inspector and the ips option
+
+2) module(.h|.cc)
+Mainly glue, the main entry for snort when communicating with the MQTT
+module
+
+3) pegs.h
+Definition of the pegs used elsewhere
+
+4) plugin_def(.h|.cc)
+Std snort struct for defining a module
+
+5) rules(.h|.cc)
+Std snort definition of the rules (gid::sid pairs and their meaning)
+
+6) settings.h
+Defintion of settings, with specialization for the setting that controls
+the ClientId monitor, this is part of the settings so it will be shared
+between all inspectors that snort might instantiate
