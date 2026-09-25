@@ -1,0 +1,96 @@
+pcap testdata/mqtt_subscribe.pcap
+cmp output.txt testdata/mqtt_regex.expected.txt
+
+
+stdout 'logs_generated: 8'
+stdout 'new_ip_client_id: 5'
+
+-- cfg.lua --
+
+event_queue = { log = 100; }
+search_engine = { max_queue_events = 100; }
+stream = {}
+stream_tcp = {}
+
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+alert_lioli = { logger = 'logger_file',
+                testmode = true }
+
+mqtt = { client_id_cache_min_size = 5}
+
+binder = {
+           { 
+             when = { proto = "tcp", ports = "1883" },
+             use  = { type = "mqtt" }
+           },          
+         }
+
+ips = {
+        rules = [[
+          log mqtt (
+            msg: "mqtt subscribe seen with multiple regex";
+
+            mqtt_field: Subscribe.Topic, regex "level1/level2";
+            mqtt_field: Subscribe.Topic, regex "A/\\+/B";
+            mqtt_field: Subscribe.Topic, regex "A/B/C";
+            mqtt_field: Subscribe.Topic, regex "C/\\+/#";
+            mqtt_field: Subscribe.Topic, regex "/A/C"; 
+
+            sid:3000000;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex level./level.";
+
+            mqtt_field: Subscribe.Topic, regex "level./level.";
+
+            sid:3000001;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex .+#";
+
+            mqtt_field: Subscribe.Topic, regex ".+#";
+
+            sid:3000002;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex .*C";
+
+            mqtt_field: Subscribe.Topic, regex ".*C";
+
+            sid:3000003;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex NOT THERE|.+#.+|.*#.+|(F|\\+).*";
+
+            mqtt_field: Subscribe.Topic, regex "NOT THERE|.+#.+|.*#.+|(F|\\+).*";
+
+            sid:3000004;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex NOT THERE|.+#.+|.*#.+|(F|\\+).*|.*D.*";
+
+            mqtt_field: Subscribe.Topic, regex "NOT THERE|.+#.+|.*#.+|(F|\\+).*|.*D.*";
+
+            sid:3000005;
+          )
+
+          log mqtt (
+            msg: "mqtt subscribe seen with regex D";
+
+            mqtt_field: Subscribe.Topic, regex "D";
+
+            sid:3000006;
+          )
+
+
+        ]]
+      }

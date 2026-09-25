@@ -331,6 +331,9 @@ public:
   }
 
   virtual bool validate_match_string() override {
+    // bail if we have already validated
+    if (regex) return true;
+    
     auto& s = get_match_string();
 
     try {
@@ -364,9 +367,8 @@ public:
   }
 
   bool match(const Cursor &c, const PacketFlowData&) override {
-
     assert(regex);
-        
+
     return run_regex(c.start(), c.length());        
   }
 
@@ -425,7 +427,7 @@ public:
 };
 
 class UnsubscribeRegExMatch : public RegExMatch {
-public:  
+public:
   bool match(const Cursor& c, const PacketFlowData& ) override {
 
     std::span<const uint8_t> span(c.start(), c.length());
@@ -446,7 +448,7 @@ public:
 
 
 class UnsubscribeMatch : public Match {
-public: 
+public:
   bool validate_match_string() override {
     auto& s = get_match_string();
     std::span<const uint8_t> match_string(reinterpret_cast<const uint8_t *>(s.data()), s.size());

@@ -653,7 +653,7 @@ void Inspector::eval(snort::Packet *p) {
   assert(p);
   assert(p->data);
 
-std::cerr << "MKRTEST: Mqtt got package" << std::endl;
+//std::cerr << "MKRTEST: Mqtt got package" << std::endl;
 
   Pegs::get<"messages">().inc();
 

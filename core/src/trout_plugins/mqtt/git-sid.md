@@ -9,19 +9,6 @@ Default Trout GID
 ## SID 1110-1150
 
 
-enum class SID {
-  message_malformed = 1110,
-  message_has_extra_data = 1111,  
-  com_on_refused_connection = 1113,
-  server_out_of_sync = 1114,
-  client_out_of_sync = 1115,
-  topic_name_invalid = 1116,
-  unsupported_version = 1129,
-  reserved_message = 1130,
-  connect_message_misplaced = 1131,
-  new_ip_for_client_id = 1132,
-};
-
 ### 1110
 #### What
 Indicates the a message contained something that didn't follow the
