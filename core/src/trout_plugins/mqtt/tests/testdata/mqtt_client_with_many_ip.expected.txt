@@ -1,0 +1,341 @@
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.2.1:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4800
+--addr: 10.0.2.1:4800
+---ip: 10.0.2.1
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.2.2:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.2:4800
+--addr: 10.0.2.2:4800
+---ip: 10.0.2.2
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.2.3:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.3:4800
+--addr: 10.0.2.3:4800
+---ip: 10.0.2.3
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.2.4:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.4:4800
+--addr: 10.0.2.4:4800
+---ip: 10.0.2.4
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.2.1:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.2.1:4800
+--addr: 10.0.2.1:4800
+---ip: 10.0.2.1
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.1:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.1:4800
+--addr: 10.0.3.1:4800
+---ip: 10.0.3.1
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.2:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.2:4800
+--addr: 10.0.3.2:4800
+---ip: 10.0.3.2
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.3:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.3:4800
+--addr: 10.0.3.3:4800
+---ip: 10.0.3.3
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.4:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.4:4800
+--addr: 10.0.3.4:4800
+---ip: 10.0.3.4
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.5:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.5:4800
+--addr: 10.0.3.5:4800
+---ip: 10.0.3.5
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.6:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.6:4800
+--addr: 10.0.3.6:4800
+---ip: 10.0.3.6
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.7:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.7:4800
+--addr: 10.0.3.7:4800
+---ip: 10.0.3.7
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.8:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.8:4800
+--addr: 10.0.3.8:4800
+---ip: 10.0.3.8
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.9:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.9:4800
+--addr: 10.0.3.9:4800
+---ip: 10.0.3.9
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.10:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.10:4800
+--addr: 10.0.3.10:4800
+---ip: 10.0.3.10
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.3.11:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.3.11:4800
+--addr: 10.0.3.11:4800
+---ip: 10.0.3.11
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.4.1:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.4.1:4800
+--addr: 10.0.4.1:4800
+---ip: 10.0.4.1
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.5.1:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.5.1:4800
+--addr: 10.0.5.1:4800
+---ip: 10.0.5.1
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.5.2:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.5.2:4800
+--addr: 10.0.5.2:4800
+---ip: 10.0.5.2
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+vvvvvvvvvvvvvvvvvvvvvvvv
+$: 1970-01-01T00:00:00.000000000Z1132800000\"mqtt client id with new ip\"10.0.2.16:188310.0.5.3:4800
+-timestamp: 1970-01-01T00:00:00.000000000Z
+-sid: 1132
+-gid: 8000
+-rev: 0
+-priority: 0
+-log: \"mqtt client id with new ip\"
+-endpoint: 10.0.2.16:1883
+--addr: 10.0.2.16:1883
+---ip: 10.0.2.16
+---port: 1883
+-principal: 10.0.5.3:4800
+--addr: 10.0.5.3:4800
+---ip: 10.0.5.3
+---port: 4800
+^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------

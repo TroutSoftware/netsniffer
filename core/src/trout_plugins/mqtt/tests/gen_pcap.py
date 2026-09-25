@@ -213,8 +213,6 @@ connection5.to_client(MQTT(type=2) / MQTTConnack())
 
 # Make subscription
 
-
-
 connection1.to_server(MQTT(type=8, QOS=1) / MQTTSubscribe(msgid=0xFFFF, topics = [
                                                                   MQTTTopicQOS(topic="level1/level2", QOS=0),
                                                                   MQTTTopicQOS(topic="A/+/B", QOS=2),
@@ -228,7 +226,6 @@ connection2.to_server(MQTT(type=8, QOS=1) / MQTTSubscribe(msgid=0x1,    topics =
                                                                   MQTTTopicQOS(topic="A/B/C/"),
                                                                   MQTTTopicQOS(topic="/A/Aa/B"),
                                                                   MQTTTopicQOS(topic="level/level")
-                                                                  
                                                                 ]))
 
 connection3.to_server(MQTT(type=8, QOS=1) / MQTTSubscribe(msgid=0x2,    topics = [
@@ -270,8 +267,70 @@ connection5.client_initiated_tcp_disconnect()
 
 
 wrpcap("testdata/mqtt_subscribe.pcap", data)
-                                                                    
-### RegEx test
+
+
+### Client id with new ip test
+
+def connect_from_ip(ip, client_id):
+  connection = TCPConnection(server_ip=SERVER_IP,
+                             server_port=SERVER_PORT,
+                             client_ip = ip,
+                             client_port=CLIENT_PORT,
+                             packets=data)
+
+  connection.tcp_connect()
+  connection.to_server(MQTT(type=1) / MQTTConnect(protoname="MQIsdp", protolevel=3, clientId=client_id))
+  connection.to_client(MQTT(type=2) / MQTTConnack())
+  connection.client_initiated_tcp_disconnect()
+
+data = []
+
+# Check reassign event
+connect_from_ip(ip = "10.0.2.1", client_id = "Many ip's")
+connect_from_ip(ip = "10.0.2.2", client_id = "Many ip's")
+connect_from_ip(ip = "10.0.2.3", client_id = "Many ip's")
+connect_from_ip(ip = "10.0.2.4", client_id = "Many ip's")
+connect_from_ip(ip = "10.0.2.1", client_id = "Many ip's")
+
+# Check buffer recycling
+connect_from_ip(ip = "10.0.3.1", client_id = "Name 01")
+connect_from_ip(ip = "10.0.3.2", client_id = "Name 02")
+connect_from_ip(ip = "10.0.3.3", client_id = "Name 03")
+connect_from_ip(ip = "10.0.3.4", client_id = "Name 04")
+connect_from_ip(ip = "10.0.3.5", client_id = "Name 05")
+connect_from_ip(ip = "10.0.3.6", client_id = "Name 06")
+connect_from_ip(ip = "10.0.3.7", client_id = "Name 07")
+connect_from_ip(ip = "10.0.3.8", client_id = "Name 08")
+connect_from_ip(ip = "10.0.3.9", client_id = "Name 09")
+connect_from_ip(ip = "10.0.3.10", client_id = "Name 10")
+connect_from_ip(ip = "10.0.3.11", client_id = "Name 11")
+
+# Check repeats doesn't generate events
+connect_from_ip(ip = "10.0.4.1", client_id = "Repeat ip")
+connect_from_ip(ip = "10.0.4.1", client_id = "Repeat ip")
+connect_from_ip(ip = "10.0.4.1", client_id = "Repeat ip")
+connect_from_ip(ip = "10.0.4.1", client_id = "Repeat ip")
+connect_from_ip(ip = "10.0.4.1", client_id = "Repeat ip")
+
+# Check cache can have at least 3 entries (test-case sets min to 3)
+connect_from_ip(ip = "10.0.5.1", client_id = "ID 5.1")
+connect_from_ip(ip = "10.0.5.2", client_id = "ID 5.2")
+connect_from_ip(ip = "10.0.5.3", client_id = "ID 5.3")
+
+connect_from_ip(ip = "10.0.5.1", client_id = "ID 5.1")
+connect_from_ip(ip = "10.0.5.2", client_id = "ID 5.2")
+connect_from_ip(ip = "10.0.5.3", client_id = "ID 5.3")
+
+connect_from_ip(ip = "10.0.5.1", client_id = "ID 5.1")
+connect_from_ip(ip = "10.0.5.2", client_id = "ID 5.2")
+connect_from_ip(ip = "10.0.5.3", client_id = "ID 5.3")
+
+connect_from_ip(ip = "10.0.5.1", client_id = "ID 5.1")
+connect_from_ip(ip = "10.0.5.2", client_id = "ID 5.2")
+connect_from_ip(ip = "10.0.5.3", client_id = "ID 5.3")
+
+wrpcap("testdata/mqtt_client_with_many_ip.pcap", data)
+
 
 ### Splitter test
 
@@ -281,6 +340,6 @@ wrpcap("testdata/mqtt_subscribe.pcap", data)
 
 ### Flags test
 
-### Client id with new ip
+
 
 ### Subscribe with QOS = 0, must not have msgid

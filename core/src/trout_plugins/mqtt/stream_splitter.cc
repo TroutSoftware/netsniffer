@@ -18,7 +18,6 @@
 #include "stream_splitter.h"
 
 // Debug includes
-#include <iostream>
 
 namespace mqtt_plugin {
 

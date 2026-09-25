@@ -16,7 +16,6 @@
 
 // Global includes
 
-
 // Local includes
 
 // Debug includes

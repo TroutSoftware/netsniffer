@@ -1,0 +1,46 @@
+pcap testdata/mqtt_client_with_many_ip.pcap
+cmp output.txt testdata/mqtt_client_with_many_ip.expected.txt
+
+stdout 'logs_generated: 20'
+stdout 'new_ip_client_id: 20'
+stdout 'client_id_cache_max_size: 3'
+stdout 'client_id_reassigned_ip: 4'
+stdout 'client_id_cache_purged'
+
+
+-- cfg.lua --
+
+event_queue = { log = 100; }
+search_engine = { max_queue_events = 100; }
+stream = {}
+stream_tcp = {}
+
+logger_file = { file_name = 'output.txt',
+                serializer = 'serializer_txt' }
+
+serializer_txt = { }
+
+alert_lioli = { logger = 'logger_file',
+                testmode = true }
+
+mqtt = { client_id_cache_min_size = 3}
+
+binder = {
+           { 
+             when = { proto = "tcp", ports = "1883" },
+             use  = { type = "mqtt" }
+           },          
+         }
+
+ips = {
+        rules = [[
+          log mqtt (
+            msg: "mqtt client id with new ip";
+
+            gid:8000;
+            sid:1132;
+          )
+
+
+        ]]
+      }

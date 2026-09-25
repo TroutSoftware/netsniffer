@@ -52,7 +52,7 @@ bool ClientIDMonitor::check(const std::span<const uint8_t> &client_id, snort::Sf
       return false;
     }
 
-    if (map_current.size() <= min_size) {
+    if (map_current.size() < min_size) {
       auto in_previous = map_previous.find(client_id);
 
       if (in_previous != map_previous.end()) {

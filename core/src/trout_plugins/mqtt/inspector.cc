@@ -26,7 +26,6 @@
 #include "stream_splitter.h"
 
 // Debug includes
-#include <iostream>
 
 namespace mqtt_plugin {
 
@@ -641,7 +640,7 @@ void Inspector::decode_disconnect(snort::Packet *p, PacketFlowData &flow_data) {
 
 
 void Inspector::reject(snort::Packet *p, std::string reason) {
-  // TODO: Add logging
+
   snort::WarningMessage("MQTT inspector received an invalid packet (%s)\n", reason.c_str());
 
   if (p->flow) {
@@ -653,16 +652,10 @@ void Inspector::eval(snort::Packet *p) {
   assert(p);
   assert(p->data);
 
-//std::cerr << "MKRTEST: Mqtt got package" << std::endl;
-
   Pegs::get<"messages">().inc();
 
   // Wrap the incomming data in a safe container
   std::span<const uint8_t> data(p->data, p->dsize);
-
-//  std::cerr << "MKRTEST: eval called with pkt len " << p->pktlen
-//            << " datalen " << p->dsize << std::endl;
-
 
   std::size_t read_pos = 1;
   uint32_t remaining;

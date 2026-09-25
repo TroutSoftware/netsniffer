@@ -94,5 +94,5 @@ last time
 #### Why
 Having a client move IP, having multiple clients with the same client
 id, or just having a client show up, is something that can signs of
-misconfigurations, evil intent or just valuable in mapping resources on
+mis-configurations, evil intent or just valuable in mapping resources on
 the network

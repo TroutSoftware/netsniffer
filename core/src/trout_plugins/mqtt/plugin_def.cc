@@ -17,8 +17,6 @@
 // Debug includes
 
 
-
-
 namespace mqtt_plugin {
 
     static const char* buffers[] = {

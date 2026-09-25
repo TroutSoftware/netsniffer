@@ -24,12 +24,6 @@ class Inspector : public snort::Inspector {
 private:
   std::shared_ptr<Settings> settings;
 
-
-  bool get_buf(snort::InspectionBuffer::Type /*ibt*/, snort::Packet* /*p*/, snort::InspectionBuffer& /*b*/) override
-    { std::cerr << "MKRTEST get_buf called" << std::endl; return false;}
-  bool get_buf(unsigned id, snort::Packet* /*p*/, snort::InspectionBuffer& /*b*/) override
-    { std::cerr << "MKRTEST get_buf called (id=" << id << ")" << std::endl; return true;}
-
   void eval(snort::Packet *) override;
   void clear(snort::Packet*) override;
 

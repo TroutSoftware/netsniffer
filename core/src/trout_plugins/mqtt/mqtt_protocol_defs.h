@@ -128,49 +128,6 @@ struct DisconnectMsg {
 
 };
 
-
-
-
-#if 0
-// TODO: Move stickyBuffer code to wrapper folder when it is ready
-using StickyBufferGetter = bool (*)(snort::Packet*, snort::InspectionBuffer&);
-
-template <typename T>
-concept StickyBufferEntryConcept =
-requires {
-  {T::get_cstring() } -> std::same_as<const char *>;
-  {T::getter() } -> std::same_as<StickyBufferGetter>;
-};
-
-template <trout::templates::FixedString buffer_name, StickyBufferGetter Func>
-struct StickyBufferEntry : public trout::templates::CStringType<buffer_name> {
-  constexpr static StickyBufferGetter getter() {
-    return Func;
-  }
-};
-static_assert(StickyBufferEntryConcept<StickyBufferEntry<"",nullptr>>,
-              "StickyBufferEntry is not compliant with StickyBufferEntryConcept");
-
-template <StickyBufferEntryConcept... entry_list>
-struct StickyBufferDef {
-  constexpr static const char** get_buffers() {
-    static const char* buffers[] = {
-          entry_list::get_cstring()..., // Expands the list for all buffer names
-          nullptr };
-    return buffers;
-  }
-};
-
-
-
-//bool getVersion(snort::Packet*, snort::InspectionBuffer&);
-//bool getQos(snort::Packet*, snort::InspectionBuffer&);
-
-
-using StickyBuffers = StickyBufferDef< StickyBufferEntry<"MQTT_PROTOCOL_VERSION", getVersion>,
-                                       StickyBufferEntry<"MQTT_QoS", getQos>>;
-#endif
-
 inline std::tuple<uint32_t, bool> decode_var_int(const std::span<const uint8_t> &data, std::size_t &read_pos) {
   static constexpr uint8_t MSB = 0b1000'0000;
   static constexpr uint8_t NOT_MSB = 0b0111'1111;
@@ -363,11 +320,7 @@ public:
       assert(data == rhs.data);
       return read_pos == rhs.read_pos;
     }
-/*
-    bool operator!=(const Iterator& other) const {
-      return read_pos != other.read_pos;
-    }
-*/
+
     void move_to_end() {
       read_pos = data.size();
     }
@@ -429,11 +382,7 @@ public:
       assert(data == rhs.data);
       return read_pos == rhs.read_pos;
     }
-/*
-    bool operator!=(const Iterator& other) const {
-      return read_pos != other.read_pos;
-    }
-*/
+
     void move_to_end() {
       read_pos = data.size();
     }
@@ -460,7 +409,7 @@ bool topic_match(const std::span<const uint8_t> &a, const std::span<const uint8_
   // We are assuming the strings are valid
   while (aitr != a.end() && bitr != b.end()) {
     // If the next chars are equal, we don't care about them
-    if (*aitr == *bitr) {
+    if (*aitr == *bitr) {      
       aitr++;
       bitr++;
       continue;
@@ -511,6 +460,7 @@ bool topic_match(const std::span<const uint8_t> &a, const std::span<const uint8_
       return true;
     }
   }
+
   return false;
 }
 

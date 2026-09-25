@@ -28,10 +28,11 @@ struct FlowData {
   bool client_in_sync = true;
   uint8_t protocol_level = 0;    // MQTT version: 3 = 3.1, 4 = 3.1.1, 5 = 5.0
   MsgType msg_type = MsgType::Reserved;
-  //uint32_t remaining_from_header = 0;   // Used during parsing
   uint32_t variable_header_start = 0;   // Used during parsing
   std::optional<std::span<const uint8_t>> extra;  // extra data that couldn't be parsed
   std::vector<uint8_t> client_id;       // Populated from the connect message
+
+  // clang-format off
   std::variant<std::monostate,          // monostate must be first entry, as it will then be the default
                ConnectMsg,
                ConnAckMsg,
@@ -48,6 +49,7 @@ struct FlowData {
                PingRespMsg,
                DisconnectMsg
                > cur_msg;
+  // clang-format on
   bool connection_refused = false;      // Connection has been refused by either party
 
 };
