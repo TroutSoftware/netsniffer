@@ -41,7 +41,6 @@ class ClientIDMonitor {
   std::map<std::vector<uint8_t>, snort::SfIp, CompareFunc> map_previous;
 
 public:
-  // ClientIDMonitor(std::shared_ptr<Settings> settings);
   ClientIDMonitor(uint32_t min_size);
 
   // True if unique, false if not
