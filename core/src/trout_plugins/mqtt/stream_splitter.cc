@@ -123,9 +123,11 @@ StreamSplitter::Status StreamSplitter::scan(
 
       decoded_remaining_length -= (len - split_pos);
 
-      break;
+      goto continue_search;
     }
   }
+
+continue_search:
 
   if (state != State::initial) {
     Pegs::get<"split_packages">().inc();

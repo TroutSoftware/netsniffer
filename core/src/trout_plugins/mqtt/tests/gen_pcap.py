@@ -331,8 +331,30 @@ connect_from_ip(ip = "10.0.5.3", client_id = "ID 5.3")
 
 wrpcap("testdata/mqtt_client_with_many_ip.pcap", data)
 
-
 ### Splitter test
+
+data = []
+
+# Generate data
+msg_data  = bytes(MQTT(type=1) / MQTTConnect(protoname="MQIsdp", protolevel=3, clientId="Splitter-client"))
+msg_data += bytes(MQTT(type=8, QOS=1) / MQTTSubscribe(msgid=0xFFFF, topics = [MQTTTopicQOS(topic="my/test/topic", QOS=0)]))
+msg_data += bytes(MQTT(type=14) / MQTTDisconnect())
+
+for split_pos in range(1, len(msg_data)):
+  connection = TCPConnection(server_ip=SERVER_IP,
+                             server_port=SERVER_PORT,
+                             client_ip=CLIENT_IP,
+                             client_port=split_pos,
+                             packets=data)
+
+  connection.tcp_connect()
+                            
+  connection.to_server(Raw(msg_data[:split_pos]))
+  connection.to_server(Raw(msg_data[split_pos:]))
+
+  connection.client_initiated_tcp_disconnect()
+
+wrpcap("testdata/mqtt_split_msg.pcap", data)
 
 ### All types test...
 
