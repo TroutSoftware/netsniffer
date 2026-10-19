@@ -18,17 +18,13 @@ namespace mqtt_plugin {
 
 using namespace trout::templates;
 
-class ClientIDMonitorType : public GenericTypeBaseClass {
+class ClientIDMonitorType : public Type<ParameterType::Int> {
   std::unique_ptr<ClientIDMonitor> client_id_monitor;
 
 public:
-  static consteval snort::Parameter::Type get_type() {
-    return snort::Parameter::PT_INT;
-  }
-
-  void set(snort::Value &val) {
-    // TODO: Delay this to the end, and implement generic validation
-    client_id_monitor = std::make_unique<ClientIDMonitor>(val.get_uint32());
+  bool end() {
+    client_id_monitor = std::make_unique<ClientIDMonitor>(value);
+    return true;
   }
 
   ClientIDMonitor &get() {

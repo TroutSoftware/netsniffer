@@ -23,7 +23,7 @@ namespace trout::templates {
 template <ParameterDefinitionConcept... list> class ParamList {
 
   std::tuple<list...>
-      data; // Stores the actuall parameters, and any state associated with it
+      data; // Stores the actual parameters, and any state associated with it
 
   template <FixedString name, typename... Ts> struct FindParameter {
     static_assert(false, "Couldn't find parameter name in defined list");
@@ -54,11 +54,16 @@ public:
     return (std::get<list>(data).set(sname, val) || ...);
   }
 
+  bool end() { return (std::get<list>(data).end() && ...); }
+
   template <FixedString name> decltype(auto) get() {
     using TypeToFind = FindParameterType<name>;
     return std::get<TypeToFind>(data).get();
   }
 };
+
+static_assert(ParamListConcept<ParamList<>>,
+              "ParamList in not compliant with ParamListConcept");
 
 }; // namespace trout::templates
 

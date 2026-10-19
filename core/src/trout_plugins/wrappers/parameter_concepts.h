@@ -35,7 +35,12 @@ concept ParameterTypeConcept =
       // Non-static functions called on instances of the type
 
       // Set function to read data from snort
-      { t.set(sv) } -> std::same_as<void>;
+      { t.set(sv) } -> std::same_as<bool>;
+
+      // Function called when parameter parsing has completed, the place
+      // to apply the value, if something goes wrong, return false
+      { t.end() } -> std::same_as<bool>;
+
       // Get function, used to retrieve the value during
       // runtime
       { t.get() };
@@ -91,6 +96,14 @@ concept ParameterDefinitionConcept =
       -> std::same_as<bool>; // true if name was a match and parameter consumed
       { t.get() }; // Retrive of value function, type could be anything
     };
+
+template <class T>
+concept ParamListConcept = requires {
+  { T::generate_snort_def() } -> std::same_as<const snort::Parameter *>;
+};
+
+template <class T>
+struct CheckIsParamList : std::bool_constant<ParamListConcept<T>> {};
 
 }; // namespace trout::templates
 

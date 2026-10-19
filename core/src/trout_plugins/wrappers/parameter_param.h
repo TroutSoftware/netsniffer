@@ -124,11 +124,13 @@ public:
   // Function that sets the value of this parameter to val, if name matches
   bool set(const std::string_view &name, snort::Value &val) {
     if (std::get<FindType<CheckIsName>>(data).is(name)) {
-      std::get<FindType<CheckIsParameterType>>(data).set(val);
-      return true;
+      return std::get<FindType<CheckIsParameterType>>(data).set(val);
     }
     return false;
   }
+
+  // Function that applies the value and does final checking
+  bool end() { return std::get<FindType<CheckIsParameterType>>(data).end(); }
 
   // Retrieve value, we use decltype to ensure references survive
   decltype(auto) get() {

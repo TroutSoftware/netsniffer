@@ -7,43 +7,36 @@
 // System includes
 
 // Global includes
+#include "../wrappers/module.h"
 
 // Local includes
+#include "pegs.h"
 #include "settings.h"
 
 // Debug includes
 
 namespace mqtt_plugin {
 
-class Module : public snort::Module {
-  std::shared_ptr<Settings> settings = std::make_shared<Settings>();
+// clang-format off
+using namespace trout::templates;
+class Module : public trout::templates::Module<
+                   Pegs,
+                   Settings,
+                   Name<"mqtt">,
+                   HelpText<"mqtt inspector">> {
+  // clang-format on
 
   Module();
   ~Module();
 
-  // Settings
-  bool begin(const char *, int, snort::SnortConfig *) override;
-  bool end(const char *, int, snort::SnortConfig *) override;
-  bool set(const char *, snort::Value &val, snort::SnortConfig *) override;
-
-  Usage get_usage() const override;
+  Usage get_usage() const override { return INSPECT; }
 
   bool is_bindable() const override { return true; }
 
   unsigned get_gid() const override;
   const snort::RuleMap *get_rules() const override;
 
-  // Pegs
-  const PegInfo *get_pegs() const override;
-  PegCount *get_counts() const override;
-
 public:
-  std::shared_ptr<Settings> get_settings();
-
-  // PegCounts &get_peg_counts();
-  static const char *get_module_name();
-  static const char *get_module_help();
-
   static snort::Module *ctor() { return new Module(); }
   static void dtor(snort::Module *p) { delete p; }
 };

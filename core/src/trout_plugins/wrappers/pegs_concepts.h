@@ -61,6 +61,15 @@ concept PegDefinitionConcept = requires(T &t, const std::string_view &name,
                            */
 };
 
+template <class T>
+concept PegListConcept = requires {
+  { T::generate_snort_peg_info_def() } -> std::same_as<const PegInfo *>;
+  { T::generate_snort_peg_count_def() } -> std::same_as<PegCount *>;
+};
+
+template <class T>
+struct CheckIsPegList : std::bool_constant<PegListConcept<T>> {};
+
 }; // namespace trout::templates
 
 #endif // #ifndef pegs_concepts_F6A7BF58

@@ -61,19 +61,26 @@ template <ParameterType type> class ParamStorage {
 };
 
 template <> class ParamStorage<ParameterType::Bool> {
+protected:
   bool value;
 
 public:
-  void set(snort::Value &val) { value = val.get_bool(); }
+  bool set(snort::Value &val) {
+    value = val.get_bool();
+    return true;
+  }
+
+  bool end() { return true; }
 
   bool get() { return value; }
 };
 
 template <> class ParamStorage<ParameterType::Int> {
+protected:
   int value;
 
 public:
-  void set(snort::Value &val) {
+  bool set(snort::Value &val) {
 
     static_assert(sizeof(value) == 4 || sizeof(value) == 8,
                   "Support only implemented for 4 and 8 byte integers");
@@ -83,16 +90,26 @@ public:
     } else if constexpr (sizeof(value) == 8) {
       value = val.get_int64();
     }
+
+    return true;
   }
+
+  bool end() { return true; }
 
   int get() { return value; }
 };
 
 template <> class ParamStorage<ParameterType::String> {
+protected:
   std::string value;
 
 public:
-  void set(snort::Value &val) { value = val.get_as_string(); }
+  bool set(snort::Value &val) {
+    value = val.get_as_string();
+    return true;
+  }
+
+  bool end() { return true; }
 
   const std::string &get() { return value; }
 };
