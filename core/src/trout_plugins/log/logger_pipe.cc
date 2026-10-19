@@ -20,10 +20,10 @@
 #include <thread>
 
 // Gloabl includes
-#include "../includes/lioli.h"
-#include "../includes/log_framework.h"
+#include <trout_plugins/common/lioli.h>
 
 // Local includes
+#include "log_framework.h"
 #include "logger_pipe.h"
 
 // Debug includes

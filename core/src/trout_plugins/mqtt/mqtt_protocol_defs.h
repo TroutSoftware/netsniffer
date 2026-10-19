@@ -15,9 +15,9 @@
 #include <vector>
 
 // Global includes
+#include <trout_plugins/wrappers/c_string_type.h>
 
 // Local includes
-#include "../wrappers/c_string_type.h"
 #include "rules.h"
 
 // Debug includes

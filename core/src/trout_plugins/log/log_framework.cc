@@ -10,7 +10,7 @@
 #include <ranges>
 
 // Local includes
-#include "../includes/log_framework.h"
+#include "log_framework.h"
 
 // Debug includes
 

@@ -12,7 +12,7 @@
 #include <queue>
 
 // Global includes
-#include "../includes/testable_time.h"
+#include <trout_plugins/common/testable_time.h>
 
 // Local includes
 #include "common.h"

@@ -10,9 +10,9 @@
 #include <regex>
 
 // Global includes
-#include "../includes/lioli_path.h"
 
 // Local includes
+#include "lioli_path.h"
 
 // Debug includes
 

@@ -7,8 +7,8 @@
 
 // Global includes
 
-#include "../wrappers/parameter_param.h"
-#include "../wrappers/parameter_param_list.h"
+#include <trout_plugins/wrappers/parameter_param.h>
+#include <trout_plugins/wrappers/parameter_param_list.h>
 
 // Local includes
 

@@ -13,10 +13,10 @@
 #include <utility>
 
 // Global includes
-#include "../includes/lioli.h"
-#include "../includes/lioli_path.h"
 
 // Local includes
+#include "lioli.h"
+#include "lioli_path.h"
 
 // Debug includes
 

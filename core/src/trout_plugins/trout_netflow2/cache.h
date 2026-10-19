@@ -15,8 +15,8 @@
 #include <vector>
 
 // Global includes
-#include "../includes/log_framework.h"
-#include "../includes/trout_utils.h"
+#include <trout_plugins/common/trout_utils.h>
+#include <trout_plugins/log/log_framework.h>
 
 // Local includes
 #include "cache_concepts.h"

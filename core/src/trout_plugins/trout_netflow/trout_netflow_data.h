@@ -12,8 +12,8 @@
 #include <string>
 
 // Global includes
-#include "../includes/lioli.h"
-#include "../includes/log_framework.h"
+#include <trout_plugins/common/lioli.h>
+#include <trout_plugins/log/log_framework.h>
 
 // Local includes
 #include "trout_netflow.private.h"

@@ -10,8 +10,8 @@
 // System includes
 
 // Global includes
-#include "../includes/lioli_path.h"
-#include "../wrappers/pegs_peg_list.h"
+#include <trout_plugins/common/lioli_path.h>
+#include <trout_plugins/wrappers/pegs_peg_list.h>
 
 // Local includes
 #include "common.h"

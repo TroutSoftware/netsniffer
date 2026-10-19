@@ -9,8 +9,8 @@
 // Local includes
 
 // Global includes
-#include "../includes/flow_data.h"
-#include "../includes/lioli_path.h"
+#include <trout_plugins/common/flow_data.h>
+#include <trout_plugins/common/lioli_path.h>
 
 // Debug includes
 

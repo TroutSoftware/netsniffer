@@ -7,7 +7,7 @@
 // System includes
 
 // Global includes
-#include "../wrappers/module.h"
+#include <trout_plugins/wrappers/module.h>
 
 // Local includes
 #include "pegs.h"

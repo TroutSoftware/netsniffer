@@ -7,7 +7,7 @@
 #include <variant>
 
 // Global includes
-#include "../includes/flow_data.h"
+#include <trout_plugins/common/flow_data.h>
 
 // Local includes
 #include "mqtt_protocol_defs.h"

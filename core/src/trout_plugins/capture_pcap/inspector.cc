@@ -13,7 +13,7 @@
 #include <string>
 
 // Global includes
-#include "../includes/flow_data.h"
+#include <trout_plugins/common/flow_data.h>
 
 // Local includes
 #include "inspector.h"

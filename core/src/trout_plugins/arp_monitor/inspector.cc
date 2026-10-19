@@ -14,7 +14,7 @@
 #include <thread>
 
 // Global includes
-#include "../includes/lioli_tree_generator.h"
+#include <trout_plugins/common/lioli_tree_generator.h>
 
 // Local includes
 #include "inspector.h"

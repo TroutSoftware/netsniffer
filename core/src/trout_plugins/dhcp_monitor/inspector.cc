@@ -19,7 +19,7 @@
 #include <shared_mutex>
 
 // Global includes
-#include "../includes/trout_gid.h"
+#include <trout_plugins/common/trout_gid.h>
 
 // Local includes
 #include "inspector.h"

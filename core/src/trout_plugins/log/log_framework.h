@@ -13,10 +13,10 @@
 #include <string>
 
 // Global includes
-#include "trout_utils.h"
+#include <trout_plugins/common/lioli.h>
+#include <trout_plugins/common/trout_utils.h>
 
 // Local includes
-#include "lioli.h"
 
 // Debug includes
 

@@ -15,7 +15,7 @@
 #include <string>
 
 // Global includes
-#include "../includes/lioli_path.h"
+#include <trout_plugins/common/lioli_path.h>
 
 // Local includes
 #include "common.h"

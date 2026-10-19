@@ -8,7 +8,7 @@
 // System includes
 
 // Global includes
-#include "../wrappers/pegs_peg_list.h"
+#include <trout_plugins/wrappers/pegs_peg_list.h>
 
 // Local includes
 

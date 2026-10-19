@@ -11,8 +11,8 @@
 // System includes
 
 // Global includes
-#include "../includes/lioli_tree_generator.h"
-#include "../includes/trout_gid.h"
+#include <trout_plugins/common/lioli_tree_generator.h>
+#include <trout_plugins/common/trout_gid.h>
 
 // Local includes
 #include "gid_sid.h"

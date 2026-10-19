@@ -17,7 +17,6 @@ add_subdirectory(dhcp_monitor)
 add_subdirectory(dhcp_option)
 add_subdirectory(discovery)
 add_subdirectory(icmp_logger)
-add_subdirectory(includes)
 add_subdirectory(log)
 add_subdirectory(mqtt)
 add_subdirectory(smnp)
@@ -36,7 +35,6 @@ set(STATIC_TROUT_PLUGINS
     $<TARGET_OBJECTS:mqtt_plugin>
     $<TARGET_OBJECTS:smnp>
     $<TARGET_OBJECTS:trout_log>
-    $<TARGET_OBJECTS:trout_includes>
     $<TARGET_OBJECTS:trout_netflow>
     $<TARGET_OBJECTS:trout_netflow2>
 
@@ -47,4 +45,3 @@ add_library( trout_plugins OBJECT
     trout_plugins.cc
     trout_plugins.h
 )
-

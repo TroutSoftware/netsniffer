@@ -1,4 +1,10 @@
+set (TROUT_LOG_INCLUDES
+    log_framework.h
+)
+
+
 set( FILE_LIST
+    ${TROUT_LOG_INCLUDES}
     log_framework.cc
     logger_file.cc
     logger_file.h
@@ -31,3 +37,7 @@ set( FILE_LIST
 )
 
 add_library( trout_log OBJECT ${FILE_LIST})
+
+install (FILES ${TROUT_LOG_INCLUDES}
+    DESTINATION "${INCLUDE_INSTALL_PATH}/trout_plugins/log"
+)

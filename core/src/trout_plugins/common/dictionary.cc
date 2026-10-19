@@ -8,9 +8,9 @@
 // System includes
 
 // Global includes
-#include "../includes/dictionary.h"
 
 // Local includes
+#include "dictionary.h"
 
 // Debug includes
 

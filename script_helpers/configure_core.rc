@@ -86,7 +86,7 @@ set -e
 EOF
 
 cat << EOF
-  $CORE_BUILD_SCRIPT install
+  ./$CORE_BUILD_SCRIPT install
 EOF
 } > "$BASE_BUILD_FOLDER/$CORE_INSTALL_SCRIPT"
 

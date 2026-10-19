@@ -9,8 +9,8 @@
 #include <cassert>
 
 // Global includes
-#include "../includes/lioli_tree_generator.h"
-#include "../includes/testable_time.h"
+#include <trout_plugins/common/lioli_tree_generator.h>
+#include <trout_plugins/common/testable_time.h>
 
 // Local includes
 #include "trout_netflow.private.h"

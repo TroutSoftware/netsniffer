@@ -13,9 +13,9 @@
 #include <iostream>
 
 // Global includes
-#include "../includes/lioli_path.h"
-#include "../includes/lioli_tree_generator.h"
-#include "../includes/log_framework.h"
+#include <trout_plugins/common/lioli_path.h>
+#include <trout_plugins/common/lioli_tree_generator.h>
+#include <trout_plugins/log/log_framework.h>
 
 // Local includes
 #include "alert_lioli.h"

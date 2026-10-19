@@ -9,13 +9,9 @@
 #include <framework/counts.h>
 #include <framework/inspector.h>
 #include <framework/module.h>
-// #include <main/snort_config.h>
 #include <protocols/packet.h>
 
 // System includes
-// #include <cassert>
-// #include <cstring>
-// #include <memory>
 
 // Local includes
 #include "inspector.h"

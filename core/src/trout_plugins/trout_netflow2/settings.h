@@ -9,7 +9,7 @@
 #include <memory>
 
 // Global includes
-#include "../includes/log_framework.h"
+#include "trout_plugins/log/log_framework.h"
 
 // Local includes
 
