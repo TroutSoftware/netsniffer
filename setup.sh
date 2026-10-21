@@ -14,12 +14,13 @@ SOURCE_SCRIPT_FOLDER="$SOURCE_FOLDER/script_helpers"
 MODE=DEBUG
 TARGET=ALPINE
 OUTPUT="$SOURCE_FOLDER/p"
+INSTALL_FOLDER="$OUTPUT/install"
 DOWNLOAD_CACHE="$SOURCE_FOLDER/cache"
 
 _echo_help() {
-  echo "$ME --mode=[DEBUG|RELEASE] --target=[ALPINE|HOST] --output=<build_folder> --download_cache=<download_folder>" >&2
+  echo "$ME --mode=[DEBUG|RELEASE] --target=[ALPINE|HOST] --output=<build_folder> --install=<install_folder> --download_cache=<download_folder>" >&2
   echo "Default parameters:" >&2
-  echo "$ME --mode=$MODE --target=$TARGET --output=$OUTPUT --download_cache=$DOWNLOAD_CACHE" >&2
+  echo "$ME --mode=$MODE --target=$TARGET --output=$OUTPUT --install=$INSTALL_FOLDER --download_cache=$DOWNLOAD_CACHE" >&2
 }
 
 # We use while-shift vs a for loop so a parameter can take multiple arguments
@@ -36,6 +37,9 @@ while [ $# -gt 0 ]; do
       ;;
     --download_cache=*)
       DOWNLOAD_CACHE="${1#*=}"
+      ;;
+    --install=*)
+      INSTALL_FOLDER="${1#*=}"
       ;;
     *)
       echo "Unknown option: $1" >&2
@@ -58,6 +62,7 @@ cat << EOF > "$OUTPUT/setup.rc"
 MODE=$MODE
 TARGET=$TARGET
 DOWNLOAD_CACHE=$DOWNLOAD_CACHE
+INSTALL_FOLDER=$INSTALL_FOLDER
 EOF
 
 cd "$OUTPUT"
