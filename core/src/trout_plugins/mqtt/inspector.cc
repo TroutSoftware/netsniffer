@@ -23,6 +23,7 @@
 #include "mqtt_protocol_defs.h"
 #include "pegs.h"
 #include "rules.h"
+#include "settings.h"
 #include "stream_splitter.h"
 
 // Debug includes

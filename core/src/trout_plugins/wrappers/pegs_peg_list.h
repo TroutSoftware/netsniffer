@@ -62,8 +62,12 @@ public:
 
   // TODO: Be clever about worker threads here
   static PegCount *generate_snort_peg_count_def() {
-    static thread_local PegCount peg_counts[count_of_all_pegs];
-    return peg_counts;
+    if constexpr (count_of_all_pegs) {
+      static thread_local PegCount peg_counts[count_of_all_pegs];
+      return peg_counts;
+    }
+
+    return nullptr;
   }
 
   template <FixedString name> static auto get() {

@@ -12,13 +12,13 @@
 
 // Local includes
 #include "flow_data.h"
+#include "module.h"
 #include "settings.h"
 
 // Debug includes
 #include <iostream>
 
 namespace mqtt_plugin {
-class Module;
 
 class Inspector : public snort::Inspector {
 private:

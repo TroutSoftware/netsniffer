@@ -2,7 +2,6 @@
 #define module_3B91DE57
 
 // Snort includes
-#include <framework/module.h>
 
 // System includes
 

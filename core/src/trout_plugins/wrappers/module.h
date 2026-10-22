@@ -10,6 +10,7 @@
 ////////////////////////////////////////////////////////////////////////
 
 // Snort includes
+#include <framework/module.h>
 
 // System includes
 #include <type_traits>

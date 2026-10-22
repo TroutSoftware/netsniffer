@@ -18,6 +18,7 @@
 #include "alert_lioli/ips_lioli_clear.h"
 #include "alert_lioli/ips_lioli_tag.h"
 #include "arp_monitor/plugin_def.h"
+#include "bacnet_ip/plugin_def.h"
 #include "capture_pcap/plugin_def.h"
 #include "dhcp_monitor/inspector.h"
 #include "dhcp_option/inspector.h"
@@ -52,6 +53,7 @@
 const snort::BaseApi *trout_plugins[] = {
   &alert_lioli::log_api.base,
   &arp_monitor::inspect_api.base,
+  &bacnet_ip::inspect_api.base,
   &capture_pcap::inspect_api.base,
   &dhcp_monitor::dhcpmonitor_api.base,
   &dhcp_option::inspector.base,

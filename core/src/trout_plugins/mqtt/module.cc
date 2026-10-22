@@ -11,7 +11,6 @@
 
 // Local includes
 #include "module.h"
-// #include "pegs.h"
 #include "rules.h"
 
 // Debug includes

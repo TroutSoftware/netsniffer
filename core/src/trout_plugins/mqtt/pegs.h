@@ -3,7 +3,6 @@
 #define pegs_E04A7D29
 
 // Snort includes
-#include <framework/counts.h>
 
 // System includes
 
