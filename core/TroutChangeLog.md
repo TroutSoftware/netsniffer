@@ -1,5 +1,9 @@
 ## 2026-10-26
 
+Added #include <cerrno> to src/main/alt_signal_stack.h
+
+## 2026-10-26
+
 - Merged with version 3.12.4.0 from https://github.com/snort3/snort3
 
 commit 705ecad300ecc903cb5518c816cdc97653948b2f (HEAD -> master, tag: 3.12.4.0, origin/master, origin/HEAD)
