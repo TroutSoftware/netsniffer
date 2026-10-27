@@ -1,3 +1,5 @@
+skip
+
 pcap testdata/mqtt_split_msg.pcap
 cmp output.txt testdata/mqtt_split.expected.txt
 

@@ -31,8 +31,8 @@
 #include "log/log.h"
 #include "main/analyzer.h"
 #include "packet_io/active.h"
-#include "packet_io/packet_tracer.h"
 #include "profiler/profiler.h"
+#include "stream/stream_log.h"
 #include "protocols/packet_manager.h"
 #include "time/packet_time.h"
 
@@ -156,8 +156,7 @@ int TcpReassemblerIps::eval_flush_policy_on_data(Packet* p)
 
     if ( asymmetric_flow_flushed(flushed, p) )
     {
-        if (PacketTracer::is_active())
-            PacketTracer::log("stream_tcp: IPS mode - %u bytes flushed on asymmetric flow\n", flushed);
+        stream_log(p, "stream_tcp: IPS mode - %u bytes flushed on asymmetric flow\n", flushed);
 
         purge_to_seq(seglist.head->start_seq() + flushed);
         tracker.r_win_base = seglist.seglist_base_seq;
@@ -170,6 +169,14 @@ int TcpReassemblerIps::eval_flush_policy_on_data(Packet* p)
 int TcpReassemblerIps::eval_asymmetric_flush(snort::Packet* p)
 {
     return eval_flush_policy_on_data(p);
+}
+
+int TcpReassemblerIps::flush_queued_sequenced(Packet* p)
+{
+    uint32_t bytes = get_q_sequenced();
+    if ( bytes )
+        return flush_to_seq(bytes, p, packet_dir);
+    return 0;
 }
 
 int TcpReassemblerIps::flush_stream(Packet* p, uint32_t dir, bool final_flush)
@@ -187,4 +194,3 @@ int TcpReassemblerIps::flush_stream(Packet* p, uint32_t dir, bool final_flush)
 
     return 0;
 }
-

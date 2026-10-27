@@ -226,7 +226,8 @@ static DCE2_Ret DCE2_SmbTransactionReq(DCE2_SmbSsnData* ssd,
                 ttracker->pipe_byte_mode = true;
 
             // Won't get a response
-            if (DCE2_SsnIsWindowsPolicy(&ssd->sd) && ttracker->one_way)
+            if (DCE2_SsnIsWindowsPolicy(&ssd->sd) && ttracker->one_way
+                && (ssd->cur_rtracker->ftracker != nullptr))
             {
                 ssd->cur_rtracker->ftracker->fp_byte_mode = ttracker->pipe_byte_mode;
             }
@@ -289,6 +290,8 @@ static DCE2_Ret DCE2_SmbNtTransactCreateReq(DCE2_SmbSsnData* ssd,
         return DCE2_RET__ERROR;
 
     dce2_move(param_ptr, param_len, pad);
+
+    DCE2_SmbFreeRequestTrackerFileName(ssd->cur_rtracker);
 
     ssd->cur_rtracker->file_name =
         DCE2_SmbGetFileName(param_ptr, file_name_length, unicode, &ssd->cur_rtracker->file_name_size);
@@ -958,13 +961,8 @@ static DCE2_Ret DCE2_SmbTrans2Open2Req(DCE2_SmbSsnData* ssd,
 
     dce2_move(param_ptr, param_len, sizeof(SmbTrans2Open2ReqParams));
 
-    // tracker may be reused across piped requests with duplicate MIDs
-    if (ssd->cur_rtracker->file_name)
-    {
-        snort_free((void*)ssd->cur_rtracker->file_name);
-        ssd->cur_rtracker->file_name = nullptr;
-        ssd->cur_rtracker->file_name_size = 0;
-    }
+    DCE2_SmbFreeRequestTrackerFileName(ssd->cur_rtracker);
+
     ssd->cur_rtracker->file_name =
         DCE2_SmbGetFileName(param_ptr, param_len, unicode, &ssd->cur_rtracker->file_name_size);
 
@@ -1175,7 +1173,8 @@ DCE2_Ret DCE2_SmbTransaction(DCE2_SmbSsnData* ssd, const SmbNtHdr* smb_hdr,
             break;
 
         case TRANS_SET_NMPIPE_STATE:
-            ssd->cur_rtracker->ftracker->fp_byte_mode = ttracker->pipe_byte_mode;
+            if (ssd->cur_rtracker->ftracker != nullptr)
+                ssd->cur_rtracker->ftracker->fp_byte_mode = ttracker->pipe_byte_mode;
             break;
 
         case TRANS_WRITE_NMPIPE:

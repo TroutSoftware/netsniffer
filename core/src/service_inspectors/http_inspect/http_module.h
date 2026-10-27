@@ -61,6 +61,8 @@ public:
     int64_t maximum_chunk_length = 0xFFFFFFFF;
     uint16_t maximum_header_length = 4096;
     uint16_t maximum_headers = 200;
+    int32_t max_request_size = 0;
+    int32_t max_request_line_length = 0;
     uint16_t maximum_pipelined_requests = 99;
     bool decompress_pdf = false;
     bool decompress_swf = false;
@@ -106,11 +108,20 @@ public:
         bool simplify_path = true;
         std::bitset<256> bad_characters;
         std::bitset<256> unreserved_char;
-        HttpEnums::CharAction uri_char[256];
+        HttpEnums::CharAction uri_char[256] = {};
 
         static const std::bitset<256> default_unreserved_char;
     };
     UriParam uri_param;
+
+    struct DecompressionParam
+    {
+        int32_t max_expansion_ratio = -1;
+#ifdef HAVE_BROTLI
+        bool decompress_brotli = false;
+#endif
+    };
+    DecompressionParam decompression_param;
 
     // This will store list of custom xff headers. These are stored in the
     // order of the header preference. The default header preference only

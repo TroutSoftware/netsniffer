@@ -39,6 +39,7 @@
 
 #include "fp_detect.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "events/event.h"
@@ -128,7 +129,7 @@ static inline void init_match_info(const IpsContext* c)
 // called by fpLogEvent(), which does the filtering etc.
 // this handles the non-rule-actions (responses).
 static inline void fpLogOther(
-    Packet* p, const RuleTreeNode* rtn, const OptTreeNode* otn, IpsAction::Type action)
+    Packet* p, const OptTreeNode* otn, IpsAction::Type action, IpsPolicy::ActionSelector action_selector)
 {
     if ( EventTrace_IsEnabled(p->context->conf) )
         EventTrace_Log(p, otn, action);
@@ -154,10 +155,13 @@ static inline void fpLogOther(
     // rule option actions are queued here (eg replace)
     otn_trigger_actions(otn, p);
 
-    IpsAction* act = get_ips_policy()->action[rtn->action];
+    IpsAction* act = get_ips_policy()->get_action(action, action_selector);
+    if ( !act )
+        return;
+
     ActiveAction* active_act = act->get_active_action();
     if ( active_act )
-        Active::queue(act->get_active_action(), p);
+        Active::queue(active_act, p);
 }
 
 /*
@@ -196,6 +200,7 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
         return 1;
     }
     action = (rateAction < 0) ? (int)rtn->action : rateAction;
+    const IpsPolicy::ActionSelector action_selector = (rateAction < 0) ? rtn->action_selector : 0;
 
     // When rate filters kick in, event filters are still processed.
     // perform event filtering tests - impacts logging
@@ -222,7 +227,10 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
         **  If InlineMode is on, then we still want to drop packets
         **  that are drop rules.  We just don't want to see the alert.
         */
-        IpsAction * act = get_ips_policy()->action[action];
+        IpsAction * act = get_ips_policy()->get_action(action, action_selector);
+        if ( !act )
+            return 1;
+
         ActInfo ai(otn, false);
         act->exec(p, ai);
 
@@ -235,7 +243,7 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
             else
                 p->flow->flags.ips_block_event_suppressed = true;
         }
-        fpLogOther(p, rtn, otn, action);
+        fpLogOther(p, otn, action, action_selector);
         pc.event_limit++;
         return 1;
     }
@@ -249,18 +257,21 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
     if ( (p->packet_flags & PKT_PASS_RULE) &&
         (sc->get_eval_index(rtn->action) > sc->get_eval_index(IpsAction::get_type("pass"))) )
     {
-        fpLogOther(p, rtn, otn, rtn->action);
+        fpLogOther(p, otn, rtn->action, rtn->action_selector);
         return 1;
     }
 
     otn->state[get_instance_id()].alerts++;
     uint16_t eseq = Event::get_next_seq_num();
-    IpsAction* act = get_ips_policy()->action[action];
+    IpsAction* act = get_ips_policy()->get_action(action, action_selector);
+    if ( !act )
+        return 1;
+
     ActInfo ai(otn);
 
     act->exec(p, ai);
     SetTags(p, otn, eseq);
-    fpLogOther(p, rtn, otn, action);
+    fpLogOther(p, otn, action, action_selector);
 
     return 0;
 }
@@ -459,61 +470,30 @@ static void rule_tree_match(
     }
 }
 
-static int sortOrderByPriority(const void* e1, const void* e2)
+struct SortOrderByPriority
 {
-    const OptTreeNode* otn1;
-    const OptTreeNode* otn2;
+    bool operator()(const OptTreeNode* otn1, const OptTreeNode* otn2) const
+    {
+#ifdef REG_TEST
+        if (otn1->sigInfo.priority == otn2->sigInfo.priority)
+            return otn1->sigInfo.sid > otn2->sigInfo.sid;
+#endif
+        return otn1->sigInfo.priority < otn2->sigInfo.priority;
+    }
+};
 
-    if (!e1 || !e2)
-        return 0;
-
-    otn1 = *(OptTreeNode* const*)e1;
-    otn2 = *(OptTreeNode* const*)e2;
-
-    if ( otn1->sigInfo.priority < otn2->sigInfo.priority )
-        return -1;
-
-    if ( otn1->sigInfo.priority > otn2->sigInfo.priority )
-        return +1;
-
-    /* This improves stability of repeated tests */
-    if ( otn1->sigInfo.sid < otn2->sigInfo.sid )
-        return -1;
-
-    if ( otn1->sigInfo.sid > otn2->sigInfo.sid )
-        return +1;
-
-    return 0;
-}
-
-// FIXIT-L pattern length is not a valid event sort criterion for
-// non-literals
-static int sortOrderByContentLength(const void* e1, const void* e2)
+// FIXIT-L pattern length is not a valid event sort criterion for non-literals
+struct SortOrderByContentLength
 {
-    const OptTreeNode* otn1;
-    const OptTreeNode* otn2;
-
-    if (!e1 || !e2)
-        return 0;
-
-    otn1 = *(OptTreeNode* const*)e1;
-    otn2 = *(OptTreeNode* const*)e2;
-
-    if (otn1->longestPatternLen < otn2->longestPatternLen)
-        return +1;
-
-    if (otn1->longestPatternLen > otn2->longestPatternLen)
-        return -1;
-
-    /* This improves stability of repeated tests */
-    if ( otn1->sigInfo.sid < otn2->sigInfo.sid )
-        return +1;
-
-    if ( otn1->sigInfo.sid > otn2->sigInfo.sid )
-        return -1;
-
-    return 0;
-}
+    bool operator()(const OptTreeNode* otn1, const OptTreeNode* otn2) const
+    {
+#ifdef REG_TEST
+        if (otn1->longestPatternLen == otn2->longestPatternLen)
+            return otn1->sigInfo.sid > otn2->sigInfo.sid;
+#endif
+        return otn1->longestPatternLen > otn2->longestPatternLen;
+    }
+};
 
 /*
 **  DESCRIPTION
@@ -625,6 +605,7 @@ static inline int fpSessionAlerted(Packet* p, const OptTreeNode* otn)
 **  FORMAL OUTPUT
 **    int - return 0 if no match, 1 if match.
 */
+template <typename Compare>
 static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
 {
     if ( !omd->have_match )
@@ -633,9 +614,6 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
     unsigned tcnt = 0;
     int res = 0;
     EventQueueConfig* eq = p->context->conf->event_queue_config;
-    int (*compar)(const void *, const void *);
-    compar = ( eq->order == SNORT_EVENTQ_PRIORITY )
-        ? &sortOrderByPriority : sortOrderByContentLength;
 
     for ( unsigned i = 0; i < p->context->conf->num_rule_types; i++ )
     {
@@ -658,8 +636,8 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
              * part of the natural ordering....Jan '06..
              */
             /* Sort the rules in this action group */
-            qsort(omd->matchInfo[i].MatchArray, omd->matchInfo[i].iMatchCount,
-                sizeof(void*), compar);
+            std::sort(omd->matchInfo[i].MatchArray, omd->matchInfo[i].MatchArray + omd->matchInfo[i].iMatchCount,
+                Compare());
 
             /* Process each event in the action (alert,drop,log,...) groups */
             for ( unsigned j = 0; j < omd->matchInfo[i].iMatchCount; j++ )
@@ -673,31 +651,6 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
                     res = 1;
                     break;
                 }
-
-                RuleTreeNode* rtn = getRtnFromOtn(otn);
-
-                if ( !rtn )
-                    continue;
-
-                if ( p->packet_flags & PKT_PASS_RULE )
-                {
-                    /* Already acted on rules, so just don't act on anymore */
-                    if ( tcnt > 0 )
-                        return 1;
-                }
-
-                //  Loop here so we don't log the same event multiple times.
-                for (unsigned k = 0; k < j; k++)
-                {
-                    if ( omd->matchInfo[i].MatchArray[k] == otn )
-                    {
-                        otn = nullptr;
-                        break;
-                    }
-                }
-
-                if ( !otn )
-                    continue;
 
                 if ( !fpSessionAlerted(p, otn) )
                 {
@@ -715,15 +668,21 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
                     if ( p->flow )
                         fpAddSessionAlert(p, otn);
                 }
-
-                /* only log/count one pass */
-                if ( p->packet_flags & PKT_PASS_RULE )
-                    return 1;
             }
         }
     }
 
     return res;
+}
+
+static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
+{
+    const EventQueueConfig* eq = p->context->conf->event_queue_config;
+
+    if (eq->order == SNORT_EVENTQ_PRIORITY)
+        return fpFinalSelectEvent<SortOrderByPriority>(omd, p);
+    else
+        return fpFinalSelectEvent<SortOrderByContentLength>(omd, p);
 }
 
 class MpseStash
@@ -1395,11 +1354,14 @@ static inline int fp_do_actions(OtnxMatchData* omd, Packet* p)
     {
         if (omd->matchInfo[i].iMatchCount)
         {
-            qsort(omd->matchInfo[i].MatchArray, omd->matchInfo[i].iMatchCount,
-                sizeof(void*), sortOrderByContentLength);
+            std::sort(omd->matchInfo[i].MatchArray, omd->matchInfo[i].MatchArray + omd->matchInfo[i].iMatchCount,
+                SortOrderByContentLength());
             const OptTreeNode* otn = omd->matchInfo[i].MatchArray[0];
             RuleTreeNode* rtn = getRtnFromOtn(otn);
-            IpsAction* act = get_ips_policy()->action[rtn->action];
+            IpsAction* act = get_ips_policy()->get_action(rtn->action, rtn->action_selector);
+            if ( !act )
+                continue;
+
             ActInfo ai(otn);
             act->exec(p, ai);
         }

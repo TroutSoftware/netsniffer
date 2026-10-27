@@ -52,12 +52,13 @@
 #include "detection/rules.h"
 #include "framework/data_bus.h"
 #include "log/log.h"
-#include "packet_io/packet_tracer.h"
 #include "profiler/profiler.h"
 #include "protocols/eth.h"
 #include "pub_sub/intrinsic_event_ids.h"
 #include "pub_sub/stream_event_ids.h"
 #include "stream/stream.h"
+#include "stream/stream_log.h"
+#include "utils/util.h"
 
 #include "stream_tcp.h"
 #include "tcp_ha.h"
@@ -110,6 +111,7 @@ bool TcpSession::setup(Packet*)
     daq_flags = address_space_id = 0;
 
     tcp_config = get_tcp_cfg(flow->ssn_server);
+    proxy_cutover_ooo_drop = tcp_config->proxy_mode_ooo_drop;
     flow->set_default_session_timeout(tcp_config->session_timeout, false);
     flow->set_idle_timeout(tcp_config->embryonic_timeout);
     set_os_policy();
@@ -378,7 +380,7 @@ void TcpSession::update_timestamp_tracking(TcpSegmentDescriptor& tsd)
 
     talker->set_tf_flags(listener->normalizer.get_timestamp_flags());
     if ( listener->normalizer.handling_timestamps()
-        && SEQ_EQ(listener->rcv_nxt, tsd.get_seq()) )
+        && SEQ_EQ(listener->get_rcv_nxt(), tsd.get_seq()) )
     {
         talker->set_ts_last_packet(tsd.get_packet_timestamp());
         talker->set_ts_last(tsd.get_timestamp());
@@ -470,6 +472,9 @@ void TcpSession::update_ignored_session(TcpSegmentDescriptor& tsd)
 
 void TcpSession::handle_data_on_syn(TcpSegmentDescriptor& tsd)
 {
+    if ( tsd.are_packet_flags_set(PKT_STREAM_INSERT) )
+        return;
+
     TcpStreamTracker* listener = tsd.get_listener();
 
     if ( !listener->normalizer.trim_syn_payload(tsd) )
@@ -582,6 +587,8 @@ bool TcpSession::check_for_window_slam(TcpSegmentDescriptor& tsd)
     if ( tcp_config->max_window && (tsd.get_wnd() > tcp_config->max_window) )
     {
         /* got a window too large, alert! */
+        stream_log(tsd.get_pkt(), "stream_tcp: wnd %u exceeds max %u\n",
+            tsd.get_wnd(), tcp_config->max_window);
         tel.set_tcp_event(EVENT_WINDOW_TOO_LARGE);
         listener->normalizer.packet_dropper(tsd, NORM_TCP_BLOCK);
         set_pkt_action_flag(ACTION_BAD_PKT);
@@ -592,6 +599,7 @@ bool TcpSession::check_for_window_slam(TcpSegmentDescriptor& tsd)
         && !(tsd.get_tcph()->is_fin() || tsd.get_tcph()->is_rst()) )
     {
         /* got a window slam alert! */
+        stream_log(tsd.get_pkt(), "stream_tcp: window slam, wnd=%u\n", tsd.get_wnd());
         tel.set_tcp_event(EVENT_WINDOW_SLAM);
         listener->normalizer.packet_dropper(tsd, NORM_TCP_BLOCK);
         set_pkt_action_flag(ACTION_BAD_PKT);
@@ -711,7 +719,7 @@ bool TcpSession::filter_packet_for_reassembly(TcpSegmentDescriptor& tsd, TcpStre
 
         if ( tsd.is_packet_inorder() )
             listener->set_rcv_nxt(tsd.get_end_seq());
-        else if ( SEQ_GT(listener->r_win_base, listener->rcv_nxt) )
+        else if ( SEQ_GT(listener->r_win_base, listener->get_rcv_nxt()) )
             listener->set_rcv_nxt(listener->r_win_base); 
 
         return false;
@@ -745,7 +753,7 @@ void TcpSession::handle_data_segment(TcpSegmentDescriptor& tsd, bool flush)
         else
             server.set_tcp_options_len(tcp_options_len);
 
-        tsd.set_packet_inorder(tsd.get_seq() == listener->rcv_nxt );
+        tsd.set_packet_inorder(tsd.get_seq() == listener->get_rcv_nxt() );
 
         int rc =  listener->normalizer.apply_normalizations(tsd, tsd.get_seq(), tsd.is_packet_inorder());
         switch ( rc )
@@ -773,15 +781,33 @@ void TcpSession::handle_data_segment(TcpSegmentDescriptor& tsd, bool flush)
             break;
 
         case TcpNormalizer::NORM_TRIMMED:
+            proxy_cutover_ooo_drop = false;
             break;
 
         case TcpNormalizer::NORM_BAD_SEQ:
+            proxy_cutover_ooo_drop = false;
             return;
 
         default:
             assert(false);
             break;
         }
+    }
+
+    if ( proxy_cutover_ooo_drop && talker->client_tracker )
+    {
+        if ( !tsd.is_packet_inorder() && tsd.is_nap_policy_inline() )
+        {
+            tsd.drop_packet();
+            ++tcpStats.proxy_cutover_ooo_drops;
+            proxy_cutover_ooo_drop = false;
+            stream_log(tsd.get_pkt(), "stream_tcp: proxy cutover: dropping OOO client data"
+                " (seq %u, len %u), expecting retransmit\n",
+                tsd.get_seq(), tsd.get_len());
+            return;
+        }
+        else if ( listener->seglist.total_segs_queued >= 2 )
+            proxy_cutover_ooo_drop = false;
     }
 
     if ( flush )
@@ -809,6 +835,8 @@ void TcpSession::check_for_repeated_syn(TcpSegmentDescriptor& tsd)
     if ( !SEQ_EQ(tsd.get_seq(), talker->get_iss()) and
         listener->normalizer.packet_dropper(tsd, NORM_TCP_BLOCK) )
     {
+        stream_log(tsd.get_pkt(), "stream_tcp: Repeated SYN with bad seq %u, expected %u\n",
+            tsd.get_seq(), talker->get_iss());
         set_pkt_action_flag(ACTION_BAD_PKT);
     }
     else if ( talker->get_tcp_state() >= TcpStreamTracker::TCP_ESTABLISHED and
@@ -912,16 +940,6 @@ void TcpSession::set_extra_data(Packet* p, uint32_t xid)
     st.tcp_alerts.set_xtradata_mask(st.tcp_alerts.get_xtradata_mask() | BIT(xid));
 }
 
-static inline void set_window_scale(TcpSegmentDescriptor& tsd)
-{
-    // scale the window.  Only if BOTH client and server specified wscale option as part
-    // of 3-way handshake.  This is per RFC 1323.
-    if ( (tsd.get_talker()->get_tf_flags() & TF_WSCALE)
-         && (tsd.get_listener()->get_tf_flags() & TF_WSCALE) )
-    {
-        tsd.scale_wnd(tsd.get_talker()->get_wscale());
-    }
-}
 
 void TcpSession::check_events_and_actions(const TcpSegmentDescriptor& tsd)
 {
@@ -973,8 +991,8 @@ bool TcpSession::cleanup_session_if_expired(Packet* p)
     // the packet...Insert a packet, or handle state change SYN, FIN, RST, etc.
     if ( Stream::expired_flow(flow, p) )
     {
-        if ( PacketTracer::is_active() and p and p->ptrs.tcph )
-            PacketTracer::log("Stream TCP session expired with session flags 0x%x, flow state %hhu, and seq %u\n",
+        if ( p and p->ptrs.tcph )
+            stream_log(p, "Stream TCP session expired with session flags 0x%x, flow state %hhu, and seq %u\n",
                 flow->get_session_flags(), static_cast<uint8_t>(flow->flow_state), p->ptrs.tcph->seq());
         /* Session is timed out, if also reset then restart, otherwise clear */
         if ( flow->get_session_flags() & SSNFLAG_RESET )
@@ -1043,19 +1061,85 @@ void TcpSession::init_tcp_packet_analysis(TcpSegmentDescriptor& tsd)
     }
 
     update_ignored_session(tsd);
-    set_window_scale(tsd);
+    tsd.set_window_scale();
+}
+
+// Out-of-order 3WHS: SYN -> ACK -> SYN-ACK.
+// Repair server-side stream state with options it missed (wscale, mss, timestamps).
+// When both sides negotiated window scaling, repair snd_wnd on both sides.
+//
+// Safety guards (any failure -> no repair):
+//   - only fires once: server.iss is 0 until init_on_late_synack() sets it
+//   - no server-to-client data has already been queued
+//   - SYN-ACK must ack exactly client ISS+1 (acks the SYN)
+//   - client ACK seq == client ISS+1 (the 3WHS ACK, not a keepalive)
+//   - server.snd_una == SYN-ACK seq+1 (the 3WHS ACK was for this SYN-ACK)
+// If the SYN-ACK carries data, it is queued after repair but before listener-side
+// handshake finalization advances rcv_nxt past the SYN payload.
+void TcpSession::handle_late_synack(TcpSegmentDescriptor& tsd)
+{
+    if ( server.get_iss() ) 
+        return;
+
+    if ( client.seglist.data_was_queued() )
+    {
+        stream_log(tsd.get_pkt(), "stream_tcp: OOO 3WHS: skipped - server data already queued.\n");
+        return;
+    }
+
+    if ( !SEQ_EQ(tsd.get_ack(), client.get_iss() + 1) )
+    {
+        stream_log(tsd.get_pkt(), "stream_tcp: OOO 3WHS: skipped - SYN-ACK ack != client ISS+1.\n");
+        return;
+    }
+
+    // r_win_base is advanced by server packets after the 3WHS ACK; if already past ISS+1 the
+    // session is no longer in the clean pre-data state required for safe repair.
+    if ( !SEQ_EQ(server.r_win_base, client.get_iss() + 1) )
+    {
+        stream_log(tsd.get_pkt(), "stream_tcp: OOO 3WHS: skipped - server r_win_base already advanced.\n");
+        return;
+    }
+
+    // snd_una was set from the 3WHS ACK's ack field; it equals SYN-ACK.seq+1 only if
+    // the ACK was for exactly this SYN-ACK.
+    if ( !SEQ_EQ(server.get_snd_una(), tsd.get_seq() + 1) )
+    {
+        stream_log(tsd.get_pkt(), "stream_tcp: OOO 3WHS: skipped - SYN-ACK seq mismatch.\n");
+        return;
+    }
+
+    server.init_on_late_synack(tsd);
+
+    // server.rcv_wnd was already scaled by init_on_late_synack (tsd.set_window_scale()
+    // was called there after TF_WSCALE was set on both sides). client.rcv_wnd was stored
+    // unscaled during SYN processing (server TF_WSCALE was not yet set then), so it needs
+    // the explicit shift here. snd_wnd mirrors the peer's rcv_wnd post-scaling.
+    if ( (client.get_tf_flags() & TF_WSCALE) and (server.get_tf_flags() & TF_WSCALE) )
+    {
+        client.set_rcv_wnd(client.get_rcv_wnd() << client.get_wscale());
+        server.set_snd_wnd(client.get_rcv_wnd());
+        client.set_snd_wnd(server.get_rcv_wnd());
+    }
+
+    tcpStats.ooo_3whs_late_synack++;
+
+    stream_log(tsd.get_pkt(), "stream_tcp: OOO 3WHS: repaired server-side stream state from late SYN-ACK.\n");
+
+    if ( tsd.is_data_segment() )
+    {
+        const uint32_t seq = tsd.get_seq();
+        handle_data_on_syn(tsd);
+        tsd.set_seq(seq);
+    }
 }
 
 bool TcpSession::validate_packet_established_session(TcpSegmentDescriptor& tsd)
 {
     TcpStreamTracker* listener = tsd.get_listener();
 
-    if ( tsd.is_nap_policy_inline() )
-       if ( tsd.get_tcph()->is_ack() && !listener->is_ack_valid(tsd.get_ack()) )
-       {
-           listener->normalizer.packet_dropper(tsd, NORM_TCP_BLOCK);
-           set_pkt_action_flag(ACTION_BAD_PKT);
-       }
+    if ( !listener->normalizer.validate_established_ack(tsd) )
+        set_pkt_action_flag(ACTION_BAD_PKT);
 
     if ( !tsd.is_meta_ack_packet() )
         set_pkt_action_flag(listener->normalizer.handle_paws(tsd));
@@ -1068,7 +1152,7 @@ int TcpSession::process_tcp_packet(TcpSegmentDescriptor& tsd, const Packet* p)
     tsm->eval(tsd);
     check_events_and_actions(tsd);
 
-    if ( stream_tcp_trace_enabled )
+    if ( stream_tcp_trace_enabled_debug )
         S5TraceTCP(tsd, p);
 
     return ACTION_NOTHING;
@@ -1125,6 +1209,9 @@ void TcpSession::init_new_tcp_session(const TcpSegmentDescriptor& tsd)
     flow->set_expire(p, flow->default_session_timeout);
 
     update_perf_base_state(TcpStreamTracker::TCP_SYN_SENT);
+
+    if ( Stream::is_midstream(flow) )
+        proxy_cutover_ooo_drop = false;
 
     tcp_init = true;
 }
@@ -1403,6 +1490,7 @@ void TcpSession::start_proxy()
 {
     client.normalizer.init(Normalizer::Policy::PROXY, this, &client, &server);
     server.normalizer.init(Normalizer::Policy::PROXY, this, &server, &client);
+    proxy_cutover_ooo_drop = false;
     ++tcpStats.proxy_mode_flows;
 }
 
@@ -1484,23 +1572,18 @@ bool TcpSession::is_hole_present(TcpStreamTracker* listener, snort::Packet* pkt)
     {
         if ( hole_size )
         {
-            if ( PacketTracer::is_active() )
-                PacketTracer::log("stream_tcp: Hole detected at seq %u of size %u bytes\n", \
-                                  leftmost_hole, hole_size);
-
-            if ( stream_tcp_trace_enabled && pkt )
-                trace_logf(TRACE_WARNING_LEVEL, stream_tcp_trace, DEFAULT_TRACE_OPTION_ID, pkt, \
-                          "stream_tcp: Hole detected at seq %u of size %u bytes\n", leftmost_hole, hole_size);
+            stream_log(pkt, "stream_tcp: Hole detected at seq %u of size %u bytes\n",
+                leftmost_hole, hole_size);
             return true;
         }
         return false;
     };
 
     // Check for hole at the beginning of seglist
-    if ( SEQ_LT(listener->rcv_nxt, listener->seglist.head->start_seq()) )
+    if ( SEQ_LT(listener->get_rcv_nxt(), listener->seglist.head->start_seq()) )
     {
-        auto hole_size = listener->seglist.head->start_seq() - listener->rcv_nxt;
-        return log_hole_detection(listener->rcv_nxt, hole_size);
+        auto hole_size = listener->seglist.head->start_seq() - listener->get_rcv_nxt();
+        return log_hole_detection(listener->get_rcv_nxt(), hole_size);
     }
 
     if ( listener->seglist.cur_sseg && listener->seglist.cur_sseg->next )
@@ -1511,4 +1594,65 @@ bool TcpSession::is_hole_present(TcpStreamTracker* listener, snort::Packet* pkt)
         return log_hole_detection(leftmost_hole, hole_size);
     }
     return false;
+}
+
+void TcpSession::log_tcp_event(TcpStreamTracker::TcpEvent event)
+{
+    static constexpr char tcp_event_chars[TcpStreamTracker::TcpEvent::TCP_MAX_EVENTS] = {
+        'S',  // TCP_SYN_SENT_EVENT
+        'H',  // TCP_SYN_ACK_SENT_EVENT
+        'A',  // TCP_ACK_SENT_EVENT
+        'D',  // TCP_DATA_SEG_SENT_EVENT
+        'F',  // TCP_FIN_SENT_EVENT
+        'R',  // TCP_RST_SENT_EVENT
+        '-',  // TCP_NO_FLAGS_EVENT
+        's',  // TCP_SYN_RECV_EVENT
+        'h',  // TCP_SYN_ACK_RECV_EVENT
+        'a',  // TCP_ACK_RECV_EVENT
+        'd',  // TCP_DATA_SEG_RECV_EVENT
+        'f',  // TCP_FIN_RECV_EVENT
+        'r',  // TCP_RST_RECV_EVENT
+    };
+
+    if ( tcp_events_seen[event] )
+        return;
+
+    switch ( event )
+    {
+    case TcpStreamTracker::TcpEvent::TCP_ACK_SENT_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_DATA_SEG_SENT_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_ACK_RECV_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_DATA_SEG_RECV_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_NO_FLAGS_EVENT:
+        tcp_events_seen[event] = true;
+        break;
+
+    case TcpStreamTracker::TcpEvent::TCP_SYN_SENT_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_SYN_RECV_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_RST_SENT_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_RST_RECV_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_FIN_SENT_EVENT:
+    case TcpStreamTracker::TcpEvent::TCP_FIN_RECV_EVENT:
+        tcp_events_seen.reset();
+        break;
+
+    default:
+        break;
+    }
+
+    if ( event < TcpStreamTracker::TcpEvent::TCP_MAX_EVENTS && event_count < MAX_SESSION_TCP_EVENTS )
+    {
+        tcp_event_history[event_count++] = tcp_event_chars[event];
+        if ( event_count >= MAX_SESSION_TCP_EVENTS )
+            tcp_events_seen.set();
+    }
+}
+
+const char* TcpSession::get_tcp_event_history() const
+{
+    uint8_t len = event_count;
+    if ( event_count >= MAX_SESSION_TCP_EVENTS )
+        tcp_event_history[len++] = 'x';
+    tcp_event_history[len] = '\0';
+    return tcp_event_history;
 }

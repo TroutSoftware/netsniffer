@@ -49,11 +49,6 @@ bool TcpStateEstablished::syn_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& 
 
 bool TcpStateEstablished::syn_ack_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    // FIXIT-M there may be an issue when syn/ack from server is seen
-    // after ack from client which causes some tracker state variables to
-    // not be initialized... update_tracker_ack_sent may fix that but needs
-    // more testing
-    //trk.update_tracker_ack_sent( tsd );
     Flow* flow = tsd.get_flow();
     if ( !(flow->session_state & STREAM_STATE_ESTABLISHED) )
     {
@@ -63,20 +58,27 @@ bool TcpStateEstablished::syn_ack_sent(TcpSegmentDescriptor& tsd, TcpStreamTrack
     }
 
     if ( trk.is_server_tracker() )
+    {
         trk.normalizer.ecn_tracker(tsd.get_tcph());
+        trk.session->handle_late_synack(tsd);
+    }
 
     return true;
 }
 
 bool TcpStateEstablished::ack_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    trk.update_tracker_ack_sent(tsd);
+    if ( trk.validate_sent_seq(tsd) )
+        trk.update_tracker_ack_sent(tsd);
+
     return true;
 }
 
 bool TcpStateEstablished::ack_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    trk.update_tracker_ack_recv(tsd);
+    if ( trk.normalizer.validate_rcvd_seq(tsd) )
+        trk.update_tracker_ack_recv(tsd);
+
     return true;
 }
 
@@ -99,22 +101,28 @@ bool TcpStateEstablished::data_seg_recv(TcpSegmentDescriptor& tsd, TcpStreamTrac
 
 bool TcpStateEstablished::fin_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    trk.update_on_fin_sent(tsd);
-    trk.session->flow->call_handlers(tsd.get_pkt(), FlowDataStore::HANDLER_EOF);
-    trk.set_tcp_state(TcpStreamTracker::TCP_FIN_WAIT1);
+    if ( trk.validate_sent_seq(tsd) )
+    {
+        trk.update_on_fin_sent(tsd);
+        trk.session->flow->call_handlers(tsd.get_pkt(), FlowDataStore::HANDLER_EOF);
+        trk.set_tcp_state(TcpStreamTracker::TCP_FIN_WAIT1);
+    }
     return true;
 }
 
 bool TcpStateEstablished::fin_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    trk.set_fin_seq_status_seen(tsd);
-    trk.update_tracker_ack_recv(tsd);
-    trk.perform_fin_recv_flush(tsd);
-
-    if ( trk.update_on_fin_recv(tsd) )
+    if ( trk.normalizer.validate_rcvd_seq(tsd) )
     {
-        trk.session->update_perf_base_state(TcpStreamTracker::TCP_CLOSING);
-        trk.set_tcp_state(TcpStreamTracker::TCP_CLOSE_WAIT);
+        trk.set_fin_seq_status_seen(tsd);
+        trk.update_tracker_ack_recv(tsd);
+        trk.perform_fin_recv_flush(tsd);
+
+        if ( trk.update_on_fin_recv(tsd) )
+        {
+            trk.session->update_perf_base_state(TcpStreamTracker::TCP_CLOSING);
+            trk.set_tcp_state(TcpStreamTracker::TCP_CLOSE_WAIT);
+        }
     }
 
     return true;

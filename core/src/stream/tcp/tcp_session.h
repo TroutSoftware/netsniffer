@@ -20,6 +20,9 @@
 #ifndef TCP_SESSION_H
 #define TCP_SESSION_H
 
+#include <bitset>
+#include <cstdint>
+
 #include "flow/flow.h"
 #include "flow/session.h"
 #include "protocols/packet.h"
@@ -41,6 +44,7 @@ class TcpSegmentDescriptor;
 class TcpSession : public Session
 {
 public:
+    static constexpr int MAX_SESSION_TCP_EVENTS = 15;
     TcpSession(snort::Flow*);
     ~TcpSession() override;
 
@@ -120,9 +124,13 @@ public:
     void mark_packet_for_drop(TcpSegmentDescriptor&);
     void handle_data_segment(TcpSegmentDescriptor&, bool flush = true);
     bool validate_packet_established_session(TcpSegmentDescriptor&);
+    void handle_late_synack(TcpSegmentDescriptor&);
 
     void count_stale_packet() override
     { tcpStats.stale_packets++; }
+
+    void log_tcp_event(TcpStreamTracker::TcpEvent);
+    const char* get_tcp_event_history() const;
 
     TcpStreamTracker client;
     TcpStreamTracker server;
@@ -138,16 +146,9 @@ public:
     uint32_t daq_flags = 0;
     uint32_t address_space_id = 0;
     bool cleaning = false;
+    bool proxy_cutover_ooo_drop = false;
     uint8_t held_packet_dir = SSN_DIR_NONE;
     uint8_t ecn = 0;
-
-    struct TcpSessionStats
-    {
-         using TcpEvents = std::bitset<TcpStreamTracker::TcpEvent::TCP_MAX_TALKER_EVENT + 1>;
-         TcpEvents client_events;
-         TcpEvents server_events;
-    };
-    TcpSessionStats tcp_ssn_stats;
 
 private:
     int process_tcp_packet(TcpSegmentDescriptor&, const snort::Packet*);
@@ -170,10 +171,15 @@ private:
     void update_session_on_server_packet(TcpSegmentDescriptor&);
     void update_session_on_client_packet(TcpSegmentDescriptor&);
     bool is_hole_present(TcpStreamTracker*, snort::Packet*);
-
     TcpStateMachine* tsm;
     bool splitter_init = false;
     bool no_ack = false;
+
+    // TCP event logging - used to display sequence of the connection tcp events
+    static constexpr int TCP_EVENT_HISTORY_BYTES = MAX_SESSION_TCP_EVENTS + 3;  // events + 'x' overflow + '\0' + 1 spare
+    mutable char tcp_event_history[TCP_EVENT_HISTORY_BYTES] = {};
+    uint8_t event_count = 0;
+    std::bitset<TcpStreamTracker::TcpEvent::TCP_MAX_EVENTS> tcp_events_seen;
 };
 
 #endif

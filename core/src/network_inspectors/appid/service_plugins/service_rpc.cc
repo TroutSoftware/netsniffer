@@ -203,7 +203,7 @@ struct RPCProgram
     char* name;
 };
 
-static THREAD_LOCAL RPCProgram* rpc_programs;
+static RPCProgram* rpc_programs;
 
 static uint8_t rpc_reply_accepted_pattern[8] = { 0,0,0,1,0,0,0,0 };
 static uint8_t rpc_reply_denied_pattern[8] = { 0,0,0,1,0,0,0,1 };
@@ -224,7 +224,6 @@ RpcServiceDetector::RpcServiceDetector(ServiceDiscovery* sd)
         {
             if (rpc->r_name)
             {
-                // FIXIT-RC - the memory allocated here may not be freed...
                 prog = (RPCProgram*)snort_calloc(sizeof(RPCProgram));
                 prog->program = rpc->r_number;
                 prog->next = rpc_programs;
@@ -426,8 +425,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                 data += (PROGRAM_LENGTH + VERSION_LENGTH);
                 const NetId* net_id = (const NetId*) data;
                 tmp = ntohl(net_id->length);
-                if (tmp == 0 or ((sizeof(ServiceRPCCall) + PROGRAM_LENGTH + VERSION_LENGTH +
-                    sizeof(NetId)) > (tmp > size ? 0 : size - tmp)))
+                if (tmp == 0 or tmp > (unsigned)(end - data) - sizeof(NetId))
                     return APPID_NOT_COMPATIBLE;
 
                 data += sizeof(NetId);
@@ -501,8 +499,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                         return APPID_NOMATCH;
                     const UniversalAddress* u_addr = (const UniversalAddress*) data;
                     tmp = ntohl(u_addr->length);
-                     if (tmp == 0 or 
-                        (sizeof(ServiceRPCReply) + sizeof(UniversalAddress)) > (tmp > size ? 0 : size - tmp))
+                    if (tmp == 0 or tmp > (unsigned)(end - data) - sizeof(UniversalAddress))
                         return APPID_NOMATCH;
                     uint32_t address = 0;
                     uint16_t port = 0;

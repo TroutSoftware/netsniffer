@@ -22,6 +22,7 @@
 
 #include "flow/flow.h"
 #include "flow/ha.h"
+#include "main/reload_tuner.h"
 
 class __attribute__((__packed__)) SessionHAContent
 {
@@ -31,12 +32,13 @@ public:
     uint8_t flags;
     static constexpr uint8_t FLAG_LOW = 0x01; // client address / port is low in key
     static constexpr uint8_t FLAG_IP6 = 0x02; // key addresses are ip6
+    static constexpr uint8_t FLAG_UDP_TUNNELED = 0x04; // flow decoded from a UDP tunnel
 };
 
 class StreamHAClient : public snort::FlowHAClient
 {
 public:
-    StreamHAClient() : FlowHAClient(sizeof(SessionHAContent), true) { }
+    StreamHAClient();
     bool consume(snort::Flow*&, const snort::FlowKey*, snort::HAMessage&, uint8_t size) override;
     bool produce(snort::Flow&, snort::HAMessage&) override;
     bool is_update_required(snort::Flow*) override;
@@ -57,8 +59,21 @@ class StreamHAManager
 public:
     static void tinit();
     static void tterm();
+    static void tswap();
 
     static THREAD_LOCAL StreamHAClient* ha_client;
+};
+
+// ReloadSwapper that recreates the StreamHAClient on reload so it picks up
+// any change to its assigned HA client index.
+class StreamHAReloadSwapper : public snort::ReloadSwapper
+{
+public:
+    const char* name() const override { return "StreamHAReloadSwapper"; }
+    void tswap() override
+    {
+        StreamHAManager::tswap();
+    }
 };
 #endif
 

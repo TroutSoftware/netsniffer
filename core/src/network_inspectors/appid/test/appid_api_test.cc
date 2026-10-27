@@ -314,7 +314,7 @@ TEST(appid_api, set_ssl_certificate_key)
     );
     string cert_key = "valid_certificate_key";
     appid_api.set_ssl_certificate_key(*flow, cert_key);
-    asd.set_cert_key(cert_key);
+    asd.set_cert_key(cert_key.c_str());
     CHECK_EQUAL(asd.get_cert_key(), cert_key);
     delete &asd.get_api();
 }
@@ -401,6 +401,24 @@ TEST(appid_api, ssl_app_group_id_lookup_zero_len_data)
     POINTERS_EQUAL(mock_session->tsession->get_tls_cname(), nullptr);
     POINTERS_EQUAL(mock_session->tsession->get_tls_org_unit(), nullptr);
     mock().checkExpectations();
+}
+
+TEST(appid_api, set_tls_null_byte_string_no_leak)
+{
+    char* null_sni = snort_strdup("\0");
+    char* null_cname = snort_strdup("\0");
+    char* null_alt_name = snort_strdup("\0");
+    char* null_org_unit = snort_strdup("\0");
+
+    mock_session->tsession->set_tls_sni(null_sni, 0);
+    mock_session->tsession->set_tls_cname(null_cname, 0);
+    mock_session->tsession->set_tls_first_alt_name(null_alt_name, 0);
+    mock_session->tsession->set_tls_org_unit(null_org_unit, 0);
+
+    POINTERS_EQUAL(mock_session->tsession->get_tls_sni(), nullptr);
+    POINTERS_EQUAL(mock_session->tsession->get_tls_cname(), nullptr);
+    POINTERS_EQUAL(mock_session->tsession->get_tls_first_alt_name(), nullptr);
+    POINTERS_EQUAL(mock_session->tsession->get_tls_org_unit(), nullptr);
 }
 
 TEST(appid_api_no_session, ssl_app_group_id_lookup)

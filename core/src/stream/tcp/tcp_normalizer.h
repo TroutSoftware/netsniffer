@@ -84,7 +84,6 @@ public:
     virtual void ecn_stripper(State&, TcpSegmentDescriptor&);
     virtual uint32_t get_zwp_seq(State&);
     virtual uint32_t get_stream_window(State&, TcpSegmentDescriptor&);
-    virtual uint32_t data_inside_window(State&, TcpSegmentDescriptor&);
     virtual uint32_t get_tcp_timestamp(State&, TcpSegmentDescriptor&, bool strip);
     virtual int handle_paws(State&, TcpSegmentDescriptor&);
     virtual RstStatus validate_rst(State&, TcpSegmentDescriptor&);
@@ -94,6 +93,8 @@ public:
     virtual void log_drop_reason(State&, const TcpSegmentDescriptor&, bool inline_mode,
         const char *issuer, const std::string& log);
     virtual bool is_keep_alive_probe(State&, const TcpSegmentDescriptor&);
+    virtual bool validate_established_ack(State&, TcpSegmentDescriptor&);
+    virtual bool validate_rcvd_seq(State&, TcpSegmentDescriptor&);
 
     static void reset_stats();
 

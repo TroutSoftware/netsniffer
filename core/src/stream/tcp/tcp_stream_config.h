@@ -57,6 +57,9 @@ public:
     uint32_t paf_max = 16384;
 
     bool no_ack = false;
+    bool proxy_mode_ooo_drop = false;
+    bool trace_seq_relative = false;
+
     uint32_t embryonic_timeout = STREAM_DEFAULT_SSN_TIMEOUT;
     uint32_t idle_timeout = 3600;
 };

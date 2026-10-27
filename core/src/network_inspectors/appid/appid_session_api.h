@@ -60,7 +60,7 @@ namespace snort
 /**Flow is a data connection not a service */
 #define APPID_SESSION_NOT_A_SERVICE         (1ULL << 16)
 #define APPID_SESSION_DECRYPTED             (1ULL << 17)
-#define APPID_SESSION_SERVICE_DELETED       (1ULL << 18)
+#define APPID_SESSION_WAIT_FOR_EXTERNAL     (1ULL << 18)
 //The following attributes are references only with appId
 /**Continue calling the routine after the service has been identified. */
 #define APPID_SESSION_CONTINUE              (1ULL << 19)
@@ -94,7 +94,7 @@ namespace snort
 #define APPID_SESSION_OPPORTUNISTIC_TLS     (1ULL << 44)
 #define APPID_SESSION_FIRST_PKT_CACHE_MATCHED    (1ULL << 45)
 #define APPID_SESSION_DO_NOT_DECRYPT        (1ULL << 46)
-#define APPID_SESSION_WAIT_FOR_EXTERNAL     (1ULL << 47)
+#define APPID_SESSION_INITIATOR_SEEN        (1ULL << 48)
 #define APPID_SESSION_IGNORE_ID_FLAGS \
     (APPID_SESSION_FUTURE_FLOW | \
     APPID_SESSION_NOT_A_SERVICE | \
@@ -152,10 +152,7 @@ public:
         return hsessions.size();
     }
 
-    const std::string& get_session_id() const
-    {
-        return session_id;
-    }
+    const char* get_session_id();
 
     void set_user_logged_in() { flags.user_logged_in = true; }
 
@@ -186,7 +183,7 @@ private:
     char* tls_sni = nullptr;
     char* netbios_name = nullptr;
     char* netbios_domain = nullptr;
-    std::string session_id;
+    char* session_id = nullptr;
 
     // Following two fields are used only for non-http sessions. For HTTP traffic,
     // these fields are maintained inside AppIdHttpSession.
@@ -221,6 +218,8 @@ private:
         dsessions.clear();
         delete dsession;
         dsession = nullptr;
+        snort_free(session_id);
+        session_id = nullptr;
     }
 
     void delete_all_http_sessions()

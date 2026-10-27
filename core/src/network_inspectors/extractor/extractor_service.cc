@@ -86,7 +86,12 @@ void ExtractorService::tinit(ExtractorLogger* new_logger)
 }
 
 void ExtractorService::tterm()
-{ logger->add_footer(get_log_id()); }
+{
+    for (auto handler : handlers)
+        handler->tterm();
+
+    logger->add_footer(get_log_id());
+}
 
 void ExtractorService::add_events(const std::vector<std::string>& vals)
 {
@@ -697,6 +702,8 @@ const ServiceBlueprint IpsUserExtractorService::blueprint =
     // fields
     {
         "action",
+        "ips_action",
+        "ids_reason",
         "sid",
         "gid",
         "rev",

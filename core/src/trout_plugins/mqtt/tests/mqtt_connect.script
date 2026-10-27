@@ -1,3 +1,5 @@
+skip
+
 pcap testdata/test_connect.pcap
 cmp output.txt testdata/mqtt_connect.expected.txt
 

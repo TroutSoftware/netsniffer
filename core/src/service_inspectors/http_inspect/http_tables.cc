@@ -253,7 +253,7 @@ const RuleMap HttpModule::http_events[] =
     { EVENT_LARGE_CHUNK,                "chunk length exceeds configured maximum_chunk_length" },
     { EVENT_WEBROOT_DIR,                "URI path includes /../ that goes above the root directory" },
     { EVENT_LONG_HDR,                   "HTTP header line exceeds maximum_header_length option bytes" },
-    { EVENT_MAX_HEADERS,                "HTTP message has more than maximum_headers option header fields" },
+    { EVENT_MAX_HEADERS,                "HTTP header count exceeds limit" },
     { EVENT_MULTIPLE_CONTLEN,           "HTTP message has more than one Content-Length header value" },
     { EVENT_MULTIPLE_HOST_HDRS,         "Host header field appears more than once or has multiple values" },
     { EVENT_LONG_HOSTNAME,              "length of HTTP Host header field value exceeds maximum_host_length option" },
@@ -353,12 +353,21 @@ const RuleMap HttpModule::http_events[] =
     { EVENT_PARTIAL_START,              "partial start line" },
     { EVENT_REQ_TOO_LONG,               "HTTP message request line longer than 63780 bytes" },
     { EVENT_UNEXPECTED_H2_PREFACE,      "HTTP/2 preface received instead of an HTTP/1 method" },
-    { EVENT_DISALLOWED_METHOD,          "HTTP request method is not on allowed methods list or is on "
-                                        "disallowed methods list" },
+    { EVENT_DISALLOWED_METHOD,          "HTTP method is not allowed" },
     { EVENT_GZIP_RESERVED_FLAGS,        "HTTP gzip body with reserved flag set" },
     { EVENT_MAX_PARTIAL_FLUSH,          "Too many partial flushes" },
     { EVENT_DEFLATE_EARLY_END,          "deflate compressed data followed by unexpected non-deflate data" },
     { EVENT_DEFLATE_FAILURE,            "deflate decompression failed" },
+    { EVENT_BROTLI_EARLY_END,           "brotli compressed data followed by unexpected non-brotli data" },
+    { EVENT_BROTLI_FAILURE,             "brotli decompression failed" },
+    { EVENT_GZIP_HIGH_EXPANSION,        "gzip decompression produced excessive output relative to consumed input" },
+    { EVENT_DEFLATE_HIGH_EXPANSION,     "deflate decompression produced excessive output relative to consumed input" },
+    { EVENT_BROTLI_HIGH_EXPANSION,      "brotli decompression produced excessive output relative to consumed input" },
+    { EVENT_BROTLI_DISABLED,            "brotli compressed traffic detected while decompression is disabled" },
+    { EVENT_REQUEST_SIZE_TOO_LONG,      "maximum request size exceeded" },
+    { EVENT_REQUEST_LINE_LENGTH_TOO_LONG, "maximum request line length exceeded" },
+    { EVENT_REQUEST_LINE_NOT_VALID,     "invalid HTTP request line format" },
+    { EVENT_HEADER_INVALID_CL_OR_TE,    "invalid Content-Length or Transfer-Encoding header" },
     { 0, nullptr }
 };
 
@@ -405,9 +414,12 @@ const PegInfo HttpModule::peg_names[PEG_COUNT_MAX+1] =
     { CountType::SUM, "compressed_deflate", "total number of HTTP bodies compressed with Deflate" },
     { CountType::SUM, "incorrect_deflate_header", "total number of HTTP bodies compressed with Deflate that had incorrect header" },
     { CountType::SUM, "compressed_deflate_failed", "total number of HTTP bodies with failed Deflate decompression" },
+    { CountType::SUM, "compressed_brotli", "total number of HTTP bodies compressed with Brotli" },
+    { CountType::SUM, "compressed_brotli_failed", "total number of HTTP bodies with failed Brotli decompression" },
     { CountType::SUM, "compressed_not_supported", "total number of HTTP bodies compressed with known but not supported methods" },
     { CountType::SUM, "compressed_unknown", "total number of HTTP bodies compressed with unknown methods" },
     { CountType::SUM, "max_publish_depth_hits", "total number of times the maximum publish depth was exceeded" },
+    { CountType::SUM, "header_count_exceeded", "total number of HTTP messages with header count exceeding the configured maximum" },
     { CountType::END, nullptr, nullptr }
 };
 

@@ -23,6 +23,8 @@
 // PacketManager provides decode and encode services by leveraging Codecs.
 
 #include <array>
+#include <string>
+#include <vector>
 
 #include "framework/codec.h"
 #include "framework/counts.h"
@@ -57,6 +59,14 @@ enum class UnreachResponse
 class SO_PUBLIC PacketManager
 {
 public:
+    static constexpr uint8_t stat_offset = 4;
+    using Stats = std::array<PegCount, stat_offset + num_protocol_idx>;
+    struct DisplayStat
+    {
+        std::string name;
+        PegCount count;
+    };
+
     static void global_init(uint8_t max_layers);
 
     static void thread_init();
@@ -105,8 +115,7 @@ public:
     // get the max payload for the current packet
     static uint16_t encode_get_max_payload(const Packet*);
 
-    // print codec information.  MUST be called after thread_term.
-    static void dump_stats();
+    static void get_display_stats(const Stats&, std::vector<DisplayStat>&);
 
     static void reset_stats();
 
@@ -134,10 +143,11 @@ public:
 
     static void accumulate();
 
+    static void get_thread_stats(Stats& out);
+    static void get_global_stats(Stats& out);
+
     static uint8_t get_max_layers()
     { return max_layers; }
-
-    static constexpr uint8_t stat_offset = 4;
 
 private:
     static bool push_layer(Packet*, CodecData&, ProtocolId, const uint8_t* hdr_start, uint32_t len);
@@ -160,4 +170,3 @@ private:
 };
 }
 #endif
-

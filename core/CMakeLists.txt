@@ -3,7 +3,7 @@ project (snort CXX C)
 
 set (VERSION_MAJOR 3)
 set (VERSION_MINOR 12)
-set (VERSION_PATCH 2)
+set (VERSION_PATCH 4)
 set (VERSION_SUBLEVEL 0)
 set (VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_SUBLEVEL}")
 
@@ -217,6 +217,14 @@ if (HAVE_LIBML)
 else ()
     message("\
     LibML:          OFF")
+endif ()
+
+if (HAVE_BROTLI)
+    message("\
+    Brotli:         ON")
+else ()
+    message("\
+    Brotli:         OFF")
 endif ()
 
 message("-------------------------------------------------------\n")

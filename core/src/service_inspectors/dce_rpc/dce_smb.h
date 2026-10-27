@@ -22,6 +22,8 @@
 #ifndef DCE_SMB_H
 #define DCE_SMB_H
 
+#include <unordered_map>
+
 #include "dce_co.h"
 #include "hash/lru_cache_local.h"
 #include "protocols/packet.h"
@@ -80,6 +82,7 @@
 #define DCE2_SMB_EVASIVE_FILE_ATTRS 57
 #define DCE2_SMB_INVALID_FILE_OFFSET 58
 #define DCE2_SMB_BAD_NEXT_COMMAND_OFFSET 59
+#define DCE2_SMB_EXCESSIVE_FILE_CHUNKS 60
 
 #define DCE2_SMB_BAD_NBSS_TYPE_STR "SMB - bad NetBIOS session service session type"
 #define DCE2_SMB_BAD_TYPE_STR  "SMB - bad SMB message type"
@@ -133,6 +136,8 @@
     "SMB - file offset provided is greater than file size specified"
 #define DCE2_SMB_BAD_NEXT_COMMAND_OFFSET_STR \
     "SMB - next command specified in SMB2 header is beyond payload boundary"
+#define DCE2_SMB_EXCESSIVE_FILE_CHUNKS_STR \
+    "SMB - excessive out-of-order file chunks causing potential DoS"
 
 struct dce2SmbStats : public LruCacheLocalStats
 {
@@ -337,6 +342,10 @@ struct DCE2_SmbFileTracker
     uint16_t file_name_size;
     uint64_t file_name_hash;
 
+    // Monotonic recency stamp for deterministic MRU-first fapi selection
+    // now that trackers live in an unordered_map.
+    uint64_t seq;
+
     union
     {
         struct
@@ -420,6 +429,10 @@ struct DCE2_SmbRequestTracker
     uint16_t tid;
     uint16_t pid;
 
+    // Monotonic insertion stamp used to restore deterministic oldest-first
+    // (FIFO) selection now that trackers live in an unordered_multimap.
+    uint64_t seq;
+
     // For WriteRaw
     bool writeraw_writethrough;
     uint32_t writeraw_remaining;
@@ -461,16 +474,20 @@ struct DCE2_SmbSsnData
 
     int uid;   // A signed integer so it can be set to sentinel
     int tid;   // A signed integer so it can be set to sentinel
-    DCE2_List* uids;
-    DCE2_List* tids;
+    std::unordered_map<uint16_t, uint16_t> uids;  // value = uid (mirrors master data)
+    std::unordered_map<uint16_t, int> tids;  // value = tid | (ipc_bit << 16)
 
     // For tracking files and named pipes
     DCE2_SmbFileTracker ftracker;
-    DCE2_List* ftrackers;  // List of DCE2_SmbFileTracker
+    std::unordered_map<uint16_t, DCE2_SmbFileTracker*> ftrackers;
+    // Per-session monotonic counter assigning and refreshing DCE2_SmbFileTracker::seq.
+    uint64_t next_ftracker_seq;
 
     // For tracking requests / responses
     DCE2_SmbRequestTracker rtracker;
-    DCE2_Queue* rtrackers;
+    std::unordered_multimap<uint16_t, DCE2_SmbRequestTracker*> rtrackers_map;
+    // Per-session monotonic counter assigning DCE2_SmbRequestTracker::seq.
+    uint64_t next_rtracker_seq;
     uint16_t max_outstanding_requests;
     uint16_t outstanding_requests;
 

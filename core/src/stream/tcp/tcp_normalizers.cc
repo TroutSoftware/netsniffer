@@ -25,7 +25,8 @@
 
 #include "tcp_normalizers.h"
 
-#include "packet_io/packet_tracer.h"
+#include "detection/detection_engine.h"
+#include "stream/stream_log.h"
 
 #include "tcp_defs.h"
 #include "tcp_module.h"
@@ -221,6 +222,8 @@ public:
     TcpNormalizer::RstStatus validate_rst(TcpNormalizerState&, TcpSegmentDescriptor&) override;
     int handle_paws(TcpNormalizerState&, TcpSegmentDescriptor&) override;
     int handle_repeated_syn(TcpNormalizerState&, TcpSegmentDescriptor&) override;
+    bool validate_established_ack(TcpNormalizerState&, TcpSegmentDescriptor&) override
+    { return true; }
 };
 
 // Normalizations applied or excluded for midstream and one-way asymmetric flows are common
@@ -235,6 +238,8 @@ public:
     TcpNormalizer::RstStatus validate_rst(TcpNormalizerState&, TcpSegmentDescriptor&) override;
     int handle_paws(TcpNormalizerState&, TcpSegmentDescriptor&) override;
     int handle_repeated_syn(TcpNormalizerState&, TcpSegmentDescriptor&) override;
+    uint32_t get_stream_window(TcpNormalizerState&, TcpSegmentDescriptor&) override
+    { return MAX_TCP_WINDOW_SCALED; }
 };
 
 static inline int handle_repeated_syn_mswin(
@@ -244,7 +249,7 @@ static inline int handle_repeated_syn_mswin(
     /* Windows has some strange behavior here.  If the sequence of the reset is the
      * next expected sequence, it Resets.  Otherwise it ignores the 2nd SYN.
      */
-    if ( SEQ_EQ(tsd.get_seq(), listener->rcv_nxt) )
+    if ( SEQ_EQ(tsd.get_seq(), listener->get_rcv_nxt()) )
     {
         session->flow->set_session_flags(SSNFLAG_RESET);
         talker->set_tcp_state(TcpStreamTracker::TCP_CLOSED);
@@ -293,7 +298,7 @@ static inline bool paws_3whs_zero_ts_supported(
     if ( talker->get_tf_flags() & TF_TSTAMP_ZERO )
     {
         talker->clear_tf_flags(TF_TSTAMP_ZERO);
-        if ( SEQ_EQ(listener->rcv_nxt, tsd.get_seq() ) )
+        if ( SEQ_EQ(listener->get_rcv_nxt(), tsd.get_seq() ) )
         {
             // Ignore timestamp for this first packet, save to check on next
             talker->set_ts_last(tsd.get_timestamp());
@@ -397,7 +402,7 @@ bool TcpNormalizerHpux11::is_paws_ts_checked_required(
 {
     /* HPUX 11 ignores timestamps for out of order segments */
     if ( (tns.tracker->get_tf_flags() & TF_MISSING_PKT)
-        || !SEQ_EQ(tns.tracker->rcv_nxt, tsd.get_seq()) )
+        || !SEQ_EQ(tns.tracker->get_rcv_nxt(), tsd.get_seq()) )
         return false;
     else
         return true;
@@ -470,12 +475,28 @@ int TcpNormalizerProxy::handle_repeated_syn(TcpNormalizerState&, TcpSegmentDescr
 TcpNormalizer::NormStatus TcpNormalizerMissed3whs::apply_normalizations(
     TcpNormalizerState& tns, TcpSegmentDescriptor& tsd, uint32_t, bool)
 {
-    if ( !tns.session->flow->two_way_traffic() )
-        return NORM_OK;
+    const bool asymmetric = !tns.session->flow->two_way_traffic();
+    const uint32_t seq = tsd.get_seq();
+    uint32_t anchor = 0;
+    const char* anchor_name = nullptr;
 
-    uint32_t seq = tsd.get_seq();
-    uint32_t r_win_base = tns.tracker->r_win_base;
-    uint32_t diff = seq - r_win_base;
+    if ( !asymmetric )
+    {
+        anchor = tns.tracker->r_win_base;
+        anchor_name = "r_win_base";
+    }
+    else if ( tns.tcp_ips_enabled )
+    {
+        anchor = tns.tracker->get_rcv_nxt();
+        anchor_name = "rcv_nxt";
+    }
+    else
+    {
+        anchor = tns.tracker->seglist.get_seglist_base_seq();
+        anchor_name = "seglist_base_seq";
+    }
+
+    const uint32_t diff = seq - anchor;
 
     if ( diff > MAX_TCP_WINDOW_SCALED && diff < MAX_TCP_SEQ_DISTANCE )
     {
@@ -487,7 +508,7 @@ TcpNormalizer::NormStatus TcpNormalizerMissed3whs::apply_normalizations(
         bool inline_mode = tsd.is_nap_policy_inline();
         log_drop_reason(tns, tsd, inline_mode, "stream",
             std::string("Normalizer: Missed3whs: Sequence ") + std::to_string(seq) +
-            " is too far from r_win_base " + std::to_string(r_win_base) +
+            " is too far from " + anchor_name + " " + std::to_string(anchor) +
             " (diff=" + std::to_string(diff) + ")\n");
         trim_win_payload(tns, tsd, 0, inline_mode);
         return NORM_BAD_SEQ;
@@ -549,18 +570,18 @@ void TcpNormalizerPolicy::init(Normalizer::Policy os, TcpSession* ssn, TcpStream
     norm = TcpNormalizerFactory::get_instance(os);
     norm->init(tns);
 
-    if ( PacketTracer::is_active() )
-    {
-        if ( os == Normalizer::Policy::MISSED_3WHS )
-            PacketTracer::log("stream_tcp: %s tracker normalization policy set to %s. Some normalizations are disabled.\n",
-                trk->client_tracker ? "client" : "server", norm->get_name().c_str());
-        else if ( os == Normalizer::Policy::PROXY )
-            PacketTracer::log("stream_tcp: %s tracker normalization policy set to %s. Normalizations are disabled.\n",
-                trk->client_tracker ? "client" : "server", norm->get_name().c_str());
-        else
-            PacketTracer::log("stream_tcp: %s tracker normalization policy set to %s\n",
-                trk->client_tracker ? "client" : "server", norm->get_name().c_str());
-    }
+    if ( os == Normalizer::Policy::MISSED_3WHS )
+        stream_log(DetectionEngine::get_current_packet(),
+            "stream_tcp: %s tracker normalization policy set to %s. Some normalizations are disabled.\n",
+            trk->client_tracker ? "client" : "server", norm->get_name().c_str());
+    else if ( os == Normalizer::Policy::PROXY )
+        stream_log(DetectionEngine::get_current_packet(),
+            "stream_tcp: %s tracker normalization policy set to %s. Normalizations are disabled.\n",
+            trk->client_tracker ? "client" : "server", norm->get_name().c_str());
+    else
+        stream_log(DetectionEngine::get_current_packet(),
+            "stream_tcp: %s tracker normalization policy set to %s\n",
+            trk->client_tracker ? "client" : "server", norm->get_name().c_str());
 
 }
 

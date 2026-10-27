@@ -305,5 +305,6 @@ void file_stats_print()
 #endif
     // these are global / shared by all threads
     FileCapture::print_mem_usage();
+    FileService::print_cache_usage();
 }
 

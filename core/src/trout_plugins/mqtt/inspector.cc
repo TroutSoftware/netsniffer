@@ -657,7 +657,7 @@ void Inspector::eval(snort::Packet *p) {
 
   Pegs::get<"messages">().inc();
 
-  // Wrap the incomming data in a safe container
+  // Wrap the incoming data in a safe container
   std::span<const uint8_t> data(p->data, p->dsize);
 
   std::size_t read_pos = 1;

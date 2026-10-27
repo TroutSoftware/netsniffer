@@ -70,7 +70,6 @@ THREAD_LOCAL bool ThirdPartyAppIdContext::tp_reload_in_progress = false;
 
 static const Parameter s_params[] =
 {
-    // FIXIT-L: DECRYPT_DEBUG - Move this to ssl-module
 #ifdef REG_TEST
     { "first_decrypted_packet_debug", Parameter::PT_INT, "0:max32", "0",
       "the first packet of an already decrypted SSL flow (debug single session only)" },
@@ -116,7 +115,7 @@ class AcAppIdDebug : public AnalyzerCommand
 {
 public:
     AcAppIdDebug(const AppIdDebugSessionConstraints* cs);
-    bool execute(Analyzer&, void**) override;
+    bool execute(Analyzer&) override;
     const char* stringify() override { return "APPID_DEBUG"; }
 
 private:
@@ -133,7 +132,7 @@ AcAppIdDebug::AcAppIdDebug(const AppIdDebugSessionConstraints* cs)
     }
 }
 
-bool AcAppIdDebug::execute(Analyzer&, void**)
+bool AcAppIdDebug::execute(Analyzer&)
 {
     if (appidDebug)
     {
@@ -142,12 +141,13 @@ bool AcAppIdDebug::execute(Analyzer&, void**)
         else
             appidDebug->set_constraints("appid", nullptr);
     }
-    // FIXIT-L Add a warning if command was called without appid configured?
+    else
+        APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: debug command called but appid is not configured\n");
 
     return true;
 }
 
-bool ACThirdPartyAppIdCleanup::execute(Analyzer& a, void**)
+bool ACThirdPartyAppIdCleanup::execute(Analyzer& a)
 {
     if (!pkt_thread_tp_appid_ctxt)
         return true;
@@ -162,7 +162,7 @@ bool ACThirdPartyAppIdCleanup::execute(Analyzer& a, void**)
 class ACThirdPartyAppIdContextSwap : public AnalyzerCommand
 {
 public:
-    bool execute(Analyzer&, void**) override;
+    bool execute(Analyzer&) override;
     ACThirdPartyAppIdContextSwap(AppIdInspector& inspector, ControlConn* conn)
         : AnalyzerCommand(conn), inspector(inspector)
     {
@@ -175,7 +175,7 @@ private:
     AppIdInspector& inspector;
 };
 
-bool ACThirdPartyAppIdContextSwap::execute(Analyzer&, void**)
+bool ACThirdPartyAppIdContextSwap::execute(Analyzer&)
 {
     if (!pkt_thread_tp_appid_ctxt) 
         pkt_thread_tp_appid_ctxt = inspector.get_ctxt().get_tp_appid_ctxt();
@@ -202,7 +202,7 @@ ACThirdPartyAppIdContextSwap::~ACThirdPartyAppIdContextSwap()
 class ACThirdPartyAppIdContextUnload : public AnalyzerCommand
 {
 public:
-    bool execute(Analyzer&, void**) override;
+    bool execute(Analyzer&) override;
     ACThirdPartyAppIdContextUnload(AppIdInspector& inspector, ThirdPartyAppIdContext* tp_ctxt,
         ControlConn* conn): AnalyzerCommand(conn), inspector(inspector), tp_ctxt(tp_ctxt)
     { }
@@ -213,7 +213,7 @@ private:
     ThirdPartyAppIdContext* tp_ctxt =  nullptr;
 };
 
-bool ACThirdPartyAppIdContextUnload::execute(Analyzer& ac, void**)
+bool ACThirdPartyAppIdContextUnload::execute(Analyzer& ac)
 {
     assert(pkt_thread_tp_appid_ctxt);
     ThirdPartyAppIdContext::set_tp_reload_in_progress(true);
@@ -248,7 +248,7 @@ ACThirdPartyAppIdContextUnload::~ACThirdPartyAppIdContextUnload()
 class ACOdpContextSwap : public AnalyzerCommand
 {
 public:
-    bool execute(Analyzer&, void**) override;
+    bool execute(Analyzer&) override;
     ACOdpContextSwap(AppIdInspector& inspector, OdpContext& odp_ctxt, ControlConn* conn) :
         AnalyzerCommand(conn), inspector(inspector), odp_ctxt(odp_ctxt)
     { }
@@ -259,7 +259,7 @@ private:
     OdpContext& odp_ctxt;
 };
 
-bool ACOdpContextSwap::execute(Analyzer&, void**)
+bool ACOdpContextSwap::execute(Analyzer&)
 {
     HostAttributesManager::clear_appid_services();
     AppIdServiceState::clean();
@@ -587,6 +587,9 @@ static const PegInfo appid_pegs[] =
     { CountType::SUM, "tp_reload_ignored_pkts", "count of packets ignored after third-party module is reloaded" },
     { CountType::NOW, "bytes_in_use", "number of bytes in use in the cache" },
     { CountType::NOW, "items_in_use", "items in use in the cache" },
+    { CountType::SUM, "tp_mem_allocations", "number of memory allocations in third-party module" },
+    { CountType::SUM, "tp_mem_frees", "number of memory frees in third-party module" },
+    { CountType::NOW, "tp_mem_bytes_in_use", "number of bytes in use in third-party module" },
     { CountType::END, nullptr, nullptr },
 };
 
@@ -640,7 +643,6 @@ AppIdConfig* AppIdModule::get_data()
 
 bool AppIdModule::set(const char*, Value& v, SnortConfig*)
 {
-    // FIXIT-L: DECRYPT_DEBUG - Move this to ssl-module
 #ifdef REG_TEST
     if ( v.is("first_decrypted_packet_debug") )
         config->first_decrypted_packet_debug = v.get_uint32();
@@ -725,7 +727,9 @@ PegCount* AppIdModule::get_counts() const
 
 void AppIdModule::sum_stats(bool dump_stats)
 {
-    AppIdPegCounts::sum_stats();
+    if ( dump_stats )
+        AppIdPegCounts::sum_stats();
+
     Module::sum_stats(dump_stats);
 }
 

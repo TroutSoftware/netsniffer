@@ -25,6 +25,8 @@
 
 #include "tcp_state_time_wait.h"
 
+#include "stream/stream_log.h"
+
 #include "tcp_normalizers.h"
 #include "tcp_session.h"
 
@@ -52,13 +54,23 @@ bool TcpStateTimeWait::syn_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk
 
 bool TcpStateTimeWait::ack_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    trk.update_tracker_ack_sent(tsd);
+    if ( trk.validate_sent_seq(tsd) )
+        trk.update_tracker_ack_sent(tsd);
+    return true;
+}
+
+bool TcpStateTimeWait::ack_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
+{
+    if ( trk.normalizer.validate_rcvd_seq(tsd) )
+        trk.update_tracker_ack_recv(tsd);
+
     return true;
 }
 
 bool TcpStateTimeWait::data_seg_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
     // data on a segment when we shouldn't be sending data any more alert!
+    stream_log(tsd.get_pkt(), "stream_tcp: data sent in TIME_WAIT\n");
     trk.session->tel.set_tcp_event(EVENT_DATA_ON_CLOSED);
     trk.session->mark_packet_for_drop(tsd);
     return true;
@@ -66,10 +78,15 @@ bool TcpStateTimeWait::data_seg_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker
 
 bool TcpStateTimeWait::fin_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
+    if ( !trk.normalizer.validate_rcvd_seq(tsd) )
+        return true;
+
     trk.set_fin_seq_status_seen(tsd);
     trk.update_tracker_ack_recv(tsd);
     if ( SEQ_GT(tsd.get_seq(), trk.get_fin_final_seq() ) )
     {
+        stream_log(tsd.get_pkt(), "stream_tcp: bad fin seq %u, fin_final_seq %u\n",
+            tsd.get_seq(), trk.get_fin_final_seq());
         trk.session->tel.set_tcp_event(EVENT_BAD_FIN);
         trk.normalizer.packet_dropper(tsd, NORM_TCP_BLOCK);
         trk.session->set_pkt_action_flag(ACTION_BAD_PKT);
@@ -116,4 +133,3 @@ bool TcpStateTimeWait::do_post_sm_packet_actions(TcpSegmentDescriptor& tsd, TcpS
     }
     return true;
 }
-

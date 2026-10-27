@@ -22,8 +22,11 @@
 
 // Packet contains a Layer for each decoded encapsulation.
 
+#include <vector>
+
 #include "main/snort_types.h"
 #include "protocols/protocol_ids.h"
+#include "sfip/sf_ip.h"
 
 namespace snort
 {
@@ -100,6 +103,18 @@ struct WifiHdr;
 
 struct Packet;
 
+// Encapsulation tunnel information for multi-layer visibility
+struct TunnelInfo
+{
+    ProtocolId tunnel_type = ProtocolId::PROTO_NOT_SET;  // e.g., VXLAN, GRE, GTP, TEREDO, GENEVE
+    SfIp src_ip{};                                        // outer IP source
+    SfIp dst_ip{};                                        // outer IP destination
+    uint16_t src_port = 0;                                // outer source port (0 if N/A)
+    uint16_t dst_port = 0;                                // outer dest port (0 if N/A)
+    IpProtocol ip_proto = IpProtocol::PROTO_NOT_SET;      // protocol number (e.g., 17 for UDP, 47 for GRE)
+    bool has_ports = false;                               // true if tunnel uses ports (UDP-based)
+};
+
 namespace layer
 {
 //  Set by PacketManager.  Ensure you can call layer:: without a packet pointers
@@ -113,6 +128,7 @@ SO_PUBLIC const eth::EtherHdr* get_eth_layer(const Packet*);
 SO_PUBLIC const geneve::GeneveLyr* get_geneve_layer(const Packet*, bool inner);
 SO_PUBLIC const gre::GREHdr* get_gre_layer(const Packet*);
 SO_PUBLIC const vlan::VlanTagHdr* get_vlan_layer(const Packet*);
+SO_PUBLIC const vlan::VlanTagHdr* get_outer_vlan_layer(const Packet*);
 SO_PUBLIC const wlan::WifiHdr* get_wifi_layer(const Packet*);
 
 /* return a pointer to the outermost UDP layer */
@@ -192,6 +208,16 @@ SO_PUBLIC bool set_inner_ip_api(const Packet* const, ip::IpApi&,
 SO_PUBLIC bool set_outer_ip_api(const Packet* const, ip::IpApi&, int8_t& curr_layer);
 SO_PUBLIC bool set_outer_ip_api(const Packet* const, ip::IpApi&,
     IpProtocol& next_ip_proto, int8_t& curr_layer);
+
+// Multi-encapsulation visibility support
+// Returns all encapsulation layers from innermost to outermost
+// For a packet stack like: VXLAN -> GRE -> GTP -> TCP
+// Returns: [GTP info, GRE info, VXLAN info] (innermost first)
+std::vector<TunnelInfo> get_encapsulation_layers(const Packet* const);
+
+// Returns the tunnel type name as a string (e.g., "vxlan", "gre", "gtp")
+const char* get_tunnel_type_name(ProtocolId prot_id);
+
 } // namespace layer
 } // namespace snort
 #endif

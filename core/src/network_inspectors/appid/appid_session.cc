@@ -145,14 +145,15 @@ AppIdSession::AppIdSession(IpProtocol proto, const SfIp* ip, uint16_t port,
         FlowData(inspector_id),
         inspector(inspector),
         config(inspector.get_ctxt().config),
-        initiator_port(port),
 #ifndef DISABLE_TENANT_ID
         tenant_id(tenant_id),
 #endif
-        asid(asid), protocol(proto),
+        asid(asid),
+        protocol(proto),
+        initiator_port(port),
         api(*(new AppIdSessionApi(this, *ip))), odp_ctxt(odp_ctxt),
-        odp_ctxt_version(odp_ctxt.get_version()),
-        tp_appid_ctxt(pkt_thread_tp_appid_ctxt)
+        tp_appid_ctxt(pkt_thread_tp_appid_ctxt),
+        odp_ctxt_version(odp_ctxt.get_version())
 {
     inspector.add_ref();
     appid_stats.total_sessions++;
@@ -608,17 +609,6 @@ void AppIdSession::examine_ssl_metadata(AppidChangeBits& change_bits, bool parti
                 tsession->set_tls_host_published(false);
             tsession->set_matched_tls_type(MatchedTlsType::MATCHED_TLS_CNAME);
         }
-        else if (odp_ctxt.get_host_matchers().scan_hostname((const uint8_t*)tls_str, size,
-            client_id, payload_id))
-        {
-            if (api.client.get_id() == APP_ID_NONE or api.client.get_id() == APP_ID_SSL_CLIENT)
-                set_client_appid_data(client_id, change_bits);
-            set_payload_appid_data(payload_id);
-            match_found = true;
-            if (api.get_tls_host() and (strcmp(api.get_tls_host(), tls_str) != 0))
-                tsession->set_tls_host_published(false);
-            tsession->set_matched_tls_type(MatchedTlsType::MATCHED_TLS_CNAME);
-        }
         scan_flags &= ~SCAN_SSL_CERTIFICATE_FLAG;
     }
 
@@ -790,6 +780,11 @@ void AppIdSession::set_service_appid_data(AppId id, AppidChangeBits& change_bits
     api.service.update(id, version);
     if (version)
         change_bits.set(APPID_SERVICE_INFO_BIT);
+}
+
+bool AppIdSession::is_svc_server_only() const
+{
+    return resp_pkts_before_init > odp_ctxt.max_packet_before_server_only;
 }
 
 bool AppIdSession::is_svc_taking_too_much_time() const
@@ -1515,7 +1510,7 @@ void AppIdSession::process_shadow_traffic_appids()
 
 void AppIdSession::check_domain_fronting_status(const std::string& host)
 {
-    TLSDomainFrontCheckEvent domain_front_event(api.asd->get_cert_key(), host);
+    TLSDomainFrontCheckEvent domain_front_event(api.asd->get_cert_key(), host.c_str());
     DataBus::publish(AppIdInspector::get_pub_id(), AppIdEventIds::DOMAIN_FRONTING, domain_front_event);
     if (DomainFrontingStatus::MISMATCH == domain_front_event.get_cert_lookup_verdict())
     {

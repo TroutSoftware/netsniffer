@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "detection/detection_engine.h"
 #include "helpers/literal_search.h"
@@ -41,6 +42,7 @@
 #define ROOT_ENTRY             "Root Entry"
 
 #define SIG_COMP_CONTAINER        0x01
+#define VBA_COMPRESSION_HEADER_LEN  3
 #define VBA_COMPRESSION_WINDOW    4096
 #define MAX_VBA_BUFFER_LEN       16384
 
@@ -278,6 +280,8 @@ private:
 #ifdef UNIT_TEST
 public:
     void set_header(OleHeader* h) { header = h; }
+    void set_dir_list(DirectoryList* d) { dir_list = d; }
+    void set_fat_list(int32_t* f, int32_t len) { fat_list = f; fat_list_len = len; }
 #endif
 };
 

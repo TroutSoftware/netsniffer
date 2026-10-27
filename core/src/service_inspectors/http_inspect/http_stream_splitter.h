@@ -56,6 +56,8 @@ public:
     void go_away() override {}
 
 private:
+    void update_request_line_length(HttpEnums::ScanResult& cut_result, const HttpCutter* const& cutter, const HttpFlowData* session_data) const;
+    void update_request_size(HttpFlowData* session_data, HttpCommon::SectionType& type, uint32_t current_size) const;
     void prepare_flush(HttpFlowData* session_data, uint32_t* flush_offset, HttpCommon::SectionType
         section_type, uint32_t num_flushed, uint32_t num_excess, int32_t num_head_lines,
         bool is_broken_chunk, uint32_t num_good_chunks, uint32_t octets_seen)
@@ -69,6 +71,8 @@ private:
         uint32_t length, uint32_t* flush_offset, HttpCommon::SectionType&, HttpCutter*&);
     StreamSplitter::Status call_cutter(snort::Flow*, HttpFlowData*, const uint8_t* data,
         uint32_t length, uint32_t* flush_offset, HttpCommon::SectionType&);
+    StreamSplitter::Status implement_scan(snort::Flow* flow, const uint8_t* data, uint32_t length,
+        uint32_t* flush_offset, snort::Packet* pkt, HttpFlowData* session_data);
 
     HttpInspect* const my_inspector;
     const HttpCommon::SourceId source_id;

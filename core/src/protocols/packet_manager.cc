@@ -278,8 +278,17 @@ void PacketManager::decode(
                     continue;
 
                 // Cache the index of the vlan layer for quick access.
+                // For Q-in-Q: vlan_idx_outer holds the first (outer) VLAN,
+                // vlan_idx always holds the last (inner) VLAN.
                 if (clyr->proto_bits == PROTO_BIT__VLAN)
+                {
+                    if (p->vlan_idx)
+                    {
+                        if (!p->vlan_idx_outer)
+                            p->vlan_idx_outer = p->vlan_idx;
+                    }
                     p->vlan_idx = p->num_layers - 1;
+                }
             }
             codec_data.codec_flags &= ~CODEC_COMPOUND;
         }
@@ -311,8 +320,17 @@ void PacketManager::decode(
             if (push_layer(p, codec_data, prev_prot_id, raw.data, codec_data.lyr_len))
             {
                 // Cache the index of the vlan layer for quick access.
+                // For Q-in-Q: vlan_idx_outer holds the first (outer) VLAN,
+                // vlan_idx always holds the last (inner) VLAN.
                 if (codec_data.proto_bits == PROTO_BIT__VLAN)
+                {
+                    if (p->vlan_idx)
+                    {
+                        if (!p->vlan_idx_outer)
+                            p->vlan_idx_outer = p->vlan_idx;
+                    }
                     p->vlan_idx = p->num_layers - 1;
+                }
             }
         }
 
@@ -911,29 +929,40 @@ uint16_t PacketManager::encode_get_max_payload(const Packet* p)
     return ETHERNET_MTU - (l.start - p->layers[0].start) - l.length;
 }
 
-void PacketManager::dump_stats()
+void PacketManager::get_display_stats(const Stats& stats, std::vector<DisplayStat>& out)
 {
-    std::vector<const char*> pkt_names;
     CodecManager* cm = CodecManager::get_instance();
 
+    Stats tmp = stats;
+
     // zero out the default codecs
-    g_stats[stat_offset] = 0;
-    g_stats[cm->s_proto_map[to_utype(ProtocolId::FINISHED_DECODE)] + stat_offset] = 0;
+    tmp[stat_offset] = 0;
+    tmp[cm->s_proto_map[to_utype(ProtocolId::FINISHED_DECODE)] + stat_offset] = 0;
+
+    out.clear();
+    out.reserve(stat_names.size() + num_protocol_idx);
 
     for (unsigned int i = 0; i < stat_names.size(); i++)
-        pkt_names.emplace_back(stat_names[i]);
+        out.emplace_back(DisplayStat{stat_names[i], tmp[i]});
 
     for (int i = 0; cm->get_codec(i) != nullptr; i++)
-        pkt_names.emplace_back(cm->get_codec(i)->get_name());
-
-    show_percent_stats((PegCount*)&g_stats, &pkt_names[0],
-        (unsigned int)pkt_names.size(), "codec");
+        out.emplace_back(DisplayStat{cm->get_codec(i)->get_name(), tmp[i + stat_offset]});
 }
 
 void PacketManager::reset_stats()
 {
     std::fill(std::begin(g_stats), std::end(g_stats), 0);
     std::fill(std::begin(s_stats), std::end(s_stats), 0);
+}
+
+void PacketManager::get_thread_stats(Stats& out)
+{
+    out = s_stats;
+}
+
+void PacketManager::get_global_stats(Stats& out)
+{
+    out = g_stats;
 }
 
 void PacketManager::accumulate()

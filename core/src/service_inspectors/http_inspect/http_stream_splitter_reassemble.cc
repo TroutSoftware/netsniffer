@@ -257,6 +257,7 @@ const StreamBuffer HttpStreamSplitter::reassemble(Flow* flow, unsigned total,
             assert(session_data->running_total[source_id] == total);
             session_data->running_total[source_id] = 0;
             session_data->section_type[source_id] = SEC__NOT_COMPUTE;
+            partial_raw_bytes = 0;
 
             // When we are skipping through a message body beyond flow depth this is the end of
             // the line. Here we do the message section's normal job of updating the flow for the
@@ -285,10 +286,8 @@ const StreamBuffer HttpStreamSplitter::reassemble(Flow* flow, unsigned total,
     {
         // Body sections need extra space to accommodate unzipping
         if ( is_body(session_data->section_type[source_id]) )
-            if ( session_data->compress[source_id] != nullptr and partial_buffer_length > 0 )
+            if ( session_data->compress[source_id] != nullptr and partial_buffer != nullptr )
             {
-                assert(partial_buffer != nullptr);
-
                 buffer = partial_buffer;
                 session_data->section_offset[source_id] = partial_buffer_length;
 
@@ -305,7 +304,7 @@ const StreamBuffer HttpStreamSplitter::reassemble(Flow* flow, unsigned total,
         }
     }
 
-    if (partial_buffer_length > 0)
+    if (partial_buffer_length > 0 and partial_buffer != nullptr)
     {
         assert(session_data->section_offset[source_id] == 0);
         memcpy(buffer, partial_buffer, partial_buffer_length);

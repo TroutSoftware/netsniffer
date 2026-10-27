@@ -40,7 +40,8 @@ using namespace jsn;
 using namespace std;
 
 JSNormalizer::JSNormalizer(JSIdentifier& js_ident_ctx, size_t norm_depth,
-    uint8_t max_template_nesting, uint32_t max_bracket_depth, int tmp_cap_size)
+        uint8_t max_template_nesting, uint32_t max_bracket_depth, int tmp_cap_size,
+        int dealias_cap_size)
     : depth(norm_depth),
       rem_bytes(norm_depth),
       unlim(norm_depth == static_cast<size_t>(-1)),
@@ -49,7 +50,8 @@ JSNormalizer::JSNormalizer(JSIdentifier& js_ident_ctx, size_t norm_depth,
       tmp_buf_size(0),
       in(&in_buf),
       out(&out_buf),
-      tokenizer(in, out, js_ident_ctx, max_template_nesting, max_bracket_depth, tmp_buf, tmp_buf_size, tmp_cap_size)
+      tokenizer(in, out, js_ident_ctx, max_template_nesting, max_bracket_depth,
+        tmp_buf, tmp_buf_size, tmp_cap_size, dealias_cap_size)
 {
 }
 
@@ -96,6 +98,14 @@ JSTokenizer::JSRet JSNormalizer::normalize(const char* src, size_t src_len, bool
 
     rem_bytes -= r_bytes;
     src_next = src + r_bytes;
+
+    if (src_next == src)
+    {
+        debug_log(4, js_trace, TRACE_PROC, nullptr,
+            "normalizer has made no progress (zero bytes consumed)\n");
+
+        return max(ret, JSTokenizer::BAD_TOKEN);
+    }
 
     return rem_bytes ? ret : JSTokenizer::EOS;
 }

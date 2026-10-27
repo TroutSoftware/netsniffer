@@ -1,4 +1,5 @@
 set( FILE_LIST
+    bacnet_ip_defs.h
     inspector.cc
     inspector.h
     module.cc

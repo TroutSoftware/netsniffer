@@ -121,6 +121,11 @@ unsigned AppIdInspector::get_shadowtraffic_pub_id()
 
 bool AppIdInspector::configure(SnortConfig* sc)
 {
+    HighAvailabilityManager::register_ha_client(MOD_NAME, APPID_HA_SUFFIX_APPS);
+    HighAvailabilityManager::register_ha_client(MOD_NAME, APPID_HA_SUFFIX_HTTP);
+    HighAvailabilityManager::register_ha_client(MOD_NAME, APPID_HA_SUFFIX_TLS);
+    sc->register_reload_handler(new AppIdHAReloadSwapper());
+
     // cppcheck-suppress unreadVariable
     Profile profile(appid_perf_stats);
     struct rusage ru;
@@ -264,7 +269,7 @@ void AppIdInspector::eval(Packet* p)
             PacketTracer::restart_timer();
 
         AppIdDiscovery::do_application_discovery(p, *this, *pkt_thread_odp_ctxt, pkt_thread_tp_appid_ctxt);
-        // FIXIT-L tag verdict reason as appid for daq
+
         if (PacketTracer::is_active())
             add_appid_to_packet_trace(*p->flow, *pkt_thread_odp_ctxt);
     }

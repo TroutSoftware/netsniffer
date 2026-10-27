@@ -48,22 +48,22 @@ void Http2RequestLine::process_pseudo_header(const Field& name, const Field& val
 {
     Field *field;
     if ((name.length() == authority_name_length) and
-        (memcmp(name.start(), authority_name, name.length()) == 0) and (authority.length() <= 0))
+        (memcmp(name.start(), authority_name, name.length()) == 0) and (authority.length() < 0))
     {
         field = &authority;
     }
     else if ((name.length() == method_name_length) and
-        (memcmp(name.start(), method_name, name.length()) == 0) and (method.length() <= 0))
+        (memcmp(name.start(), method_name, name.length()) == 0) and (method.length() < 0))
     {
         field = &method;
     }
     else if ((name.length() == path_name_length) and
-        (memcmp(name.start(), path_name, name.length()) == 0) and (path.length() <= 0))
+        (memcmp(name.start(), path_name, name.length()) == 0) and (path.length() < 0))
     {
         field = &path;
     }
     else if ((name.length() == scheme_name_length) and
-        (memcmp(name.start(), scheme_name, name.length()) == 0) and (scheme.length() <= 0))
+        (memcmp(name.start(), scheme_name, name.length()) == 0) and (scheme.length() < 0))
     {
         field = &scheme;
     }
@@ -116,15 +116,15 @@ bool Http2RequestLine::generate_start_line(Field& start_line, bool pseudo_header
     if (method.length() == connect_length and memcmp(method.start(),
         method_connect, method.length()) == 0)
     {
-        if (authority.length() <= 0 and pseudo_headers_complete)
-        {
-            *infractions += INF_CONNECT_WITHOUT_AUTHORITY;
-            events->create_event(EVENT_REQUEST_WITHOUT_REQUIRED_FIELD);
-        }
-        else
+        if (authority.length() > 0)
         {
             use_authority = true;
             uri_len = authority.length();
+        }
+        else if (pseudo_headers_complete)
+        {
+            *infractions += INF_CONNECT_WITHOUT_AUTHORITY;
+            events->create_event(EVENT_REQUEST_WITHOUT_REQUIRED_FIELD);
         }
 
         if ( scheme.length() > 0 or path.length() > 0)

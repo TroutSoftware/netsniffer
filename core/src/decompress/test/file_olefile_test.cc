@@ -29,9 +29,14 @@
 #include "helpers/literal_search.h"
 #include "helpers/utf.h"
 
+#include <chrono>
+#include <cstdlib>
+
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 #include <CppUTestExt/MockSupport.h>
+
+#include <vector>
 
 THREAD_LOCAL const snort::Trace* vba_data_trace = nullptr;
 
@@ -100,7 +105,7 @@ TEST(Olefile_ole, get_file_offset)
 
 TEST(Olefile_ole, decompression_empty_data)
 {
-    uint8_t* ole_data = nullptr;
+    const uint8_t* ole_data = nullptr;
     uint8_t* buf = nullptr;
     uint32_t len = 0;
     uint32_t buf_len;
@@ -110,9 +115,25 @@ TEST(Olefile_ole, decompression_empty_data)
     delete olefile;
 }
 
+TEST(Olefile_ole, decompression_short_data)
+{
+    const uint8_t ole_data[VBA_COMPRESSION_HEADER_LEN] = { SIG_COMP_CONTAINER, 0x00, 0x30 };
+    uint8_t buf[MAX_VBA_BUFFER_LEN + 1] = { 0 };
+    uint8_t* vba_buf = buf;
+    uint32_t len = VBA_COMPRESSION_HEADER_LEN - 1;
+    uint32_t buf_len = 7;
+    buf[0] = 0x5a;
+
+    OleFile* olefile = new OleFile(nullptr, 0);
+    olefile->decompression(ole_data, len, vba_buf, buf_len);
+    CHECK_EQUAL(7, buf_len);
+    CHECK_EQUAL(0x5a, vba_buf[0]);
+    delete olefile;
+}
+
 TEST(Olefile_ole, decompression_invalid_data_1)
 {
-    uint8_t ole_data[10] = { 0 };
+    const uint8_t ole_data[10] = { 0 };
     uint8_t* buf = nullptr;
     uint32_t len = 10;
     uint32_t buf_len;
@@ -146,6 +167,51 @@ TEST(Olefile_ole, decompression_flag_0)
     olefile->decompression(ole_data, len, buf, buf_len);
     CHECK(buf == nullptr);
     delete olefile;
+}
+
+TEST(Olefile_ole, decompression_flag_0_large_data)
+{
+    constexpr uint32_t payload_len = VBA_COMPRESSION_WINDOW * 2;
+    constexpr uint32_t input_len = payload_len + VBA_COMPRESSION_HEADER_LEN;
+    std::vector<uint8_t> ole_data(input_len, 0x41);
+    std::vector<uint8_t> buf(MAX_VBA_BUFFER_LEN + 1);
+    uint8_t* vba_buf = buf.data();
+    uint32_t len = input_len;
+    uint32_t buf_len = 0;
+
+    ole_data[0] = SIG_COMP_CONTAINER;
+    ole_data[1] = 0x00;
+    ole_data[2] = 0x30;
+
+    OleFile olefile(nullptr, 0);
+    olefile.decompression(ole_data.data(), len, vba_buf, buf_len);
+    CHECK_EQUAL(VBA_COMPRESSION_WINDOW, buf_len);
+    MEMCMP_EQUAL(ole_data.data() + VBA_COMPRESSION_HEADER_LEN, buf.data(), VBA_COMPRESSION_WINDOW);
+}
+
+TEST(Olefile_ole, decompression_compressed_data_without_null)
+{
+    constexpr uint32_t literal_groups = VBA_COMPRESSION_WINDOW / 8;
+    constexpr uint32_t input_len = VBA_COMPRESSION_HEADER_LEN + literal_groups * 9;
+    std::vector<uint8_t> ole_data(input_len, 0x41);
+    std::vector<uint8_t> buf(MAX_VBA_BUFFER_LEN + 1);
+    uint8_t* vba_buf = buf.data();
+    uint32_t len = input_len;
+    uint32_t buf_len = 0;
+
+    ole_data[0] = SIG_COMP_CONTAINER;
+    ole_data[1] = 0x00;
+    ole_data[2] = 0xB0;
+
+    for (uint32_t pos = VBA_COMPRESSION_HEADER_LEN; pos < input_len; pos += 9)
+        ole_data[pos] = 0x00;
+
+    OleFile olefile(nullptr, 0);
+    olefile.decompression(ole_data.data(), len, vba_buf, buf_len);
+    CHECK_EQUAL(VBA_COMPRESSION_WINDOW, buf_len);
+
+    std::vector<uint8_t> expected(VBA_COMPRESSION_WINDOW, 0x41);
+    MEMCMP_EQUAL(expected.data(), buf.data(), VBA_COMPRESSION_WINDOW);
 }
 
 TEST(Olefile_ole, get_next_fat_sector_failure)
@@ -279,7 +345,7 @@ TEST(fat_mini_fat_list, fat_list_overflow_guard)
     // This test makes populate_fat_list hit its integer overflow check.
     // i.e ( byte_offset + sector_size < byte_offset ) condition
     olefile->populate_fat_list();
-    
+
     delete olefile;
 }
 
@@ -397,6 +463,112 @@ TEST(OLECycleDetection, MiniFatSectorCycle)
     olefile.populate_fat_list();
     olefile.populate_mini_fat_list();
     CHECK_TRUE(true);
+}
+
+TEST_GROUP(GetMiniFatOffsetInfiniteLoop)
+{
+};
+
+// Shared helper: build an OleFile with a small FAT containing a 2-cycle
+// (0 -> 1 -> 0). sector_size = 512, mini_sector_size = 64
+// (=> mini_fat_persector = 8). Root mini-stream sector = 0 (head of cycle).
+// Ownership of hdr/dl/fat transfers to the returned OleFile via the
+// UNIT_TEST setters; ~OleFile deletes header, dir_list, fat_list[].
+static OleFile* build_cyclic_fat_olefile(const uint8_t* dummy, uint32_t dummy_len)
+{
+    OleHeader* hdr = new OleHeader();
+    const uint8_t sec_size_bytes[2]  = { 0x09, 0x00 };
+    const uint8_t mini_size_bytes[2] = { 0x06, 0x00 };
+    hdr->set_sector_size(sec_size_bytes);
+    hdr->set_mini_sector_size(mini_size_bytes);
+
+    const int32_t fat_len = 4;
+    int32_t* fat = new int32_t[fat_len];
+    fat[0] = 1; fat[1] = 0; fat[2] = -1; fat[3] = -1;
+
+    DirectoryList* dl = new DirectoryList();
+    dl->set_mini_stream_sector(0);
+
+    OleFile* olefile = new OleFile(dummy, dummy_len);
+    olefile->set_header(hdr);
+    olefile->set_dir_list(dl);
+    olefile->set_fat_list(fat, fat_len);
+    return olefile;
+}
+
+// Length-clamp path: attacker-supplied sec_id makes sec_position vastly
+// exceed fat_list_len, so the clamp at file_olefile.cc bails out with -1
+// before the walk begins. Bounded-time guarantee against huge sec_id.
+TEST(GetMiniFatOffsetInfiniteLoop, LengthClampReturnsError)
+{
+    uint8_t dummy[16] = { 0 };
+    OleFile* olefile = build_cyclic_fat_olefile(dummy, sizeof(dummy));
+
+    const int32_t attack_sec_id = 8 * 1024 * 1024;
+
+    auto t0 = std::chrono::steady_clock::now();
+    int32_t rv = olefile->get_mini_fat_offset(attack_sec_id);
+    auto t1 = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    CHECK_EQUAL(-1, rv);
+    CHECK(elapsed_ms < 60000.0);
+
+    delete olefile;
+}
+
+// Visited-set path: pick sec_id small enough to pass the length clamp
+// (sec_position = 3, fat_list_len = 4) but large enough to force the walk
+// to a third iteration, at which point current_sector == 0 is already in
+// visited_fat_sectors and the cycle-detection branch fires. mini_fat_persector
+// * 2 is NOT sufficient: it only walks 0 -> 1 -> 0 and exits before the
+// visited-set is checked a third time. mini_fat_persector * 3 forces the
+// third check and hits the guard.
+TEST(GetMiniFatOffsetInfiniteLoop, CycleDetectionReturnsError)
+{
+    uint8_t dummy[16] = { 0 };
+    OleFile* olefile = build_cyclic_fat_olefile(dummy, sizeof(dummy));
+
+    const int32_t mini_fat_persector = 8;
+    const int32_t attack_sec_id = mini_fat_persector * 3;
+
+    auto t0 = std::chrono::steady_clock::now();
+    int32_t rv = olefile->get_mini_fat_offset(attack_sec_id);
+    auto t1 = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    CHECK_EQUAL(-1, rv);
+    CHECK(elapsed_ms < 1000.0);
+
+    delete olefile;
+}
+
+// Full attack vector from the CSCwv17631 PoC (sec_id = 0x7FFFFFFE, which is
+// ~268M loop iterations on the unpatched code). Gated behind OLE_FULL_ATTACK
+// so an accidental run on a still-vulnerable build cannot wedge CI.
+TEST(GetMiniFatOffsetInfiniteLoop, FullAttackVector)
+{
+    const char* env = std::getenv("OLE_FULL_ATTACK");
+    if (!env || env[0] == '0' || env[0] == '\0')
+        return;
+
+    uint8_t dummy[16] = { 0 };
+    OleFile* olefile = build_cyclic_fat_olefile(dummy, sizeof(dummy));
+
+    const int32_t attack_sec_id = 0x7FFFFFFE;
+
+    auto t0 = std::chrono::steady_clock::now();
+    int32_t rv = olefile->get_mini_fat_offset(attack_sec_id);
+    auto t1 = std::chrono::steady_clock::now();
+    double elapsed_ms =
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    CHECK_EQUAL(-1, rv);
+    CHECK(elapsed_ms < 1000.0);
+
+    delete olefile;
 }
 
 int main(int argc, char** argv)

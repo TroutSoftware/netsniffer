@@ -29,7 +29,9 @@
 #include "control/control.h"
 #include "framework/module.h"
 #include "log/messages.h"
+#include "main/thread.h"
 #include "managers/module_manager.h"
+#include "managers/plugin_manager.h"
 #include "packet_io/sfdaq_instance.h"
 #include "protocols/packet_manager.h"
 #include "target_based/host_attributes.h"
@@ -116,65 +118,188 @@ void AnalyzerCommand::log_message(const char* format, ...)
     va_end(args);
 }
 
-bool ACStart::execute(Analyzer& analyzer, void**)
+bool ACStart::execute(Analyzer& analyzer)
 {
     analyzer.start();
     return true;
 }
 
-bool ACRun::execute(Analyzer& analyzer, void**)
+bool ACRun::execute(Analyzer& analyzer)
 {
     analyzer.run(paused);
     paused = false;
     return true;
 }
 
-bool ACStop::execute(Analyzer& analyzer, void**)
+bool ACStop::execute(Analyzer& analyzer)
 {
     analyzer.stop();
     return true;
 }
 
-bool ACPause::execute(Analyzer& analyzer, void**)
+bool ACPause::execute(Analyzer& analyzer)
 {
     analyzer.pause();
     return true;
 }
 
-bool ACResume::execute(Analyzer& analyzer, void**)
+bool ACResume::execute(Analyzer& analyzer)
 {
     analyzer.resume(msg_cnt);
     return true;
 }
 
-bool ACRotate::execute(Analyzer& analyzer, void**)
+bool ACRotate::execute(Analyzer& analyzer)
 {
     analyzer.rotate();
     return true;
 }
 
-bool ACGetStats::execute(Analyzer&, void**)
+struct ACGetStats::State
 {
-    // FIXIT-P This incurs locking on all threads to retrieve stats.  It
-    // could be reimplemented to optimize for large thread counts by
-    // retrieving stats in the command and accumulating in the main thread.
-    PacketManager::accumulate();
-    ModuleManager::accumulate(SnortConfig::get_conf());
+    struct ThreadSnapshot
+    {
+        bool pkt_stats_valid = false;
+        PacketManager::Stats pkt_stats{};
+        std::vector<std::vector<PegCount>> module_dump_counts;
+    };
+
+    std::vector<Module*> modules;
+    std::vector<ThreadSnapshot> thread_snapshots;
+};
+
+ACGetStats::ACGetStats(ControlConn* conn, StatsOutputFormat output_format) :
+    AnalyzerCommand(conn), state(std::make_unique<State>()), format(output_format)
+{
+    auto mods = PluginManager::get_all_modules();
+    state->modules.assign(mods.begin(), mods.end());
+    state->thread_snapshots.resize(ThreadConfig::get_instance_max());
+
+    for ( auto& snapshot : state->thread_snapshots )
+        snapshot.module_dump_counts.reserve(state->modules.size());
+}
+
+bool ACGetStats::execute(Analyzer&)
+{
+    const unsigned id = snort::get_instance_id();
+    if ( !state || id >= state->thread_snapshots.size() )
+        return true;
+
+    auto& snapshot = state->thread_snapshots[id];
+
+    PacketManager::get_thread_stats(snapshot.pkt_stats);
+    snapshot.pkt_stats_valid = true;
+
+    snapshot.module_dump_counts.clear();
+    snapshot.module_dump_counts.resize(state->modules.size());
+
+    const bool is_first_packet_thread = (id == 0);
+
+    for ( size_t i = 0; i < state->modules.size(); i++ )
+    {
+        Module* mod = state->modules[i];
+        if ( !mod )
+            continue;
+
+        const bool is_dynamic_stats = ModuleManager::is_dynamic_stats_module(mod);
+        const bool is_global_stats = mod->global_stats();
+
+        if ( is_global_stats && !is_first_packet_thread )
+        {
+            continue;
+        }
+
+        const bool needs_lock =
+            is_global_stats || is_dynamic_stats;
+
+        if ( needs_lock && mod->get_num_counts() > 0 )
+            snapshot.module_dump_counts[i].reserve(mod->get_num_counts());
+
+        if ( needs_lock )
+        {
+            std::lock_guard<std::mutex> lock(ModuleManager::stats_mutex);
+            mod->prep_counts(true);
+            if ( is_dynamic_stats )
+                mod->sum_stats(true);
+            mod->collect_dump_stats_counts(snapshot.module_dump_counts[i]);
+        }
+        else
+        {
+            mod->prep_counts(true);
+            mod->collect_dump_stats_counts(snapshot.module_dump_counts[i]);
+        }
+    }
     return true;
 }
 
 ACGetStats::~ACGetStats()
 {
+    if ( !state )
+        return;
 
-    // FIXIT-L This should track the owner so it can dump stats to the
-    // shell instead of the logs when initiated by a shell command
-    DropStats(ctrlcon);
-    LogRespond(ctrlcon, "==================================================\n"); // Marking End of stats
+    for ( size_t i = 0; i < state->modules.size(); i++ )
+    {
+        Module* mod = state->modules[i];
+        if ( !mod || !mod->get_pegs() || mod->get_num_counts() <= 0 )
+            continue;
+
+        if ( mod->global_stats() )
+        {
+            ModuleManager::collect_global_dump_stats(mod);
+            continue;
+        }
+
+        const PegInfo* pegs = mod->get_pegs();
+        const int n = mod->get_num_counts();
+
+        std::vector<const std::vector<PegCount>*> per_thread_counts;
+        per_thread_counts.reserve(state->thread_snapshots.size());
+        std::vector<std::vector<PegCount>> accumulated_fallbacks(state->thread_snapshots.size());
+        for ( size_t thread_idx = 0; thread_idx < state->thread_snapshots.size(); thread_idx++ )
+        {
+            const auto& snapshot = state->thread_snapshots[thread_idx];
+            if ( i >= snapshot.module_dump_counts.size() )
+            {
+                ModuleManager::get_accumulated_counts(mod, thread_idx, accumulated_fallbacks[thread_idx]);
+                per_thread_counts.emplace_back(&accumulated_fallbacks[thread_idx]);
+            }
+            else
+                per_thread_counts.emplace_back(&snapshot.module_dump_counts[i]);
+        }
+
+        std::vector<PegCount> results;
+        Module::aggregate_dump_stats_counts(pegs, n, per_thread_counts, results);
+
+        mod->set_dump_stats_results(results);
+    }
+
+    PacketManager::Stats global_before{};
+    PacketManager::get_global_stats(global_before);
+
+    PacketManager::Stats thread_sum{};
+    thread_sum.fill(0);
+
+    for ( const auto& snapshot : state->thread_snapshots )
+    {
+        if ( !snapshot.pkt_stats_valid )
+            continue;
+
+        for ( size_t idx = 0; idx < thread_sum.size(); idx++ )
+            thread_sum[idx] += snapshot.pkt_stats[idx];
+    }
+
+    PacketManager::Stats display_stats = global_before;
+    for ( size_t idx = 0; idx < display_stats.size(); idx++ )
+        display_stats[idx] += thread_sum[idx];
+
+    DropStats(ctrlcon, true, &display_stats, format);
+    if ( format == StatsOutputFormat::Text )
+        LogRespond(ctrlcon, "==================================================\n"); // Marking End of stats
 
     ModuleManager::clear_global_active_counters();
 }
 
-bool ACResetStats::execute(Analyzer&, void**)
+bool ACResetStats::execute(Analyzer&)
 {
     ModuleManager::reset_stats(requested_type);
     return true;
@@ -183,7 +308,7 @@ bool ACResetStats::execute(Analyzer&, void**)
 ACResetStats::ACResetStats(clear_counter_type_t requested_type_l) : requested_type(
         requested_type_l) { }
 
-bool ACSwap::execute(Analyzer& analyzer, void** ac_state)
+bool ACSwap::execute(Analyzer& analyzer)
 {
     if (analyzer.get_state() != Analyzer::State::PAUSED and
         analyzer.get_state() != Analyzer::State::RUNNING)
@@ -196,11 +321,12 @@ bool ACSwap::execute(Analyzer& analyzer, void** ac_state)
         const SnortConfig* sc = ps->get_new_conf();
         if ( sc )
         {
-            std::list<ReloadResourceTuner*>* reload_tuners;
+            const unsigned id = get_instance_id();
+            std::list<ReloadResourceTuner*>*& reload_tuners = reload_tuners_by_thread[id];
 
-            if ( !*ac_state )
+            if ( !reload_tuners )
             {
-                LogMessage("ReloadResourceTuner[%u] start\n", get_instance_id());
+                LogMessage("ReloadResourceTuner[%u] start\n", id);
                 reload_tuners = new std::list<ReloadResourceTuner*>(sc->get_reload_resource_tuners());
                 std::list<ReloadResourceTuner*>::iterator rtt = reload_tuners->begin();
                 while ( rtt != reload_tuners->end() )
@@ -210,12 +336,9 @@ bool ACSwap::execute(Analyzer& analyzer, void** ac_state)
                     else
                         rtt = reload_tuners->erase(rtt);
                 }
-                *ac_state = reload_tuners;
                 if (!reload_tuners->empty())
                     tuner_next(reload_tuners->front());
             }
-            else
-                reload_tuners = (std::list<ReloadResourceTuner*>*)*ac_state;
 
             if ( !reload_tuners->empty() )
             {
@@ -234,8 +357,9 @@ bool ACSwap::execute(Analyzer& analyzer, void** ac_state)
             // check for empty again and free list instance if we are done
             if ( reload_tuners->empty() )
             {
-                LogMessage("ReloadResourceTuner[%d] complete\n", get_instance_id());
+                LogMessage("ReloadResourceTuner[%u] complete\n", id);
                 delete reload_tuners;
+                reload_tuners = nullptr;
                 ps->finish();
                 return true;
             }
@@ -249,6 +373,9 @@ bool ACSwap::execute(Analyzer& analyzer, void** ac_state)
 
 ACSwap::~ACSwap()
 {
+    for (auto* tuners : reload_tuners_by_thread)
+        delete tuners;
+    reload_tuners_by_thread.clear();
     if (ps)
     {
         SnortConfig* sc = ps->get_new_conf();
@@ -261,7 +388,7 @@ ACSwap::~ACSwap()
     log_message("== reload complete\n");
 }
 
-bool ACHostAttributesSwap::execute(Analyzer&, void**)
+bool ACHostAttributesSwap::execute(Analyzer&)
 {
     HostAttributesManager::initialize();
     return true;
@@ -274,7 +401,7 @@ ACHostAttributesSwap::~ACHostAttributesSwap()
     log_message("== reload host attributes complete\n");
 }
 
-bool ACDAQSwap::execute(Analyzer& analyzer, void**)
+bool ACDAQSwap::execute(Analyzer& analyzer)
 {
     analyzer.reload_daq();
     return true;
@@ -285,7 +412,7 @@ ACDAQSwap::~ACDAQSwap()
     LogMessage("== daq module reload complete\n");
 }
 
-bool ACScratchUpdate::execute(Analyzer&, void**)
+bool ACScratchUpdate::execute(Analyzer&)
 {
     for ( auto* s : handlers )
     {
@@ -313,7 +440,7 @@ ACShowSnortCPU::~ACShowSnortCPU()
     double cpu_usage_300s = 0.0;
     int instance = 0;
 
-    for (const auto& cu : cpu_usage) 
+    for (const auto& cu : cpu_usage)
     {
         LogRespond(ctrlcon, "%-3d \t%-6d \t%.1f%% \t%.1f%% \t%.1f%%\n",
             instance, ThreadConfig::get_instance_tid(instance), cu.cpu_usage_30s,
@@ -331,14 +458,14 @@ ACShowSnortCPU::~ACShowSnortCPU()
             cpu_usage_300s/instance);
 }
 
-bool ACShowSnortCPU::execute(Analyzer& analyzer, void**)
+bool ACShowSnortCPU::execute(Analyzer& analyzer)
 {
     DIOCTL_GetCpuProfileData get_data = {};
 
     SFDAQInstance* instance = get_daq_instance(analyzer);
     if (!instance)
         return true;
-    
+
     int instance_id = get_instance_id();
 
     int status = instance->ioctl((DAQ_IoctlCmd)DIOCTL_GET_CPU_PROFILE_DATA,
@@ -347,14 +474,14 @@ bool ACShowSnortCPU::execute(Analyzer& analyzer, void**)
     if (DAQ_SUCCESS != status)
     {
         LogRespond(ctrlcon, "Fetching profile data failed from DAQ instance %d\n", instance_id);
-        return true; 
+        return true;
     }
 
     auto& stat = cpu_usage[instance_id];
     stat.cpu_usage_30s = static_cast<double>(get_data.cpu_usage_percent_30s);
     stat.cpu_usage_120s = static_cast<double>(get_data.cpu_usage_percent_120s);
-    stat.cpu_usage_300s = static_cast<double>(get_data.cpu_usage_percent_300s); 
- 
+    stat.cpu_usage_300s = static_cast<double>(get_data.cpu_usage_percent_300s);
+
     return true;
 }
 
@@ -370,7 +497,7 @@ ACShowSnortPacketLatencyData::~ACShowSnortPacketLatencyData()
         for (size_t i = 0; i < protocol_names.size(); i++)
         {
             auto& latency_data_proto = ld.snort_latency_data[i];
-            double average_pkt_time = latency_data_proto.pkt_count > 0 ? 
+            double average_pkt_time = latency_data_proto.pkt_count > 0 ?
             (latency_data_proto.sum_time*1.0 / latency_data_proto.pkt_count / 1000.0) : 0.0;
 
             char max_pkt_src_ip[INET6_ADDRSTRLEN], max_pkt_dst_ip[INET6_ADDRSTRLEN];
@@ -421,7 +548,7 @@ ACShowSnortPacketLatencyData::~ACShowSnortPacketLatencyData()
     }
 }
 
-bool ACShowSnortPacketLatencyData::execute(Analyzer& analyzer, void**)
+bool ACShowSnortPacketLatencyData::execute(Analyzer& analyzer)
 {
     DIOCTL_GetSnortLatencyData latency_data_array = {};
 

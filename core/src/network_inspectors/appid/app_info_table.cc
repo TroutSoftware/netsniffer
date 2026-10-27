@@ -594,6 +594,21 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
                     odp_ctxt.max_packet_before_service_fail = max_packet_before_service_fail;
                 }
             }
+            else if (!(strcasecmp(conf_key, "max_packet_before_server_only")))
+            {
+                uint16_t max_packet_before_server_only = atoi(conf_val);
+                if (max_packet_before_server_only < MIN_MAX_PKTS_BEFORE_SERVER_ONLY)
+                {
+                    APPID_LOG(nullptr, TRACE_WARNING_LEVEL, "appid: invalid "
+                        "max_packet_before_server_only %" PRIu16 ", must be greater than %u.\n",
+                        max_packet_before_server_only, MIN_MAX_PKTS_BEFORE_SERVER_ONLY);
+                }
+                else
+                {
+                    odp_ctxt.max_packet_before_server_only =
+                        max_packet_before_server_only;
+                }
+            }
             else if (!(strcasecmp(conf_key, "max_packet_service_fail_ignore_bytes")))
             {
                 uint16_t max_packet_service_fail_ignore_bytes = atoi(conf_val);
@@ -758,6 +773,22 @@ void AppInfoManager::load_odp_config(OdpContext& odp_ctxt, const char* path)
                 const std::string user_key(token);
                 const std::string user_value(token2);
                 odp_ctxt.get_user_data_map().add_user_data(user_table, user_key, user_value, false);
+            }
+            else if (!(strcasecmp(conf_key, "tp_memory_allocation_stats")))
+            {
+                if (!(strcasecmp(conf_val, "disabled")))
+                {
+                    odp_ctxt.tp_memory_allocation_stats = false;
+                }
+                else if (!(strcasecmp(conf_val, "enabled")))
+                {
+                    odp_ctxt.tp_memory_allocation_stats = true;
+                }
+                else
+                {
+                    ParseWarning(WARN_CONF, "appid: invalid value for tp_memory_allocation_stats at line %s:%u\n",
+                        path, line);
+                }
             }
             else
                 ParseWarning(WARN_CONF, "appid: unsupported configuration: %s\n", conf_key);

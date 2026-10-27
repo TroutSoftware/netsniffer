@@ -33,35 +33,17 @@ using namespace std;
 //  History
 //-------------------------------------------------------------------------
 
-static void one_side_history(const TcpSession* ssn, string& history, bool client)
-{
-    const auto& events = client ? ssn->tcp_ssn_stats.client_events : ssn->tcp_ssn_stats.server_events;
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_SYN_SENT_EVENT))
-        history += client ? "S" : "s";
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_SYN_ACK_SENT_EVENT))
-        history += client ? "H" : "h";
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_ACK_SENT_EVENT))
-        history += client ? "A" : "a";
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_DATA_SEG_SENT_EVENT))
-        history += client ? "D" : "d";
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_FIN_SENT_EVENT))
-        history += client ? "F" : "f";
-    if (events.test(TcpStreamTracker::TcpEvent::TCP_RST_SENT_EVENT))
-        history += client ? "R" : "r";
-}
-
 static void get_tcp_history(const TcpSession* ssn, string& history)
 {
-    one_side_history(ssn, history, true);
-    one_side_history(ssn, history, false);
+    history = ssn->get_tcp_event_history();
 }
 
 static void get_udp_history(const UdpSession* ssn, string& history)
 {
     if (ssn->payload_bytes_seen_client)
-        history += "D";
+        history += 'D';
     if (ssn->payload_bytes_seen_server)
-        history += "d";
+        history += 'd';
 }
 
 const string& EofEvent::get_history() const
@@ -72,7 +54,7 @@ const string& EofEvent::get_history() const
         return history;
 
     if (f->pkt_type == PktType::TCP)
-        get_tcp_history((const TcpSession*)f->session, history);
+        get_tcp_history(static_cast<const TcpSession*>(f->session), history);
     else if (f->pkt_type == PktType::UDP)
         get_udp_history((const UdpSession*)f->session, history);
 

@@ -72,6 +72,7 @@ THREAD_LOCAL bool RuleContext::enabled = false;
 THREAD_LOCAL bool snort::TimeProfilerStats::enabled;
 THREAD_LOCAL snort::PacketTracer* snort::PacketTracer::s_pkt_trace;
 THREAD_LOCAL class FlowControl* flow_con;
+THREAD_LOCAL const snort::Trace* snort_trace = nullptr;
 
 void Profiler::start() { }
 void Profiler::stop(uint64_t) { }
@@ -150,6 +151,7 @@ int Packet::inject() { return 0; }
 void DataBus::publish(unsigned, unsigned, Packet*, Flow*) { }
 void DataBus::publish(unsigned, unsigned, DataEvent&, Flow*) { }
 void DataBus::publish_to_all_network_policies(unsigned int, unsigned int) { }
+void InspectorManager::thread_drain_pending_tterm() { }
 SFDAQInstance::SFDAQInstance(const char*, unsigned, const SFDAQConfig*) { }
 SFDAQInstance::~SFDAQInstance() = default;
 void SFDAQInstance::reload() { }
@@ -193,6 +195,8 @@ void PacketTracer::daq_dump(Packet*) { }
 void PacketTracer::activate(const Packet&) { }
 bool PacketTracer::is_active() { return false; }
 bool PacketTracer::is_daq_activated() { return false; }
+void TraceApi::filter(const Packet&) { }
+uint8_t TraceApi::get_constraints_generation() { return 0; }
 void TraceApi::thread_init(const TraceConfig*) { }
 void TraceApi::thread_term() { }
 void TraceApi::thread_reinit(const TraceConfig*) { }
@@ -212,6 +216,7 @@ void ErrorMessage(const char*,...) { }
 [[noreturn]] void FatalError(const char*,...) { exit(-1); }
 void ParseWarning(WarningGroup, const char*, ...) { }
 void HighAvailabilityManager::thread_init() { }
+void HighAvailabilityManager::thread_reinit() { }
 void HighAvailabilityManager::process_receive() { }
 void HighAvailabilityManager::thread_term() { }
 void HighAvailabilityManager::thread_term_beginning() { }
@@ -227,6 +232,8 @@ bool Stream::set_packet_action_to_hold(Packet*) { return false; }
 void Stream::init_active_response(const Packet*, Flow*) { }
 void Stream::drop_flow(const Packet* ) { }
 void Stream::block_flow(const Packet*) { }
+void Stream::daq_log_start() { }
+void Stream::daq_log_end(Packet*) { }
 IpsContext::IpsContext(unsigned) { }
 NetworkPolicy* get_default_network_policy(const snort::SnortConfig*) { return nullptr; }
 NetworkPolicy* get_network_policy() { return nullptr; }
@@ -240,6 +247,7 @@ void ThreadConfig::apply_thread_policy(SThreadType , unsigned ) { }
 void ThreadConfig::set_instance_tid(int) { }
 void populate_instance_maps() { }
 void invalidate_instance_maps() { }
+void trace_vprintf(const char*, TraceLevel, const char*, const Packet*, const char*, va_list) { }
 }
 
 bool FlowControl::move_to_allowlist(snort::Flow*) { return true; }

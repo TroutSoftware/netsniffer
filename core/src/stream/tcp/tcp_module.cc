@@ -43,12 +43,13 @@ THREAD_LOCAL ProfileStats s5TcpPerfStats;
 
 THREAD_LOCAL const Trace* stream_tcp_trace = nullptr;
 THREAD_LOCAL bool stream_tcp_trace_enabled = false;
+THREAD_LOCAL bool stream_tcp_trace_enabled_debug = false;
+THREAD_LOCAL bool stream_tcp_trace_seq_relative = false;
 
 static const TraceOption stream_tcp_trace_options[] =
 {
     { "segments", TRACE_SEGMENTS, "enable stream TCP segments trace logging" },
     { "state",    TRACE_STATE,    "enable stream TCP state trace logging" },
-
     { nullptr, 0, nullptr }
 };
 
@@ -64,8 +65,10 @@ const PegInfo tcp_pegs[] =
     { CountType::SUM, "discards_skipped", "tcp packet discards skipped due to normalization disabled" },
     { CountType::SUM, "invalid_seq_left", 
         "tcp packets received that fall to the left of the current TCP window (spurious retransmits)" },
-    { CountType::SUM, "invalid_seq_right", 
+    { CountType::SUM, "invalid_seq_right",
         "tcp packets received that fall to the right of the current TCP window" },
+    { CountType::SUM, "invalid_sent_seq",
+        "bare ACKs sent with seq outside the locally-tracked send window" },
     { CountType::SUM, "invalid_ack", "tcp packets received with an invalid ack number" },
     { CountType::SUM, "no_flags_set", "tcp packets received with no TCP flags set" },
     { CountType::SUM, "events", "events generated" },
@@ -129,11 +132,13 @@ const PegInfo tcp_pegs[] =
     { CountType::SUM, "zero_win_probes", "number of tcp zero window probes" },
     { CountType::SUM, "keep_alive_probes", "number of tcp keep-alive probes" },
     { CountType::SUM, "proxy_mode_flows", "number of flows set to proxy normalization policy" },
+    { CountType::SUM, "proxy_cutover_ooo_drops", "number of OOO data packets dropped before proxy mode cutover" },
     { CountType::SUM, "full_retransmits", "number of fully retransmitted segments" },
     { CountType::SUM, "flush_on_asymmetric_flow", "number of flushes on asymmetric flows" },
     { CountType::SUM, "asymmetric_flows", "number of completed flows having one-way traffic only" },
     { CountType::SUM, "max_bytes_exceeded_hole", "number of times max bytes were exceeded due to a hole" },
     { CountType::SUM, "max_segs_exceeded_hole", "number of times max segs were exceeded due to a hole" },
+    { CountType::SUM, "ooo_3whs_late_synack", "server-side stream state repaired from late SYN-ACK; wscale/snd_wnd repaired if negotiated" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -248,6 +253,12 @@ static const Parameter s_params[] =
     { "track_only", Parameter::PT_BOOL, nullptr, "false",
       "disable reassembly if true" },
 
+    { "proxy_mode_ooo_drop", Parameter::PT_BOOL, nullptr, "false",
+      "drop out-of-order data packets before proxy mode cutover; TCP retransmission recovers" },
+
+    { "trace_seq_relative", Parameter::PT_BOOL, nullptr, "false",
+      "if true show relative seq/ack numbers in trace output, if false show absolute" },
+
     { "embryonic_timeout", Parameter::PT_INT, "1:max31", "30",
       "Non-established connection timeout" },
 
@@ -293,8 +304,10 @@ StreamTcpModule::StreamTcpModule() :
 void StreamTcpModule::set_trace(const Trace* trace) const
 {
     stream_tcp_trace = trace;
-    stream_tcp_trace_enabled = trace_enabled(stream_tcp_trace, TRACE_SEGMENTS) ||
-                                   trace_enabled(stream_tcp_trace, TRACE_STATE);
+    stream_tcp_trace_enabled_debug = trace_enabled(stream_tcp_trace, TRACE_SEGMENTS, TRACE_DEBUG_LEVEL) ||
+                                   trace_enabled(stream_tcp_trace, TRACE_STATE, TRACE_DEBUG_LEVEL);
+    stream_tcp_trace_enabled = trace_enabled(stream_tcp_trace, TRACE_STATE, TRACE_INFO_LEVEL);
+    stream_tcp_trace_seq_relative = config and config->trace_seq_relative;
 }
 
 const TraceOption* StreamTcpModule::get_trace_options() const
@@ -402,6 +415,12 @@ bool StreamTcpModule::set(const char*, Value& v, SnortConfig*)
             config->flags &= ~STREAM_CONFIG_NO_REASSEMBLY;
     }
 
+    else if ( v.is("proxy_mode_ooo_drop") )
+        config->proxy_mode_ooo_drop = v.get_bool();
+
+    else if ( v.is("trace_seq_relative") )
+        config->trace_seq_relative = v.get_bool();
+
     return true;
 }
 
@@ -431,4 +450,3 @@ void StreamTcpModule::reset_stats()
     TcpNormalizer::reset_stats();
     Module::reset_stats();
 }
-

@@ -231,6 +231,7 @@ void OdpContext::dump_appid_config()
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: recheck_for_portservice_appid            %s\n", (recheck_for_portservice_appid ? "True" : "False"));
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: max_bytes_before_service_fail            %" PRIu64" \n", max_bytes_before_service_fail);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: max_packet_before_service_fail           %" PRIu16" \n", max_packet_before_service_fail);
+    APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: max_packet_before_server_only            %" PRIu16" \n", max_packet_before_server_only);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: max_packet_service_fail_ignore_bytes     %" PRIu16" \n", max_packet_service_fail_ignore_bytes);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: max_midstream_packet_before_service_fail %d\n", max_midstream_packet_before_service_fail);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: eve_http_client                          %s\n", (eve_http_client ? "True" : "False"));
@@ -239,7 +240,8 @@ void OdpContext::dump_appid_config()
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: brute_force_inprocess_threshold          %" PRId8" \n", brute_force_inprocess_threshold);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: failed_state_expiration_secs             %" PRId32" \n", failed_state_expiration_secs);
     APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: inspect_ooo_flows                        %s\n", inspect_ooo_flows ? "True" : "False");
-    APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: kerberos_check_failed_login                    %s\n", kerberos_check_failed_login ? "True" : "False");
+    APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: kerberos_check_failed_login              %s\n", kerberos_check_failed_login ? "True" : "False");
+    APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Appid Config: tp_memory_allocation_stats               %s\n", tp_memory_allocation_stats ? "True" : "False");
 }
 
 bool OdpContext::is_appid_cpu_profiler_running()

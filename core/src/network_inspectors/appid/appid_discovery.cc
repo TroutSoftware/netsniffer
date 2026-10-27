@@ -96,11 +96,18 @@ void AppIdDiscovery::tterm()
 
 void AppIdDiscovery::register_detector(const std::string& name, AppIdDetector* cd, IpProtocol proto)
 {
-    // FIXIT-L - check for dup name?
     if (proto == IpProtocol::TCP)
-        tcp_detectors[name] = cd;
+    {
+        if (!tcp_detectors.emplace(name, cd).second)
+            APPID_LOG(nullptr, TRACE_ERROR_LEVEL,
+                "Duplicate TCP detector registration for %s; ignoring\n", name.c_str());
+    }
     else if (proto == IpProtocol::UDP)
-        udp_detectors[name] = cd;
+    {
+        if (!udp_detectors.emplace(name, cd).second)
+            APPID_LOG(nullptr, TRACE_ERROR_LEVEL,
+                "Duplicate UDP detector registration for %s; ignoring\n", name.c_str());
+    }
     else
         APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "Detector %s has unsupported protocol %u\n", name.c_str(), (unsigned)proto);
 }
@@ -205,7 +212,6 @@ static bool set_network_attributes(AppIdSession* asd, Packet* p, IpProtocol& pro
         else
             return false;
 
-        // FIXIT-L Refactor to use direction symbols defined by snort proper
         direction = p->is_from_client() ? APP_ID_FROM_INITIATOR : APP_ID_FROM_RESPONDER;
     }
 
@@ -271,8 +277,6 @@ bool AppIdDiscovery::do_pre_discovery(Packet* p, AppIdSession*& asd, AppIdInspec
     if (!asd->get_session_flags(APPID_SESSION_DISCOVER_APP | APPID_SESSION_SPECIAL_MONITORED))
         return false;
 
-    // FIXIT-L - from this point on we always have a valid ptr to a Packet
-    //           refactor to pass this as ref and delete any checks for null
     appid_stats.processed_packets++;
     asd->session_packet_count++;
     asd->stats.cpu_profiler_pkt_count++;
@@ -280,6 +284,7 @@ bool AppIdDiscovery::do_pre_discovery(Packet* p, AppIdSession*& asd, AppIdInspec
     if (direction == APP_ID_FROM_INITIATOR)
     {
         asd->stats.initiator_bytes += p->pkth->pktlen;
+        asd->set_session_flags(APPID_SESSION_INITIATOR_SEEN);
         if (p->dsize)
         {
             asd->init_pkts_without_reply++;
@@ -293,6 +298,8 @@ bool AppIdDiscovery::do_pre_discovery(Packet* p, AppIdSession*& asd, AppIdInspec
         {
             asd->init_pkts_without_reply = 0;
             asd->init_bytes_without_reply = 0;
+            if (!asd->get_session_flags(APPID_SESSION_INITIATOR_SEEN))
+                asd->resp_pkts_before_init++;
         }
     }
 
@@ -389,8 +396,6 @@ bool AppIdDiscovery::do_pre_discovery(Packet* p, AppIdSession*& asd, AppIdInspec
         }
     }
 
-    // FIXIT-L: DECRYPT_DEBUG - Move set_proxied and first_decrypted_packet_debug to ssl-module
-    // after ssl-module's decryption capability is implemented
 #ifdef REG_TEST
     uint32_t fdpd = config.first_decrypted_packet_debug;
     if (fdpd and (fdpd == asd->session_packet_count))
@@ -532,7 +537,6 @@ bool AppIdDiscovery::do_host_port_based_discovery(Packet* p, AppIdSession& asd, 
                 asd.get_odp_ctxt().allow_port_wildcard_host_cache);
             if (appid > APP_ID_NONE)
             {
-                // FIXIT-L: Make this more generic to support service and payload IDs
                 asd.set_client_id(appid);
                 asd.client_disco_state = APPID_DISCO_STATE_FINISHED;
                 asd.set_session_flags(APPID_SESSION_HOST_CACHE_MATCHED);
@@ -783,7 +787,6 @@ bool AppIdDiscovery::do_discovery(Packet* p, AppIdSession& asd, IpProtocol proto
                 asd.set_payload_id(APP_ID_UNKNOWN);
         }
     }
-    // FIXIT-M - snort 2.x has added a check for midstream pickup to this, do we need that?
     else if (protocol != IpProtocol::TCP or ((p->packet_flags & PKT_STREAM_ORDER_OK) || asd.get_session_flags(APPID_SESSION_OOO)))
     {
         if (asd.service_disco_state != APPID_DISCO_STATE_FINISHED)
@@ -842,7 +845,8 @@ bool AppIdDiscovery::do_discovery(Packet* p, AppIdSession& asd, IpProtocol proto
         {
             if (hsession->get_tun_dest())
                 hsession->free_tun_dest();
-            hsession->set_tun_dest();
+            if (hsession->get_field(REQ_URI_FID))
+                hsession->set_tun_dest();
             asd.scan_flags &= ~SCAN_HTTP_URI_FLAG;
         }
 

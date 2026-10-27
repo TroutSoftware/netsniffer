@@ -68,6 +68,7 @@ struct TcpStats
     PegCount discards_skipped;
     PegCount invalid_seq_left;
     PegCount invalid_seq_right;
+    PegCount invalid_sent_seq;
     PegCount invalid_ack;
     PegCount no_flags_set;
     PegCount events;
@@ -127,16 +128,19 @@ struct TcpStats
     PegCount zero_win_probes;
     PegCount keep_alive_probes;
     PegCount proxy_mode_flows;
+    PegCount proxy_cutover_ooo_drops;
     PegCount full_retransmits;
     PegCount flush_on_asymmetric_flow;
     PegCount asymmetric_flows;
     PegCount max_bytes_exceeded_hole;
     PegCount max_segs_exceeded_hole;
+    PegCount ooo_3whs_late_synack;
 };
 
 extern THREAD_LOCAL struct TcpStats tcpStats;
 extern THREAD_LOCAL bool stream_tcp_trace_enabled;
-
+extern THREAD_LOCAL bool stream_tcp_trace_enabled_debug;
+extern THREAD_LOCAL bool stream_tcp_trace_seq_relative;
 //-------------------------------------------------------------------------
 // stream_tcp module
 //-------------------------------------------------------------------------

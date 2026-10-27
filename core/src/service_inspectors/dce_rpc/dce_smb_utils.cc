@@ -41,6 +41,7 @@ using namespace snort;
 
 static uint8_t dce2_smb_delete_pdu[65535];
 
+
 /********************************************************************
  * Private function prototypes
  ********************************************************************/
@@ -86,7 +87,10 @@ bool DCE2_SmbIsTidIPC(DCE2_SmbSsnData* ssd, const uint16_t tid)
     }
     else
     {
-        int check_tid = (int)(uintptr_t)DCE2_ListFind(ssd->tids, (void*)(uintptr_t)tid);
+        // Preserve master behavior: DCE2_ListFind returned nullptr (-> 0) when the
+        // tid was absent, so an unknown tid == 0 is reported as IPC.
+        auto it = ssd->tids.find(tid);
+        int check_tid = (it != ssd->tids.end()) ? it->second : 0;
         if (((check_tid & 0x0000ffff) == (int)tid) && ((check_tid >> 16) == 0))
             return true;
     }
@@ -100,6 +104,8 @@ char* DCE2_SmbGetFileName(const uint8_t* data, uint32_t data_len, bool unicode,
     uint16_t* file_name_len)
 {
     const uint8_t inc = unicode ? 2 : 1;
+    *file_name_len = 0;
+
     if (data_len < inc)
         return nullptr;
 
@@ -135,28 +141,12 @@ char* DCE2_SmbGetFileName(const uint8_t* data, uint32_t data_len, bool unicode,
     return fname;
 }
 
-int DCE2_SmbUidTidFidCompare(const void* a, const void* b)
-{
-    int x = (int)(uintptr_t)a;
-    int y = (int)(uintptr_t)b;
-
-    if (x == y)
-        return 0;
-
-    /* Only care about equality for finding */
-    return -1;
-}
-
 DCE2_Ret DCE2_SmbFindUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
 {
-    DCE2_Ret status;
-
     if ((ssd->uid != DCE2_SENTINEL) && (ssd->uid == (int)uid))
-        status = DCE2_RET__SUCCESS;
-    else
-        status = DCE2_ListFindKey(ssd->uids, (void*)(uintptr_t)uid);
+        return DCE2_RET__SUCCESS;
 
-    return status;
+    return ssd->uids.count(uid) ? DCE2_RET__SUCCESS : DCE2_RET__ERROR;
 }
 
 void DCE2_SmbInsertUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
@@ -167,18 +157,7 @@ void DCE2_SmbInsertUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
     }
     else
     {
-        if (ssd->uids == nullptr)
-        {
-            ssd->uids = DCE2_ListNew(DCE2_LIST_TYPE__SPLAYED, DCE2_SmbUidTidFidCompare,
-                nullptr, nullptr, DCE2_LIST_FLAG__NO_DUPS);
-
-            if (ssd->uids == nullptr)
-            {
-                return;
-            }
-        }
-
-        (void)DCE2_ListInsert(ssd->uids, (void*)(uintptr_t)uid, (void*)(uintptr_t)uid);
+        ssd->uids.emplace(uid, uid);
     }
 }
 
@@ -189,7 +168,7 @@ void DCE2_SmbRemoveUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
     if ((ssd->uid != DCE2_SENTINEL) && (ssd->uid == (int)uid))
         ssd->uid = DCE2_SENTINEL;
     else
-        DCE2_ListRemove(ssd->uids, (void*)(uintptr_t)uid);
+        ssd->uids.erase(uid);
 
     switch (policy)
     {
@@ -201,32 +180,32 @@ void DCE2_SmbRemoveUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
     case DCE2_POLICY__WIN7:
     case DCE2_POLICY__SAMBA:
     case DCE2_POLICY__SAMBA_3_0_37:
-        // Removing uid invalidates any fid that was created with it */
+        // Removing uid invalidates any fid that was created with it
         if ((ssd->ftracker.fid_v1 != DCE2_SENTINEL) &&
             (ssd->ftracker.uid_v1 == uid))
         {
             DCE2_SmbRemoveFileTracker(ssd, &ssd->ftracker);
         }
 
-        if (ssd->ftrackers != nullptr)
+        for (auto it = ssd->ftrackers.begin(); it != ssd->ftrackers.end(); )
         {
-            DCE2_SmbFileTracker* ftracker;
-
-            for (ftracker = (DCE2_SmbFileTracker*)DCE2_ListFirst(ssd->ftrackers);
-                ftracker != nullptr;
-                ftracker = (DCE2_SmbFileTracker*)DCE2_ListNext(ssd->ftrackers))
+            DCE2_SmbFileTracker* ftracker = it->second;
+            if (ftracker->uid_v1 == uid)
             {
-                if (ftracker->uid_v1 == uid)
-                {
-                    if (ssd->fapi_ftracker == ftracker)
-                        DCE2_SmbFinishFileAPI(ssd);
+                if (ssd->fapi_ftracker == ftracker)
+                    DCE2_SmbFinishFileAPI(ssd);
 
-                    if (ssd->fb_ftracker == ftracker)
-                        DCE2_SmbFinishFileBlockVerdict(ssd);
+                if (ssd->fb_ftracker == ftracker)
+                    DCE2_SmbFinishFileBlockVerdict(ssd);
 
-                    DCE2_ListRemoveCurrent(ssd->ftrackers);
-                    DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
-                }
+                DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
+                DCE2_SmbCleanFileTracker(ftracker);
+                snort_free((void*)ftracker);
+                it = ssd->ftrackers.erase(it);
+            }
+            else
+            {
+                ++it;
             }
         }
 
@@ -262,24 +241,14 @@ DCE2_SmbRequestTracker* DCE2_SmbNewRequestTracker(DCE2_SmbSsnData* ssd,
             ssd->sd);
     }
 
-    // Check for outstanding requests with the same MID
-    DCE2_SmbRequestTracker* tmp_rtracker = &ssd->rtracker;
-    while ((tmp_rtracker != nullptr) && (tmp_rtracker->mid != DCE2_SENTINEL))
+    // A client must not reuse an outstanding MID. A duplicate is anomalous but
+    // not fatal: alert and still track it (mirrors the legacy queue behavior)
+    // so the request is inspected instead of silently dropped.
+    if (((ssd->rtracker.mid != DCE2_SENTINEL) && (ssd->rtracker.mid == (int)mid))
+        || (ssd->rtrackers_map.find(mid) != ssd->rtrackers_map.end()))
     {
-        if (tmp_rtracker->mid == (int)mid)
-        {
-            // Have yet to see an MID repeatedly used so shouldn't
-            // be any outstanding requests with the same MID.
-            dce_alert(GID_DCE2, DCE2_SMB_REQS_SAME_MID, (dce2CommonStats*)&dce2_smb_stats,
-                ssd->sd);
-            break;
-        }
-
-        // Look at the next request in the queue
-        if (tmp_rtracker == &ssd->rtracker)
-            tmp_rtracker = (DCE2_SmbRequestTracker*)DCE2_QueueFirst(ssd->rtrackers);
-        else
-            tmp_rtracker = (DCE2_SmbRequestTracker*)DCE2_QueueNext(ssd->rtrackers);
+        dce_alert(GID_DCE2, DCE2_SMB_REQS_SAME_MID, (dce2CommonStats*)&dce2_smb_stats,
+            ssd->sd);
     }
 
     DCE2_SmbRequestTracker* rtracker = nullptr;
@@ -289,26 +258,8 @@ DCE2_SmbRequestTracker* DCE2_SmbNewRequestTracker(DCE2_SmbSsnData* ssd,
     }
     else
     {
-        if (ssd->rtrackers == nullptr)
-        {
-            ssd->rtrackers = DCE2_QueueNew(DCE2_SmbRequestTrackerDataFree);
-            if (ssd->rtrackers == nullptr)
-            {
-                return nullptr;
-            }
-        }
-
         rtracker = (DCE2_SmbRequestTracker*)snort_calloc(sizeof(DCE2_SmbRequestTracker));
-        if (rtracker == nullptr)
-        {
-            return nullptr;
-        }
-
-        if (DCE2_QueueEnqueue(ssd->rtrackers, (void*)rtracker) != DCE2_RET__SUCCESS)
-        {
-            snort_free((void*)rtracker);
-            return nullptr;
-        }
+        ssd->rtrackers_map.insert({mid, rtracker});
     }
 
     rtracker->smb_com = SmbCom(smb_hdr);
@@ -316,6 +267,7 @@ DCE2_SmbRequestTracker* DCE2_SmbNewRequestTracker(DCE2_SmbSsnData* ssd,
     rtracker->tid = tid;
     rtracker->pid = pid;
     rtracker->mid = (int)mid;
+    rtracker->seq = ssd->next_rtracker_seq++;
     memset(&rtracker->ttracker, 0, sizeof(rtracker->ttracker));
     rtracker->ftracker = nullptr;
     rtracker->sequential_only = false;
@@ -365,25 +317,13 @@ DCE2_SmbFileTracker* DCE2_SmbNewFileTracker(DCE2_SmbSsnData* ssd,
             return nullptr;
         }
 
-        if (ssd->ftrackers == nullptr)
-        {
-            ssd->ftrackers = DCE2_ListNew(DCE2_LIST_TYPE__SPLAYED,
-                DCE2_SmbUidTidFidCompare, DCE2_SmbFileTrackerDataFree, nullptr,
-                DCE2_LIST_FLAG__NO_DUPS);
-
-            if (ssd->ftrackers == nullptr)
-            {
-                DCE2_SmbCleanSessionFileTracker(ssd, ftracker);
-                return nullptr;
-            }
-        }
-
-        if (DCE2_ListInsert(ssd->ftrackers, (void*)(uintptr_t)fid,
-            (void*)ftracker) != DCE2_RET__SUCCESS)
+        if (!ssd->ftrackers.emplace(fid, ftracker).second)
         {
             DCE2_SmbCleanSessionFileTracker(ssd, ftracker);
             return nullptr;
         }
+
+        ftracker->seq = ssd->next_ftracker_seq++;
     }
 
     return ftracker;
@@ -442,8 +382,10 @@ DCE2_SmbFileTracker* DCE2_SmbFindFileTracker(DCE2_SmbSsnData* ssd,
     }
     else
     {
-        ftracker = (DCE2_SmbFileTracker*)
-            DCE2_ListFind(ssd->ftrackers, (void*)(uintptr_t)fid);
+        auto it = ssd->ftrackers.find(fid);
+        ftracker = (it != ssd->ftrackers.end()) ? it->second : nullptr;
+        if (ftracker != nullptr)
+            ftracker->seq = ssd->next_ftracker_seq++;
     }
 
     if (ftracker == nullptr)
@@ -543,12 +485,25 @@ void DCE2_SmbRemoveFileTracker(DCE2_SmbSsnData* ssd, DCE2_SmbFileTracker* ftrack
     if (ssd->fb_ftracker == ftracker)
         DCE2_SmbFinishFileBlockVerdict(ssd);
 
-    if (ftracker == &ssd->ftracker)
-        DCE2_SmbCleanFileTracker(&ssd->ftracker);
-    else if (ssd->ftrackers != nullptr)
-        DCE2_ListRemove(ssd->ftrackers, (void*)(uintptr_t)ftracker->fid_v1);
-
     DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
+
+    if (ftracker == &ssd->ftracker)
+    {
+        DCE2_SmbCleanFileTracker(&ssd->ftracker);
+    }
+    else
+    {
+        // Only free when the map actually owns this exact tracker. A tracker
+        // resolved via DCE2_SmbGetTmpFileTracker is owned by rtracker->ft_queue
+        // (not the map); freeing it here would double-free at queue teardown.
+        auto it = ssd->ftrackers.find((uint16_t)ftracker->fid_v1);
+        if (it != ssd->ftrackers.end() && it->second == ftracker)
+        {
+            ssd->ftrackers.erase(it);
+            DCE2_SmbCleanFileTracker(ftracker);
+            snort_free((void*)ftracker);
+        }
+    }
 }
 
 void DCE2_SmbCleanFileTracker(DCE2_SmbFileTracker* ftracker)
@@ -640,6 +595,20 @@ void DCE2_SmbCleanTransactionTracker(DCE2_SmbTransactionTracker* ttracker)
     memset(ttracker, 0, sizeof(*ttracker));
 }
 
+void DCE2_SmbFreeRequestTrackerFileName(DCE2_SmbRequestTracker* rtracker)
+{
+    if (rtracker == nullptr)
+        return;
+
+    if (rtracker->file_name != nullptr)
+    {
+        snort_free((void*)rtracker->file_name);
+        rtracker->file_name = nullptr;
+    }
+
+    rtracker->file_name_size = 0;
+}
+
 void DCE2_SmbCleanRequestTracker(DCE2_SmbRequestTracker* rtracker)
 {
     if (rtracker == nullptr)
@@ -661,12 +630,7 @@ void DCE2_SmbCleanRequestTracker(DCE2_SmbRequestTracker* rtracker)
     DCE2_QueueDestroy(rtracker->ft_queue);
     rtracker->ft_queue = nullptr;
 
-    if (rtracker->file_name != nullptr)
-    {
-        snort_free((void*)rtracker->file_name);
-        rtracker->file_name = nullptr;
-        rtracker->file_name_size = 0;
-    }
+    DCE2_SmbFreeRequestTrackerFileName(rtracker);
 }
 
 void DCE2_SmbRemoveRequestTracker(DCE2_SmbSsnData* ssd,
@@ -684,16 +648,17 @@ void DCE2_SmbRemoveRequestTracker(DCE2_SmbSsnData* ssd,
         return;
     }
 
-    DCE2_SmbRequestTracker* tmp_node;
-    for (tmp_node = (DCE2_SmbRequestTracker*)DCE2_QueueFirst(ssd->rtrackers);
-        tmp_node != nullptr;
-        tmp_node = (DCE2_SmbRequestTracker*)DCE2_QueueNext(ssd->rtrackers))
+    // Duplicate MIDs may coexist, so match the exact tracker among equal keys
+    // before erasing to avoid freeing a different request's tracker.
+    auto range = ssd->rtrackers_map.equal_range((uint16_t)rtracker->mid);
+    for (auto it = range.first; it != range.second; ++it)
     {
-        if (tmp_node == (void*)rtracker)
+        if (it->second == rtracker)
         {
-            DCE2_QueueRemoveCurrent(ssd->rtrackers);
+            DCE2_SmbRequestTrackerDataFree(rtracker);
+            ssd->rtrackers_map.erase(it);
             ssd->outstanding_requests--;
-            return;
+            break;
         }
     }
 }
@@ -712,13 +677,10 @@ void DCE2_SmbRemoveFileTrackerFromRequestTrackers(DCE2_SmbSsnData* ssd,
     if ((ssd->cur_rtracker != nullptr) && (ssd->cur_rtracker->ftracker == ftracker))
         ssd->cur_rtracker->ftracker = nullptr;
 
-    DCE2_SmbRequestTracker* rtracker;
-    for (rtracker = (DCE2_SmbRequestTracker*)DCE2_QueueFirst(ssd->rtrackers);
-        rtracker != nullptr;
-        rtracker = (DCE2_SmbRequestTracker*)DCE2_QueueNext(ssd->rtrackers))
+    for (auto& entry : ssd->rtrackers_map)
     {
-        if (rtracker->ftracker == ftracker)
-            rtracker->ftracker = nullptr;
+        if (entry.second->ftracker == ftracker)
+            entry.second->ftracker = nullptr;
     }
 }
 
@@ -748,25 +710,13 @@ DCE2_SmbFileTracker* DCE2_SmbDequeueTmpFileTracker(DCE2_SmbSsnData* ssd,
     }
     else
     {
-        if (ssd->ftrackers == nullptr)
-        {
-            ssd->ftrackers = DCE2_ListNew(DCE2_LIST_TYPE__SPLAYED,
-                DCE2_SmbUidTidFidCompare, DCE2_SmbFileTrackerDataFree, nullptr,
-                DCE2_LIST_FLAG__NO_DUPS);
-
-            if (ssd->ftrackers == nullptr)
-            {
-                DCE2_SmbCleanSessionFileTracker(ssd, ftracker);
-                return nullptr;
-            }
-        }
-
-        if (DCE2_ListInsert(ssd->ftrackers, (void*)(uintptr_t)fid,
-            (void*)ftracker) != DCE2_RET__SUCCESS)
+        if (!ssd->ftrackers.emplace(fid, ftracker).second)
         {
             DCE2_SmbCleanSessionFileTracker(ssd, ftracker);
             return nullptr;
         }
+
+        ftracker->seq = ssd->next_ftracker_seq++;
     }
 
     // Other values were initialized when queuing.
@@ -788,14 +738,10 @@ void DCE2_SmbRequestTrackerDataFree(void* data)
 
 DCE2_Ret DCE2_SmbFindTid(DCE2_SmbSsnData* ssd, const uint16_t tid)
 {
-    DCE2_Ret status;
-
     if ((ssd->tid != DCE2_SENTINEL) && ((ssd->tid & 0x0000ffff) == (int)tid))
-        status = DCE2_RET__SUCCESS;
-    else
-        status = DCE2_ListFindKey(ssd->tids, (void*)(uintptr_t)tid);
+        return DCE2_RET__SUCCESS;
 
-    return status;
+    return ssd->tids.count(tid) ? DCE2_RET__SUCCESS : DCE2_RET__ERROR;
 }
 
 void DCE2_SmbRemoveTid(DCE2_SmbSsnData* ssd, const uint16_t tid)
@@ -803,7 +749,7 @@ void DCE2_SmbRemoveTid(DCE2_SmbSsnData* ssd, const uint16_t tid)
     if ((ssd->tid != DCE2_SENTINEL) && ((ssd->tid & 0x0000ffff) == (int)tid))
         ssd->tid = DCE2_SENTINEL;
     else
-        DCE2_ListRemove(ssd->tids, (void*)(uintptr_t)tid);
+        ssd->tids.erase(tid);
 
     // Removing Tid invalidates files created with it
     if ((ssd->ftracker.fid_v1 != DCE2_SENTINEL)
@@ -812,25 +758,25 @@ void DCE2_SmbRemoveTid(DCE2_SmbSsnData* ssd, const uint16_t tid)
         DCE2_SmbRemoveFileTracker(ssd, &ssd->ftracker);
     }
 
-    if (ssd->ftrackers != nullptr)
+    for (auto it = ssd->ftrackers.begin(); it != ssd->ftrackers.end(); )
     {
-        DCE2_SmbFileTracker* ftracker;
-
-        for (ftracker = (DCE2_SmbFileTracker*)DCE2_ListFirst(ssd->ftrackers);
-            ftracker != nullptr;
-            ftracker = (DCE2_SmbFileTracker*)DCE2_ListNext(ssd->ftrackers))
+        DCE2_SmbFileTracker* ftracker = it->second;
+        if (ftracker->tid_v1 == (int)tid)
         {
-            if (ftracker->tid_v1 == (int)tid)
-            {
-                if (ssd->fapi_ftracker == ftracker)
-                    DCE2_SmbFinishFileAPI(ssd);
+            if (ssd->fapi_ftracker == ftracker)
+                DCE2_SmbFinishFileAPI(ssd);
 
-                if (ssd->fb_ftracker == ftracker)
-                    DCE2_SmbFinishFileBlockVerdict(ssd);
+            if (ssd->fb_ftracker == ftracker)
+                DCE2_SmbFinishFileBlockVerdict(ssd);
 
-                DCE2_ListRemoveCurrent(ssd->ftrackers);
-                DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
-            }
+            DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
+            DCE2_SmbCleanFileTracker(ftracker);
+            snort_free((void*)ftracker);
+            it = ssd->ftrackers.erase(it);
+        }
+        else
+        {
+            ++it;
         }
     }
 }
@@ -858,18 +804,7 @@ void DCE2_SmbInsertTid(DCE2_SmbSsnData* ssd,
     }
     else
     {
-        if (ssd->tids == nullptr)
-        {
-            ssd->tids = DCE2_ListNew(DCE2_LIST_TYPE__SPLAYED, DCE2_SmbUidTidFidCompare,
-                nullptr, nullptr, DCE2_LIST_FLAG__NO_DUPS);
-
-            if (ssd->tids == nullptr)
-            {
-                return;
-            }
-        }
-
-        (void)DCE2_ListInsert(ssd->tids, (void*)(uintptr_t)tid, (void*)(uintptr_t)insert_tid);
+        ssd->tids.emplace(tid, insert_tid);
     }
 }
 
@@ -1608,6 +1543,17 @@ static int DCE2_SmbFileOffsetCompare(const void* a, const void* b)
     return 0;
 }
 
+static int64_t DCE2_SmbFileOffsetDistance(const void* a, const void* b)
+{
+    uint64_t oa = ((const DCE2_SmbFileChunk*)a)->offset;
+    uint64_t ob = ((const DCE2_SmbFileChunk*)b)->offset;
+
+    if (oa >= ob)
+        return (int64_t)(oa - ob);
+
+    return -(int64_t)(ob - oa);
+}
+
 static void DCE2_SmbFileChunkFree(void* data)
 {
     DCE2_SmbFileChunk* fc = (DCE2_SmbFileChunk*)data;
@@ -1684,6 +1630,17 @@ static DCE2_Ret DCE2_SmbHandleOutOfOrderFileData(DCE2_SmbSsnData* ssd,
                 return DCE2_RET__ERROR;
         }
 
+        if (ftracker->ff_file_chunks->num_nodes >= ((dce2SmbProtoConf*)ssd->sd.config)->smb_max_file_chunks)
+        {
+            dce_alert(GID_DCE2, DCE2_SMB_EXCESSIVE_FILE_CHUNKS,
+                reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats), ssd->sd);
+
+            Packet* p = DetectionEngine::get_current_packet();
+            p->active->block_session(p, true);
+
+            return DCE2_RET__ERROR;
+        }
+
         DCE2_SmbFileChunk* file_chunk = (DCE2_SmbFileChunk*)snort_calloc(
             sizeof(DCE2_SmbFileChunk));
         file_chunk->data = (uint8_t*)snort_calloc(data_len);
@@ -1694,11 +1651,13 @@ static DCE2_Ret DCE2_SmbHandleOutOfOrderFileData(DCE2_SmbSsnData* ssd,
         ftracker->ff_bytes_queued += data_len;
 
         DCE2_Ret ret;
-        if ((ret = DCE2_ListInsert(ftracker->ff_file_chunks,
-            (void*)file_chunk, (void*)file_chunk)) != DCE2_RET__SUCCESS)
+        if ((ret = DCE2_ListInsertSorted(ftracker->ff_file_chunks,
+            (void*)file_chunk, (void*)file_chunk,
+            DCE2_SmbFileOffsetDistance)) != DCE2_RET__SUCCESS)
         {
             snort_free((void*)file_chunk->data);
             snort_free((void*)file_chunk);
+            ftracker->ff_bytes_queued -= data_len;
 
             if (ret != DCE2_RET__DUPLICATE)
                 return DCE2_RET__ERROR;
@@ -1868,33 +1827,41 @@ void DCE2_FileDetect()
 static void DCE2_SmbSetNewFileAPIFileTracker(DCE2_SmbSsnData* ssd)
 {
     assert(ssd);
+
     DCE2_SmbFileTracker* ftracker = &ssd->ftracker;
-
-    while (ftracker != nullptr)
+    if ((ftracker != ssd->fapi_ftracker) && (ftracker->fid_v1 != DCE2_SENTINEL)
+        && !ftracker->is_ipc && ftracker->ff_sequential_only
+        && (ftracker->ff_bytes_processed == 0))
     {
-        if ((ftracker != ssd->fapi_ftracker) && (ftracker->fid_v1 != DCE2_SENTINEL)
-            && !ftracker->is_ipc && ftracker->ff_sequential_only
-            && (ftracker->ff_bytes_processed == 0))
-        {
-            break;
-        }
-
-        if (ftracker == &ssd->ftracker)
-            ftracker = (DCE2_SmbFileTracker*)DCE2_ListFirst(ssd->ftrackers);
-        else
-            ftracker = (DCE2_SmbFileTracker*)DCE2_ListNext(ssd->ftrackers);
+        ssd->fapi_ftracker = ftracker;
+        return;
     }
-    ssd->fapi_ftracker = ftracker;
+
+    // Master walked a splayed list and took the first eligible tracker. Since
+    // insertions and successful finds moved a tracker to the head, reproduce
+    // that MRU order by selecting the eligible tracker with the largest stamp.
+    DCE2_SmbFileTracker* best = nullptr;
+    for (auto& [fid, ft] : ssd->ftrackers)
+    {
+        if ((ft != ssd->fapi_ftracker) && (ft->fid_v1 != DCE2_SENTINEL)
+            && !ft->is_ipc && ft->ff_sequential_only
+            && (ft->ff_bytes_processed == 0))
+        {
+            if ((best == nullptr) || (ft->seq > best->seq))
+                best = ft;
+        }
+    }
+
+    ssd->fapi_ftracker = best;
 }
 
 void DCE2_Update_Ftracker_from_ReqTracker(DCE2_SmbFileTracker* ftracker,
     DCE2_SmbRequestTracker* cur_rtracker)
 {
     ftracker->file_name = cur_rtracker->file_name;
-    ftracker->file_name_size = cur_rtracker->file_name_size;
-    ftracker->file_name_hash = str_to_hash(
-        (const uint8_t*)cur_rtracker->file_name, cur_rtracker->file_name_size);
+    ftracker->file_name_size = ftracker->file_name ? cur_rtracker->file_name_size : 0;
+    ftracker->file_name_hash = ftracker->file_name_size ?
+        str_to_hash((const uint8_t*)ftracker->file_name, ftracker->file_name_size) : 0;
     cur_rtracker->file_name = nullptr;
     cur_rtracker->file_name_size = 0;
 }
-

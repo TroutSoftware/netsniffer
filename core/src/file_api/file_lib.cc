@@ -157,6 +157,28 @@ void FileInfo::copy(const FileInfo& other, bool clear_data)
     }
 }
 
+size_t FileInfo::get_serialized_size() const
+{
+    size_t size = sizeof(is_sha256_set)
+        + sizeof(verdict) + sizeof(file_size) + sizeof(direction) + sizeof(file_id)
+        + sizeof(file_type_id) + sizeof(file_state.capture_state)
+        + sizeof(file_state.sig_state) + sizeof(policy_id)
+        + sizeof(file_name_set) + sizeof(url_set) + sizeof(host_set)
+        + sizeof(file_type_enabled) + sizeof(file_signature_enabled)
+        + sizeof(file_capture_enabled) + sizeof(is_partial);
+
+    if (sha256)
+        size += SHA256_HASH_SIZE;
+    if (file_name_set)
+        size += sizeof(uint32_t) + file_name.length();
+    if (url_set)
+        size += sizeof(uint32_t) + url.length();
+    if (host_set)
+        size += sizeof(uint32_t) + host_name.length();
+
+    return size;
+}
+
 void FileInfo::serialize(char* buffer, uint16_t buffer_len)
 {
     uint16_t offset = 0;
@@ -783,11 +805,14 @@ bool FileContext::process(Packet* p, const uint8_t* file_data, int data_size,
     if (cacheable and (FileService::get_file_cache()->cached_verdict_lookup(p, this, policy, file_data, data_size) !=
         FILE_VERDICT_UNKNOWN))
     {
+        file_counts.file_cache_hits++;
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL,
             p, "file process completed in file context process\n");
         processing_complete = true;
         return true;
     }
+    else if (cacheable)
+        file_counts.file_cache_misses++;
 
     /*file type id*/
     if (is_file_type_enabled())
@@ -989,6 +1014,7 @@ void FileContext::process_file_signature_sha256(const uint8_t* file_data, int da
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, GET_CURRENT_PACKET,
             "process_file_signature_sha256:FILE_SIG_DEPTH_FAIL\n");
         file_state.sig_state = FILE_SIG_DEPTH_FAIL;
+        file_counts.file_sig_depth_exceeded++;
         return;
     }
 
@@ -1325,6 +1351,87 @@ TEST_CASE ("is_partial", "[file_info]")
     CHECK (true == info.is_partial_download());
     info.set_partial_flag(false);
     CHECK (false == info.is_partial_download());
+}
+
+TEST_CASE ("get_serialized_size_no_strings", "[file_info]")
+{
+    FI_TEST info;
+    info.set_file_id(12345);
+    info.set_file_size(1000);
+    info.set_file_direction(FILE_UPLOAD);
+
+    size_t expected_size = info.get_serialized_size();
+    CHECK (expected_size > 0);
+
+    char* buffer = new char[expected_size + 100];
+    memset(buffer, 0xAB, expected_size + 100);
+    info.serialize(buffer, static_cast<uint16_t>(expected_size));
+
+    for (size_t i = expected_size; i < expected_size + 100; i++)
+        CHECK (static_cast<char>(0xAB) == buffer[i]);
+
+    delete[] buffer;
+}
+
+TEST_CASE ("get_serialized_size_with_filename", "[file_info]")
+{
+    FI_TEST info;
+    info.set_file_name("test_file.txt", 13);
+
+    size_t expected_size = info.get_serialized_size();
+
+    char* buffer = new char[expected_size + 100];
+    memset(buffer, 0xAB, expected_size + 100);
+    info.serialize(buffer, static_cast<uint16_t>(expected_size));
+
+    for (size_t i = expected_size; i < expected_size + 100; i++)
+        CHECK (static_cast<char>(0xAB) == buffer[i]);
+
+    delete[] buffer;
+}
+
+TEST_CASE ("get_serialized_size_with_all_strings", "[file_info]")
+{
+    FI_TEST info;
+    info.set_file_name("document.pdf", 12);
+    info.set_url("https://example.org/document.pdf", 32);
+    info.set_host("example.org", 11);
+
+    size_t expected_size = info.get_serialized_size();
+
+    char* buffer = new char[expected_size + 100];
+    memset(buffer, 0xAB, expected_size + 100);
+    info.serialize(buffer, static_cast<uint16_t>(expected_size));
+
+    for (size_t i = expected_size; i < expected_size + 100; i++)
+        CHECK (static_cast<char>(0xAB) == buffer[i]);
+
+    delete[] buffer;
+}
+
+TEST_CASE ("serialize_deserialize_roundtrip", "[file_info]")
+{
+    FI_TEST original;
+    original.set_file_id(98765);
+    original.set_file_size(123456789);
+    original.set_file_direction(FILE_DOWNLOAD);
+    original.set_file_name("roundtrip.bin", 13);
+    original.set_url("https://test.example.com/roundtrip.bin", 38);
+
+    size_t buffer_size = original.get_serialized_size();
+    char* buffer = new char[buffer_size];
+    original.serialize(buffer, static_cast<uint16_t>(buffer_size));
+
+    FI_TEST deserialized;
+    deserialized.deserialize(buffer, static_cast<uint16_t>(buffer_size));
+
+    CHECK (original.get_file_id() == deserialized.get_file_id());
+    CHECK (original.get_file_size() == deserialized.get_file_size());
+    CHECK (original.get_file_direction() == deserialized.get_file_direction());
+    CHECK (original.get_file_name() == deserialized.get_file_name());
+    CHECK (original.get_url() == deserialized.get_url());
+
+    delete[] buffer;
 }
 #endif
 

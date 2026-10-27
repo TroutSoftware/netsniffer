@@ -46,6 +46,7 @@ public:
     int eval_flush_policy_on_ack(snort::Packet*) override;
     int eval_flush_policy_on_data(snort::Packet*) override;
     int eval_asymmetric_flush(snort::Packet*) override;
+    int flush_queued_sequenced(snort::Packet*) override;
     int flush_stream(snort::Packet*, uint32_t dir, bool final_flush = false) override;
 
     FlushPolicy get_flush_policy() const override
@@ -54,6 +55,8 @@ public:
 private:
     int32_t scan_data_post_ack(uint32_t* flags, snort::Packet*);
     void skip_seglist_hole();
+    bool prepare_ack_flush_cursor();
+    bool ack_flush_in_window(uint32_t) const;
 };
 
 #endif

@@ -31,12 +31,15 @@ Required:
 * pkgconfig from https://www.freedesktop.org/wiki/Software/pkg-config/ to locate
   build dependencies
 
-* zlib from http://www.zlib.net for decompression (>= 1.2.8 recommended)
+* zlib from http://www.zlib.net for decompression (>= 1.2.12 recommended)
 
 Optional:
 
 * asciidoc from http://www.methods.co.nz/asciidoc/ to build the HTML
   manual
+
+* brotli from https://github.com/google/brotli.git for decompression
+  (>= 1.2.0 recommended)
 
 * cpputest from http://cpputest.github.io to run additional unit tests with
   make check

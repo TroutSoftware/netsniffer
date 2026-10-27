@@ -101,6 +101,8 @@ public:
     Usage get_usage() const override
     { return MOD_USAGE; }
     void sum_stats(bool) override;
+    bool has_dynamic_stats() const override
+    { return true; }
     void show_dynamic_stats() override;
 
     void set_trace(const snort::Trace*) const override;
@@ -113,7 +115,7 @@ private:
 class ACThirdPartyAppIdCleanup : public snort::AnalyzerCommand
 {
 public:
-    bool execute(Analyzer&, void**) override;
+    bool execute(Analyzer&) override;
     const char* stringify() override { return "THIRD_PARTY_APPID_CLEANUP"; }
 };
 

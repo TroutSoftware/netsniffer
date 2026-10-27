@@ -45,13 +45,18 @@ class QuicExtractorFlowData : public ExtractorFlowData
 public:
     static constexpr ServiceType type_id = ServiceType::QUIC;
 
-    QuicExtractorFlowData(QuicExtractor& owner)
-        : ExtractorFlowData(type_id), owner(owner) { }
+    QuicExtractorFlowData(QuicExtractor& owner, const Flow& origin)
+        : ExtractorFlowData(origin, type_id), owner(owner)
+    {
+        owner.get_inspector().add_ref();
+    }
 
     ~QuicExtractorFlowData() override
     {
         if (has_data)
             owner.dump(*this);
+
+        owner.get_inspector().rem_ref();
     }
 
     void reset()
@@ -185,19 +190,25 @@ void ExtractorEvent::log<vector<QuicExtractor::FdStrField>, const QuicExtractorF
     }
 }
 
+template<typename T>
+void log(ExtractorLogger* logger, const T& fields, const QuicExtractorFlowData* fd)
+{
+    for (const auto& f : fields)
+        logger->add_field(f.name, f.get(nullptr, &fd->flow));
+}
+
 void QuicExtractor::dump(const QuicExtractorFlowData& fd)
 {
     Profile profile(extractor_perf_stats);
 
+    if (!logger)
+        return;
+
     logger->open_record();
 
-    for (const auto& f : nts_fields)
-        logger->add_field(f.name, fd.ts);
-    for (const auto& f : sip_fields)
-        logger->add_field(f.name, "");
-    for (const auto& f : num_fields)
-        logger->add_field(f.name, (uint64_t)0);
-
+    ::log(logger, nts_fields, &fd);
+    ::log(logger, sip_fields, &fd);
+    ::log(logger, num_fields, &fd);
     log(fd_str_fields, &fd, logger->is_strict());
 
     logger->close_record(*log_id);
@@ -214,7 +225,7 @@ void QuicExtractor::ClientHello::handle(DataEvent& event, Flow* flow)
     auto fd = ExtractorFlowData::get<QuicExtractorFlowData>(flow);
 
     if (!fd)
-        flow->set_flow_data(fd = new QuicExtractorFlowData(owner));
+        flow->set_flow_data(fd = new QuicExtractorFlowData(owner, *flow));
     else if (fd->has_data)
     {
         // log existing flow data
@@ -256,10 +267,18 @@ void QuicExtractor::HandshakeComplete::handle(DataEvent& event, Flow* flow)
     auto fd = ExtractorFlowData::get<QuicExtractorFlowData>(flow);
 
     if (!fd)
-        flow->set_flow_data(fd = new QuicExtractorFlowData(owner));
+        flow->set_flow_data(fd = new QuicExtractorFlowData(owner, *flow));
 
     const auto& quic_event = static_cast<const QuicHandshakeCompleteEvent&>(event);
 
+    if (quic_event.supersede() || !fd->has_data)
+    {
+        fd->version = quic_event.get_version();
+        fd->client_initial_dcid = quic_event.get_client_initial_dcid();
+        fd->client_scid = quic_event.get_client_scid();
+        fd->server_name = quic_event.get_server_name();
+        fd->client_protocol = quic_event.get_client_protocol();
+    }
     fd->server_scid = quic_event.get_server_scid();
     fd->history = quic_event.get_history();
 

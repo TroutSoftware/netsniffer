@@ -151,6 +151,7 @@ IpsPolicy* get_ips_policy() { return nullptr; }
 void DataBus::publish(unsigned, unsigned, Packet*, Flow*) { }
 void DataBus::publish(unsigned, unsigned, DataEvent&, Flow*) { }
 void DataBus::publish_to_all_network_policies(unsigned int, unsigned int) { }
+void InspectorManager::thread_drain_pending_tterm() { }
 SFDAQInstance::SFDAQInstance(const char*, unsigned, const SFDAQConfig*) { }
 SFDAQInstance::~SFDAQInstance() = default;
 void SFDAQInstance::reload() { }
@@ -201,6 +202,7 @@ void LogMessage(const char*,...) { }
 [[noreturn]] void FatalError(const char*,...) { exit(-1); }
 void ParseWarning(WarningGroup, const char*, ...) { }
 void HighAvailabilityManager::thread_init() { }
+void HighAvailabilityManager::thread_reinit() { }
 void HighAvailabilityManager::process_receive() { }
 void HighAvailabilityManager::thread_term() { }
 void HighAvailabilityManager::thread_term_beginning() { }

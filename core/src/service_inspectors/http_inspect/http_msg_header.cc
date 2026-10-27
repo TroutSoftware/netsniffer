@@ -24,6 +24,7 @@
 #include "http_msg_header.h"
 
 #include <cassert>
+#include <cctype>
 
 #include "decompress/file_decomp.h"
 #include "file_api/file_flows.h"
@@ -262,11 +263,50 @@ std::string HttpMsgHeader::get_host_header_field() const
 
 void HttpMsgHeader::gen_events()
 {
-    if ((get_header_count(HEAD_CONTENT_LENGTH) > 0) &&
-        (get_header_count(HEAD_TRANSFER_ENCODING) > 0) && !session_data->for_httpx)
+    auto raise_cl_or_te = [this] (Detail301ReasonCode code)
     {
-        add_infraction(INF_BOTH_CL_AND_TE);
-        create_event(EVENT_BOTH_CL_AND_TE);
+        auto& reason = get_cache_data().reason_code_detail_301[source_id];
+
+        if ( reason != DETAIL_301_NONE )
+            return;
+
+        reason = code;
+
+        create_event(EVENT_HEADER_INVALID_CL_OR_TE);
+    };
+
+    if ( session_data->for_httpx and get_header_count(HEAD_TRANSFER_ENCODING) > 0 )
+        raise_cl_or_te(DETAIL_301_HTTPX_HAS_TE);
+
+    if ( get_header_count(HEAD_CONTENT_LENGTH) > 0 )
+    {
+        if ( get_header_count(HEAD_TRANSFER_ENCODING) > 0 and !session_data->for_httpx )
+        {
+            add_infraction(INF_BOTH_CL_AND_TE);
+            create_event(EVENT_BOTH_CL_AND_TE);
+
+            raise_cl_or_te(DETAIL_301_CL_AND_TE_PRESENT);
+        }
+        else
+        {
+            const auto& cl = get_header_value_norm(HEAD_CONTENT_LENGTH);
+
+            for ( int negative = 0, pos = 1; pos < cl.length(); ++pos )
+            {
+                if ( cl.start()[pos - 1] == ',' )
+                    negative = 0;
+
+                if ( cl.start()[pos - 1] == '-' )
+                    ++negative;
+
+                if ( negative == 1 and std::isdigit(static_cast<unsigned char>(cl.start()[pos])) and
+                    norm_decimal_integer(Field(cl.length() - pos, cl.start() + pos)) > 0 )
+                {
+                    raise_cl_or_te(DETAIL_301_NEGATIVE_CL);
+                    break;
+                }
+            }
+        }
     }
 
     // Force inspection of the Host field
@@ -602,15 +642,8 @@ void HttpMsgHeader::prepare_body()
     DataBus::publish(DataBus::get_id(http_pub_key), HttpEventIds::HTTP_PUBLISH_LENGTH, http_publish_length_event, flow);
     int32_t new_depth = http_publish_length_event.get_publish_length();
 
-    int32_t should_publish = (int32_t)http_publish_length_event.should_publish_body();
-    // FIXIT-E move STASH_PUBLISH_REQUEST_BODY / STASH_PUBLISH_RESPONSE_BODY to the
-    // transaction object as well; this body-publish setting is negotiated and consumed
-    // entirely within http_inspect and fits per-transaction state better than generic
-    // flow stash.
-    if (is_request)
-        flow->set_attr(STASH_PUBLISH_REQUEST_BODY, should_publish);
-    else
-        flow->set_attr(STASH_PUBLISH_RESPONSE_BODY, should_publish);
+    const bool should_publish = http_publish_length_event.should_publish_body();
+    transaction->set_should_publish_body(source_id, should_publish);
 
     if (http_publish_length_event.should_publish_on_sse_event_boundary())
         transaction->set_publish_on_sse_event_boundary();
@@ -754,6 +787,12 @@ void HttpMsgHeader::setup_encoding_decompression()
             HttpModule::increment_peg_counts(PEG_COMPRESSED_DEFLATE);
             compression = CMP_DEFLATE;
             break;
+#ifdef HAVE_BROTLI
+        case CONTENTCODE_BR:
+            HttpModule::increment_peg_counts(PEG_COMPRESSED_BROTLI);
+            compression = CMP_BROTLI;
+            break;
+#endif
         case CONTENTCODE_IDENTITY:
             break;
         case CONTENTCODE_CHUNKED:
@@ -781,14 +820,8 @@ void HttpMsgHeader::setup_encoding_decompression()
     if ( compression == CMP_NONE )
         return;
 
-    session_data->compress[source_id] = new HttpCompressStream;
-
-    if ( session_data->compress[source_id]->setup(compression) )
-        return;
-
-    assert(false);
-    delete session_data->compress[source_id];
-    session_data->compress[source_id] = nullptr;
+    session_data->compress[source_id] = HttpCompressStream::create(compression,
+        params->decompression_param, transaction->get_infractions(source_id), session_data->events[source_id]);
 }
 
 void HttpMsgHeader::setup_utf_decoding()

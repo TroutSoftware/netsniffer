@@ -23,6 +23,7 @@
 
 #include "main.h"
 
+#include <cstring>
 #include <thread>
 
 #include "control/control.h"
@@ -152,7 +153,6 @@ public:
     bool requires_privileged_start = true;
 
 private:
-    void reap_command(AnalyzerCommand* ac);
 
     // we could just let the analyzer own this pointer and delete
     // immediately after getting the data but that creates memory
@@ -218,19 +218,6 @@ void Pig::stop()
 
     LogMessage("-- [%u] %s\n", idx, analyzer->get_source());
 
-    // Reap all analyzer commands, completed or not.
-    // FIXIT-L X Add concept of finalizing commands differently based on whether they were
-    //  completed or not when we have commands that care about that.
-    while (!analyzer->completed_work_queue.empty())
-    {
-        reap_command(analyzer->completed_work_queue.front());
-        analyzer->completed_work_queue.pop();
-    }
-    while (!analyzer->pending_work_queue.empty())
-    {
-        reap_command(analyzer->pending_work_queue.front());
-        analyzer->pending_work_queue.pop();
-    }
     delete analyzer;
     analyzer = nullptr;
 }
@@ -255,41 +242,11 @@ bool Pig::queue_command(AnalyzerCommand* ac, bool orphan)
     return true;
 }
 
-void Pig::reap_command(AnalyzerCommand* ac)
-{
-    unsigned ac_ref_count = ac->put();
-    if (ac_ref_count == 0)
-    {
-        debug_logf(snort_trace, TRACE_MAIN, nullptr, "[%u] Destroying completed command %s\n",
-            idx, ac->stringify());
-        delete ac;
-    }
-#ifdef DEBUG_MSGS
-    else
-        debug_logf(snort_trace, TRACE_MAIN, nullptr, "[%u] Reaped ongoing command %s (refcount %u)\n",
-            idx, ac->stringify(), ac_ref_count);
-#endif
-}
-
 void Pig::reap_commands()
 {
     if (!analyzer)
         return;
-    size_t commands_to_reap;
-    do
-    {
-        AnalyzerCommand* ac = nullptr;
-        analyzer->completed_work_queue_mutex.lock();
-        commands_to_reap = analyzer->completed_work_queue.size();
-        if (commands_to_reap)
-        {
-            ac = analyzer->completed_work_queue.front();
-            analyzer->completed_work_queue.pop();
-        }
-        analyzer->completed_work_queue_mutex.unlock();
-        if (ac)
-            reap_command(ac);
-    } while (commands_to_reap > 1);
+    analyzer->reap_commands();
 }
 
 
@@ -367,12 +324,34 @@ void snort::main_unicast_command(AnalyzerCommand* ac, unsigned target,  ControlC
 int main_dump_stats(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    send_response(ctrlcon, "== dumping stats\n");
-    main_broadcast_command(new ACGetStats(ctrlcon), ctrlcon);
+    if ( L && lua_gettop(L) > 0 && lua_type(L, 1) != LUA_TSTRING )
+    {
+        send_response(ctrlcon, "invalid dump_stats format; expected 'text' or 'json'\n");
+        return 0;
+    }
+
+    const char* format_arg = L ? luaL_optstring(L, 1, "text") : "text";
+    StatsOutputFormat format = StatsOutputFormat::Text;
+
+    if ( !strcmp(format_arg, "text") )
+        format = StatsOutputFormat::Text;
+    else if ( !strcmp(format_arg, "json") )
+        format = StatsOutputFormat::Json;
+    else
+    {
+        send_response(ctrlcon, "invalid dump_stats format; expected 'text' or 'json'\n");
+        return 0;
+    }
+
+    if ( format == StatsOutputFormat::Text )
+        send_response(ctrlcon, "== dumping stats\n");
+
+    main_broadcast_command(new ACGetStats(ctrlcon, format), ctrlcon);
     return 0;
 }
 
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_dump_heap_stats(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -394,6 +373,7 @@ int main_heap_profile(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_dump_heap_profile(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -401,6 +381,7 @@ int main_dump_heap_profile(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_show_heap_profile(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -478,6 +459,7 @@ int main_log_command(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_rotate_stats(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -486,6 +468,7 @@ int main_rotate_stats(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_show_config_generation(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -576,7 +559,10 @@ int main_reload_config(lua_State* L)
         LogMessage("No host attribute table loaded\n");
 
     SnortConfig::set_conf(sc);
-    proc_stats.conf_reloads++;
+    {
+        std::lock_guard<std::mutex> lock(ModuleManager::stats_mutex);
+        proc_stats.conf_reloads++;
+    }
 
     if ( sc->max_procs > 1 )
     {
@@ -598,12 +584,16 @@ int main_reload_config(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_reload_daq(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
     send_response(ctrlcon, ".. reloading daq module\n");
     main_broadcast_command(new ACDAQSwap(), ctrlcon);
-    proc_stats.daq_reloads++;
+    {
+        std::lock_guard<std::mutex> lock(ModuleManager::stats_mutex);
+        proc_stats.daq_reloads++;
+    }
 
     return 0;
 }
@@ -646,7 +636,10 @@ int main_reload_hosts(lua_State* L)
         return 0;
     }
 
-    proc_stats.attribute_table_reloads++;
+    {
+        std::lock_guard<std::mutex> lock(ModuleManager::stats_mutex);
+        proc_stats.attribute_table_reloads++;
+    }
     int32_t num_hosts = HostAttributesManager::get_num_host_entries();
     assert( num_hosts >= 0 );
     LogMessage("Host attribute table: %d hosts loaded successfully.\n", num_hosts);
@@ -672,6 +665,7 @@ int main_process(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_pause(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -730,6 +724,7 @@ int main_resume(lua_State* L)
 }
 
 #ifdef SHELL
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_detach(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -759,6 +754,7 @@ int main_show_plugins(lua_State*)
 }
 #endif
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_quit(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -772,6 +768,7 @@ int main_quit(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int main_help(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -817,6 +814,7 @@ int main_help(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int show_snort_cpu(lua_State* L)
 {
     ControlConn* ctrlconn = ControlConn::query_from_lua(L);
@@ -825,6 +823,7 @@ int show_snort_cpu(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
 int show_snort_packet_latency(lua_State* L)
 {
     ControlConn* ctrlconn = ControlConn::query_from_lua(L);
@@ -879,7 +878,10 @@ static int signal_check()
             LogMessage("** caught unknown signal - %u\n", s);
         return 0;
     }
-    proc_stats.signals++;
+    {
+        std::lock_guard<std::mutex> lock(ModuleManager::stats_mutex);
+        proc_stats.signals++;
+    }
     return 1;
 }
 

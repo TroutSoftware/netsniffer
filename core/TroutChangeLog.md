@@ -1,3 +1,11 @@
+## 2026-10-26
+
+- Merged with version 3.12.4.0 from https://github.com/snort3/snort3
+
+commit 705ecad300ecc903cb5518c816cdc97653948b2f (HEAD -> master, tag: 3.12.4.0, origin/master, origin/HEAD)
+Author: Priyanka Gurudev <prbg@cisco.com>
+Date:   Thu Jul 23 18:41:37 2026 -0400
+
 ## 2026-07-17
 
 - Fixed compiler warning in src/time/clock_defs.h

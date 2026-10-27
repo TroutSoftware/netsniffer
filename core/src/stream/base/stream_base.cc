@@ -34,6 +34,7 @@
 #include "managers/inspector_manager.h"
 #include "packet_io/packet_tracer.h"
 #include "profiler/profiler_defs.h"
+#include "stream/stream_log.h"
 #include "protocols/packet.h"
 #include "protocols/tcp.h"
 #include "pub_sub/stream_event_ids.h"
@@ -246,9 +247,11 @@ public:
 StreamBase::StreamBase(const StreamModuleConfig* c) : config(*c)
 { }
 
-bool StreamBase::configure(SnortConfig*)
+bool StreamBase::configure(SnortConfig* sc)
 {
     Stream::set_pub_id();
+    HighAvailabilityManager::register_ha_client(MOD_NAME, nullptr, /*is_session=*/true);
+    sc->register_reload_handler(new StreamHAReloadSwapper());
     return true;
 }
 
@@ -258,15 +261,9 @@ void StreamBase::tear_down(SnortConfig* sc, bool shutdown)
         sc->register_reload_handler(new StreamUnloadReloadResourceManager);
 }
 
-static THREAD_LOCAL bool keep_tld = false;
-
 void StreamBase::tinit()
 {
-    if ( flow_con )
-    {
-        keep_tld = true;
-        return;
-    }
+    assert(!flow_con);
     assert(config.flow_cache_cfg.max_flows);
 
     // this is temp added to suppress the compiler error only
@@ -312,11 +309,6 @@ void StreamBase::tinit()
 
 void StreamBase::tterm()
 {
-    if ( keep_tld )
-    {
-        keep_tld = false;
-        return;
-    }
     Stream::delete_held_packet_queue();
     StreamHAManager::tterm();
     FlushBucket::clear();
@@ -336,6 +328,9 @@ void StreamBase::eval(Packet* p)
 {
     Profile profile(s5PerfStats);
 
+    if ( PacketTracer::is_daq_activated() )
+        PacketTracer::restart_timer();
+
     if ( !is_eligible(p) )
         return;
 
@@ -343,8 +338,7 @@ void StreamBase::eval(Packet* p)
     {
     case PktType::NONE:
         stream_base_stats.no_flow_pkt_type_none++;
-        if ( PacketTracer::is_active() )
-            PacketTracer::log("Flow: packet without flow - packet type is NONE\n");
+        stream_log(p, "Flow: packet without flow - packet type is NONE\n");
         break;
 
     case PktType::IP:
@@ -450,4 +444,3 @@ static const InspectApi base_api =
 };
 
 const BaseApi* nin_stream_base = &base_api.base;
-
