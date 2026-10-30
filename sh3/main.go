@@ -57,6 +57,7 @@ func main() {
 
 	var fail = lipgloss.NewStyle().Foreground(lipgloss.Color("#ea580c"))
 	var pass = lipgloss.NewStyle().Foreground(lipgloss.Color("#6ee7b7"))
+	var skipping = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))
 
 	modules := flag.Args()
 
@@ -162,10 +163,12 @@ func main() {
 			var se skipError
 			if skip := errors.As(err, &se); skip {
 				tests_skipped++
-				if se.msg != "" {
-					fmt.Fprintf(os.Stderr, "Skipping test\n")
+				if se.msg == "" {
+					fmt.Fprintf(os.Stderr, skipping.Render("Skipping test"))
+					fmt.Fprintf(os.Stderr, "\n")
 				} else {
-					fmt.Fprintf(os.Stderr, "Skipping test: %s\n", se.msg)
+					fmt.Fprintf(os.Stderr, skipping.Render("Skipping test: "))
+					fmt.Fprintf(os.Stderr, "%s\n", se.msg)
 				}
 			} else {
 				fmt.Fprintln(os.Stderr, fail.Render("FAIL"))
