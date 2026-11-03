@@ -25,7 +25,9 @@ using Pegs = PegList<
   Peg<Name<"packet_underflow">,             Type<PegType::SUM>, HelpText<"Not enough data in packet to decode">>,
   Peg<Name<"packet_extra_data">,            Type<PegType::SUM>, HelpText<"Packets that contains data that isn't part of the message">>,
   Peg<Name<"packet_extra_data_sum">,        Type<PegType::SUM>, HelpText<"Sum of all extra data in packets">>,
-  Peg<Name<"bacnet_ip_packets_received">,   Type<PegType::SUM>, HelpText<"BACnet/ip packets recevied">>
+  Peg<Name<"bacnet_ip_packets_received">,   Type<PegType::SUM>, HelpText<"BACnet/ip packets recevied">>,
+  Peg<Name<"unsupported_protocol_version">, Type<PegType::SUM>, HelpText<"Times an unknown BACnet protocol versions was seen in a message">>,
+  Peg<Name<"spec_violations">,              Type<PegType::SUM>, HelpText<"The number of BACnet specification violations seen">>
 >;
 // clang-format on
 

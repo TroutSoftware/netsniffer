@@ -16,7 +16,10 @@
 namespace bacnet_ip {
 
 // clang-format off
-using Settings = ParamList<>;
+using Settings = ParamList< Param<  Name<"ignore_version">,
+                                    Type<ParameterType::Bool>,
+                                    DefaultValue<"true">,
+                                    HelpText<"Tries to parse messages, even if the version number isn't supported">>>;
 // clang-format on
 
 } // namespace bacnet_ip

@@ -51,6 +51,13 @@ constexpr uint8_t NPDU_PRIORITY_CRITICAL_EQUIP = 0x02;
 /// NPDU Control priority, life safety
 constexpr uint8_t NPDU_PRIORITY_LIFE_SAFETY = 0x03;
 
+/// NPDU Max address length
+constexpr uint8_t NPDU_MAX_ADDRESS_LENGTH = 0x07;
+
+/// The first MSG type (in NPDU data) for vendor types
+constexpr uint8_t BACNET_MSG_TYPE_FIRST_VENDOR_RANGE = 0x80;
+
+
 } // namespace bacnet_ip
 
 #endif // #ifndef bacnet_ip_defs_37BEFE22
