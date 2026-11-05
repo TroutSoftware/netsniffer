@@ -21,8 +21,8 @@ using namespace trout::templates;
 class Module : public trout::templates::Module<
                    Pegs,
                    Settings,
-                   Name<"bacnet_ip">,
-                   HelpText<"bacnet_ip is currently a pure address inspector">> {
+                   Name<"bacnet_ip_wip">,
+                   HelpText<"bacnet_ip is a WIP not currently being actively developed">> {
   // clang-format on
 
   Module();

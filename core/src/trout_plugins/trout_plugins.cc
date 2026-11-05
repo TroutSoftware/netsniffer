@@ -53,7 +53,7 @@
 const snort::BaseApi *trout_plugins[] = {
   &alert_lioli::log_api.base,
   &arp_monitor::inspect_api.base,
-  &bacnet_ip::inspect_api.base,
+  // On hold: &bacnet_ip::inspect_api.base,
   &capture_pcap::inspect_api.base,
   &dhcp_monitor::dhcpmonitor_api.base,
   &dhcp_option::inspector.base,
@@ -80,7 +80,7 @@ const snort::BaseApi *trout_plugins[] = {
   &serializer_raw::inspect_api.base,
   &serializer_txt::inspect_api.base,
   &smnp::inspect_api.base,
-  &trout::discovery::inspect_api.base,
+  // On hold: &trout::discovery::inspect_api.base,
   &trout_netflow::inspect_api.base,
   &trout_netflow2::inspect_api.base,
 //  &trout_wizard::inspect_api.base,
