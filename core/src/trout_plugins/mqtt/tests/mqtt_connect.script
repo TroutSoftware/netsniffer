@@ -1,7 +1,5 @@
-skip
-
 pcap testdata/test_connect.pcap
-cmp output.txt testdata/mqtt_connect.expected.txt
+text_log_cmp output.txt testdata/mqtt_connect.expected.txt
 
 stdout 'client_id_cache_max_size: 1'
 stdout 'flow_count: 3'

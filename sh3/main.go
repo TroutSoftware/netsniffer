@@ -69,6 +69,7 @@ func main() {
 	ng.Cmds["pcap"] = snort()
 	ng.Cmds["skip"] = Skip()
 	ng.Cmds["cmp"] = Eq()
+	ng.Cmds["text_log_cmp"] = LioLiTextEq()
 
 	if wd == "" {
 		w, err := os.Getwd()

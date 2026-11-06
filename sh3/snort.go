@@ -130,3 +130,59 @@ func Eq() script.Cmd {
 			return nil, nil
 		})
 }
+
+func LioLiTextEq() script.Cmd {
+	return script.Command(
+		script.CmdUsage{
+			Summary: "check if two files contains the same LioLi text logs, ignoring the ordering of the individual logs",
+			Args:    "f1 f2",
+		},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 2 {
+				return nil, script.ErrUsage
+			}
+
+			f1, err := os.ReadFile(s.Path(args[0]))
+			if err != nil {
+				return nil, fmt.Errorf("opening %s: %w", args[0], err)
+			}
+
+			f2, err := os.ReadFile(s.Path(args[1]))
+			if err != nil {
+				return nil, fmt.Errorf("opening %s: %w", args[1], err)
+			}
+
+			var f1s = string(f1)
+			var f2s = string(f2)
+
+			f1s = strings.TrimSuffix(f1s, "------------------------\n")
+			f2s = strings.TrimSuffix(f2s, "------------------------\n")
+
+			var parts1 = strings.Split(f1s, "vvvvvvvvvvvvvvvvvvvvvvvv\n")
+			var parts2 = strings.Split(f2s, "vvvvvvvvvvvvvvvvvvvvvvvv\n")
+
+			if len(parts1) != len(parts2) {
+				return nil, fmt.Errorf("file %s and %s has different number of log statements", args[0], args[1])
+			}
+
+			for _, part1 := range parts1 {
+				var match = false
+
+				for index, part2 := range parts2 {
+
+					if part1 == part2 {
+						parts2 = append(parts2[:index], parts2[index+1:]...)
+						match = true
+						break
+					}
+				}
+
+				if !match {
+					fmt.Fprintf(os.Stderr, "Couldn't find >>>\n%s<<< in %s", part1, args[1])
+					return nil, fmt.Errorf("file %s and %s doesn't contain the same log statements", args[0], args[1])
+				}
+			}
+
+			return nil, nil
+		})
+}

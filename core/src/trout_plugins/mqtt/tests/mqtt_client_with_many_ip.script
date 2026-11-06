@@ -1,7 +1,5 @@
-skip
-
 pcap testdata/mqtt_client_with_many_ip.pcap
-cmp output.txt testdata/mqtt_client_with_many_ip.expected.txt
+text_log_cmp output.txt testdata/mqtt_client_with_many_ip.expected.txt
 
 stdout 'logs_generated: 20'
 stdout 'new_ip_client_id: 20'
