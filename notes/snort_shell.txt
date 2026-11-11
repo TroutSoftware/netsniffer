@@ -1,0 +1,45 @@
+Notes on the snort shell
+------------------------
+
+The snort shell is a cli that can be enabled in the snort build.
+
+You can run lua commands on the shell, e.g.:
+
+-----
+
+o")~ 
+dump_stats()
+== dumping stats
+--------------------------------------------------
+Packet Statistics
+--------------------------------------------------
+daq
+                 received: 117
+                 analyzed: 117
+                    allow: 117
+                 rx_bytes: 11249
+.
+.
+.
+o")~ 
+
+-----
+
+The shell can either be accessed from stdin/stdout when running snort
+or it can be accessed through a telnet port given at startup.
+
+To enabled the shell "-DENABLE_SHELL=true" needs to be added to the
+build config of snort.
+
+When launching snort the "-j" parameter can be used to enable the telnet
+shell, e.g.:
+
+$ sudo ./network_snort.sh -i enp0s3 -j 4321
+
+To launch with the cli prompt use "--shell" as a launch parameter, e.g.:
+
+$ sudo ./network_snort.sh -i enp0s3 --shell
+
+The two launch parameters can be combined:
+
+e.g.: $ sudo ./network_snort.sh -i enp0s3 -j 4321 --shell
