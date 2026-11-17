@@ -1,0 +1,68 @@
+Snort settings reload
+---------------------
+
+Snort settings are reloaded when a SIGHUP is received by the snort
+process or when a reload_config(<PATH to config.lua file>) is entered
+on the command line.
+
+Different scenarios can happen:
+
+************************************************************************
+The module wasn't configured in the old, but is in the new configuration
+************************************************************************
+
+1) Module receives a standard begin-set*-end sequence to parse the new
+   settings
+
+2) Inspector is created (on main thread)
+
+3) configure() is called on the inspector (on main thread)
+
+4) show() is called on the inspector (on main thread)
+
+5) tinit() is called on the inspector from each thread it is run in
+   (main thread isn't one of them, tinit()'s aren't run in sequence)
+
+
+************************************************************************
+   The module has configuration in both the old and new configuration
+   (New config is invalid)
+************************************************************************
+
+1) Module receives a standard begin-set*-end sequence to parse the new
+   settings (on main thread)
+
+Nothing more happens in this case, the program is expected to continue
+to run with the old settings
+
+************************************************************************
+   The module has configuration in both the old and new configuration
+   (New config is valid)
+************************************************************************
+
+1) Module receives a standard begin-set*-end sequence to parse the new
+   settings (on main thread)
+
+2) New inspector is created (on main thread)
+
+3) configure() is called on the new inspector (on main thread)
+
+4) install_reload() is called on the new inspector (on main thread)
+
+5) show() is called on the new inspector (on main thread)
+
+6) old inspector is deleted (on main thread)
+
+Note: No tinit() called on the new inspector instance
+
+************************************************************************
+   The module doesn't exist in the new configuration, but did in the
+   previous
+************************************************************************
+
+1) tear_down(shutdown=false) is called on the old inspector (from main
+   thread)
+
+2) tterm() is called from each thread (not main thread)
+
+3) inspector is deleted (on main thread)
