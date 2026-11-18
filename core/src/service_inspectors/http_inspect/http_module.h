@@ -61,6 +61,7 @@ public:
     int64_t maximum_chunk_length = 0xFFFFFFFF;
     uint16_t maximum_header_length = 4096;
     uint16_t maximum_headers = 200;
+    int32_t maximum_header_value_length = 0;
     int32_t max_request_size = 0;
     int32_t max_request_line_length = 0;
     uint16_t maximum_pipelined_requests = 99;
@@ -68,7 +69,7 @@ public:
     bool decompress_swf = false;
     bool decompress_zip = false;
     bool decompress_vba = false;
-    snort::DecodeConfig* mime_decode_conf;
+    snort::DecodeConfig* mime_decode_conf = nullptr;
     uint32_t max_mime_attach = 5;
     bool script_detection = false;
     snort::LiteralSearch::Handle* script_detection_handle = nullptr;
@@ -138,6 +139,8 @@ public:
 
     std::set<std::string> allowed_methods;
     std::set<std::string> disallowed_methods;
+
+    std::set<std::string> allowed_content_type;
 
 #ifdef REG_TEST
     int64_t print_amount = 1200;
@@ -225,6 +228,7 @@ public:
 private:
     static const snort::Parameter http_params[];
     static const snort::RuleMap http_events[];
+    // cppcheck-suppress duplInheritedMember ; http_inspect configuration, unrelated to Module's parameter table
     HttpParaList* params = nullptr;
     static const PegInfo peg_names[];
     static THREAD_LOCAL snort::ProfileStats http_profile;

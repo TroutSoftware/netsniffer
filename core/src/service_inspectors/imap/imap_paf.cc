@@ -36,7 +36,7 @@ static inline ImapPafData* get_state(Flow* flow, bool c2s)
     if ( !flow )
         return nullptr;
 
-    ImapSplitter* s = (ImapSplitter*)Stream::get_splitter(flow, c2s);
+    ImapSplitter* s = static_cast<ImapSplitter*>(Stream::get_splitter(flow, c2s));
     return (s and s->is_paf()) ? &s->state : nullptr;
 }
 
@@ -558,6 +558,9 @@ static StreamSplitter::Status imap_paf_server(ImapPafData* pfdata,
         case IMAP_PAF_DATA_STATE:
             if (find_data_end_mime_data(ch, pfdata))
             {
+                if (pfdata->mime_info.paf_abort)
+                    return StreamSplitter::ABORT;
+
                 // if not a boundary, wait for end of
                 // the server's response before flushing
                 if (pfdata->imap_state == IMAP_PAF_DATA_STATE)
@@ -579,7 +582,7 @@ static StreamSplitter::Status imap_paf_server(ImapPafData* pfdata,
         }
     }
 
-    if( saw_reg_state )
+    if (saw_reg_state)
     {
         pfdata->server_bytes_seen += len;
         if (pfdata->server_bytes_seen > IMAP_MAX_OCTETS)
@@ -587,7 +590,7 @@ static StreamSplitter::Status imap_paf_server(ImapPafData* pfdata,
             return StreamSplitter::ABORT;
         }
     }
-    else 
+    else
     {
         pfdata->server_bytes_seen = 0;
     }
@@ -624,15 +627,18 @@ static StreamSplitter::Status imap_paf_client(ImapPafData* pfdata, const uint8_t
 {
     uint32_t i;
     uint32_t flush_len = 0;
-    ImapClientState client_state = IMAP_CLIENT_FIRST_CHAR;
-    bool is_valid_command = false;
-    bool is_valid_base64 = len >= MIN_BASE64_LEN;
-    bool found_space = false;
-    
+
+    if (pfdata->client_state == IMAP_CLIENT_FIRST_CHAR)
+    {
+        pfdata->client_is_valid_command = false;
+        pfdata->client_found_space = false;
+        pfdata->client_is_valid_base64 = len >= MIN_BASE64_LEN;
+    }
+
     for (i = 0; i < len; i++)
     {
         uint8_t ch = data[i];
-        
+
         if (ch == '\n')
         {
             flush_len = i + 1;
@@ -643,31 +649,33 @@ static StreamSplitter::Status imap_paf_client(ImapPafData* pfdata, const uint8_t
             continue;
         }
 
-        switch (client_state)
+        switch (pfdata->client_state)
         {
         case IMAP_CLIENT_FIRST_CHAR:
             if (isalnum(ch))
             {
-                is_valid_command = true;
-                client_state = IMAP_CLIENT_COMMAND_TAG;
+                pfdata->client_is_valid_command = true;
+                pfdata->client_state = IMAP_CLIENT_COMMAND_TAG;
             }
             else
             {
-                is_valid_command = false;
-                client_state = is_valid_base64 ? IMAP_CLIENT_BASE64_CHECK : IMAP_CLIENT_FLUSH_LINE;
+                pfdata->client_is_valid_command = false;
+                pfdata->client_state = pfdata->client_is_valid_base64 ?
+                    IMAP_CLIENT_BASE64_CHECK : IMAP_CLIENT_FLUSH_LINE;
             }
             break;
 
         case IMAP_CLIENT_COMMAND_TAG:
             if (ch == ' ')
             {
-                found_space = true;
-                client_state = IMAP_CLIENT_FLUSH_LINE;
+                pfdata->client_found_space = true;
+                pfdata->client_state = IMAP_CLIENT_FLUSH_LINE;
             }
             else if (!isalnum(ch) && ch != '-')
             {
-                is_valid_command = false;
-                client_state = is_valid_base64 ? IMAP_CLIENT_BASE64_CHECK : IMAP_CLIENT_FLUSH_LINE;
+                pfdata->client_is_valid_command = false;
+                pfdata->client_state = pfdata->client_is_valid_base64 ?
+                    IMAP_CLIENT_BASE64_CHECK : IMAP_CLIENT_FLUSH_LINE;
             }
             break;
 
@@ -676,8 +684,8 @@ static StreamSplitter::Status imap_paf_client(ImapPafData* pfdata, const uint8_t
             {
                 if (!(isalnum(ch) || ch == '+' || ch == '/' || ch == '='))
                 {
-                    is_valid_base64 = false;
-                    client_state = IMAP_CLIENT_FLUSH_LINE;
+                    pfdata->client_is_valid_base64 = false;
+                    pfdata->client_state = IMAP_CLIENT_FLUSH_LINE;
                 }
             }
             break;
@@ -687,27 +695,27 @@ static StreamSplitter::Status imap_paf_client(ImapPafData* pfdata, const uint8_t
         }
     }
 
-    is_valid_command = is_valid_command && found_space;
-    bool is_valid = is_valid_command || is_valid_base64;
-    uint32_t check_len = flush_len ? flush_len : len;
+    bool is_valid = (pfdata->client_state != IMAP_CLIENT_FIRST_CHAR) &&
+        ((pfdata->client_is_valid_command && pfdata->client_found_space) ||
+         pfdata->client_is_valid_base64);
+    uint32_t line_len = flush_len ? flush_len : len;
 
     if (is_valid)
-    {
         pfdata->client_bytes_seen = 0;
-    }
     else
     {
-        pfdata->client_bytes_seen += check_len;
-        
+        pfdata->client_bytes_seen += line_len;
         if (pfdata->client_bytes_seen > IMAP_MAX_OCTETS)
         {
             pfdata->client_bytes_seen = 0;
+            pfdata->client_state = IMAP_CLIENT_FIRST_CHAR;
             return StreamSplitter::ABORT;
         }
     }
-    
+
     if (flush_len)
     {
+        pfdata->client_state = IMAP_CLIENT_FIRST_CHAR;
         *fp = flush_len;
         return StreamSplitter::FLUSH;
     }
@@ -759,7 +767,6 @@ StreamSplitter::Status ImapSplitter::scan(
 
 bool imap_is_data_end(Flow* ssn)
 {
-    ImapPafData* s = get_state(ssn, true);
+    const ImapPafData* s = get_state(ssn, true);
     return s ? s->end_of_data : false;
 }
-

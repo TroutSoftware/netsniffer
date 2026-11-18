@@ -70,7 +70,9 @@ FlowDataStore::~FlowDataStore() = default;
 FlowData* FlowDataStore::get(unsigned) const { return nullptr; }
 void FlowDataStore::set(FlowData*) {}
 
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 
 Packet::Packet(bool)
     : flow(nullptr), packet_flags(0), xtradata_mask(0), proto_bits(0), alt_dsize(0), num_layers(0),
@@ -133,8 +135,8 @@ unsigned get_instance_id() { return 0; }
 
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) {}
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) {}
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) {}
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) {}
 
 unsigned ThreadConfig::get_instance_max() { return 1; }
 
@@ -192,7 +194,6 @@ TEST_GROUP(ssh_kexinit_test)
     void setup() override
     {
         reset_captured_state();
-        // cppcheck-suppress unreadVariable
         p.flow = &f;
     }
 };

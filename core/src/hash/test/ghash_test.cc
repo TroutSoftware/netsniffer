@@ -90,13 +90,13 @@ TEST(ghash, create_find_delete_test)
         snprintf(str, sizeof(str), "KeyWord%d",i+1);
         str[sizeof(str) - 1] = '\0';
 
-        char* p = (char*)t->find(str);
+        const char* p = (char*)t->find(str);
 
         CHECK(p != nullptr);
         CHECK(p == (void *)(str + (i+1)));
     }
 
-    for (GHashNode* n = t->find_first(); n; n = t->find_next() )
+    for (const GHashNode* n = t->find_first(); n; n = t->find_next() )
     {
         i = t->remove(n->key);
 
@@ -136,14 +136,14 @@ TEST(ghash, collision_test)
         snprintf(str, sizeof(str), "KeyWord%d",i+1);
         str[sizeof(str) - 1] = '\0';
 
-        char* p = (char*)t->find(str);
+        const char* p = (char*)t->find(str);
 
         CHECK(p != nullptr);
         CHECK(p == (void *)(str + (i+1)));
     }
 
     // remove one node
-    GHashNode* n = t->find_first();
+    const GHashNode* n = t->find_first();
     if (n)
     {
         n = t->find_next();
@@ -187,7 +187,7 @@ TEST(ghash, userfree_test)
         snprintf(str, sizeof(str), "KeyWord%d",i+1);
         str[sizeof(str) - 1] = '\0';
 
-        char *p = (char*)t->find(str);
+        const char *p = (char*)t->find(str);
 
         CHECK(p != nullptr);
         CHECK(p[0] == (i+1));
@@ -203,7 +203,7 @@ TEST(ghash, userfree_test)
     // try to remove a node that is not in the table
     CHECK(t->remove( str) == HASH_NOT_FOUND);
 
-    for ( GHashNode* n = t->find_first(); n; n = t->find_next() )
+    for ( const GHashNode* n = t->find_first(); n; n = t->find_next() )
     {
         // user free should be called here, no memory leak should be detected
         i = t->remove(n->key);

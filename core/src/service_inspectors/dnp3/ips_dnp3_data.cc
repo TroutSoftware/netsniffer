@@ -50,6 +50,7 @@ public:
     Dnp3DataOption() : IpsOption(s_name) { }
 
     uint32_t hash() const override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool operator==(const IpsOption&) const override;
 
     EvalStatus eval(Cursor&, Packet*) override;
@@ -75,7 +76,6 @@ bool Dnp3DataOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus Dnp3DataOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(dnp3_data_perf_stats);
 
     InspectionBuffer b;

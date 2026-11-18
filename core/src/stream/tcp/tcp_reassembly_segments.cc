@@ -28,6 +28,7 @@
 #include "detection/detection_engine.h"
 #include "tcp_reassembly_segments.h"
 
+#include "flow/flow.h"
 #include "log/messages.h"
 #include "protocols/tcp.h"
 #include "stream/stream_log.h"
@@ -42,14 +43,43 @@
 
 using namespace snort;
 
+static inline size_t segment_mem(const TcpSegmentNode* tsn)
+{ return sizeof(TcpSegmentNode) + tsn->size; }
+
 TcpReassemblySegments::~TcpReassemblySegments()
 {
     delete tos;
 }
 
+uint32_t TcpReassemblySegments::purge()
+{
+    int i = 0;
+
+    while ( head )
+    {
+        i++;
+        TcpSegmentNode* dump_me = head;
+        head = head->next;
+        if (flow)
+            flow->sub_mem(segment_mem(dump_me));
+        dump_me->term();
+    }
+
+    head = tail = cur_rseg = cur_sseg = nullptr;
+    seg_count = 0;
+    flush_count = 0;
+    seg_bytes_total = 0;
+    seg_bytes_logical = 0;
+    total_bytes_queued = 0;
+    total_segs_queued = 0;
+    overlap_count = 0;
+    return i;
+}
+
 void TcpReassemblySegments::init(TcpSession* ssn, TcpStreamTracker* trk, Overlap::Policy pol)
 {
     session = ssn;
+    flow = ssn ? ssn->flow : nullptr;
     tracker = trk;
     overlap_resolver = TcpOverlapResolverFactory::get_instance(pol);
     if ( tos )
@@ -63,6 +93,7 @@ void TcpReassemblySegments::reset()
     seglist_base_seq = 0;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void TcpReassemblySegments::purge_segment_list()
 {
     purge();
@@ -101,27 +132,113 @@ uint32_t TcpReassemblySegments::get_pending_segment_count(const unsigned max) co
     return n;
 }
 
-bool TcpReassemblySegments::segment_within_seglist_window(TcpSegmentDescriptor& tsd)
+bool TcpReassemblySegments::segment_within_seglist_window(
+    const TcpSegmentDescriptor& tsd, uint32_t max_queued_segs)
 {
-    assert (head);
-    uint32_t start;
+    assert(head);
+    // Allow a small reordered burst while keeping post-limit admission bounded.
+    static constexpr uint32_t max_reordered_segments = 5;
 
-    if ( SEQ_LT(seglist_base_seq, head->start_seq()) )
-        start = seglist_base_seq;
+    assert(seg_count >= max_queued_segs);
+    if ( seg_count - max_queued_segs >= max_reordered_segments )
+        return false;
+
+    const uint32_t hole_left = tracker->get_rcv_nxt();
+    uint32_t hole_right;
+
+    if ( SEQ_LT(hole_left, head->start_seq()) )
+        hole_right = head->start_seq();
+    else if ( !cur_sseg or !cur_sseg->next
+        or !SEQ_EQ(cur_sseg->next_seq(), hole_left)
+        or !SEQ_LT(hole_left, cur_sseg->next->start_seq()) )
+        return false;
     else
-        start = head->seq;
+        hole_right = cur_sseg->next->start_seq();
 
-    if ( SEQ_LEQ(tsd.get_end_seq(), start) )
+    if ( SEQ_LEQ(tsd.get_end_seq(), hole_left)
+        or SEQ_GT(tsd.get_end_seq(), hole_right) )
         return false;
 
-    // Right side
-    if ( SEQ_GEQ(tsd.get_seq(), tail->next_seq()) )
-        return false;
+    // Allow a bounded burst near the visible hole edge.
+    const uint32_t effective_start =
+        SEQ_LT(tsd.get_seq(), hole_left) ? hole_left : tsd.get_seq();
+    const uint32_t reorder_window = tsd.get_len() * max_reordered_segments;
 
-    return true;
+    return effective_start - hole_left < reorder_window;
 }
 
-void TcpReassemblySegments::print_stream_state(TcpStreamTracker* talker)
+uint32_t TcpReassemblySegments::get_seglist_footprint_base_seq() const
+{
+    uint32_t base = seglist_base_seq;
+
+    // Reserve the active receive gap for two-way ACK-based reassembly.
+    if ( tracker->get_flush_policy() == STREAM_FLPOLICY_ON_ACK
+        && session->flow->two_way_traffic() )
+        base = tracker->get_rcv_nxt();
+    else if ( SEQ_LT(base, tracker->get_rcv_nxt()) )
+        base = tracker->get_rcv_nxt();
+
+    // Retained data before the active base remains in the footprint.
+    if ( head && SEQ_LT(head->start_seq(), base) )
+        base = head->start_seq();
+
+    return base;
+}
+
+uint32_t TcpReassemblySegments::get_segment_length_in_footprint(
+    const TcpSegmentDescriptor& tsd, uint32_t max_queued_bytes) const
+{
+    const uint32_t len = tsd.get_len();
+    const uint32_t clip_base = head ? tracker->r_win_base : seglist_base_seq;
+    const int32_t clip_offset = static_cast<int32_t>(clip_base - tsd.get_seq());
+    uint32_t prefix = 0;
+
+    // Mirror the prefix that queue insertion will discard.
+    if ( clip_offset > 0 )
+    {
+        prefix = static_cast<uint32_t>(clip_offset);
+        if ( prefix >= len )
+            return len;
+    }
+
+    const uint32_t seq = tsd.get_seq() + prefix;
+    const uint32_t base = get_seglist_footprint_base_seq();
+    const int32_t footprint_offset = static_cast<int32_t>(seq - base);
+    uint32_t right = base;
+
+    if ( head )
+    {
+        assert(tail);
+        right = tail->next_seq();
+        if ( SEQ_GT(tracker->get_rcv_nxt(), right) )
+            right = tracker->get_rcv_nxt();
+
+        // Ignore data that cannot extend the scanned head.
+        if ( SEQ_LEQ(tsd.get_end_seq(), head->start_seq())
+            and tracker->reassembler->segment_already_scanned(seq) )
+            return len;
+    }
+
+    uint32_t offset = 0;
+    if ( footprint_offset < 0 )
+    {
+        const uint64_t span = static_cast<uint32_t>(right - seq);
+        if ( span > max_queued_bytes )
+            return prefix;
+    }
+    else
+        offset = static_cast<uint32_t>(footprint_offset);
+
+    if ( offset >= max_queued_bytes )
+        return prefix;
+
+    const uint32_t space_left = max_queued_bytes - offset;
+    const uint64_t allowed = static_cast<uint64_t>(prefix) + space_left;
+
+    return allowed < len ? static_cast<uint32_t>(allowed) : len;
+}
+
+void TcpReassemblySegments::print_stream_state(const TcpStreamTracker* talker)
 {
     if ( !snort::PacketTracer::is_active() and !snort::PacketTracer::is_daq_activated()
         and !stream_tcp_trace_enabled )
@@ -178,9 +295,10 @@ void TcpReassemblySegments::insert_segment_in_empty_seglist(TcpSegmentDescriptor
     add_reassembly_segment(tsd, tsd.get_len(), overlap, 0, tsd.get_seq(), nullptr);
 }
 
-bool TcpReassemblySegments::is_segment_fasttrack(TcpSegmentNode* tail, const TcpSegmentDescriptor& tsd)
+bool TcpReassemblySegments::is_segment_fasttrack(
+    const TcpSegmentNode* tail_segment, const TcpSegmentDescriptor& tsd)
 {
-    if ( SEQ_EQ(tsd.get_seq(), tail->next_seq()) )
+    if ( SEQ_EQ(tsd.get_seq(), tail_segment->next_seq()) )
         return true;
 
     return false;
@@ -196,9 +314,31 @@ void TcpReassemblySegments::insert_segment_in_seglist(TcpSegmentDescriptor& tsd)
         return;
     }
 
-    // Packet is problematic, may have overlaps/retransmission, fill the hole, create a hole
     tsd.set_packet_flags(PKT_TCP_INJECT_BLOCKED);
+    const uint32_t rcv_nxt = tracker->get_rcv_nxt();
 
+    // Insert a clean segment within the initial receive gap in O(1).
+    if ( SEQ_LT(rcv_nxt, head->start_seq())
+        and SEQ_GEQ(tsd.get_seq(), rcv_nxt)
+        and SEQ_LEQ(tsd.get_end_seq(), head->start_seq())
+        and !tracker->reassembler->segment_already_scanned(tsd.get_seq()) )
+    {
+        add_reassembly_segment(tsd, tsd.get_len(), 0, 0, tsd.get_seq(), nullptr);
+        return;
+    }
+
+    // Insert a clean segment within the active receive gap in O(1).
+    if ( cur_sseg and cur_sseg->next
+        and SEQ_EQ(cur_sseg->next_seq(), rcv_nxt)
+        and SEQ_LT(rcv_nxt, cur_sseg->next->start_seq())
+        and SEQ_GEQ(tsd.get_seq(), rcv_nxt)
+        and SEQ_LEQ(tsd.get_end_seq(), cur_sseg->next->start_seq()) )
+    {
+        add_reassembly_segment(tsd, tsd.get_len(), 0, 0, tsd.get_seq(), cur_sseg);
+        return;
+    }
+
+    // Packet is problematic, may have overlaps/retransmission, fill the hole, create a hole
     tos->init(tsd);
     overlap_resolver->eval_left(*tos);
     overlap_resolver->eval_right(*tos);
@@ -240,6 +380,9 @@ void TcpReassemblySegments::insert_segment_data(TcpSegmentNode* prev, TcpSegment
     seg_bytes_total += tsn->size;
     total_segs_queued++;
     tcpStats.segs_queued++;
+
+    if (flow)
+        flow->add_mem(segment_mem(tsn));
 
     if ( seg_count > tcpStats.max_segs )
         tcpStats.max_segs = seg_count;
@@ -305,6 +448,9 @@ int TcpReassemblySegments::delete_reassembly_segment(TcpSegmentNode* tsn)
 {
     int ret;
     assert(tsn);
+
+    if (flow)
+        flow->sub_mem(segment_mem(tsn));
 
     seg_bytes_total -= tsn->size;
     seg_bytes_logical -= tsn->length;
@@ -453,6 +599,7 @@ void TcpReassemblySegments::flush_before_purge(Packet* p)
     }
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 bool TcpReassemblySegments::skip_holes(Packet* p)
 {
     assert( head );
@@ -497,7 +644,7 @@ bool TcpReassemblySegments::skip_holes(Packet* p)
     return num_holes > 0;
 }
 
-void TcpReassemblySegments::skip_midstream_pickup_seglist_hole(TcpSegmentDescriptor& tsd)
+void TcpReassemblySegments::skip_midstream_pickup_seglist_hole(const TcpSegmentDescriptor& tsd)
 {
     uint32_t ack = tsd.get_ack();
 

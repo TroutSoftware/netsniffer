@@ -30,6 +30,7 @@
 #include "profiler/profiler.h"
 
 #include "extractor_enums.h"
+#include "extractor_rate_filter.h"
 #include "extractor_service.h"
 
 #define S_NAME "extractor"
@@ -45,6 +46,7 @@ public:
     uint32_t tenant_id;
     std::vector<std::string> on_events;
     std::vector<std::string> fields;
+    SamplingConfig sampling;
 };
 
 struct ExtractorConfig
@@ -81,7 +83,7 @@ public:
     { return extractor_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&extractor_stats; }
+    { return reinterpret_cast<PegCount*>(&extractor_stats); }
 
     snort::ProfileStats* get_profile() const override
     { return &extractor_perf_stats; }
@@ -97,7 +99,6 @@ public:
     { return extractor_config; }
 
 private:
-    void store(snort::Value& val, std::vector<std::string>& dst);
     void commit_config();
 
     ExtractorConfig extractor_config;

@@ -53,7 +53,8 @@ bool get_buf_mms_data(snort::Packet* p, snort::InspectionBuffer& b)
 
     // not including any checks for a full PDU as we're not guaranteed to
     // have one with the available pipelining options to get to MMS
-    MmsFlowData* mmsfd = (MmsFlowData*)p->flow->get_flow_data(MmsFlowData::inspector_id);
+    MmsFlowData* mmsfd = static_cast<MmsFlowData*>(
+        p->flow->get_flow_data(MmsFlowData::inspector_id));
     if (!mmsfd or !mmsfd->is_mms_found() or mmsfd->get_mms_offset() >= p->dsize)
         return false;
 
@@ -118,13 +119,13 @@ public:
 
 void Mms::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(mms_prof);
 
     // preconditions - what we registered for
     assert(p->has_tcp_data());
 
-    MmsFlowData* mmsfd = (MmsFlowData*)p->flow->get_flow_data(MmsFlowData::inspector_id);
+    MmsFlowData* mmsfd = static_cast<MmsFlowData*>(
+        p->flow->get_flow_data(MmsFlowData::inspector_id));
 
     // not including any checks for a full PDU as we're not guaranteed to
     // have one with the available pipelining options to get to MMS
@@ -231,4 +232,3 @@ const BaseApi * sin_mms[] =
     ips_mms_func,
     nullptr
 };
-

@@ -70,14 +70,13 @@ bool DsizeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const DsizeOption& rhs = (const DsizeOption&)ips;
+    const DsizeOption& rhs = static_cast<const DsizeOption&>(ips);
     return config == rhs.config;
 }
 
 // Test the packet's payload size against the rule payload size value
 IpsOption::EvalStatus DsizeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(dsizePerfStats);
 
     /* fake packet dsizes are always wrong
@@ -154,7 +153,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* dsize_ctor(Module* p, IpsInfo&)
 {
-    DsizeModule* m = (DsizeModule*)p;
+    const DsizeModule* m = static_cast<DsizeModule*>(p);
     return new DsizeOption(m->data);
 }
 
@@ -197,4 +196,3 @@ const BaseApi* ips_dsize[] =
     &dsize_api.base,
     nullptr
 };
-

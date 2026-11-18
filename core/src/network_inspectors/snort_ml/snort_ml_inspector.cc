@@ -60,7 +60,6 @@ private:
 
 void HttpUriHandler::handle(DataEvent& de, Flow*)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(snort_ml_prof);
 
     HttpEvent* he = reinterpret_cast<HttpEvent*>(&de);
@@ -114,7 +113,6 @@ private:
 
 void HttpBodyHandler::handle(DataEvent& de, Flow*)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(snort_ml_prof);
 
     HttpRequestBodyEvent* he = reinterpret_cast<HttpRequestBodyEvent*>(&de);
@@ -171,10 +169,9 @@ private:
 
 void HttpFormHandler::handle(DataEvent& de, Flow*)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(snort_ml_prof);
 
-    HttpFormDataEvent* he = reinterpret_cast<HttpFormDataEvent*>(&de);
+    const HttpFormDataEvent* he = reinterpret_cast<HttpFormDataEvent*>(&de);
 
     const std::string& data = he->get_form_data_uri();
 
@@ -257,6 +254,7 @@ static Module* mod_ctor()
 static void mod_dtor(Module* m)
 { delete m; }
 
+// cppcheck-suppress constParameterCallback
 static Inspector* snort_ml_ctor(Module* m)
 {
     const SnortMLModule* mod = reinterpret_cast<const SnortMLModule*>(m);

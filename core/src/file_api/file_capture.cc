@@ -34,16 +34,19 @@
 
 #include <cassert>
 
-#include "log/log_stats.h"
 #include "log/messages.h"
 #include "main/thread.h"
-#include "utils/stats.h"
+#include "utils/stats/snapshot.h"
 #include "utils/util.h"
 
 #include "file_mempool.h"
 #include "file_stats.h"
 
 #ifdef UNIT_TEST
+#include <atomic>
+#include <memory>
+#include <set>
+
 #include "catch/snort_catch.h"
 #endif
 
@@ -56,7 +59,15 @@ std::mutex FileCapture::capture_mutex;
 std::condition_variable FileCapture::capture_cv;
 std::thread* FileCapture::file_storer = nullptr;
 std::queue<FileCapture*> FileCapture::files_waiting;
+bool FileCapture::file_storing = false;
 bool FileCapture::running = true;
+
+#ifdef UNIT_TEST
+static void (*writer_test_hook)() = nullptr;
+static void (*writer_idle_test_hook)() = nullptr;
+static void (*flush_entry_test_hook)() = nullptr;
+static void (*flush_predicate_test_hook)(bool, bool) = nullptr;
+#endif
 
 FileCaptureState FileCapture::error_capture(FileCaptureState state)
 {
@@ -83,10 +94,25 @@ void FileCapture::writer_thread()
 
         FileCapture* file = files_waiting.front();
         files_waiting.pop();
+        file_storing = true;
         lk.unlock();
+
+#ifdef UNIT_TEST
+        if (writer_test_hook)
+            writer_test_hook();
+#endif
 
         file->store_file();
         delete file;
+
+        lk.lock();
+        file_storing = false;
+        lk.unlock();
+        capture_cv.notify_all();
+#ifdef UNIT_TEST
+        if (writer_idle_test_hook)
+            writer_idle_test_hook();
+#endif
         // coverity[double_unlock] : ~unique_lock is a no-op after explicit lk.unlock() above
     }
 }
@@ -165,6 +191,23 @@ void FileCapture::exit()
     }
 }
 
+void FileCapture::flush()
+{
+    std::unique_lock<std::mutex> lk(capture_mutex);
+#ifdef UNIT_TEST
+    if (flush_entry_test_hook)
+        flush_entry_test_hook();
+#endif
+    capture_cv.wait(lk, []
+    {
+#ifdef UNIT_TEST
+        if (flush_predicate_test_hook)
+            flush_predicate_test_hook(files_waiting.empty(), file_storing);
+#endif
+        return files_waiting.empty() and !file_storing;
+    });
+}
+
 /*
  * Initialize the file memory pool
  *
@@ -228,6 +271,9 @@ inline FileCaptureState FileCapture::save_to_file_buffer(const uint8_t* file_dat
     FileCaptureBlock* lastBlock = last;
     int64_t available_bytes;
 
+    if ( data_size <= 0 )
+        return FILE_CAPTURE_SUCCESS;
+
     if ( data_size + (int64_t)capture_size > max_size)
     {
         file_counts.file_size_max++;
@@ -245,7 +291,7 @@ inline FileCaptureState FileCapture::save_to_file_buffer(const uint8_t* file_dat
         const uint8_t* file_end = file_data + data_size;
 
         /*can't hold all, use current block first*/
-        memcpy((uint8_t*)lastBlock + lastBlock->length + sizeof (*lastBlock),
+        memcpy(reinterpret_cast<uint8_t*>(lastBlock) + lastBlock->length + sizeof(*lastBlock),
             file_current, available_bytes);
 
         lastBlock->length = capture_block_size;
@@ -255,7 +301,7 @@ inline FileCaptureState FileCapture::save_to_file_buffer(const uint8_t* file_dat
         while (true)
         {
             /*get another block*/
-            new_block = (FileCaptureBlock*)create_file_buffer();
+            new_block = static_cast<FileCaptureBlock*>(create_file_buffer());
 
             if (new_block == nullptr)
             {
@@ -269,14 +315,14 @@ inline FileCaptureState FileCapture::save_to_file_buffer(const uint8_t* file_dat
             /*Save data to the new block*/
             if (file_current + capture_block_size < file_end)
             {
-                memcpy((uint8_t*)last + sizeof(*new_block),
+                memcpy(reinterpret_cast<uint8_t*>(last) + sizeof(*new_block),
                     file_current,  capture_block_size);
                 new_block->length =  capture_block_size;
                 file_current += capture_block_size;
             }
             else
             {
-                memcpy((uint8_t*)last + sizeof(*new_block),
+                memcpy(reinterpret_cast<uint8_t*>(last) + sizeof(*new_block),
                     file_current,  file_end - file_current);
 
                 new_block->length = file_end - file_current;
@@ -286,7 +332,7 @@ inline FileCaptureState FileCapture::save_to_file_buffer(const uint8_t* file_dat
     }
     else
     {
-        memcpy((uint8_t*)lastBlock + lastBlock->length + sizeof(*lastBlock),
+        memcpy(reinterpret_cast<uint8_t*>(lastBlock) + lastBlock->length + sizeof(*lastBlock),
             file_data, data_size);
 
         lastBlock->length += data_size;
@@ -432,7 +478,7 @@ FileCaptureBlock* FileCapture::get_file_data(uint8_t** buff, int* size)
         return nullptr;
     }
 
-    *buff = (uint8_t*)current_block + sizeof(*current_block);
+    *buff = reinterpret_cast<uint8_t*>(current_block) + sizeof(*current_block);
     *size = current_block->length;
 
     current_block = current_block->next;
@@ -445,6 +491,7 @@ FileCaptureBlock* FileCapture::get_file_data(uint8_t** buff, int* size)
  * In the case of interrupt errors, the write is retried, but only for a
  * finite number of times.
  */
+// cppcheck-suppress constParameterPointer ; preserve the private installed-header declaration
 void FileCapture::write_file_data(uint8_t* buf, size_t buf_len, FILE* fh)
 {
     int max_retries = 3;
@@ -494,7 +541,7 @@ void FileCapture::store_file()
     // Check the file buffer
     uint8_t* buff = nullptr;
     int size = 0;
-    void* file_mem;
+    const void* file_mem;
 
     do
     {
@@ -520,7 +567,7 @@ std::string FileCapture::store_file_async()
     if (!file_info)
         return std::string();
 
-    uint8_t* sha = file_info->get_file_sig_sha256();
+    const uint8_t* sha = file_info->get_file_sig_sha256();
     if (!sha)
         return std::string();
 
@@ -536,20 +583,20 @@ std::string FileCapture::store_file_async()
     return file_full_name;
 }
 
-/*Log file capture mempool usage*/
-void FileCapture::print_mem_usage()
+void FileCapture::collect_mem_usage(stats::Builder& builder, stats::Group& group)
 {
-    if (file_mempool)
-    {
-        int64_t block_size = get_block_size() + sizeof (FileCapture);
-        if (block_size & 7)
-            block_size += (8 - (block_size & 7));
-        LogCount("Max file buffer capacity", file_mempool->total_objects());
-        LogCount("Buffers in use", file_mempool->allocated());
-        LogCount("Buffers in free list", file_mempool->freed());
-        LogCount("Buffers in release list", file_mempool->released());
-        LogCount("Memory usage in bytes", file_mempool->allocated() * block_size);
-    }
+    if (!file_mempool)
+        return;
+
+    int64_t block_size = get_block_size() + sizeof(FileCapture);
+    if (block_size & 7)
+        block_size += (8 - (block_size & 7));
+
+    builder.counter(group, "Max file buffer capacity", file_mempool->total_objects());
+    builder.counter(group, "Buffers in use", file_mempool->allocated());
+    builder.counter(group, "Buffers in free list", file_mempool->freed());
+    builder.counter(group, "Buffers in release list", file_mempool->released());
+    builder.counter(group, "Memory usage in bytes", file_mempool->allocated() * block_size);
 }
 
 int64_t FileCapture::get_buffers_max()
@@ -571,10 +618,296 @@ int64_t FileCapture::get_buffers_in_use()
 //--------------------------------------------------------------------------
 
 #ifdef UNIT_TEST
+namespace snort
+{
+struct FileCaptureTestAccess
+{
+    static bool resettable()
+    {
+        std::lock_guard<std::mutex> lock(FileCapture::capture_mutex);
+        return FileCapture::file_storer == nullptr and FileCapture::files_waiting.empty();
+    }
+
+    static void reset()
+    {
+        std::lock_guard<std::mutex> lock(FileCapture::capture_mutex);
+        delete FileCapture::file_mempool;
+        FileCapture::file_mempool = nullptr;
+        FileCapture::capture_block_size = 0;
+        FileCapture::file_storing = false;
+        FileCapture::running = true;
+    }
+
+    static void enqueue(FileCapture* capture)
+    {
+        std::lock_guard<std::mutex> lock(FileCapture::capture_mutex);
+        FileCapture::files_waiting.push(capture);
+        FileCapture::capture_cv.notify_one();
+    }
+
+    static void enqueue(FileCapture* first, FileCapture* second)
+    {
+        std::lock_guard<std::mutex> lock(FileCapture::capture_mutex);
+        FileCapture::files_waiting.push(first);
+        FileCapture::files_waiting.push(second);
+        FileCapture::capture_cv.notify_one();
+    }
+
+    static uint64_t released_buffers()
+    {
+        return FileCapture::file_mempool->released();
+    }
+};
+}
+
+class AsyncWriterGate
+{
+public:
+    void writer_wait()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        writer_owns_capture = true;
+        cv.notify_all();
+        cv.wait(lock, [this] { return writer_released; });
+    }
+
+    void writer_idle()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        ++idle_transitions;
+        cv.notify_all();
+        if (pause_first_idle and idle_transitions == 1)
+            cv.wait(lock, [this] { return idle_released; });
+    }
+
+    void flush_entered()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        flush_callers.emplace(std::this_thread::get_id());
+        cv.notify_all();
+    }
+
+    void flush_predicate_evaluated(bool queue_empty, bool writer_active)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!queue_empty and !writer_active)
+            saw_nonempty_idle_evaluation = true;
+        cv.notify_all();
+    }
+
+    void wait_for_writer()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this] { return writer_owns_capture; });
+    }
+
+    void wait_for_flush_callers(unsigned expected)
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this, expected] { return flush_callers.size() >= expected; });
+    }
+
+    void pause_first_idle_transition()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        pause_first_idle = true;
+    }
+
+    void wait_for_first_idle_transition()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this] { return idle_transitions >= 1; });
+    }
+
+    void wait_for_nonempty_idle_evaluation()
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        cv.wait(lock, [this] { return saw_nonempty_idle_evaluation; });
+    }
+
+    void release_writer()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        writer_released = true;
+        cv.notify_all();
+    }
+
+    void release_idle_transition()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        idle_released = true;
+        cv.notify_all();
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::set<std::thread::id> flush_callers;
+    unsigned idle_transitions = 0;
+    bool writer_owns_capture = false;
+    bool writer_released = false;
+    bool pause_first_idle = false;
+    bool idle_released = false;
+    bool saw_nonempty_idle_evaluation = false;
+};
+
+static AsyncWriterGate* async_writer_gate = nullptr;
+
+static void wait_in_writer_test_hook()
+{
+    async_writer_gate->writer_wait();
+}
+
+static void wait_at_writer_idle_test_hook()
+{
+    async_writer_gate->writer_idle();
+}
+
+static void record_flush_entry_test_hook()
+{
+    async_writer_gate->flush_entered();
+}
+
+static void record_flush_predicate_test_hook(bool queue_empty, bool writer_active)
+{
+    async_writer_gate->flush_predicate_evaluated(queue_empty, writer_active);
+}
+
+class AsyncCaptureFixture
+{
+public:
+    AsyncCaptureFixture()
+    {
+        const bool resettable = FileCaptureTestAccess::resettable();
+        REQUIRE(resettable);
+        FileCaptureTestAccess::reset();
+        async_writer_gate = &gate;
+        writer_test_hook = wait_in_writer_test_hook;
+        writer_idle_test_hook = wait_at_writer_idle_test_hook;
+        flush_entry_test_hook = record_flush_entry_test_hook;
+        flush_predicate_test_hook = record_flush_predicate_test_hook;
+        FileCapture::init(1, 64);
+    }
+
+    ~AsyncCaptureFixture() noexcept
+    {
+        gate.release_writer();
+        gate.release_idle_transition();
+        FileCapture::exit();
+        writer_test_hook = nullptr;
+        writer_idle_test_hook = nullptr;
+        flush_entry_test_hook = nullptr;
+        flush_predicate_test_hook = nullptr;
+        async_writer_gate = nullptr;
+        FileCaptureTestAccess::reset();
+    }
+
+    AsyncWriterGate gate;
+};
+
 TEST_CASE ("Should not segfault when file mempool is not configured", "[file_capture]")
 {
     FileCapture fc(0, 0);
 
     CHECK(fc.process_buffer((const uint8_t*)"dummy", 5, SNORT_FILE_START) == FILE_CAPTURE_MEMCAP);
+}
+
+TEST_CASE ("Flush returns when no asynchronous captures are pending", "[file_capture]")
+{
+    FileCapture::flush();
+}
+
+TEST_CASE ("Flush waits for the asynchronous writer to release its capture", "[file_capture]")
+{
+    AsyncCaptureFixture fixture;
+
+    auto capture = std::make_unique<FileCapture>(0, 128);
+    const uint8_t data[] = { 0x01, 0x02, 0x03, 0x04 };
+    REQUIRE(capture->process_buffer(data, sizeof(data), SNORT_FILE_START) ==
+        FILE_CAPTURE_SUCCESS);
+
+    FileInfo file;
+    file.set_file_size(sizeof(data));
+    REQUIRE(capture->reserve_file(&file) == FILE_CAPTURE_SUCCESS);
+    REQUIRE(FileCapture::get_buffers_in_use() == 1);
+
+    FileCaptureTestAccess::enqueue(capture.release());
+    fixture.gate.wait_for_writer();
+
+    std::atomic<unsigned> completed_flushes = 0;
+    std::thread first_flush([&completed_flushes]
+    {
+        FileCapture::flush();
+        ++completed_flushes;
+    });
+    std::thread second_flush([&completed_flushes]
+    {
+        FileCapture::flush();
+        ++completed_flushes;
+    });
+
+    fixture.gate.wait_for_flush_callers(2);
+    CHECK(completed_flushes == 0);
+    CHECK(FileCapture::get_buffers_in_use() == 1);
+
+    fixture.gate.release_writer();
+    first_flush.join();
+    second_flush.join();
+
+    CHECK(completed_flushes == 2);
+    file_counts_update_buffers();
+    CHECK(file_counts.file_buffers_in_use == 0);
+    CHECK(FileCapture::get_buffers_in_use() == 0);
+    CHECK(FileCaptureTestAccess::released_buffers() == 1);
+}
+
+TEST_CASE ("Flush keeps waiting between queued asynchronous captures", "[file_capture]")
+{
+    AsyncCaptureFixture fixture;
+
+    auto first_capture = std::make_unique<FileCapture>(0, 128);
+    auto second_capture = std::make_unique<FileCapture>(0, 128);
+    const uint8_t first_data[] = { 0x01 };
+    const uint8_t second_data[] = { 0x02 };
+    REQUIRE(first_capture->process_buffer(first_data, sizeof(first_data), SNORT_FILE_START) ==
+        FILE_CAPTURE_SUCCESS);
+    REQUIRE(second_capture->process_buffer(second_data, sizeof(second_data), SNORT_FILE_START) ==
+        FILE_CAPTURE_SUCCESS);
+
+    FileInfo first_file;
+    first_file.set_file_size(sizeof(first_data));
+    FileInfo second_file;
+    second_file.set_file_size(sizeof(second_data));
+    REQUIRE(first_capture->reserve_file(&first_file) == FILE_CAPTURE_SUCCESS);
+    REQUIRE(second_capture->reserve_file(&second_file) == FILE_CAPTURE_SUCCESS);
+    REQUIRE(FileCapture::get_buffers_in_use() == 2);
+
+    FileCaptureTestAccess::enqueue(first_capture.release(), second_capture.release());
+    fixture.gate.wait_for_writer();
+    fixture.gate.pause_first_idle_transition();
+
+    std::atomic<unsigned> completed_flushes = 0;
+    std::thread flush([&completed_flushes]
+    {
+        FileCapture::flush();
+        ++completed_flushes;
+    });
+
+    fixture.gate.wait_for_flush_callers(1);
+    fixture.gate.release_writer();
+    fixture.gate.wait_for_first_idle_transition();
+    fixture.gate.wait_for_nonempty_idle_evaluation();
+
+    CHECK(completed_flushes == 0);
+    CHECK(FileCapture::get_buffers_in_use() == 1);
+
+    fixture.gate.release_idle_transition();
+    flush.join();
+
+    CHECK(completed_flushes == 1);
+    file_counts_update_buffers();
+    CHECK(file_counts.file_buffers_in_use == 0);
+    CHECK(FileCapture::get_buffers_in_use() == 0);
+    CHECK(FileCaptureTestAccess::released_buffers() == 2);
 }
 #endif

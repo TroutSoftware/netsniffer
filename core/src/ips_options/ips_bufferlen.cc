@@ -79,13 +79,12 @@ bool LenOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const LenOption& rhs = (const LenOption&)ips;
+    const LenOption& rhs = static_cast<const LenOption&>(ips);
     return ( range == rhs.range and relative == rhs.relative );
 }
 
 IpsOption::EvalStatus LenOption::eval(Cursor& c, Packet*)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(lenCheckPerfStats);
     unsigned n = relative ? c.length() : c.size();
 
@@ -166,7 +165,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* len_ctor(Module* p, IpsInfo&)
 {
-    LenModule* m = (LenModule*)p;
+    const LenModule* m = static_cast<LenModule*>(p);
     return new LenOption(m->data, m->relative);
 }
 
@@ -209,4 +208,3 @@ const BaseApi* ips_bufferlen[] =
     &len_api.base,
     nullptr
 };
-

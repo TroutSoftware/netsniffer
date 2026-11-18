@@ -68,7 +68,8 @@ uint32_t SipStatCodeOption::hash() const
     unsigned n = 0;
     while ( n < SIP_NUM_STAT_CODE_MAX and ssod.stat_codes[n] ) ++n;
 
-    mix_str(a, b, c, (const char*)ssod.stat_codes, n*sizeof(ssod.stat_codes[0]));
+    mix_str(a, b, c, reinterpret_cast<const char*>(ssod.stat_codes),
+        n*sizeof(ssod.stat_codes[0]));
     finalize(a, b, c);
 
     return c;
@@ -79,7 +80,7 @@ bool SipStatCodeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const SipStatCodeOption& rhs = (const SipStatCodeOption&)ips;
+    const SipStatCodeOption& rhs = static_cast<const SipStatCodeOption&>(ips);
 
     if ( !memcmp(ssod.stat_codes, rhs.ssod.stat_codes, sizeof(ssod.stat_codes)) )
         return true;
@@ -89,7 +90,7 @@ bool SipStatCodeOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus SipStatCodeOption::eval(Cursor&, Packet* p)
 {
-    RuleProfile profile(sipStatCodeRuleOptionPerfStats);    // cppcheck-suppress unreadVariable
+    RuleProfile profile(sipStatCodeRuleOptionPerfStats);
 
     if ((!p->has_tcp_data() && !p->is_udp()) || !p->flow || !p->dsize)
         return NO_MATCH;
@@ -99,7 +100,7 @@ IpsOption::EvalStatus SipStatCodeOption::eval(Cursor&, Packet* p)
     if (!sd)
         return NO_MATCH;
 
-    SIP_Roptions* ropts = &sd->ropts;
+    const SIP_Roptions* ropts = &sd->ropts;
 
     if (0 == ropts->status_code)
         return NO_MATCH;
@@ -195,7 +196,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* sip_stat_code_ctor(Module* p, IpsInfo&)
 {
-    SipStatCodeModule* m = (SipStatCodeModule*)p;
+    const SipStatCodeModule* m = static_cast<SipStatCodeModule*>(p);
     return new SipStatCodeOption(m->ssod);
 }
 
@@ -235,4 +236,3 @@ static const IpsApi sip_stat_code_api =
 
 // added to snort_plugins in sip.cc
 const BaseApi* ips_sip_stat_code = &sip_stat_code_api.base;
-

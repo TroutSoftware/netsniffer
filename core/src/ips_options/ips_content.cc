@@ -249,7 +249,7 @@ bool ContentOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const ContentOption& rhs = (const ContentOption&)ips;
+    const ContentOption& rhs = static_cast<const ContentOption&>(ips);
     const ContentData& left = *config;
     const ContentData& right = *rhs.config;
 
@@ -430,7 +430,6 @@ static bool uniSearchReal(ContentData* cd, Cursor& c)
 
 static IpsOption::EvalStatus CheckANDPatternMatch(ContentData* idx, Cursor& c)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(contentPerfStats);
 
     bool found = uniSearchReal(idx, c);
@@ -449,7 +448,7 @@ typedef enum
     CMF_DISTANCE = 0x1, CMF_WITHIN = 0x2, CMF_OFFSET = 0x4, CMF_DEPTH = 0x8
 } ContentModifierFlags;
 
-static unsigned GetCMF(ContentData* cd)
+static unsigned GetCMF(const ContentData* cd)
 {
     unsigned cmf = 0;
     if ( (cd->pmd.offset != 0) || (cd->offset_var != -1) )
@@ -854,7 +853,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* content_ctor(Module* p, IpsInfo&)
 {
-    ContentModule* m = (ContentModule*)p;
+    ContentModule* m = static_cast<ContentModule*>(p);
     ContentData* cd = m->get_data();
     return new ContentOption(cd);
 }

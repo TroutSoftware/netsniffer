@@ -58,7 +58,7 @@ TcpSegmentDescriptor::TcpSegmentDescriptor(Flow* f, Packet* p, TcpEventLogger& t
     {
         end_seq++;
         if ( !tcph->is_ack() )
-            tel.log_internal_event(SESSION_EVENT_SYN_RX);
+            tel.log_internal_event(SESSION_EVENT_SYN_RX, *flow);
     }
 }
 
@@ -124,6 +124,7 @@ void TcpSegmentDescriptor::clear()
     ma_pseudo_packet = nullptr;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 uint32_t TcpSegmentDescriptor::init_mss(uint16_t* value)
 {
     if ( pkt->ptrs.decode_flags & DECODE_TCP_MSS )
@@ -143,6 +144,7 @@ uint32_t TcpSegmentDescriptor::init_mss(uint16_t* value)
     return TF_NONE;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 uint32_t TcpSegmentDescriptor::init_wscale(uint16_t* value)
 {
     if ( pkt->ptrs.decode_flags & DECODE_TCP_WS )

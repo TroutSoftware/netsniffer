@@ -20,19 +20,29 @@
 #ifndef GET_INSPECTOR_STUBS_H
 #define GET_INSPECTOR_STUBS_H
 
+#include <cstdarg>
+#include <cstdio>
+#include <string>
+
 #include "detection/detection_engine.h"
 #include "flow/expect_flow.h"
 #include "flow/flow.h"
+#include "flow/session.h"
 #include "main/policy.h"
 #include "main/snort.h"
 #include "main/snort_config.h"
 #include "main/thread_config.h"
 #include "managers/inspector_manager.h"
 #include "managers/plugin_manager.h"
+#include "framework/inspector.h"
+#include "framework/reload_survivor_subscriptions_impl.h"
 #include "network_inspectors/binder/bind_module.h"
 #include "profiler/rule_profiler_defs.h"
 #include "profiler/time_profiler_defs.h"
+#include "pub_sub/intrinsic_event_ids.h"
 #include "search_engines/search_tool.h"
+#include "stream/stream.h"
+#include "stream/stream_splitter.h"
 #include "trace/trace.h"
 #include "trace/trace_api.h"
 
@@ -54,18 +64,124 @@ namespace snort
 void LogMessage(const char*, ...) { }
 void LogLabel(const char*, FILE*) { }
 void ParseError(const char*, ...) { }
-void WarningMessage(const char*, ...) { }
+
+// captures the rendered text so tests can assert on message content, not
+// just that a warning fired
+static std::string last_warning_message;
+
+void WarningMessage(const char* format, ...)
+{
+    char buf[512];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buf, sizeof(buf), format, args);
+    va_end(args);
+    last_warning_message = buf;
+}
 
 DataBus::DataBus() { }
 DataBus::~DataBus() { }
 
-void DataBus::publish(unsigned, unsigned, Packet*, Flow*) { }
+using TestDataBusPublishHook = void (*)(unsigned, Packet*);
+static TestDataBusPublishHook test_data_bus_publish_hook = nullptr;
+
+void DataBus::publish(unsigned, unsigned event_id, Packet* packet, Flow*)
+{
+    if ( test_data_bus_publish_hook )
+        test_data_bus_publish_hook(event_id, packet);
+}
 unsigned DataBus::get_id(const PubKey&) { return 0; }
 
-void Flow::set_service(Packet*, const char* new_service)
-{ service = new_service; }
+// test-only recorder: ReloadSurvivorSubscriptions ctor stashes (np, ip, survivor);
+// list_survivors() returns the seeded vector so tests can drive the resweep pass
+struct RssCapture
+{
+    unsigned ctor_calls = 0;
+    unsigned end_reconcile_calls = 0;
+    NetworkPolicy* last_np = nullptr;
+    InspectionPolicy* last_ip = nullptr;
+    Inspector* last_survivor = nullptr;
 
+    std::vector<RssSurvivorView> survivors;
+
+    unsigned last_list_reload_id = 0;
+
+    // release() defers (returns false) for the first release_defer_count calls
+    unsigned release_defer_count = 0;
+    unsigned release_calls = 0;
+
+    // await_quiescent() defers (returns false) for the first
+    // await_quiescent_defer_count calls
+    unsigned await_quiescent_defer_count = 0;
+    unsigned await_quiescent_calls = 0;
+
+    void reset()
+    {
+        ctor_calls = 0;
+        end_reconcile_calls = 0;
+        last_np = nullptr;
+        last_ip = nullptr;
+        last_survivor = nullptr;
+        survivors.clear();
+        last_list_reload_id = 0;
+        release_defer_count = 0;
+        release_calls = 0;
+        await_quiescent_defer_count = 0;
+        await_quiescent_calls = 0;
+    }
+};
+static RssCapture rss_capture;
+
+ReloadSurvivorSubscriptions::ReloadSurvivorSubscriptions(
+    NetworkPolicy& np_, InspectionPolicy& ip_, Inspector& survivor_)
+    : np(np_), ip(ip_), survivor(survivor_)
+{
+    ++rss_capture.ctor_calls;
+    rss_capture.last_np = &np_;
+    rss_capture.last_ip = &ip_;
+    rss_capture.last_survivor = &survivor_;
+}
+
+bool rss_release(Inspector&)
+{
+    ++rss_capture.release_calls;
+    if ( rss_capture.release_calls <= rss_capture.release_defer_count )
+        return false;
+    return true;
+}
+
+bool rss_await_quiescent(Inspector&)
+{
+    ++rss_capture.await_quiescent_calls;
+    if ( rss_capture.await_quiescent_calls <= rss_capture.await_quiescent_defer_count )
+        return false;
+    return true;
+}
+
+void rss_on_bus_destroyed(const DataBus*) { }
+void rss_end_reconcile(Inspector&)
+{ ++rss_capture.end_reconcile_calls; }
+
+std::vector<RssSurvivorView>
+rss_list_survivors(unsigned reload_id)
+{
+    rss_capture.last_list_reload_id = reload_id;
+
+    std::vector<RssSurvivorView> out = rss_capture.survivors;
+    return out;
+}
+
+RssStats rss_stats;
+
+void Flow::set_service(Packet* packet, const char* new_service)
+{
+    service = new_service;
+    DataBus::publish(intrinsic_pub_id, IntrinsicEventIds::FLOW_SERVICE_CHANGE, packet);
+}
+
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 FlowDataStore::~FlowDataStore() = default;
 
 void Flow::release_gadget()
@@ -79,6 +195,8 @@ void Flow::release_gadget()
     old_gadget->rem_ref();
     InspectorManager::thread_drain_pending_tterm_if_pending(old_gadget);
 }
+
+void Flow::pin_survivor_flow_data(Inspector&) { }
 
 void DetectionEngine::disable_content(Packet*) { }
 
@@ -125,6 +243,33 @@ void set_ips_policy(IpsPolicy*) { }
 unsigned get_instance_id() { return 0; }
 void trace_vprintf(const char*, TraceLevel, const char*, const Packet*, const char*, va_list) { }
 
+Packet::Packet(bool) { }
+Packet::~Packet() = default;
+
+const StreamBuffer StreamSplitter::reassemble(
+    Flow*, unsigned, unsigned, const uint8_t*, unsigned, uint32_t, unsigned&)
+{ return { nullptr, 0 }; }
+
+unsigned StreamSplitter::max(Flow*)
+{ return 0; }
+
+uint16_t StreamSplitter::get_flush_bucket_size()
+{ return 0; }
+
+AtomSplitter::AtomSplitter(bool to_server, uint16_t size) : StreamSplitter(to_server),
+    base(size), min(size), segs(0)
+{ }
+
+StreamSplitter::Status AtomSplitter::scan(
+    Packet*, const uint8_t*, uint32_t, uint32_t, uint32_t*)
+{ return SEARCH; }
+
+bool AtomSplitter::restart()
+{ return true; }
+
+void Stream::set_splitter(Flow* flow, bool to_server, StreamSplitter* splitter)
+{ flow->session->set_splitter(to_server, splitter); }
+
 NetworkPolicy* get_network_parse_policy() { return nullptr; }
 
 Module::Module(const char* name, const char*) : name(name), help(nullptr), params(nullptr), list(false) { }
@@ -141,4 +286,3 @@ unsigned PluginManager::for_each(PlugType, PluginManager::PlugFunc, void*) { ret
 const snort::BaseApi* PluginManager::get_api(char const*) { return nullptr; }
 
 #endif
-

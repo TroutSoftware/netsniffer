@@ -158,6 +158,10 @@ class MPUnixDomainTransport : public MPTransport
 
     private:
 
+#ifdef UNIT_TEST
+    friend struct MPUnixDomainTransportTestAccess;
+#endif
+
     void init_side_channels();
     void cleanup_side_channels();
     void side_channel_receive_handler(SCMessage* msg);
@@ -176,6 +180,7 @@ class MPUnixDomainTransport : public MPTransport
     MPUnixDomainTransportConfig* config = nullptr;
 
     std::vector<SideChannelHandle*> side_channels;
+    uint16_t answer_channel_count = 0;
     std::vector<UnixAcceptorHandle*> accept_handlers;
     std::unordered_map<unsigned, SerializeFunctionHandle> event_helpers;
 

@@ -82,7 +82,7 @@ bool SslVersionOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const SslVersionOption& rhs = (const SslVersionOption&)ips;
+    const SslVersionOption& rhs = static_cast<const SslVersionOption&>(ips);
 
     if ( (svod.flags == rhs.svod.flags) &&
         (svod.mask == rhs.svod.mask) )
@@ -93,7 +93,7 @@ bool SslVersionOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus SslVersionOption::eval(Cursor&, Packet* pkt)
 {
-    RuleProfile profile(sslVersionRuleOptionPerfStats); // cppcheck-suppress unreadVariable
+    RuleProfile profile(sslVersionRuleOptionPerfStats);
 
     if ( !(pkt->packet_flags & PKT_REBUILT_STREAM) && !pkt->is_full_pdu() )
         return NO_MATCH;
@@ -101,7 +101,7 @@ IpsOption::EvalStatus SslVersionOption::eval(Cursor&, Packet* pkt)
     if (!pkt->flow)
         return NO_MATCH;
 
-    SSLData* sd = SslBaseFlowData::get_ssl_session_data(pkt->flow);
+    const SSLData* sd = SslBaseFlowData::get_ssl_session_data(pkt->flow);
 
     if (!sd)
         return NO_MATCH;
@@ -238,7 +238,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* ssl_version_ctor(Module* p, IpsInfo&)
 {
-    SslVersionModule* m = (SslVersionModule*)p;
+    const SslVersionModule* m = static_cast<SslVersionModule*>(p);
     return new SslVersionOption(m->svod);
 }
 
@@ -273,4 +273,3 @@ static const IpsApi ssl_version_api =
 };
 
 const BaseApi* ips_ssl_version = &ssl_version_api.base;
-

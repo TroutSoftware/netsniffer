@@ -80,7 +80,7 @@ void get_parse_location(const char*& file, unsigned& line)
         line = 0;
         return;
     }
-    Location& loc = files.top();
+    const Location& loc = files.top();
     file = loc.file.c_str();
     line = loc.line;
 }
@@ -300,6 +300,7 @@ void add_service_to_otn(SnortConfig* sc, OptTreeNode* otn, const char* svc_name)
     }
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 ListHead* get_rule_list(SnortConfig* sc, const char* s)
 {
     const RuleListNode* p = sc->rule_lists;
@@ -336,4 +337,3 @@ void parse_rules_string(SnortConfig* sc, const char* s, bool ips_policy)
     parse_stream(ss, sc);
     s_ips_policy = true;
 }
-

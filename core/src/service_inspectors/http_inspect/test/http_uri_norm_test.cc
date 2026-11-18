@@ -66,8 +66,8 @@ snort::SearchTool* js_create_mpse_open_tag() { return nullptr; }
 snort::SearchTool* js_create_mpse_tag_type() { return nullptr; }
 snort::SearchTool* js_create_mpse_tag_attr() { return nullptr; }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 int64_t Parameter::get_int(char const*) { return 0; }
 
@@ -97,11 +97,11 @@ TEST_GROUP(http_double_decode_test)
 
     void setup() override
     {
-        uri_param.percent_u = true; // cppcheck-suppress unreadVariable
-        uri_param.iis_unicode = true;   // cppcheck-suppress unreadVariable
-        uri_param.utf8_bare_byte = true;    // cppcheck-suppress unreadVariable
-        uri_param.iis_double_decode = true; // cppcheck-suppress unreadVariable
-        uri_param.backslash_to_slash = true;    // cppcheck-suppress unreadVariable
+        uri_param.percent_u = true;
+        uri_param.iis_unicode = true;
+        uri_param.utf8_bare_byte = true;
+        uri_param.iis_double_decode = true;
+        uri_param.backslash_to_slash = true;
     }
 };
 
@@ -172,4 +172,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

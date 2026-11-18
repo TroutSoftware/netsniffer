@@ -47,7 +47,7 @@ using namespace snort;
 #define LIST_OPEN '['
 #define LIST_CLOSE ']'
 
-static SfIpRet sfvar_list_compare(sfip_node_t*, sfip_node_t*);
+static SfIpRet sfvar_list_compare(const sfip_node_t*, const sfip_node_t*);
 static inline void sfip_node_free(sfip_node_t*&);
 static inline void sfip_node_freelist(sfip_node_t*&);
 
@@ -572,9 +572,10 @@ static int sfvar_is_alias(const sfip_var_t* one, const sfip_var_t* two)
     return 0;
 }
 
-static SfIpRet sfvar_list_compare(sfip_node_t* list1, sfip_node_t* list2)
+static SfIpRet sfvar_list_compare(const sfip_node_t* list1, const sfip_node_t* list2)
 {
-    sfip_node_t* tmp, * tmp2;
+    const sfip_node_t* tmp;
+    const sfip_node_t* tmp2;
 
     if ((list1 == nullptr) && (list2 == nullptr))
         return SFIP_EQUAL;
@@ -759,7 +760,7 @@ SfIpRet sfvar_parse_iplist(vartable_t* table, sfip_var_t* var,
                 return SFIP_LOOKUP_UNAVAILABLE;
             }
 
-            sfip_var_t* tmp_var;
+            const sfip_var_t* tmp_var;
             sfip_var_t* copy_var;
 
             if ((tmp_var = sfvt_lookup_var(table, tok)) == nullptr)
@@ -885,7 +886,8 @@ SfIpRet sfvar_validate(sfip_var_t* var)
 /* Allocates and returns a new variable, described by "variable". */
 sfip_var_t* sfvar_alloc(vartable_t* table, const char* variable, SfIpRet* status)
 {
-    sfip_var_t* ret, * tmpvar;
+    sfip_var_t* ret;
+    const sfip_var_t* tmpvar;
     const char* str, * end;
     char* tmp;
     SfIpRet stat;
@@ -1477,4 +1479,3 @@ TEST_CASE("SfIpVarAny", "[SfIpVar]")
 }
 
 #endif
-

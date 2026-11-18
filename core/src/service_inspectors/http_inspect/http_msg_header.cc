@@ -23,8 +23,10 @@
 
 #include "http_msg_header.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <memory>
 
 #include "decompress/file_decomp.h"
 #include "file_api/file_flows.h"
@@ -41,6 +43,7 @@
 #include "http_api.h"
 #include "http_common.h"
 #include "http_compress_stream.h"
+#include "http_context_data.h"
 #include "http_enum.h"
 #include "http_inspect.h"
 #include "http_js_norm.h"
@@ -223,9 +226,10 @@ const Field& HttpMsgHeader::get_true_ip_addr()
     else
     {
         const size_t addr_length = (tmp_sfip.is_ip6() ? 4 : 1);
-        uint32_t* const addr_buf = new uint32_t[addr_length];
-        memcpy(addr_buf, tmp_sfip.get_ptr(), addr_length * sizeof(uint32_t));
-        true_ip_addr.set(addr_length * sizeof(uint32_t), (uint8_t*)addr_buf, true);
+        const size_t addr_size = addr_length * sizeof(uint32_t);
+        uint8_t* const addr_buf = new uint8_t[addr_size];
+        memcpy(addr_buf, tmp_sfip.get_ptr(), addr_size);
+        true_ip_addr.set(addr_size, addr_buf, true);
     }
     return true_ip_addr;
 }
@@ -261,16 +265,83 @@ std::string HttpMsgHeader::get_host_header_field() const
     return "";
 }
 
+bool HttpMsgHeader::body_indicated()
+{
+    if (session_data->for_httpx)
+        return session_data->hx_body_state[source_id] != HX_BODY_NO_BODY;
+
+    if (get_header_count(HEAD_TRANSFER_ENCODING) > 0)
+        return true;
+
+    const Field& content_length = get_header_value_norm(HEAD_CONTENT_LENGTH);
+    return content_length.length() > 0 and norm_decimal_integer(content_length) > 0;
+}
+
+void HttpMsgHeader::check_allowed_content_type()
+{
+    // A partial header block omits lines not yet seen in full, so wait for the complete block
+    if (session_data->partial_flush[source_id])
+        return;
+
+    // Line by line, since a repeat joined by commas would look like a list
+    bool allowed = true;
+    bool named_type = false;
+    for (int32_t k = 0; allowed and k < num_headers; k++)
+    {
+        if (header_name_id[k] == HEAD_CONTENT_TYPE)
+            allowed = content_type_allowed(header_value[k], named_type);
+    }
+
+    // RFC 9110 8.3 only asks for a Content-Type on a message that carries content.
+    if (allowed and (named_type or !body_indicated()))
+        return;
+
+    HttpModule::increment_peg_counts(PEG_CONTENT_TYPE_NOT_ALLOWED);
+    create_event(EVENT_CONTENT_TYPE_NOT_ALLOWED);
+}
+
+bool HttpMsgHeader::content_type_allowed(const Field& content_type, bool& named_type) const
+{
+    const uint8_t* const value = content_type.start();
+    const int32_t len = content_type.length();
+
+    if (HttpMsgHeadShared::content_type_is_list(value, len))
+        return false;
+
+    int32_t offset;
+    const int32_t media_len = HttpMsgHeadShared::content_type_media_type(value, len, offset);
+    if (media_len <= 0)
+        return true;
+
+    named_type = true;
+    const uint8_t* const media_type = value + offset;
+    return std::any_of(params->allowed_content_type.cbegin(), params->allowed_content_type.cend(),
+        [media_type, media_len](const std::string& pattern)
+        { return HttpMsgHeadShared::content_type_matches(pattern, media_type, media_len); });
+}
+
 void HttpMsgHeader::gen_events()
 {
+    if (source_id == SRC_CLIENT and !params->allowed_content_type.empty())
+        check_allowed_content_type();
+
     auto raise_cl_or_te = [this] (Detail301ReasonCode code)
     {
-        auto& reason = get_cache_data().reason_code_detail_301[source_id];
+        constexpr auto slot_index = get_tmp_buffer_index<DETAIL_119_301>();
 
-        if ( reason != DETAIL_301_NONE )
+        HttpTmpBufferCache& tmp_cache = HttpContextData::get_tmp_buffers();
+        auto& slot_ptr = tmp_cache.tmp_bufs[slot_index];
+        if (!slot_ptr)
+            slot_ptr = std::make_unique<HttpTmpBuffer>();
+
+        HttpTmpBuffer& slot = *slot_ptr;
+
+        if ( slot.num != DETAIL_301_NONE )
             return;
 
-        reason = code;
+        slot.num = code;
+        slot.text.clear();
+        slot.field.reset();
 
         create_event(EVENT_HEADER_INVALID_CL_OR_TE);
     };
@@ -746,7 +817,7 @@ void HttpMsgHeader::setup_file_processing()
     }
 
     session_data->file_depth_remaining[source_id] = max_file_depth;
-    FileFlows* file_flows = FileFlows::get_file_flows(flow);
+    const FileFlows* file_flows = FileFlows::get_file_flows(flow);
     if (!file_flows)
         session_data->file_depth_remaining[source_id] = 0;
 }
@@ -821,7 +892,8 @@ void HttpMsgHeader::setup_encoding_decompression()
         return;
 
     session_data->compress[source_id] = HttpCompressStream::create(compression,
-        params->decompression_param, transaction->get_infractions(source_id), session_data->events[source_id]);
+        params->decompression_param, transaction->get_infractions(source_id),
+        session_data->events[source_id], flow);
 }
 
 void HttpMsgHeader::setup_utf_decoding()

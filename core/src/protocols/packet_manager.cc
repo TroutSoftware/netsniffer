@@ -229,6 +229,7 @@ void PacketManager::decode(
 
     ProtocolIndex mapped_prot = cm->grinder;
     ProtocolId prev_prot_id = cm->grinder_id;
+    bool tunnel_decap_pending = false;
 
     RawData raw(p->daq_msg, pkt, pktlen);
     CodecData codec_data(p->context->conf, ProtocolId::FINISHED_DECODE);
@@ -261,13 +262,13 @@ void PacketManager::decode(
         {
             for (int idx = 0; idx < codec_data.compound_layer_cnt; idx++)
             {
-                CompoundLayer* clyr = &codec_data.compound_layers[idx];
+                const CompoundLayer* clyr = &codec_data.compound_layers[idx];
 
                 // If this was an IP layer, stash the next protocol in the Packet for later
                 if (clyr->proto_bits & (PROTO_BIT__IP | PROTO_BIT__IP6_EXT) &&
                     idx + 1 < codec_data.compound_layer_cnt)
                 {
-                    CompoundLayer* nclyr = &codec_data.compound_layers[idx + 1];
+                    const CompoundLayer* nclyr = &codec_data.compound_layers[idx + 1];
                     p->ip_proto_next = convert_protocolid_to_ipprotocol(nclyr->layer.prot_id);
                 }
                 p->proto_bits |= clyr->proto_bits;
@@ -383,6 +384,21 @@ void PacketManager::decode(
         raw.data += curr_lyr_len;
 
         p->proto_bits |= codec_data.proto_bits;
+
+        // A validated UDP-tunnel codec or a codec that dispatches into a TEB
+        // payload establishes a pending decapsulation boundary.
+        // Wait for an IP codec to succeed so malformed or header-only tunnels
+        // remain keyed on their outer tuple.  Plain IP-in-GRE never dispatches
+        // through TEB and therefore keeps its existing flow-key behavior.
+        if ( codec_data.proto_bits & PROTO_BIT__IP )
+        {
+            if ( tunnel_decap_pending )
+                p->proto_bits |= PROTO_BIT__TUNNEL_DECAP;
+            tunnel_decap_pending = false;
+        }
+        else if ( (codec_data.proto_bits & PROTO_BIT__ANY_UDP_TUNNEL) or
+            codec_data.next_prot_id == ProtocolId::ETHERTYPE_TRANS_ETHER_BRIDGING )
+            tunnel_decap_pending = true;
 
         // Reset the volatile part of the codec data for the next codec to decode into
         codec_data.next_prot_id = ProtocolId::FINISHED_DECODE;
@@ -622,7 +638,7 @@ const uint8_t* PacketManager::encode_reject(UnreachResponse type,
             icmph->code = icmp::IcmpCode::PORT_UNREACH;
         }
 
-        icmph->csum = checksum::icmp_cksum((uint16_t*)buf.data(), buf.size());
+        icmph->csum = checksum::icmp_cksum(buf.data(), buf.size());
 
         if (encode(p, flags, inner_ip_index, IpProtocol::ICMPV4, buf))
         {
@@ -686,7 +702,7 @@ const uint8_t* PacketManager::encode_reject(UnreachResponse type,
         ps6.hdr.protocol = IpProtocol::ICMPV6;
         ps6.hdr.len = htons((uint16_t)(ip_len));
 
-        icmph->csum = checksum::icmp_cksum((uint16_t*)buf.data(), ip_len, ps6);
+        icmph->csum = checksum::icmp_cksum(buf.data(), ip_len, ps6);
 
         if (encode(p, flags, inner_ip_index, IpProtocol::ICMPV6, buf))
         {
@@ -761,7 +777,7 @@ int PacketManager::encode_format(
     const DAQ_PktHdr_t* phdr, uint32_t opaque)
 {
     bool update_ip4_len = false;
-    uint8_t num_layers;
+    uint8_t num_layers = 0;
 
     if ( f & ENC_FLAG_DEF )
     {
@@ -771,15 +787,19 @@ int PacketManager::encode_format(
          * we ensure that the ip6_frag header is not copied too.
          */
 
+        int stop;
         if ( p->is_ip6() )
         {
-            num_layers = layer::get_inner_ip6_frag_index(p);
+            stop = layer::get_inner_ip6_frag_index(p);
         }
         else
         {
-            num_layers = layer::get_inner_ip_lyr_index(p) + 1;
+            stop = layer::get_inner_ip_lyr_index(p) + 1;
             update_ip4_len = true;
         }
+
+        if (stop > 0)
+            num_layers = stop;
     }
     else if ( f & ENC_FLAG_NET )
         num_layers = layer::get_inner_ip_lyr_index(p) + 1;

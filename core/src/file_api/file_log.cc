@@ -88,7 +88,7 @@ public:
 
 private:
     FileLogConfig config;
-    void log_file_name(TextLog*, FileContext*);
+    static void log_file_name(TextLog*, FileContext*);
 };
 
 void LogHandler::log_file_name(TextLog* log, FileContext* file)
@@ -182,7 +182,7 @@ void LogHandler::handle(DataEvent&, Flow* f)
 
     TextLog_Print(tlog, "[Type: %s] ", type_name.c_str());
 
-    uint8_t* sha = file->get_file_sig_sha256();
+    const uint8_t* sha = file->get_file_sig_sha256();
     if (sha)
         TextLog_Print(tlog, "[SHA: %s] ", (file->sha_to_string(sha)).c_str());
 
@@ -248,7 +248,7 @@ public:
     { return fl_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&fl_stats; }
+    { return reinterpret_cast<PegCount*>(&fl_stats); }
 
     bool set(const char*, Value& v, SnortConfig*) override;
 
@@ -282,7 +282,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* fl_ctor(Module* m)
 {
-    FileLogModule* fl_module = (FileLogModule*)m;
+    const FileLogModule* fl_module = static_cast<FileLogModule*>(m);
     return new FileLog(fl_module->config);
 }
 
@@ -327,4 +327,3 @@ const BaseApi* sin_file[] =
     sin_file_flow,
     nullptr
 };
-

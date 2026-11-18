@@ -24,7 +24,9 @@
 
 #include "flow_ip_tracker.h"
 
-#include <appid/appid_api.h>
+#include <cinttypes>
+
+#include "appid/appid_api.h"
 #include "flow/stream_flow.h"
 #include "framework/pig_pen.h"
 #include "hash/hash_defs.h"
@@ -47,8 +49,8 @@ struct FlowStateKey
 };
 
 FlowStateValue* FlowIPTracker::find_stats(const SfIp* src_addr, const SfIp* dst_addr,
-    int* swapped, const char* appid_name, uint16_t src_port, uint16_t dst_port,
-    uint8_t ip_protocol, uint64_t flow_latency, uint64_t rule_latency)
+    int* swapped, const char* app_name, uint16_t src_port, uint16_t dst_port,
+    uint8_t ip_protocol, uint64_t total_flow_latency, uint64_t total_rule_latency)
 {
     FlowStateKey key;
     FlowStateValue* value = nullptr;
@@ -69,7 +71,7 @@ FlowStateValue* FlowIPTracker::find_stats(const SfIp* src_addr, const SfIp* dst_
     value = (FlowStateValue*)ip_map->get_user_data(&key);
     if ( value )
     {
-        strncpy(value->appid_name, appid_name, sizeof(value->appid_name) - 1);
+        strncpy(value->appid_name, app_name, sizeof(value->appid_name) - 1);
         value->appid_name[sizeof(value->appid_name) - 1] = '\0';
         if ( *swapped )
         {
@@ -82,8 +84,8 @@ FlowStateValue* FlowIPTracker::find_stats(const SfIp* src_addr, const SfIp* dst_
             value->port_b = dst_port;
         }
         value->protocol = ip_protocol;
-        value->total_flow_latency = flow_latency;
-        value->total_rule_latency = rule_latency;
+        value->total_flow_latency = total_flow_latency;
+        value->total_rule_latency = total_rule_latency;
     }
     else
     {
@@ -252,7 +254,7 @@ void FlowIPTracker::process(bool)
     for (auto node = ip_map->find_first_node(); node; node = ip_map->find_next_node())
     {
         FlowStateKey* key = (FlowStateKey*)node->key;
-        FlowStateValue* cur_stats = (FlowStateValue*)node->data;
+        const FlowStateValue* cur_stats = (FlowStateValue*)node->data;
 
         key->ipA.ntop(ip_a, sizeof(ip_a));
         key->ipB.ntop(ip_b, sizeof(ip_b));
@@ -266,8 +268,8 @@ void FlowIPTracker::process(bool)
         std::snprintf(port_a, sizeof(port_a), "%d", cur_stats->port_a);
         std::snprintf(port_b, sizeof(port_b), "%d", cur_stats->port_b);
         std::snprintf(protocol, sizeof(protocol), "%d", cur_stats->protocol);
-        std::snprintf(flow_latency, sizeof(flow_latency), "%lu", cur_stats->total_flow_latency);
-        std::snprintf(rule_latency, sizeof(rule_latency), "%lu", cur_stats->total_rule_latency);
+        std::snprintf(flow_latency, sizeof(flow_latency), "%" PRIu64, cur_stats->total_flow_latency);
+        std::snprintf(rule_latency, sizeof(rule_latency), "%" PRIu64, cur_stats->total_rule_latency);
 
         memcpy(&stats, cur_stats, sizeof(stats));
 
@@ -279,17 +281,16 @@ void FlowIPTracker::process(bool)
 }
 
 int FlowIPTracker::update_state(const SfIp* src_addr, const SfIp* dst_addr,
-    FlowState state, const char* appid_name, uint16_t src_port, uint16_t dst_port,
-    uint8_t ip_protocol, uint64_t flow_latency, uint64_t rule_latency)
+    FlowState state, const char* app_name, uint16_t src_port, uint16_t dst_port,
+    uint8_t ip_protocol, uint64_t total_flow_latency, uint64_t total_rule_latency)
 {
     int swapped;
 
-    FlowStateValue* value = find_stats(src_addr, dst_addr, &swapped, appid_name, src_port, dst_port,
-        ip_protocol, flow_latency, rule_latency);
+    FlowStateValue* value = find_stats(src_addr, dst_addr, &swapped, app_name, src_port, dst_port,
+        ip_protocol, total_flow_latency, total_rule_latency);
     if ( !value )
         return 1;
 
     value->state_changes[state]++;
     return 0;
 }
-

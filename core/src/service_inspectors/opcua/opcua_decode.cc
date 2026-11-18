@@ -31,6 +31,7 @@
 #include "trace/trace_api.h"
 
 #include <unordered_map>
+#include <algorithm>
 
 #include "opcua_module.h"
 #include "opcua_session.h"
@@ -38,10 +39,10 @@
 using namespace snort;
 
 
-static bool append_message_chunk(Packet*, OpcuaSessionData*);
-static bool inspect_is_final_field(Packet*, OpcuaSessionData*);
-static bool inspect_msg_size_field(Packet*, uint32_t);
-static bool analyze_opcua_string(Packet*, OpcuaStringAnalysisData&);
+static bool append_message_chunk(const Packet*, OpcuaSessionData*);
+static bool inspect_is_final_field(const Packet*, OpcuaSessionData*);
+static bool inspect_msg_size_field(const Packet*, uint32_t);
+static bool analyze_opcua_string(const Packet*, OpcuaStringAnalysisData&);
 static bool parse_msg_hel(Packet*, OpcuaSessionData*);
 static bool parse_msg_ack(Packet*, OpcuaSessionData*);
 static bool parse_msg_err(Packet*, OpcuaSessionData*);
@@ -62,7 +63,7 @@ static const std::unordered_map<uint32_t, OpcuaMsgParseFunc> opcua_msg_parsers =
     {make_opcua_msg_key('C','L','O'), parse_msg_clo}
 };
 
-static bool append_message_chunk(Packet* p, OpcuaSessionData* ssn_data)
+static bool append_message_chunk(const Packet* p, OpcuaSessionData* ssn_data)
 {
     // reject undersized messages
     if ( p->dsize <= OPCUA_MSG_HDR_LEN )
@@ -72,41 +73,39 @@ static bool append_message_chunk(Packet* p, OpcuaSessionData* ssn_data)
     }
 
     // reject impossibly large messages
-    if ( p->dsize > OPCUA_CHUNK_DATA_BUF_SIZE )
+    const uint32_t current_chunk_len = p->dsize - OPCUA_MSG_HDR_LEN;
+    if (current_chunk_len >= OPCUA_CHUNK_DATA_MAX_SIZE)
     {
         DetectionEngine::queue_event(GID_OPCUA, OPCUA_BAD_MSG_SIZE);
         return false;
     }
 
-    // reject new chunks when the chunk data buffer is already full
-    const uint32_t current_chunk_buf_used = ssn_data->chunk_data_len;
-    if ( current_chunk_buf_used >= OPCUA_CHUNK_DATA_BUF_SIZE )
+    // reject new chunks when accumulated size would reach or exceed limit
+    if (ssn_data->accumulated_chunk_data_len >= OPCUA_CHUNK_DATA_MAX_SIZE - current_chunk_len)
     {
         DetectionEngine::queue_event(GID_OPCUA, OPCUA_LARGE_CHUNKED_MSG);
         return false;
     }
+    ssn_data->accumulated_chunk_data_len += current_chunk_len;
 
-    // reject instances where adding in the new chunk data would be too large to process
-    const uint32_t current_chunk_len = p->dsize - OPCUA_MSG_HDR_LEN;
-    const uint32_t available_space = OPCUA_CHUNK_DATA_BUF_SIZE - current_chunk_buf_used;
-    if ( current_chunk_len >= available_space )
-    {
-        DetectionEngine::queue_event(GID_OPCUA, OPCUA_LARGE_CHUNKED_MSG);
-        return false;
-    }
+    // have already copied nodeid metadata
+    if (ssn_data->chunk_metadata_len >= OPCUA_CHUNK_METADATA_BUF_SIZE)
+        return true;
 
-    // append new chunk data to the message chunk buffer
-    void* dst = ssn_data->chunk_data + current_chunk_buf_used;
+    // append new chunk's metadata to the message chunk buffer
+    void* dst = ssn_data->chunk_metadata + ssn_data->chunk_metadata_len;
     const void* src = p->data + OPCUA_MSG_HDR_LEN;
-    memcpy(dst, src, current_chunk_len);
-    ssn_data->chunk_data_len = current_chunk_buf_used + current_chunk_len;
+    const uint32_t bytes_to_copy = std::min(current_chunk_len,
+        static_cast<uint32_t>(OPCUA_CHUNK_METADATA_BUF_SIZE) - ssn_data->chunk_metadata_len);
+    memcpy(dst, src, bytes_to_copy);
+    ssn_data->chunk_metadata_len += bytes_to_copy;
 
     return true;
 }
 
-static bool inspect_is_final_field(Packet* p, OpcuaSessionData* ssn_data)
+static bool inspect_is_final_field(const Packet* p, OpcuaSessionData* ssn_data)
 {
-    const OpcuaHeader* hdr = (const OpcuaHeader*) p->data;
+    const OpcuaHeader* hdr = reinterpret_cast<const OpcuaHeader*>(p->data);
 
     if ( ssn_data->msg_type == OPCUA_MSG_MSG )
     {
@@ -174,9 +173,9 @@ static bool inspect_is_final_field(Packet* p, OpcuaSessionData* ssn_data)
     return false;
 }
 
-static bool inspect_msg_size_field(Packet* p, uint32_t min_size)
+static bool inspect_msg_size_field(const Packet* p, uint32_t min_size)
 {
-    const OpcuaHeader* hdr = (const OpcuaHeader*) p->data;
+    const OpcuaHeader* hdr = reinterpret_cast<const OpcuaHeader*>(p->data);
     if ( hdr->msg_size < min_size || p->dsize < min_size )
     {
         DetectionEngine::queue_event(GID_OPCUA, OPCUA_BAD_MSG_SIZE);
@@ -185,7 +184,7 @@ static bool inspect_msg_size_field(Packet* p, uint32_t min_size)
     return true;
 }
 
-static bool validate_opcua_string_bounds(Packet* p, uint32_t string_size, uint32_t string_offset, bool is_last_field)
+static bool validate_opcua_string_bounds(const Packet* p, uint32_t string_size, uint32_t string_offset, bool is_last_field)
 {
     if ( ( is_last_field && p->dsize != (string_offset + string_size) ) ||
         ( p->dsize < (string_offset + string_size) ) )
@@ -197,7 +196,8 @@ static bool validate_opcua_string_bounds(Packet* p, uint32_t string_size, uint32
     return true;
 }
 
-static bool analyze_opcua_string(Packet* p, OpcuaStringAnalysisData& sad)
+// cppcheck-suppress constParameterReference ; string_size points to state normalized below
+static bool analyze_opcua_string(const Packet* p, OpcuaStringAnalysisData& sad)
 {
     if ( *(sad.string_size) == OPCUA_NULL_STRING_SIZE || *(sad.string_size) == 0 )
     {
@@ -217,6 +217,7 @@ static bool analyze_opcua_string(Packet* p, OpcuaStringAnalysisData& sad)
     return validate_opcua_string_bounds(p, *(sad.string_size), sad.string_offset, sad.is_last_field);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_hel(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_HEL;
@@ -226,7 +227,7 @@ static bool parse_msg_hel(Packet* p, OpcuaSessionData* ssn_data)
         return false;
     }
 
-    const OpcuaMsgTypeHel* hel = (const OpcuaMsgTypeHel*) p->data;
+    const OpcuaMsgTypeHel* hel = reinterpret_cast<const OpcuaMsgTypeHel*>(p->data);
 
     if ( hel->protocol_version != OPCUA_PROTOCOL_VERSION_STANDARD )
     {
@@ -250,6 +251,7 @@ static bool parse_msg_hel(Packet* p, OpcuaSessionData* ssn_data)
     return inspect_is_final_field(p, ssn_data);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_ack(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_ACK;
@@ -273,6 +275,7 @@ static bool parse_msg_ack(Packet* p, OpcuaSessionData* ssn_data)
     return inspect_is_final_field(p, ssn_data);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_err(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_ERR;
@@ -282,7 +285,7 @@ static bool parse_msg_err(Packet* p, OpcuaSessionData* ssn_data)
         return false;
     }
 
-    const OpcuaMsgTypeErr* err = (const OpcuaMsgTypeErr*) p->data;
+    const OpcuaMsgTypeErr* err = reinterpret_cast<const OpcuaMsgTypeErr*>(p->data);
 
     uint32_t reason_size = err->raw_reason_size;
     const uint32_t opcua_err_reason_offset = sizeof(OpcuaMsgTypeErr);
@@ -301,6 +304,7 @@ static bool parse_msg_err(Packet* p, OpcuaSessionData* ssn_data)
     return inspect_is_final_field(p, ssn_data);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_rhe(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_RHE;
@@ -310,7 +314,7 @@ static bool parse_msg_rhe(Packet* p, OpcuaSessionData* ssn_data)
         return false;
     }
 
-    const OpcuaMsgTypeRhe* rhe = (const OpcuaMsgTypeRhe*) p->data;
+    const OpcuaMsgTypeRhe* rhe = reinterpret_cast<const OpcuaMsgTypeRhe*>(p->data);
 
     uint32_t rhe_server_uri_size = rhe->raw_server_uri_size;
     const uint32_t opcua_rhe_server_uri_offset = sizeof(OpcuaMsgTypeRhe);
@@ -357,6 +361,7 @@ static bool parse_msg_rhe(Packet* p, OpcuaSessionData* ssn_data)
     return inspect_is_final_field(p, ssn_data);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_opn(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_OPN;
@@ -366,7 +371,7 @@ static bool parse_msg_opn(Packet* p, OpcuaSessionData* ssn_data)
         return false;
     }
 
-    const OpcuaMsgTypeOpn* opn = (const OpcuaMsgTypeOpn*) p->data;
+    const OpcuaMsgTypeOpn* opn = reinterpret_cast<const OpcuaMsgTypeOpn*>(p->data);
 
     uint32_t opn_sec_policy_uri_size = opn->raw_sec_policy_uri_size;
     const uint32_t opn_sec_policy_uri_offset = sizeof(OpcuaMsgTypeOpn);
@@ -442,6 +447,7 @@ static bool parse_msg_opn(Packet* p, OpcuaSessionData* ssn_data)
     return inspect_is_final_field(p, ssn_data);
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_msg(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_MSG;
@@ -463,15 +469,15 @@ static bool parse_msg_msg(Packet* p, OpcuaSessionData* ssn_data)
 
     if ( ssn_data->is_complete_msg )
     {
-        if ( ssn_data->chunk_data_len < OPCUA_TYPEID_ENCODING_MASK_SIZE + OPCUA_TYPEID_NAMESPACE_INDEX_SIZE + OPCUA_TYPEID_NODE_ID_SIZE )
+        if (ssn_data->chunk_metadata_len < OPCUA_TYPEID_ENCODING_MASK_SIZE + OPCUA_TYPEID_NAMESPACE_INDEX_SIZE + OPCUA_TYPEID_NODE_ID_SIZE)
         {
             DetectionEngine::queue_event(GID_OPCUA, OPCUA_BAD_TYPEID_ENCODING);
             return false;
         }
 
-        if ( ssn_data->chunk_data[0] == OPCUA_TYPEID_ENCODING_FOUR_BYTES_ENCODED_NUMERIC )
+        if (ssn_data->chunk_metadata[0] == OPCUA_TYPEID_ENCODING_FOUR_BYTES_ENCODED_NUMERIC)
         {
-            ssn_data->node_namespace_index = ssn_data->chunk_data[OPCUA_TYPEID_ENCODING_MASK_SIZE];
+            ssn_data->node_namespace_index = ssn_data->chunk_metadata[OPCUA_TYPEID_ENCODING_MASK_SIZE];
             if ( ssn_data->node_namespace_index != OPCUA_DEFAULT_NAMESPACE_INDEX )
             {
                 DetectionEngine::queue_event(GID_OPCUA, OPCUA_NONZERO_NAMESPACE_INDEX_MSG);
@@ -479,8 +485,8 @@ static bool parse_msg_msg(Packet* p, OpcuaSessionData* ssn_data)
 
             const uint32_t opcua_typeid_node_id_idx_lo = OPCUA_TYPEID_ENCODING_MASK_SIZE + OPCUA_TYPEID_NAMESPACE_INDEX_SIZE;
             const uint32_t opcua_typeid_node_id_idx_hi = opcua_typeid_node_id_idx_lo + 1;
-            uint32_t msg_service = ssn_data->chunk_data[opcua_typeid_node_id_idx_lo];
-            msg_service |= ssn_data->chunk_data[opcua_typeid_node_id_idx_hi] << 8;
+            uint32_t msg_service = ssn_data->chunk_metadata[opcua_typeid_node_id_idx_lo];
+            msg_service |= ssn_data->chunk_metadata[opcua_typeid_node_id_idx_hi] << 8;
             ssn_data->node_id = (OpcuaMsgServiceType) msg_service;
         }
 
@@ -492,6 +498,7 @@ static bool parse_msg_msg(Packet* p, OpcuaSessionData* ssn_data)
     return true;
 }
 
+// cppcheck-suppress constParameterCallback
 static bool parse_msg_clo(Packet* p, OpcuaSessionData* ssn_data)
 {
     ssn_data->msg_type = OPCUA_MSG_CLO;
@@ -533,7 +540,7 @@ bool opcua_decode(Packet* p, OpcuaFlowData* opcuafd)
         return false;
     }
 
-    const OpcuaHeader* hdr = (const OpcuaHeader*) p->data;
+    const OpcuaHeader* hdr = reinterpret_cast<const OpcuaHeader*>(p->data);
 
     bool parse_result = false;
 
@@ -557,4 +564,3 @@ bool opcua_decode(Packet* p, OpcuaFlowData* opcuafd)
 
     return parse_result;
 }
-

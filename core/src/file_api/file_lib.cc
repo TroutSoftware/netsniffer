@@ -31,8 +31,12 @@
 
 #include <openssl/evp.h>
 
+#include <climits>
 #include <iostream>
 #include <iomanip>
+#ifdef UNIT_TEST
+#include <vector>
+#endif
 
 #include "detection/fp_detect.h"
 #include "framework/data_bus.h"
@@ -65,6 +69,16 @@
 using namespace snort;
 
 THREAD_LOCAL ProfileStats file_perf_stats;
+
+//   - url:       4095 bytes, a practical ceiling for HTTP request URIs.
+//   - file_name: file names are paths, bounded by PATH_MAX.
+//   - host_name: a DNS name is at most 253 bytes (RFC 1035); 256 leaves slack.
+static constexpr uint32_t FILE_URL_CAP  = 4095;
+static constexpr uint32_t FILE_NAME_CAP = PATH_MAX;
+static constexpr uint32_t FILE_HOST_CAP = 256;
+
+static inline uint32_t file_clamp_len(uint32_t len, uint32_t cap)
+{ return len > cap ? cap : len; }
 
 // Convert UTF16-LE file name to UTF-8.
 // Returns allocated name. Caller responsible for freeing the buffer.
@@ -153,6 +167,7 @@ void FileInfo::copy(const FileInfo& other, bool clear_data)
         // only one copy of file capture
         file_capture = nullptr;
         policy_id = 0;
+        delete user_file_data;
         user_file_data = nullptr;
     }
 }
@@ -207,7 +222,7 @@ void FileInfo::serialize(char* buffer, uint16_t buffer_len)
 
     if (is_sha256_set && sha256 && offset < buffer_len)
     {
-        memcpy(buffer + offset,(uint16_t *) sha256, SHA256_HASH_SIZE);
+        memcpy(buffer + offset, sha256, SHA256_HASH_SIZE);
         offset += SHA256_HASH_SIZE;
     }
 
@@ -240,20 +255,37 @@ void FileInfo::deserialize(const char* buffer, uint16_t buffer_len)
 {
     uint16_t offset = 0;
     auto read_bool = [&](bool& val) {
+        if (offset + sizeof(val) > buffer_len)
+        {
+            val = false;
+            offset = buffer_len;
+            return;
+        }
         memcpy(&val, buffer + offset, sizeof(val));
         offset += sizeof(val);
     };
 
-    auto read_string = [&](std::string& str, bool& is_set) {
+    // Buffer is peer-supplied (MP sync), so bounds-check the declared length
+    // against buffer_len and clamp to cap; still consume the full on-wire length.
+    auto read_string = [&](std::string& str, bool& is_set, uint32_t cap) {
         read_bool(is_set);
-        if (is_set && offset < buffer_len)
+        if (!is_set)
+            return;
+        if (offset + sizeof(uint32_t) > buffer_len)
         {
-            uint32_t len = 0;
-            memcpy(&len, buffer + offset, sizeof(len));
-            offset += sizeof(len);
-            str.assign(buffer + offset, len);
-            offset += len;
+            offset = buffer_len;
+            return;
         }
+        uint32_t len = 0;
+        memcpy(&len, buffer + offset, sizeof(len));
+        offset += sizeof(len);
+        if (len > (uint32_t)(buffer_len - offset))
+        {
+            offset = buffer_len;
+            return;
+        }
+        str.assign(buffer + offset, file_clamp_len(len, cap));
+        offset += len;
     };
 
     memcpy(&is_sha256_set, buffer + offset, sizeof(is_sha256_set));
@@ -282,9 +314,9 @@ void FileInfo::deserialize(const char* buffer, uint16_t buffer_len)
     offset += sizeof(file_state.sig_state);
     memcpy(&policy_id, buffer + offset, sizeof(policy_id));
     offset += sizeof(policy_id);
-    read_string(file_name, file_name_set);
-    read_string(url, url_set);
-    read_string(host_name, host_set);
+    read_string(file_name, file_name_set, FILE_NAME_CAP);
+    read_string(url, url_set, FILE_URL_CAP);
+    read_string(host_name, host_set, FILE_HOST_CAP);
     read_bool(file_type_enabled);
     read_bool(file_signature_enabled);
     read_bool(file_capture_enabled);
@@ -311,7 +343,7 @@ FileInfo& FileInfo::operator=(const FileInfo& other)
 void FileInfo::set_file_name(const char* name, uint32_t name_size)
 {
     if (name and name_size)
-        file_name.assign(name, name_size);
+        file_name.assign(name, file_clamp_len(name_size, FILE_NAME_CAP));
 
     file_name_set = true;
 }
@@ -319,7 +351,7 @@ void FileInfo::set_file_name(const char* name, uint32_t name_size)
 void FileInfo::set_weak_file_name(const char* name, uint32_t name_size)
 {
     if (name and name_size)
-        file_name.assign(name, name_size);
+        file_name.assign(name, file_clamp_len(name_size, FILE_NAME_CAP));
 }
 
 void FileInfo::unset_file_name()
@@ -327,7 +359,6 @@ void FileInfo::unset_file_name()
     file_name_set = false;
 }
 
-// cppcheck-suppress unusedFunction
 void FileInfo::reset_sha()
 {
     if (sha256)
@@ -341,7 +372,7 @@ void FileInfo::reset_sha()
 void FileInfo::set_url(const char* url_name, uint32_t url_size)
 {
     if (url_name and url_size)
-        url.assign(url_name, url_size);
+        url.assign(url_name, file_clamp_len(url_size, FILE_URL_CAP));
 
     url_set = true;
 }
@@ -349,18 +380,18 @@ void FileInfo::set_url(const char* url_name, uint32_t url_size)
 void FileInfo::set_weak_url(const char* url_name, uint32_t url_size)
 {
     if (url_name and url_size)
-        url.assign(url_name, url_size);
+        url.assign(url_name, file_clamp_len(url_size, FILE_URL_CAP));
 }
 
-void FileInfo::set_host(const char* host_name, uint32_t host_size)
+void FileInfo::set_host(const char* new_host_name, uint32_t host_size)
 {
     if (this->host_set)
         return;
 
-    if (host_name and host_size)
+    if (new_host_name and host_size)
     {
-        this->host_name.assign(host_name, host_size);
-        this->host_set = true;
+        host_name.assign(new_host_name, file_clamp_len(host_size, FILE_HOST_CAP));
+        host_set = true;
     }
 }
 
@@ -424,14 +455,14 @@ uint8_t* FileInfo::get_file_sig_sha256() const
     return (sha256);
 }
 
-std::string FileInfo::sha_to_string(const uint8_t* sha256) const
+std::string FileInfo::sha_to_string(const uint8_t* digest) const
 {
-    uint8_t conv[] = "0123456789ABCDEF";
+    const uint8_t conv[] = "0123456789ABCDEF";
     const uint8_t* index;
     const uint8_t* end;
     std::string sha_out;
 
-    index = sha256;
+    index = digest;
     end = index + SHA256_HASH_SIZE;
 
     while (index < end)
@@ -486,6 +517,8 @@ uint32_t FileInfo::get_policy_id()
 
 FileCaptureState FileInfo::reserve_file(FileCapture*& dest)
 {
+    std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
+
     if (!file_capture)
         return FileCapture::error_capture(FILE_CAPTURE_FAIL);
 
@@ -493,7 +526,6 @@ FileCaptureState FileInfo::reserve_file(FileCapture*& dest)
 
     if (state == FILE_CAPTURE_SUCCESS)
         extracted_size = file_capture->get_file_capture_size();
-    
     config_file_capture(false);
     dest = file_capture;
     file_capture = nullptr;
@@ -511,8 +543,10 @@ void FileInfo::set_file_data(UserFileDataBase* fd)
     user_file_data = fd;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void FileInfo::set_capture_file_data(const uint8_t* file_data, uint32_t size)
 {
+    std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
     if (file_capture)
         file_capture->set_data(file_data, size);
 }
@@ -529,7 +563,7 @@ FileContext::FileContext () : start_time(SnortClock::now())
     file_capture = nullptr;
     file_segments = nullptr;
 
-    inspector = (FileInspect*)InspectorManager::acquire_file_inspector();
+    inspector = static_cast<FileInspect*>(InspectorManager::acquire_file_inspector());
 
     if (inspector and SnortConfig::get_conf())
         config = inspector->config;
@@ -614,9 +648,13 @@ void FileContext::log_file_event(Flow* flow, FilePolicyBase* policy)
         {
             hr_time now = SnortClock::now();
             duration = (TO_USECS(now - start_time)) / 1000000.0;  // Convert microseconds to seconds
-            set_source(flow);
 
             FileEvent file_event(*this);
+            {
+                std::lock_guard<std::recursive_mutex> udlock(user_file_data_mutex);
+                set_source(flow);
+                file_event.snapshot();
+            }
             DataBus::publish(get_file_adv_pub_id(), FileEventIds::FILE_COMPLETE, file_event, flow);
 
             std::string filename = file_event.get_filename();
@@ -638,7 +676,10 @@ void FileContext::log_file_event(Flow* flow, FilePolicyBase* policy)
         }
 
         if ( config->trace_type and !force_adv_log )
+        {
+            std::lock_guard<std::recursive_mutex> udlock(user_file_data_mutex);
             print(std::cout);
+        }
     }
 }
 
@@ -684,14 +725,18 @@ void FileContext::finish_signature_lookup(Packet* p, bool final_lookup, FilePoli
         }
         else
         {
+            // cppcheck-suppress knownConditionTrueFalse ; completion and verdict depend on file processing
             if ( processing_complete and (verdict == FILE_VERDICT_UNKNOWN ))
             {
                 force_adv_log = true;
                 log_file_event(flow, policy);
                 force_adv_log = false;
             }
-            snort_free(sha256);
-            sha256 = nullptr;
+            {
+                std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
+                snort_free(sha256);
+                sha256 = nullptr;
+            }
         }
     }
 }
@@ -761,6 +806,7 @@ void FileContext::remove_segments()
     file_segments = nullptr;
 }
 
+// cppcheck-suppress duplInheritedMember ; derived reset intentionally hides base reset for context-specific state
 void FileContext::reset()
 {
     verdict = FILE_VERDICT_UNKNOWN;
@@ -779,9 +825,11 @@ void FileContext::reset()
 bool FileContext::process(Packet* p, const uint8_t* file_data, int data_size,
     FilePosition position, FilePolicyBase* policy)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(file_perf_stats);
     Flow* flow = p->flow;
+
+    if ( data_size < 0 )
+        return true;
 
     if ( config->trace_stream )
     {
@@ -897,9 +945,7 @@ bool FileContext::process(Packet* p, const uint8_t* file_data, int data_size,
         /*Fails to capture, when out of memory or size limit, need lookup*/
         if (is_file_capture_enabled())
         {
-            user_file_data_mutex.lock();
             process_file_capture(file_data, data_size, position);
-            user_file_data_mutex.unlock();
         }
 
         finish_signature_lookup(p, ( file_state.sig_state != FILE_SIG_FLUSH ), policy);
@@ -979,23 +1025,33 @@ void FileContext::find_file_type_from_ips(Packet* pkt, const uint8_t* file_data,
     p->packet_flags |= PKT_ALLOW_MULTIPLE_DETECT;
     p->proto_bits |= PROTO_BIT__PDU;
 
-    bool set_file_context = false;
+    // The regular set_current_file_context() cannot be used here: it engages
+    // deferred-delete (would free a context still owned via
+    // partially_processed_contexts) and clears current_file_id (would break
+    // the matched restore).
     FileFlows* files = FileFlows::get_file_flows(p->flow, false);
+    FileFlows::CurrentContextSlot saved;
+    bool did_swap = false;
     if (files)
     {
-        FileContext* context = files->get_current_file_context();
+        const FileContext* context = files->get_current_file_context();
         if (!context or context != this)
         {
-            files->set_current_file_context(this);
-            set_file_context = true;
+            saved = files->swap_current_file_context_no_delete(this);
+            did_swap = true;
         }
     }
     fp_eval_service_group(p, conf->snort_protocol_id);
     /* Check whether file transfer is done or type depth is reached */
     if ((position == SNORT_FILE_END) || (position == SNORT_FILE_FULL) || depth_exhausted)
         finalize_file_type();
-    if (set_file_context)
-        files->set_current_file_context(nullptr);
+    if (did_swap)
+    {
+        // Re-entrant fp_eval_service_group may have replaced current_context;
+        // don't overwrite whatever it installed with a possibly-stale saved.ctx.
+        if (files->get_current_file_context() == this)
+            files->restore_current_file_context_no_delete(saved);
+    }
 }
 
 void FileContext::process_file_type(Packet* pkt,const uint8_t* file_data, int data_size,
@@ -1009,6 +1065,8 @@ void FileContext::process_file_type(Packet* pkt,const uint8_t* file_data, int da
 void FileContext::process_file_signature_sha256(const uint8_t* file_data, int data_size,
     FilePosition position)
 {
+    std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
+
     if ((int64_t)processed_bytes + data_size > config->file_signature_depth)
     {
         FILE_DEBUG(file_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, GET_CURRENT_PACKET,
@@ -1111,6 +1169,8 @@ void FileContext::process_file_signature_sha256(const uint8_t* file_data, int da
 FileCaptureState FileContext::process_file_capture(const uint8_t* file_data,
     int data_size, FilePosition position)
 {
+    std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
+
     if (!file_capture)
     {
         file_capture = new FileCapture(config->capture_min_size,
@@ -1121,17 +1181,24 @@ FileCaptureState FileContext::process_file_capture(const uint8_t* file_data,
         file_capture->process_buffer(file_data, data_size, position);
 
     if (file_state.capture_state != FILE_CAPTURE_SUCCESS)
-        stop_file_capture();
+        stop_file_capture_unlocked();
 
     return file_state.capture_state;
 }
 
 void FileContext::stop_file_capture()
 {
+    std::lock_guard<std::recursive_mutex> lock(user_file_data_mutex);
+    stop_file_capture_unlocked();
+}
+
+void FileContext::stop_file_capture_unlocked()
+{
     if (file_capture)
     {
-        delete file_capture;
+        FileCapture* capture = file_capture;
         file_capture = nullptr;
+        delete capture;
     }
 
     config_file_capture(false);
@@ -1169,9 +1236,9 @@ void FileContext::print_file_data(FILE* fp, const uint8_t* data, int len, int ma
     {
         char c = (char)data[i];
         if (isprint(c) and (c == ' ' or !isspace(c)))
-            str[pos] = c; // cppcheck-suppress unreadVariable
+            str[pos] = c;
         else
-            str[pos] = '.'; // cppcheck-suppress unreadVariable
+            str[pos] = '.';
         pos++;
         fprintf(fp, "%02X ", data[i]);
 
@@ -1183,7 +1250,7 @@ void FileContext::print_file_data(FILE* fp, const uint8_t* data, int len, int ma
         }
         else if (pos == 8)
         {
-            str[pos] = ' '; // cppcheck-suppress unreadVariable
+            str[pos] = ' ';
             pos++;
             fprintf(fp, "%s", " ");
         }
@@ -1212,7 +1279,7 @@ void FileContext::print_file_data(FILE* fp, const uint8_t* data, int len, int ma
  */
 void FileContext::print_file_sha256(std::ostream& log)
 {
-    unsigned char* hash = sha256;
+    const unsigned char* hash = sha256;
 
     if (!sha256)
         return;
@@ -1433,5 +1500,125 @@ TEST_CASE ("serialize_deserialize_roundtrip", "[file_info]")
 
     delete[] buffer;
 }
-#endif
 
+TEST_CASE ("set_url caps oversized url", "[file_info]")
+{
+    FI_TEST info;
+    const std::string big(FILE_URL_CAP + 5000, 'a');
+    info.set_url(big.c_str(), static_cast<uint32_t>(big.size()));
+
+    CHECK (info.get_url().size() == FILE_URL_CAP);
+    CHECK (info.get_url() == big.substr(0, FILE_URL_CAP));
+}
+
+TEST_CASE ("set_url keeps short url intact", "[file_info]")
+{
+    FI_TEST info;
+    info.set_url("https://example.org/a.pdf", 25);
+    CHECK (info.get_url() == std::string("https://example.org/a.pdf"));
+}
+
+TEST_CASE ("set_weak_url caps oversized url", "[file_info]")
+{
+    FI_TEST info;
+    const std::string big(FILE_URL_CAP + 100, 'b');
+    info.set_weak_url(big.c_str(), static_cast<uint32_t>(big.size()));
+    CHECK (info.get_url().size() == FILE_URL_CAP);
+}
+
+TEST_CASE ("set_file_name caps oversized name", "[file_info]")
+{
+    FI_TEST info;
+    const std::string big(FILE_NAME_CAP + 5000, 'c');
+    info.set_file_name(big.c_str(), static_cast<uint32_t>(big.size()));
+
+    CHECK (info.get_file_name().size() == FILE_NAME_CAP);
+    CHECK (info.get_file_name() == big.substr(0, FILE_NAME_CAP));
+    CHECK (true == info.is_file_name_set());
+}
+
+TEST_CASE ("set_file_name keeps short name intact", "[file_info]")
+{
+    FI_TEST info;
+    info.set_file_name("report.pdf", 10);
+    CHECK (info.get_file_name() == std::string("report.pdf"));
+}
+
+TEST_CASE ("set_weak_file_name caps oversized name", "[file_info]")
+{
+    FI_TEST info;
+    const std::string big(FILE_NAME_CAP + 100, 'd');
+    info.set_weak_file_name(big.c_str(), static_cast<uint32_t>(big.size()));
+    CHECK (info.get_file_name().size() == FILE_NAME_CAP);
+}
+
+TEST_CASE ("set_host caps oversized host", "[file_info]")
+{
+    FI_TEST info;
+    const std::string big(FILE_HOST_CAP + 5000, 'e');
+    info.set_host(big.c_str(), static_cast<uint32_t>(big.size()));
+
+    CHECK (info.get_host_name().size() == FILE_HOST_CAP);
+    CHECK (info.get_host_name() == big.substr(0, FILE_HOST_CAP));
+}
+
+TEST_CASE ("set_host keeps short host intact", "[file_info]")
+{
+    FI_TEST info;
+    info.set_host("example.org", 11);
+    CHECK (info.get_host_name() == std::string("example.org"));
+}
+
+TEST_CASE ("deserialize caps peer-supplied oversized url", "[file_info]")
+{
+    const uint32_t big_len = FILE_URL_CAP + 2000;
+    std::vector<char> buf;
+    auto put_bytes = [&](const void* p, size_t n) {
+        const char* c = static_cast<const char*>(p);
+        buf.insert(buf.end(), c, c + n);
+    };
+    auto put_zero = [&](size_t n) { buf.insert(buf.end(), n, '\0'); };
+    auto put_bool = [&](bool b) { char v = b ? 1 : 0; put_bytes(&v, 1); };
+
+    put_bool(false);                       // is_sha256_set
+    put_zero(sizeof(FileVerdict));         // verdict
+    put_zero(sizeof(uint64_t));            // file_size
+    put_zero(sizeof(FileDirection));       // direction
+    put_zero(sizeof(uint64_t));            // file_id
+    put_zero(sizeof(uint32_t));            // file_type_id
+    put_zero(sizeof(FileCaptureState));    // file_state.capture_state
+    put_zero(sizeof(FileSigState));        // file_state.sig_state
+    put_zero(sizeof(uint32_t));            // policy_id
+    put_bool(false);                       // file_name is_set
+    put_bool(true);                        // url is_set
+    put_bytes(&big_len, sizeof(big_len));  // url length (oversized)
+    buf.insert(buf.end(), big_len, 'z');   // url payload present in-buffer
+    put_bool(false);                       // host is_set
+    put_bool(false);                       // file_type_enabled
+    put_bool(false);                       // file_signature_enabled
+    put_bool(false);                       // file_capture_enabled
+    put_bool(false);                       // is_partial
+
+    FI_TEST info;
+    info.deserialize(buf.data(), static_cast<uint16_t>(buf.size()));
+
+    CHECK (info.get_url().size() == FILE_URL_CAP);
+}
+
+TEST_CASE ("deserialize rejects string running past buffer_len", "[file_info]")
+{
+    FI_TEST original;
+    original.set_url("https://example.org/resource.bin", 32);
+
+    size_t full = original.get_serialized_size();
+    std::vector<char> buf(full);
+    original.serialize(buf.data(), static_cast<uint16_t>(full));
+
+    // Declare fewer bytes than were serialized so the url payload no longer
+    // fits; deserialize must bail out cleanly, leaving url empty, not read on.
+    FI_TEST info;
+    info.deserialize(buf.data(), static_cast<uint16_t>(full - 10));
+
+    CHECK (info.get_url().empty());
+}
+#endif

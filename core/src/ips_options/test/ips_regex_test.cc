@@ -110,11 +110,13 @@ MemoryContext::~MemoryContext() = default;
 
 extern const BaseApi* ips_regex;
 
+// The test stub must match Cursor's mutable Packet constructor.
+// cppcheck-suppress constParameterPointer
 Cursor::Cursor(Packet* p)
 { set("pkt_data", p->data, p->dsize); }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 OptTreeNode::~OptTreeNode() = default;
 
@@ -146,7 +148,7 @@ SoEvalFunc SoManager::get_so_eval(const char*, const char*, void**)
 // helpers
 //-------------------------------------------------------------------------
 
-static const Parameter* get_param(Module* m, const char* s)
+static const Parameter* get_param(const Module* m, const char* s)
 {
     const Parameter* p = m->get_parameters();
 
@@ -171,7 +173,7 @@ static IpsOption* get_option(Module* mod, const char* pat)
 
     IpsInfo info(nullptr, nullptr);
 
-    const IpsApi* api = (const IpsApi*) ips_regex;
+    const IpsApi* api = reinterpret_cast<const IpsApi*>(ips_regex);
     IpsOption* opt = api->ctor(mod, info);
 
     return opt;
@@ -201,7 +203,7 @@ TEST(ips_regex_base, base)
 
 TEST(ips_regex_base, ips_option)
 {
-    const IpsApi* ips_api = (const IpsApi*) ips_regex;
+    const IpsApi* ips_api = reinterpret_cast<const IpsApi*>(ips_regex);
 
     CHECK(ips_api->ctor);
     CHECK(ips_api->dtor);
@@ -287,7 +289,7 @@ TEST_GROUP(ips_regex_option)
     }
     void teardown() override
     {
-        const IpsApi* api = (const IpsApi*) ips_regex;
+        const IpsApi* api = reinterpret_cast<const IpsApi*>(ips_regex);
         api->dtor(opt);
         if ( do_cleanup )
             scratcher->cleanup(snort_conf);
@@ -306,7 +308,7 @@ TEST(ips_regex_option, hash)
 
     do_cleanup = scratcher->setup(snort_conf);
 
-    const IpsApi* api = (const IpsApi*) ips_regex;
+    const IpsApi* api = reinterpret_cast<const IpsApi*>(ips_regex);
     api->dtor(opt2);
 }
 
@@ -317,7 +319,7 @@ TEST(ips_regex_option, opeq)
 
     do_cleanup = scratcher->setup(snort_conf);
 
-    const IpsApi* api = (const IpsApi*) ips_regex;
+    const IpsApi* api = reinterpret_cast<const IpsApi*>(ips_regex);
     api->dtor(opt2);
 }
 
@@ -366,7 +368,7 @@ TEST_GROUP(ips_regex_option_relative)
     }
     void teardown() override
     {
-        const IpsApi* api = (const IpsApi*) ips_regex;
+        const IpsApi* api = reinterpret_cast<const IpsApi*>(ips_regex);
         api->dtor(opt);
         if ( do_cleanup )
             scratcher->cleanup(snort_conf);
@@ -399,4 +401,3 @@ int main(int argc, char** argv)
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

@@ -68,7 +68,7 @@ public:
     { return full_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&full_counts; }
+    { return reinterpret_cast<PegCount*>(&full_counts); }
 
     Usage get_usage() const override
     { return GLOBAL; }
@@ -108,7 +108,7 @@ public:
 
 int AcfMpse::search(const uint8_t* T, int n, MpseMatch match, void* context, int* current_state)
 {
-    Profile profile(full_stats);  // cppcheck-suppress unreadVariable
+    Profile profile(full_stats);
 
     full_counts.searches++;
     full_counts.bytes += n;
@@ -197,4 +197,3 @@ const BaseApi* se_ac_full[] =
     &acf_api.base,
     nullptr
 };
-

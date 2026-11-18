@@ -43,9 +43,10 @@ StreamSplitter::Status TelnetSplitter::scan(
 {
     if (p->flow)
     {
-        FTP_TELNET_SESSION* ft_ssn = nullptr;
+        const FTP_TELNET_SESSION* ft_ssn = nullptr;
         
-        FtpFlowData* fd = (FtpFlowData*)p->flow->get_flow_data(FtpFlowData::inspector_id);
+        FtpFlowData* fd = static_cast<FtpFlowData*>(
+            p->flow->get_flow_data(FtpFlowData::inspector_id));
         ft_ssn = fd ? &fd->session.ft_ssn : nullptr;
 
         if (ft_ssn && ft_ssn->fallback)
@@ -71,15 +72,15 @@ StreamSplitter::Status TelnetSplitter::scan(
                 const uint8_t* ptr = nullptr;      // last CR or LF found
                 const uint8_t* iac_ptr = nullptr;  // first IAC found
 
-                for ( const uint8_t* scan = read_ptr; scan < end; ++scan )
+                for ( const uint8_t* cursor = read_ptr; cursor < end; ++cursor )
                 {
-                    uint8_t c = *scan;
+                    uint8_t c = *cursor;
                     if ( c == '\r' || c == '\n' )
-                        ptr = scan;
+                        ptr = cursor;
 
                     else if ( c == TNC_IAC )
                     {
-                        iac_ptr = scan;
+                        iac_ptr = cursor;
                         break;
                     }
                 }
@@ -147,4 +148,3 @@ StreamSplitter::Status TelnetSplitter::scan(
     }
     return SEARCH;
 }
-

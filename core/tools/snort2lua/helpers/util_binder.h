@@ -119,19 +119,23 @@ public:
     void set_use_file(const std::string& file_name, IncludeType = IT_FILE);
     void set_use_action(const std::string& action);
 
-    std::string get_use_type() const
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    const std::string& get_use_type() const
     { return use_type; }
 
-    std::string get_use_name() const
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    const std::string& get_use_name() const
     { return use_name; }
 
     IncludeTypePair get_use_file() const
     { return IncludeTypePair(use_file, use_file_type); }
 
-    std::string get_use_service() const
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    const std::string& get_use_service() const
     { return use_service; }
 
-    std::string get_use_action() const
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    const std::string& get_use_action() const
     { return use_action; }
 
 private:
@@ -174,4 +178,3 @@ void print_binder_priorities();
 #endif
 
 #endif
-

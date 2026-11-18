@@ -26,6 +26,7 @@
 #include "protocols/packet.h"
 
 #include "http_compress_stream.h"
+#include "http_context_data.h"
 #include "http_inspect.h"
 #include "http_module.h"
 #include "http_test_input.h"
@@ -135,7 +136,7 @@ void HttpStreamSplitter::chunk_spray(HttpFlowData* session_data, uint8_t* buffer
 }
 
 void HttpStreamSplitter::decompress_copy(const uint8_t* src, uint32_t src_size,
-    uint8_t* dst, uint32_t& dst_size, HttpFlowData* const session_data) const
+    uint8_t* dst, uint32_t& dst_size, const HttpFlowData* const session_data) const
 {
     if ( session_data->compress[source_id] != nullptr and
         is_body(session_data->section_type[source_id]) )
@@ -147,7 +148,6 @@ void HttpStreamSplitter::decompress_copy(const uint8_t* src, uint32_t src_size,
 const StreamBuffer HttpStreamSplitter::reassemble(Flow* flow, unsigned total,
     unsigned, const uint8_t* data, unsigned len, uint32_t flags, unsigned& copied)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(HttpModule::get_profile_stats());
 
     copied = len;
@@ -360,6 +360,9 @@ const StreamBuffer HttpStreamSplitter::reassemble(Flow* flow, unsigned total,
 
         buffer = nullptr;
         session_data->section_offset[source_id] = 0;
+
+        if (!session_data->is_for_httpx())
+            HttpContextData::save_pending_section_buffer(http_buf.data);
     }
     return http_buf;
 }

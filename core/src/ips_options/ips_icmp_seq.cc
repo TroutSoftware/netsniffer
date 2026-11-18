@@ -93,13 +93,12 @@ bool IcmpSeqOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IcmpSeqOption& rhs = (const IcmpSeqOption&)ips;
+    const IcmpSeqOption& rhs = static_cast<const IcmpSeqOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus IcmpSeqOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(icmpSeqPerfStats);
 
     if (!p->ptrs.icmph)
@@ -181,7 +180,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* icmp_seq_ctor(Module* p, IpsInfo&)
 {
-    IcmpSeqModule* m = (IcmpSeqModule*)p;
+    const IcmpSeqModule* m = static_cast<IcmpSeqModule*>(p);
     return new IcmpSeqOption(m->data);
 }
 
@@ -224,4 +223,3 @@ const BaseApi* ips_icmp_seq[] =
     &icmp_seq_api.base,
     nullptr
 };
-

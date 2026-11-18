@@ -47,6 +47,8 @@
 using namespace snort;
 extern THREAD_LOCAL class FlowControl* flow_con;
 
+Flow::Flow() = default;
+
 Flow::~Flow()
 {
     PolicySwitcher ps(this);
@@ -55,6 +57,13 @@ Flow::~Flow()
 
     free_flow_data();
     delete session;
+
+    // Leak guard: every add_mem() must be balanced by a sub_mem(). By this point
+    // all tracked memory has been released -- free_flow_data() drops flow_data and
+    // the stash, delete session drops the session and its reassembly segments --
+    // and nothing below is tracked. So mem_bytes must be back at its sizeof(Flow)
+    // baseline; anything higher is an add_mem() with no matching sub_mem().
+    assert(mem_bytes == sizeof(Flow));
 
     delete_mpls_layer(mpls_client);
     delete_mpls_layer(mpls_server);
@@ -176,12 +185,43 @@ void Flow::restart(bool dump_flow_data)
 
     clean();
 
+    flags.svc_event_generated = false;
+
+    const uint32_t prev_session_flags = ssn_state.session_flags;
+
     ssn_state.ignore_direction = 0;
     ssn_state.session_flags = SSNFLAG_NONE;
+
+    update_uni_candidacy(prev_session_flags);
 
     session_state = STREAM_STATE_NONE;
     expire_time = 0;
     previous_ssn_state = ssn_state;
+
+    // A restart begins a new logical session on this reusable Flow object.
+    // Retained allocations form the new session's starting point; peaks from
+    // the previous session must not contaminate its telemetry.
+    peak_mem_bytes = mem_bytes;
+}
+
+void Flow::restart(Packet& p, bool dump_flow_data)
+{
+    if ( p.flow != this || !session )
+    {
+        assert(false);
+        return;
+    }
+
+    restart(dump_flow_data);
+
+    // A packet-triggered restart begins a new logical session on the existing flow.
+    // Replay the complete setup lifecycle so every subscriber can rebuild its state.
+    DataBus::publish(intrinsic_pub_id, IntrinsicEventIds::FLOW_STATE_SETUP, &p, this);
+
+    if ( flow_state == FlowState::SETUP ||
+        (flow_state == FlowState::INSPECT &&
+         (!ssn_client || !session->setup_after_restart(&p))) )
+        set_state(FlowState::ALLOW);
 }
 
 void Flow::clear(bool dump_flow_data)
@@ -213,6 +253,7 @@ void Flow::trust()
     disable_inspection();
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 uint64_t Flow::fetch_add_inspection_duration()
 {
     if (inspected_packet_count != 0)
@@ -279,7 +320,7 @@ void Flow::set_client_initiate(Packet* p)
 
 void Flow::set_direction(Packet* p)
 {
-    ip::IpApi* ip_api = &p->ptrs.ip_api;
+    const ip::IpApi* ip_api = &p->ptrs.ip_api;
 
     // FIXIT-M This does not work properly for NAT "real" v6 addresses on top of v4 packet data
     //  (it will only compare a portion of the address)
@@ -385,7 +426,7 @@ void Flow::set_ttl(Packet* p, bool client)
     }
 }
 
-void Flow::set_mpls_layer_per_dir(Packet* p)
+void Flow::set_mpls_layer_per_dir(const Packet* p)
 {
     const Layer* mpls_lyr = layer::get_mpls_layer(p);
 
@@ -446,6 +487,28 @@ void Flow::swap_roles()
     std::swap(inner_client_ttl, inner_server_ttl);
     std::swap(outer_client_ttl, outer_server_ttl);
     flags.client_initiated = !flags.client_initiated;
+}
+
+void Flow::set_block_flags(uint32_t drop_flags)
+{
+    const uint32_t prev_session_flags = ssn_state.session_flags;
+    ssn_state.session_flags |= drop_flags;
+
+    update_uni_candidacy(prev_session_flags);
+}
+
+void Flow::update_uni_candidacy(uint32_t prev_session_flags)
+{
+    if ( !key or !flow_con )
+        return;
+
+    if ( was_blocked() )
+        flow_con->unlink_uni(this);
+
+    else if ( (prev_session_flags & SSNFLAG_BLOCK)
+        and (prev_session_flags & SSNFLAG_SEEN_BOTH) != SSNFLAG_SEEN_BOTH
+        and !two_way_traffic() )
+        flow_con->relink_uni(this);
 }
 
 bool Flow::handle_allowlist()

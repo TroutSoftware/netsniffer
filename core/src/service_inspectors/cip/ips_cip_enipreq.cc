@@ -51,6 +51,7 @@ public:
     CipEnipreqOption() : IpsOption(s_name) { }
 
     uint32_t hash() const override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool operator==(const IpsOption&) const override;
 
     EvalStatus eval(Cursor&, Packet*) override;
@@ -73,7 +74,6 @@ bool CipEnipreqOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus CipEnipreqOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(cip_enipreq_perf_stats);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -84,7 +84,7 @@ IpsOption::EvalStatus CipEnipreqOption::eval(Cursor&, Packet* p)
     if (!fd)
         return NO_MATCH;
 
-    CipSessionData* session_data = &fd->session;
+    const CipSessionData* session_data = &fd->session;
 
     if (session_data->current_data.direction == CIP_FROM_CLIENT)
     {
@@ -163,4 +163,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_cip_enipreq = &ips_api.base;
-

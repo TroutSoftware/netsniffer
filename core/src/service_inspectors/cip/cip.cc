@@ -27,7 +27,9 @@
 #include "cip.h"
 
 #include "detection/detection_engine.h"
+#include "framework/module.h"
 #include "log/messages.h"
+#include "managers/inspector_manager.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
 #include "pub_sub/cip_events.h"
@@ -68,7 +70,7 @@ CipSessionData* get_cip_session_data(const Flow* flow)
     return fd ? &fd->session : nullptr;
 }
 
-static CipSessionData* set_new_cip_session_data(CipProtoConf* config, Packet* p)
+static CipSessionData* set_new_cip_session_data(const CipProtoConf* config, Packet* p)
 {
     CipFlowData* fd = new CipFlowData;
     CipSessionData* css = &fd->session;
@@ -109,7 +111,7 @@ static void free_cip_data(void* data)
     }
 }
 
-static CipPacketDirection get_packet_direction(Packet* p)
+static CipPacketDirection get_packet_direction(const Packet* p)
 {
     if (!p->has_tcp_data())
     {
@@ -122,7 +124,7 @@ static CipPacketDirection get_packet_direction(Packet* p)
     return CIP_FROM_SERVER;
 }
 
-static void publish_data_to_appId(Packet* packet, CipCurrentData& current_data)
+static void publish_data_to_appId(Packet* packet, const CipCurrentData& current_data)
 {
     CipEventData cip_event_data = {};
     CipEvent cip_event(packet, &cip_event_data);
@@ -196,6 +198,7 @@ static void log_cip_validity_errors(const CipCurrentData& current_data,
 }
 
 static void cip_current_data_process(CipSessionData* css, CipCurrentData& current_data,
+    // cppcheck-suppress constParameterPointer ; session retains the mutable configuration pointer
     CipProtoConf* config, Packet* p)
 {
     /* Current Data should be implemented as the same with c files  */
@@ -221,7 +224,6 @@ static void cip_current_data_process(CipSessionData* css, CipCurrentData& curren
 
 static void snort_cip(CipProtoConf* config, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(cip_perf_stats);
 
     if (p->has_tcp_data() && !p->is_full_pdu())
@@ -245,28 +247,8 @@ static void snort_cip(CipProtoConf* config, Packet* p)
 // class stuff
 //-------------------------------------------------------------------------
 
-class Cip : public Inspector
-{
-public:
-    Cip(CipProtoConf*);
-    ~Cip() override;
-
-    bool configure(SnortConfig*) override;
-    void show(const SnortConfig*) const override;
-    void eval(Packet*) override;
-
-    class StreamSplitter* get_splitter(bool c2s) override
-    { return new CipSplitter(c2s); }
-
-    bool is_control_channel() const override
-    { return true; }
-
-private:
-    CipProtoConf* config;
-};
-
-Cip::Cip(CipProtoConf* pc)
-{ config = pc; }
+Cip::Cip(CipProtoConf* pc) : config(pc)
+{ }
 
 Cip::~Cip()
 { delete config; }
@@ -295,6 +277,7 @@ void Cip::show(const SnortConfig*) const
     ConfigLogger::log_value("unconnected_timeout", config->unconnected_timeout);
     ConfigLogger::log_value("max_cip_connections", config->max_cip_connections);
     ConfigLogger::log_value("max_unconnected_messages", config->max_unconnected_messages);
+    ConfigLogger::log_value("small_pdus_limit", config->small_pdus_limit);
 }
 
 void Cip::eval(Packet* p)
@@ -304,6 +287,9 @@ void Cip::eval(Packet* p)
     cip_stats.packets++;
     snort_cip(config, p);
 }
+
+snort::StreamSplitter* Cip::get_splitter(bool c2s)
+{ return new CipSplitter(c2s); }
 
 //-------------------------------------------------------------------------
 // api stuff
@@ -395,4 +381,3 @@ const BaseApi* sin_cip[] =
     ips_cip_status,
     nullptr
 };
-

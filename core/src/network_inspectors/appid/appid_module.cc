@@ -344,6 +344,7 @@ static int enable_debug(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int disable_debug(lua_State* L)
 {
     AppIdDebugLogEvent event(nullptr, "");
@@ -352,6 +353,7 @@ static int disable_debug(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int reload_third_party(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -361,7 +363,8 @@ static int reload_third_party(lua_State* L)
         return 0;
     }
 
-    AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector = static_cast<AppIdInspector*>(
+        InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
 
     if (!inspector)
     {
@@ -384,10 +387,12 @@ static int reload_third_party(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the Lua C callback API
 static int print_appid_config(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    AppIdInspector* inspector = (AppIdInspector*) InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector = static_cast<AppIdInspector*>(
+        InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     if (!inspector)
     {
         ctrlcon->respond("== printing appid config failed - appid not enabled\n");
@@ -415,7 +420,8 @@ static int show_cpu_profiler_stats(lua_State* L)
     int display_rows_limit = luaL_optint(L, 2, APPID_CPU_PROFILER_DEFAULT_DISPLAY_ROWS);
 
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    AppIdInspector* inspector = (AppIdInspector*) InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector = static_cast<AppIdInspector*>(
+        InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     if (!inspector)
     {
         ctrlcon->respond("== displaying appid cpu profiler failed - appid not enabled\n");
@@ -455,10 +461,12 @@ static int show_cpu_profiler_stats(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the Lua C callback API
 static int show_cpu_profiler_status(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    AppIdInspector* inspector = (AppIdInspector*) InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector = static_cast<AppIdInspector*>(
+        InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     if (!inspector)
     {
         ctrlcon->respond("== appid cpu profiler status check failed- appid not enabled\n");
@@ -471,6 +479,7 @@ static int show_cpu_profiler_status(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the Lua C callback API
 static int reload_detectors(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -479,7 +488,8 @@ static int reload_detectors(lua_State* L)
         ctrlcon->respond("== reload pending; retry\n");
         return 0;
     }
-    AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector = static_cast<AppIdInspector*>(
+        InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
 
     if (!inspector)
     {
@@ -590,6 +600,7 @@ static const PegInfo appid_pegs[] =
     { CountType::SUM, "tp_mem_allocations", "number of memory allocations in third-party module" },
     { CountType::SUM, "tp_mem_frees", "number of memory frees in third-party module" },
     { CountType::NOW, "tp_mem_bytes_in_use", "number of bytes in use in third-party module" },
+    { CountType::SUM, "suppressed_future_flows", "number of suppressed expected flows" },
     { CountType::END, nullptr, nullptr },
 };
 
@@ -722,7 +733,7 @@ const PegInfo* AppIdModule::get_pegs() const
 
 PegCount* AppIdModule::get_counts() const
 {
-    return (PegCount*)&appid_stats;
+    return reinterpret_cast<PegCount*>(&appid_stats);
 }
 
 void AppIdModule::sum_stats(bool dump_stats)
@@ -733,9 +744,10 @@ void AppIdModule::sum_stats(bool dump_stats)
     Module::sum_stats(dump_stats);
 }
 
-void AppIdModule::show_dynamic_stats()
+void AppIdModule::collect_dynamic_stats(stats::Builder& builder,
+    const stats::DynamicStatsPolicy& policy) const
 {
-    AppIdPegCounts::print();
+    AppIdPegCounts::collect_stats(builder, policy);
 }
 
 void AppIdModule::reset_stats()

@@ -44,6 +44,9 @@ class AppInfoTableEntry;
 
 #define LUA_STATE_GLOBAL_SC_ID  "snort_config"
 
+inline const char* lua_message_log(const char* message)
+{ return message ? message : "(null)"; }
+
 struct DetectorPackageInfo
 {
     std::string initFunctionName;
@@ -77,6 +80,7 @@ struct LuaDetectorParameters
 class LuaStateDescriptor
 {
 public:
+    bool disabled = false;
     LuaDetectorParameters ldp;
     DetectorPackageInfo package_info;
     AppId service_id = APP_ID_UNKNOWN;
@@ -121,8 +125,8 @@ public:
     bool is_running()
     { return running; }
 
-    void set_running(bool is_running)
-    { running = is_running; }
+    void set_running(bool enabled)
+    { running = enabled; }
 
     OdpContext& get_odp_ctxt() const
     { return odp_ctxt; }
@@ -164,6 +168,6 @@ void free_current_chp_glossary();
 void free_old_chp_glossary();
 
 void check_detector_callback(const snort::Packet& p, AppIdSession& asd, AppidSessionDirection dir,
-    AppId app_id, AppidChangeBits& change_bits, AppInfoTableEntry* entry = nullptr);
+    AppId app_id, AppidChangeBits& change_bits, const AppInfoTableEntry* entry = nullptr);
 
 #endif

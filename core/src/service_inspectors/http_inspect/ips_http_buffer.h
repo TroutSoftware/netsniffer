@@ -46,6 +46,7 @@ public:
         snort::CursorActionType cat_, BufferPsIdx idx_, const snort::Parameter params[])
         : HttpRuleOptModule(key_, help, rule_opt_index_, cat_, params), idx(idx_) {}
     snort::ProfileStats* get_profile() const override { return &http_buffer_ps[idx]; }
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static void mod_dtor(snort::Module* m) { delete m; }
     bool begin(const char*, int, snort::SnortConfig*) override;
     bool set(const char*, snort::Value&, snort::SnortConfig*) override;
@@ -75,7 +76,7 @@ public:
     EvalStatus eval(Cursor&, snort::Packet*) override;
 
     static IpsOption* opt_ctor(snort::Module* m, IpsInfo&)
-    { return new HttpBufferIpsOption((HttpBufferRuleOptModule*)m); }
+    { return new HttpBufferIpsOption(static_cast<HttpBufferRuleOptModule*>(m)); }
 
     static void opt_dtor(snort::IpsOption* p) { delete p; }
 

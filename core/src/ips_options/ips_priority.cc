@@ -79,9 +79,10 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* priority_ctor(Module* p, IpsInfo& info)
 {
-    PriorityModule* m = (PriorityModule*)p;
+    const PriorityModule* m = static_cast<PriorityModule*>(p);
     IpsOption::set_priority(info, m->priority);
     return nullptr;
 }
@@ -120,4 +121,3 @@ const BaseApi* ips_priority[] =
     &priority_api.base,
     nullptr
 };
-

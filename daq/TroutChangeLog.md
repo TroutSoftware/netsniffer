@@ -1,5 +1,10 @@
 ## 2026-10-26
 
+- Copied version v3.0.29 from https://github.com/snort3/libdaq
+
+
+## 2026-10-26
+
 - Copied version v3.0.28 from https://github.com/snort3/libdaq
 
 commit 6e76888ae8ddc5dae1eb110363f2254d0f701b32 (HEAD -> master, tag: v3.0.28, origin/master, origin/HEAD)

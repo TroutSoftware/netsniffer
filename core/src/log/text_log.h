@@ -77,4 +77,3 @@ inline bool TextLog_Puts(TextLog* const txt, const char* str)
 }
 
 #endif
-

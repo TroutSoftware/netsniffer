@@ -23,11 +23,13 @@
 
 #include "ip_session.h"
 
+#include "flow/flow_control.h"
 #include "framework/data_bus.h"
 #include "profiler/profiler_defs.h"
 #include "protocols/packet.h"
 #include "pub_sub/stream_event_ids.h"
 #include "stream/stream.h"
+#include "trace/trace_api.h"
 
 #include "ip_defrag.h"
 #include "ip_ha.h"
@@ -71,8 +73,14 @@ THREAD_LOCAL ProfileStats ip_perf_stats;
 // private methods
 //-------------------------------------------------------------------------
 
-static void IpSessionCleanup(Flow* lws, FragTracker* tracker)
+static void IpSessionCleanup(Flow* lws, FragTracker* tracker, Packet* p = nullptr)
 {
+    if ( tracker->engine )
+    {
+        assert(ip_stats.current_frags);
+        --ip_stats.current_frags;
+    }
+
     if ( lws->ssn_server )
     {
         Defrag* d = get_defrag(lws->ssn_server);
@@ -82,7 +90,10 @@ static void IpSessionCleanup(Flow* lws, FragTracker* tracker)
     if ( lws->ssn_state.session_flags & SSNFLAG_SEEN_SENDER )
         ip_stats.released++;
 
-    lws->restart();
+    if ( p )
+        lws->restart(*p);
+    else
+        lws->restart();
 }
 
 //-------------------------------------------------------------------------
@@ -118,6 +129,10 @@ static inline void update_session(Packet* p, Flow* lws)
             {
                 DataBus::publish(Stream::get_pub_id(), StreamEventIds::IP_BIDIRECTIONAL, p);
             }
+
+            trace_logf(stream_ip_trace, TRACE_IP_STATE, p,
+                "established: bidirectional (session_flags=0x%08x)\n",
+                lws->ssn_state.session_flags);
         }
     }
 
@@ -133,30 +148,42 @@ static inline void update_session(Packet* p, Flow* lws)
 //-------------------------------------------------------------------------
 
 IpSession::IpSession(Flow* f) : Session(f)
-{ }
+{
+    if (flow)
+        flow->add_mem(sizeof(*this));
+}
 
 IpSession::~IpSession()
-{ }
+{
+    if (flow)
+        flow->sub_mem(sizeof(*this));
+}
 
 void IpSession::clear()
 {
-    if(tracker.engine)
-    {
-        //  Only decrement if the tracker was not already cleaned up.
-        assert(ip_stats.current_frags);
-        ip_stats.current_frags--;
-    }
-
     IpSessionCleanup(flow, &tracker);
     IpHAManager::process_deletion(*flow);
 }
 
 bool IpSession::setup(Packet* p)
 {
-    SESSION_STATS_ADD(ip_stats)
-    memset(&tracker, 0, sizeof(tracker));
+    return setup(p, false);
+}
 
-    StreamIpConfig* pc = get_ip_cfg(flow->ssn_server);
+bool IpSession::setup_after_restart(Packet* p)
+{
+    return setup(p, true);
+}
+
+bool IpSession::setup(const Packet* p, bool is_restart)
+{
+    if ( is_restart )
+        ip_stats.created++;
+    else
+        SESSION_STATS_ADD(ip_stats)
+    tracker = {};
+
+    const StreamIpConfig* pc = get_ip_cfg(flow->ssn_server);
     flow->set_default_session_timeout(pc->session_timeout, false);
 
     if ( p->ptrs.decode_flags & DECODE_FRAG )
@@ -164,9 +191,15 @@ bool IpSession::setup(Packet* p)
         ip_stats.trackers_created++;
         ip_stats.current_frags++;
     }
+
+    trace_logf(stream_ip_trace, TRACE_IP_STATE, p,
+        "session setup (%s), timeout=%u%s\n", is_restart ? "restart" : "new",
+        pc->session_timeout, (p->ptrs.decode_flags & DECODE_FRAG) ? " [fragmented]" : "");
+
     if ( flow->ssn_state.ignore_direction != SSN_DIR_NONE )
     {
-        ip_stats.sessions--; // Incremented in SESSION_STATS_ADD
+        if ( !is_restart )
+            ip_stats.sessions--; // Incremented in SESSION_STATS_ADD
         return false;
     }
     return true;
@@ -174,19 +207,23 @@ bool IpSession::setup(Packet* p)
 
 int IpSession::process(Packet* p)
 {
-    Profile profile(ip_perf_stats); // cppcheck-suppress unreadVariable
+    Profile profile(ip_perf_stats);
 
     if ( Stream::expired_flow(flow, p) )
     {
+        trace_logf(stream_ip_trace, TRACE_IP_STATE, p,
+            "session expired\n");
+
         ip_stats.timeouts++;
-        IpSessionCleanup(flow, &tracker);
-        ip_stats.created++;
+        IpSessionCleanup(flow, &tracker, p);
 
 #ifdef ENABLE_EXPECTED_IP
         if ( Stream::expected_flow(flow, p) )
             return 0;
 #endif
         IpHAManager::process_deletion(*flow);
+        if ( !FlowControl::apply_flow_state(flow, p, false) )
+            return 0;
     }
 
     if ( Stream::blocked_flow(p) || Stream::ignored_flow(flow, p) )
@@ -220,7 +257,7 @@ bool IpSession::add_alert(Packet*, uint32_t gid, uint32_t sid)
 
 bool IpSession::check_alerted(Packet* p, uint32_t gid, uint32_t sid)
 {
-    FragTracker* ft = &tracker;
+    const FragTracker* ft = &tracker;
 
     if ( !ft->engine )
         return false;
@@ -251,7 +288,9 @@ public:
 
     void show(const SnortConfig*) const override;
     NORETURN_ASSERT void eval(Packet*) override;
+    // cppcheck-suppress unusedStructMember
     StreamIpConfig* config;
+    // cppcheck-suppress unusedStructMember
     Defrag* defrag;
 };
 

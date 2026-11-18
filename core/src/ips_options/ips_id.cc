@@ -69,13 +69,12 @@ bool IpIdOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IpIdOption& rhs = (const IpIdOption&)ips;
+    const IpIdOption& rhs = static_cast<const IpIdOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus IpIdOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(ipIdPerfStats);
 
     if (!p->has_ip())
@@ -154,7 +153,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* id_ctor(Module* p, IpsInfo&)
 {
-    IpIdModule* m = (IpIdModule*)p;
+    const IpIdModule* m = static_cast<IpIdModule*>(p);
     return new IpIdOption(m->data);
 }
 
@@ -197,4 +196,3 @@ const BaseApi* ips_id[] =
     &id_api.base,
     nullptr
 };
-

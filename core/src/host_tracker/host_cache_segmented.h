@@ -54,6 +54,7 @@ public:
     size_t get_mem_chunk();
     PegCount* get_counts();
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     void set_segments(uint8_t segments) { segment_count = segments; }
     void print_config();
     bool set_max_size(size_t max_size);
@@ -65,7 +66,7 @@ public:
 
     std::shared_ptr<Value> operator[](const Key& key);
 
-    uint8_t get_segment_idx(Key val);
+    uint8_t get_segment_idx(const Key& val);
     std::shared_ptr<Value> find(const Key& key);
     std::shared_ptr<Value> find_else_create(const Key& key, bool* new_data);
     std::vector<std::pair<Key, std::shared_ptr<Value>>> get_all_data();
@@ -204,7 +205,7 @@ bool HostCacheSegmented<Key, Value>::reload_resize(size_t memcap)
 
 // Computes the index of the segment where a given key-value pair belongs.
 template<typename Key, typename Value>
-uint8_t HostCacheSegmented<Key, Value>::get_segment_idx(Key val)
+uint8_t HostCacheSegmented<Key, Value>::get_segment_idx(const Key& val)
 {
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&val);
     uint8_t result = 0;
@@ -244,7 +245,7 @@ template<typename Key, typename Value>
 void HostCacheSegmented<Key, Value>::update_counts()
 {
     std::lock_guard<std::mutex> guard(stats_lock);
-    PegCount* pcs = (PegCount*)&counts;
+    PegCount* pcs = reinterpret_cast<PegCount*>(&counts);
     const PegInfo* pegs = get_pegs();
 
     for (int i = 0; pegs[i].type != CountType::END; i++)
@@ -313,7 +314,7 @@ PegCount* HostCacheSegmented<Key, Value>::get_counts()
     if( init_done )
         update_counts();
 
-    return (PegCount*)&host_cache_counts;
+    return reinterpret_cast<PegCount*>(&host_cache_counts);
 }
 
 template<typename Key, typename Value>
@@ -354,7 +355,7 @@ template<typename Key, typename Value>
 size_t HostCacheSegmented<Key, Value>::get_max_size()
 {
     size_t max_size = 0;
-    for (auto cache : seg_list)
+    for (const auto* cache : seg_list)
         max_size += cache->get_max_size();
     return max_size;
 }
@@ -405,4 +406,3 @@ typedef HostCacheSegmented<snort::SfIp, snort::HostTracker> HostCacheSegmentedIp
 extern SO_PUBLIC HostCacheSegmentedIp host_cache;
 
 #endif // HOST_CACHE_SEGMENTED_H
-

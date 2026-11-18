@@ -298,6 +298,7 @@ void TcpStreamTracker::init_tcp_state(TcpSession* s)
     fin_seq_status = FIN_NOT_SEEN;
     fin_seq_set = false;
     rst_pkt_sent = false;
+    service_search_byte_limit = 0;
     order = TcpStreamTracker::IN_SEQUENCE;
 
     if (auto* hpq = Stream::get_held_packet_queue())
@@ -310,6 +311,24 @@ void TcpStreamTracker::init_tcp_state(TcpSession* s)
 
     seglist.reset();
     tcp_alerts.clear();
+}
+
+void TcpStreamTracker::update_midstream_rcv_wnd(const TcpSegmentDescriptor& tsd)
+{
+    assert(session && Stream::is_midstream(session->flow));
+    if ( !session->flow->two_way_traffic() )
+        return;
+
+    // The state machine dispatches the talker before the listener, so the
+    // listener still holds the previous accepted window-update ordering point.
+    const TcpStreamTracker* listener = tsd.get_listener();
+    const bool newer_window =
+        SEQ_LT(listener->get_snd_wl1(), tsd.get_seq()) or
+        (SEQ_EQ(listener->get_snd_wl1(), tsd.get_seq()) and
+         SEQ_LEQ(listener->get_snd_wl2(), tsd.get_ack()));
+
+    if ( !has_rcv_wnd() || newer_window )
+        set_rcv_wnd(tsd.get_wnd());
 }
 
 void TcpStreamTracker::update_stream_order(const TcpSegmentDescriptor& tsd, bool aligned)
@@ -414,6 +433,10 @@ void TcpStreamTracker::set_splitter(StreamSplitter* ss)
     }
 
     splitter = ss;
+    Flow* flow = session ? session->flow : nullptr;
+    // An unclassified Clouseau PAF is Wizard's Magic splitter.
+    service_search_byte_limit = ss and flow and flow->searching_for_service() and
+        !flow->service and !flow->gadget and ss->is_paf() ? ss->max(flow) : 0;
     if ( ss )
     {
         if ( normalizer.is_tcp_ips_enabled() )
@@ -485,6 +508,41 @@ void TcpStreamTracker::fallback()
     }
 }
 
+void TcpStreamTracker::purge_queue_and_fallback(
+    TcpSegmentDescriptor& tsd, const char* limit)
+{
+    uint32_t purged_segments = seglist.get_seg_count();
+    uint32_t purged_bytes = seglist.get_seg_bytes_total();
+    Packet* packet = tsd.get_pkt();
+
+    tcp_alerts.purge_alerts(session->flow);
+    bool held_packet_purged = is_holding_packet();
+    finalize_held_packet(packet);
+    if ( held_packet_purged )
+        tcpStats.held_packet_purges++;
+    seglist.purge_segment_list();
+
+    // Start the new inspection epoch at the first byte of this segment the window can retain.
+    uint32_t base = SEQ_GT(r_win_base, tsd.get_seq()) ? r_win_base : tsd.get_seq();
+    rcv_nxt = base;
+    seglist.set_seglist_base_seq(base);
+    tsd.set_packet_inorder(SEQ_GT(tsd.get_end_seq(), base));
+    set_order(OUT_OF_SEQUENCE);
+
+    // Asymmetric recovery may already have counted the fallback; reuse Atom when it is retained.
+    if ( !session->flow->is_direction_aborted(!client_tracker) )
+        fallback();
+    else if ( splitter && splitter->restart() )
+        reassembler->reset_paf();
+    else
+        set_splitter(new AtomSplitter(!client_tracker));
+
+    stream_log(packet, "stream_tcp: Reassembly queue remained over the %s limit after recovery; "
+        "purged queue contents (segments=%u, bytes=%u) and reset the %s tracker to the Atom "
+        "splitter\n",
+        limit, purged_segments, purged_bytes, client_tracker ? "client" : "server");
+}
+
 void TcpStreamTracker::disable_reassembly(Flow* f)
 {
     set_splitter((StreamSplitter*)nullptr);
@@ -501,7 +559,7 @@ void TcpStreamTracker::init_on_syn_sent(TcpSegmentDescriptor& tsd)
     iss = tsd.get_seq();
     snd_una = iss;
     snd_nxt = tsd.get_end_seq();
-    rcv_wnd =  tsd.get_wnd();
+    set_rcv_wnd(tsd.get_wnd());
 
     ts_last_packet = tsd.get_packet_timestamp();
     tf_flags |= normalizer.get_tcp_timestamp(tsd, false);
@@ -542,7 +600,7 @@ void TcpStreamTracker::init_on_synack_sent(TcpSegmentDescriptor& tsd)
     snd_wl2 = 0;
     snd_una = tsd.get_seq();
     snd_nxt = tsd.get_end_seq();
-    rcv_wnd = tsd.get_wnd();
+    set_rcv_wnd(tsd.get_wnd());
 
     r_win_base = tsd.get_ack();
     rcv_nxt = tsd.get_ack();
@@ -590,7 +648,7 @@ void TcpStreamTracker::init_on_data_seg_sent(TcpSegmentDescriptor& tsd)
     snd_wl2 = 0;
     snd_una = tsd.get_seq();
     snd_nxt = snd_una + tsd.get_len();
-    rcv_wnd = tsd.get_wnd();
+    set_rcv_wnd(tsd.get_wnd());
 
     r_win_base = tsd.get_ack();
     rcv_nxt = tsd.get_ack();
@@ -611,7 +669,7 @@ void TcpStreamTracker::init_on_data_seg_recv(const TcpSegmentDescriptor& tsd)
 {
     iss = tsd.get_ack() - 1;
     irs = tsd.get_seq() - 1;
-    snd_wl1 = irs;
+    snd_wl1 = tsd.get_seq();
     snd_wl2 = tsd.get_ack();
     snd_una = tsd.get_ack();
     snd_nxt = snd_una;
@@ -637,7 +695,7 @@ void TcpStreamTracker::init_on_late_synack(TcpSegmentDescriptor& tsd)
     // rcv_wnd is stored pre-scaled, matching the finish_server_init pattern.
     tf_flags |= ( tsd.init_mss(&mss) | tsd.init_wscale(&wscale) );
     tsd.set_window_scale();
-    rcv_wnd = tsd.get_wnd();
+    set_rcv_wnd(tsd.get_wnd());
 
     tf_flags |= normalizer.get_tcp_timestamp(tsd, false);
     ts_last = tsd.get_timestamp();
@@ -657,7 +715,7 @@ void TcpStreamTracker::finish_server_init(TcpSegmentDescriptor& tsd)
 
     tf_flags |= ( tsd.init_mss(&mss) | tsd.init_wscale(&wscale) );
     tsd.set_window_scale();
-    rcv_wnd = tsd.get_wnd();
+    set_rcv_wnd(tsd.get_wnd());
 
     tf_flags |= normalizer.get_tcp_timestamp(tsd, false);
     ts_last = tsd.get_timestamp();
@@ -690,9 +748,9 @@ void TcpStreamTracker::finish_client_init(const TcpSegmentDescriptor& tsd)
     {
         seglist.set_seglist_base_seq(tsd.get_seq());
         r_win_base = tsd.get_seq();
-        // Midstream: wscale is unknown, so set_window_scale() leaves tsd.wnd unscaled;
-        // window validation is bypassed for midstream flows (get_stream_window() returns
-        // MAX_TCP_WINDOW_SCALED), so the unscaled rcv_wnd is never used for validation.
+        // Midstream: wscale is unknown, so set_window_scale() leaves tsd.wnd unscaled.
+        // Receive-window validation uses the max scaled window until an advertised
+        // window is observed and stored as a conservative max-scale estimate.
     }
 }
 
@@ -757,12 +815,15 @@ bool TcpStreamTracker::validate_sent_seq(TcpSegmentDescriptor& tsd)
 // In no-ack policy, data is implicitly acked immediately.
 void TcpStreamTracker::update_tracker_no_ack_recv(const TcpSegmentDescriptor& tsd)
 {
-    snd_una = snd_nxt = tsd.get_end_seq();
+    if ( SEQ_GT(tsd.get_end_seq(), snd_una) )
+        snd_una = tsd.get_end_seq();
 }
 
 void TcpStreamTracker::update_tracker_no_ack_sent(const TcpSegmentDescriptor& tsd)
 {
-    r_win_base = tsd.get_end_seq();
+    if ( SEQ_GT(tsd.get_end_seq(), r_win_base) )
+        r_win_base = tsd.get_end_seq();
+
     reassembler->eval_flush_policy_on_ack(tsd.get_pkt());
 }
 
@@ -776,7 +837,10 @@ void TcpStreamTracker::update_tracker_ack_sent(TcpSegmentDescriptor& tsd)
         if ( SEQ_GT(tsd.get_ack(), r_win_base) )
             r_win_base = tsd.get_ack();
 
-        rcv_wnd = tsd.get_wnd();  // scaled by set_window_scale() if both sides have TF_WSCALE
+        if ( Stream::is_midstream(session->flow) )
+            update_midstream_rcv_wnd(tsd);
+        else
+            set_rcv_wnd(tsd.get_wnd());  // scaled by set_window_scale() if both sides have TF_WSCALE
     }
 
     if ( flush_policy == STREAM_FLPOLICY_IGNORE
@@ -973,32 +1037,34 @@ bool TcpStreamTracker::set_held_packet(Packet* p)
     return true;
 }
 
-int32_t TcpStreamTracker::kickstart_asymmetric_flow(const TcpSegmentDescriptor& tsd, uint32_t max_queued_bytes)
+void TcpStreamTracker::kickstart_asymmetric_flow(
+    const TcpSegmentDescriptor& tsd, uint32_t max_queued_bytes)
 {
-    seglist.skip_holes(tsd.get_pkt());
-
+    // Prepare the splitter before skip_holes() reassembles unscanned pre-hole data.
     if ( reassembler->is_splitter_paf() )
         fallback();
     else
+    {
+        splitter->restart();
         reassembler->reset_paf();
+    }
 
+    seglist.skip_holes(tsd.get_pkt());
     reassembler->eval_asymmetric_flush(tsd.get_pkt());
 
-    int32_t space_left = max_queued_bytes - seglist.get_seg_bytes_total();
+    const uint32_t queued_bytes = seglist.get_seg_bytes_total();
+    const uint32_t space_left =
+        queued_bytes < max_queued_bytes ? max_queued_bytes - queued_bytes : 0;
 
+    const char* flow_type = "asymmetric";
     if ( get_tcp_state() == TcpStreamTracker::TCP_MID_STREAM_RECV )
     {
         set_tcp_state(TcpStreamTracker::TCP_ESTABLISHED);
-        stream_log(tsd.get_pkt(), "stream_tcp: Kickstart of midstream asymmetric flow! Seglist queue space: %u\n",
-            space_left);
-    }
-    else
-    {
-        stream_log(tsd.get_pkt(), "stream_tcp: Kickstart of asymmetric flow! Seglist queue space: %u\n",
-            space_left);
+        flow_type = "midstream asymmetric";
     }
 
-    return space_left;
+    stream_log(tsd.get_pkt(), "stream_tcp: Kickstart of %s flow! Seglist queue space: %u\n",
+        flow_type, space_left);
 }
 
 void TcpStreamTracker::perform_fin_recv_flush(TcpSegmentDescriptor& tsd)

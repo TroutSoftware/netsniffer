@@ -78,9 +78,10 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* rev_ctor(Module* p, IpsInfo& info)
 {
-    RevModule* m = (RevModule*)p;
+    const RevModule* m = static_cast<RevModule*>(p);
     IpsOption::set_rev(info, m->rev);
     return nullptr;
 }
@@ -119,4 +120,3 @@ const BaseApi* ips_rev[] =
     &rev_api.base,
     nullptr
 };
-

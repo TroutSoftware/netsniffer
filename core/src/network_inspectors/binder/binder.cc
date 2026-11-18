@@ -68,10 +68,10 @@ static std::string to_string(const sfip_var_t* list)
     if (!list or !list->head)
         return "";
 
-    for (auto node = list->head; node; node = node->next)
+    for (const auto* node = list->head; node; node = node->next)
     {
         SfIpString ip_str;
-        auto ip = node->ip;
+        const auto* ip = node->ip;
 
         ip->get_addr()->ntop(ip_str);
         ipset += std::string(ip_str);
@@ -496,7 +496,7 @@ public:
     void handle_flow_service_change(Flow&);
     void handle_assistant_gadget(const char* service, Flow&);
     void handle_flow_after_reload(Flow&);
-    void handle_appid_service_change(DataEvent&,Flow&);
+    void handle_appid_service_change(const DataEvent&,Flow&);
 
 private:
     void check_user_ids(const SnortConfig*) const;
@@ -504,8 +504,8 @@ private:
     void get_policy_bindings(Packet*);
     void get_bindings(Flow&, Stuff&, const char* service = nullptr);
     void get_bindings(Packet*, Stuff&);
-    void apply(Flow&, Stuff&);
-    void apply_assistant(Flow&, Stuff&, const char*);
+    static void apply(Flow&, Stuff&);
+    static void apply_assistant(Flow&, Stuff&, const char*);
     Inspector* find_gadget(Flow&, Inspector*& data);
 
 private:
@@ -522,7 +522,7 @@ public:
 
     void handle(DataEvent& e, Flow*) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
         if (binder)
             binder->handle_packet(e.get_packet());
     }
@@ -536,7 +536,7 @@ public:
 
     void handle(DataEvent&, Flow* flow) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
         if (binder && flow && !flow->flags.ha_flow)
             binder->handle_flow_setup(*flow);
     }
@@ -549,7 +549,7 @@ class AppIDServiceChangeHandler : public DataHandler
 
     void handle(DataEvent& event, Flow* flow) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
         if (binder && flow)
             binder->handle_appid_service_change(event, *flow);
     }
@@ -563,7 +563,7 @@ public:
 
     void handle(DataEvent&, Flow* flow) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
         if (binder && flow)
             binder->handle_flow_service_change(*flow);
     }
@@ -577,7 +577,7 @@ public:
 
     void handle(DataEvent&, Flow* flow) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
         if (binder && flow)
             binder->handle_flow_setup(*flow, true);
     }
@@ -590,8 +590,8 @@ public:
 
     void handle(DataEvent& event, Flow* flow) override
     {
-        Binder* binder = (Binder*)InspectorManager::get_binder();
-        AssistantGadgetEvent* assistant_event = (AssistantGadgetEvent*)&event;
+        Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
+        AssistantGadgetEvent* assistant_event = static_cast<AssistantGadgetEvent*>(&event);
 
         if (binder && flow)
             binder->handle_assistant_gadget(assistant_event->get_service(), *flow);
@@ -607,7 +607,7 @@ public:
     {
         if (flow && Flow::FlowState::INSPECT == flow->flow_state)
         {
-            Binder* binder = (Binder*)InspectorManager::get_binder();
+            Binder* binder = static_cast<Binder*>(InspectorManager::get_binder());
             if (binder)
                 binder->handle_flow_after_reload(*flow);
         }
@@ -738,7 +738,6 @@ void Binder::show(const SnortConfig*) const
 
 void Binder::handle_packet(const Packet* pkt)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(bindPerfStats);
 
     Stuff stuff;
@@ -764,7 +763,7 @@ void Binder::handle_flow_setup(Flow& flow, bool standby)
     // FIXIT-M logic for applying information from the host attribute table likely doesn't belong
     // in binder, but it *does* need to occur before the binding lookup (for service information)
     HostAttriInfo host;
-    HostAttriInfo* p_host = nullptr;
+    const HostAttriInfo* p_host = nullptr;
 
     if ( HostAttributesManager::get_host_attributes(flow.server_ip, flow.pkt_type, flow.server_port, &host) )
         p_host = &host;
@@ -810,9 +809,9 @@ void Binder::handle_flow_setup(Flow& flow, bool standby)
     bstats.verdicts[stuff.action]++;
 }
 
-void Binder::handle_appid_service_change(DataEvent& event, Flow& flow)
+void Binder::handle_appid_service_change(const DataEvent& event, Flow& flow)
 {
-    AppidEvent& appid_event = static_cast<AppidEvent&>(event);
+    const AppidEvent& appid_event = static_cast<const AppidEvent&>(event);
 
     if(appid_event.get_change_bitset().test(APPID_PROTOCOL_ID_BIT))
     {
@@ -932,7 +931,6 @@ void Binder::handle_flow_service_change(Flow& flow)
 
 void Binder::handle_assistant_gadget(const char* service, Flow& flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(bindPerfStats);
 
     Stuff stuff;
@@ -1038,7 +1036,7 @@ void Binder::get_bindings(Flow& flow, Stuff& stuff, const char* service)
     get_policy_bindings(flow, service);
 
     // If policy selection produced a new binder to use, use that instead.
-    Binder* sub = (Binder*)InspectorManager::get_binder();
+    Binder* sub = static_cast<Binder*>(InspectorManager::get_binder());
     if (sub && sub != this)
     {
         sub->get_bindings(flow, stuff, service);
@@ -1069,7 +1067,7 @@ void Binder::get_bindings(Packet* p, Stuff& stuff)
     get_policy_bindings(p);
 
     // If policy selection produced a new binder to use, use that instead.
-    Binder* sub = (Binder*)InspectorManager::get_binder();
+    Binder* sub = static_cast<Binder*>(InspectorManager::get_binder());
     if (sub && sub != this)
     {
         sub->get_bindings(p, stuff);
@@ -1129,7 +1127,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* bind_ctor(Module* m)
 {
-    BinderModule* mod = (BinderModule*)m;
+    BinderModule* mod = static_cast<BinderModule*>(m);
     return new Binder(mod->get_bindings(), mod->get_policy_bindings());
 }
 
@@ -1167,4 +1165,3 @@ static const InspectApi bind_api =
 };
 
 const BaseApi* nin_binder = &bind_api.base;
-

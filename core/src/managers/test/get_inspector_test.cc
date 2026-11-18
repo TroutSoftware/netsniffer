@@ -364,7 +364,6 @@ TEST_GROUP(get_inspector_tests)
     void setup() override
     {
         InspectorManager::new_map();
-        // cppcheck-suppress unreadVariable
         sc = new SnortConfig;
     }
 

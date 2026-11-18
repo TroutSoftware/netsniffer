@@ -89,6 +89,9 @@ static const Parameter s_params[] =
     { "max_to_len", Parameter::PT_INT, "0:65535", "256",
       "maximum to field size" },
 
+    { "max_undersized_msgs", Parameter::PT_INT, "0:max32", "32",
+      "maximum number of undersized SIP messages" },
+
     { "max_uri_len", Parameter::PT_INT, "0:65535", "256",
       "maximum request uri field size" },
 
@@ -212,7 +215,7 @@ const PegInfo* SipModule::get_pegs() const
 { return sip_pegs; }
 
 PegCount* SipModule::get_counts() const
-{ return (PegCount*)&sip_stats; }
+{ return reinterpret_cast<PegCount*>(&sip_stats); }
 
 ProfileStats* SipModule::get_profile() const
 { return &sipPerfStats; }
@@ -247,6 +250,9 @@ bool SipModule::set(const char*, Value& v, SnortConfig*)
 
     else if ( v.is("max_to_len") )
         conf->maxToLen = v.get_uint16();
+
+    else if ( v.is("max_undersized_msgs") )
+        conf->maxUndersizedMsgs = v.get_uint32();
 
     else if ( v.is("max_uri_len") )
         conf->maxUriLen = v.get_uint16();
@@ -302,4 +308,3 @@ bool SipModule::end(const char*, int, SnortConfig*)
     }
     return true;
 }
-

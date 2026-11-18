@@ -51,6 +51,7 @@ public:
     CipRspOption() : IpsOption(s_name) { }
 
     uint32_t hash() const override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool operator==(const IpsOption&) const override;
 
     EvalStatus eval(Cursor&, Packet*) override;
@@ -73,7 +74,6 @@ bool CipRspOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus CipRspOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(cip_rsp_perf_stats);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -84,7 +84,7 @@ IpsOption::EvalStatus CipRspOption::eval(Cursor&, Packet* p)
     if (!fd)
         return NO_MATCH;
 
-    CipSessionData* session_data = &fd->session;
+    const CipSessionData* session_data = &fd->session;
 
     if (session_data->current_data.cip_message_type == CipMessageTypeExplicit
         && !session_data->current_data.cip_msg.is_cip_request)
@@ -164,4 +164,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_cip_rsp = &ips_api.base;
-

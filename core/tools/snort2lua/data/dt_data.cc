@@ -83,9 +83,7 @@ std::string DataApi::expand_vars(const std::string& string)
     estring.resize(1024, '\0');
 
     char rawvarname[128], varname[128], varaux[128], varbuffer[128];
-    char varmodifier;
-    const char* varcontents;
-    std::size_t varname_completed, i, j, iv, jv, l_string, name_only;
+    std::size_t i, j, l_string;
     int quote_toggle = 0;
 
     if (string.empty() || string.rfind('$') == std::string::npos)
@@ -107,6 +105,8 @@ std::string DataApi::expand_vars(const std::string& string)
 
         if (c == '$' && !quote_toggle)
         {
+            const char* varcontents;
+            std::size_t varname_completed, iv, jv, name_only;
             std::memset((char*)rawvarname, 0, sizeof(rawvarname));
             varname_completed = 0;
             name_only = 1;
@@ -141,7 +141,8 @@ std::string DataApi::expand_vars(const std::string& string)
 
             if (varname_completed || iv == l_string)
             {
-                char* p;
+                char varmodifier = ' ';
+                const char* p;
 
                 i = iv;
 
@@ -149,8 +150,6 @@ std::string DataApi::expand_vars(const std::string& string)
 
                 std::memset((char*)varname, 0, sizeof(varname));
                 std::memset((char*)varaux, 0, sizeof(varaux));
-                varmodifier = ' ';
-
                 p = strchr(rawvarname, ':');
                 if (p)
                 {
@@ -223,10 +222,10 @@ std::string DataApi::expand_vars(const std::string& string)
     return estring;
 }
 
-bool DataApi::failed_conversions() const
+bool DataApi::failed_conversions()
 { return errors_count > 0; }
 
-std::size_t DataApi::num_errors() const
+std::size_t DataApi::num_errors()
 { return errors_count; }
 
 std::string DataApi::get_file_line()
@@ -243,6 +242,7 @@ var_it DataApi::find_var(const std::string& name) const
         [&](const Variable* v){ return v->get_name() == name; });
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void DataApi::error(const std::string& error)
 {
     errors->add_text(error);
@@ -423,4 +423,3 @@ void DataApi::swap_conf_data(std::vector<Variable*>& new_vars,
     std::swap(comments, new_comments);
     std::swap(unsupported, new_unsupported);
 }
-

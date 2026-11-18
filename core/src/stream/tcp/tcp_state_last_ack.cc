@@ -97,7 +97,7 @@ bool TcpStateLastAck::fin_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
     if ( !trk.normalizer.validate_rcvd_seq(tsd) )
         return true;
 
-    Flow* flow = tsd.get_flow();
+    const Flow* flow = tsd.get_flow();
 
     bool fin_acked = SEQ_EQ(tsd.get_ack(), trk.get_snd_nxt());
     trk.update_tracker_ack_recv(tsd);
@@ -134,11 +134,10 @@ bool TcpStateLastAck::do_post_sm_packet_actions(TcpSegmentDescriptor& tsd, TcpSt
         ( trk.get_tcp_event() != TcpStreamTracker::TCP_FIN_RECV_EVENT ) )
     {
         TcpStreamTracker::TcpState talker_state = trk.session->get_talker_state(tsd);
-        Flow* flow = tsd.get_flow();
-
         if ( ( talker_state == TcpStreamTracker::TCP_TIME_WAIT )
             || ( talker_state == TcpStreamTracker::TCP_CLOSED ) )
         {
+            Flow* flow = tsd.get_flow();
             // The last ACK is a part of the session. Delete session after processing the ack
             trk.session->clear_session(false, true, false, tsd.is_meta_ack_packet() ? nullptr : tsd.get_pkt() );
             flow->session_state |= STREAM_STATE_CLOSED;
@@ -148,4 +147,3 @@ bool TcpStateLastAck::do_post_sm_packet_actions(TcpSegmentDescriptor& tsd, TcpSt
 
     return true;
 }
-

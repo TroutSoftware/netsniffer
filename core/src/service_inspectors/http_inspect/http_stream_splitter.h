@@ -29,6 +29,10 @@
 #include "http_test_manager.h"
 
 class HttpInspect;
+class HttpCutter;
+struct HttpSplitterSnapshot;
+
+namespace snort { class Flow; }
 
 class HttpStreamSplitter : public HttpStreamSplitterBase
 {
@@ -46,27 +50,36 @@ public:
     bool finish(snort::Flow* flow) override;
     void prep_partial_flush(snort::Flow* flow, uint32_t num_flush) override
     { prep_partial_flush(flow, num_flush, 0, 0, HttpEnums::PF_DETECT); }
-    void prep_partial_flush(snort::Flow* flow, uint32_t num_flush, uint32_t num_excess,
+    void prep_partial_flush(const snort::Flow* flow, uint32_t num_flush, uint32_t num_excess,
         uint32_t num_head_lines, HttpEnums::PartialFlushType partial_flush_type);
     bool is_paf() override { return true; }
     static StreamSplitter::Status status_value(StreamSplitter::Status ret_val, bool http2 = false);
+    static HttpEnums::VersionId get_httpx_version_id(bool for_httpx, const snort::Flow* flow);
 
     // FIXIT-M should return actual packet buffer size
     unsigned max(snort::Flow*) override { return HttpEnums::MAX_OCTETS; }
     void go_away() override {}
 
 private:
-    void update_request_line_length(HttpEnums::ScanResult& cut_result, const HttpCutter* const& cutter, const HttpFlowData* session_data) const;
-    void update_request_size(HttpFlowData* session_data, HttpCommon::SectionType& type, uint32_t current_size) const;
+    static uint32_t compute_request_line_length(const HttpCutter* const& cutter,
+        const HttpFlowData* session_data, uint32_t section_size, const uint8_t* data,
+        uint32_t cut_length);
+    static uint32_t scan_to_terminator(const uint8_t* data, uint32_t limit);
+    static uint32_t compute_request_size(const HttpFlowData* session_data,
+        HttpCommon::SectionType type, uint32_t current_size);
     void prepare_flush(HttpFlowData* session_data, uint32_t* flush_offset, HttpCommon::SectionType
         section_type, uint32_t num_flushed, uint32_t num_excess, int32_t num_head_lines,
         bool is_broken_chunk, uint32_t num_good_chunks, uint32_t octets_seen)
         const;
+    void capture_splitter_snapshot(HttpFlowData* session_data, const HttpCutter* cutter,
+        HttpEnums::ScanResult cut_result, HttpCommon::SectionType type,
+        const snort::Flow* flow, const uint8_t* data, uint32_t cut_length,
+        bool capture_300, bool check_299, bool check_298, bool exhausted) const;
     HttpCutter* get_cutter(HttpCommon::SectionType type, HttpFlowData* session) const;
     void chunk_spray(HttpFlowData* session_data, uint8_t* buffer, const uint8_t* data,
         unsigned length) const;
     void decompress_copy(const uint8_t* src, uint32_t src_size,
-        uint8_t* dst, uint32_t& dst_size, HttpFlowData* const session_data) const;
+        uint8_t* dst, uint32_t& dst_size, const HttpFlowData* const session_data) const;
     StreamSplitter::Status handle_zero_nine(snort::Flow*, HttpFlowData*, const uint8_t* data,
         uint32_t length, uint32_t* flush_offset, HttpCommon::SectionType&, HttpCutter*&);
     StreamSplitter::Status call_cutter(snort::Flow*, HttpFlowData*, const uint8_t* data,
@@ -79,4 +92,3 @@ private:
 };
 
 #endif
-

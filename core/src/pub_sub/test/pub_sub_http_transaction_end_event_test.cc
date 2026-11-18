@@ -22,6 +22,7 @@
 #include "config.h"
 #endif
 
+#include "detection/ips_context.h"
 #include "pub_sub/http_transaction_end_event.h"
 #include "pub_sub/http_form_data_event.h"
 #include "service_inspectors/http_inspect/http_common.h"
@@ -42,6 +43,11 @@ using namespace snort;
 using namespace HttpCommon;
 using namespace HttpEnums;
 
+namespace
+{
+    IpsContextData* test_context_data = nullptr;
+}
+
 namespace snort
 {
 unsigned FlowData::flow_data_id = 0;
@@ -49,11 +55,21 @@ FlowData::FlowData(unsigned) : id(0) { }
 FlowData::~FlowData() = default;
 FlowData* FlowDataStore::get(uint32_t) const { return nullptr; }
 void FlowDataStore::set(FlowData*) { }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 FlowDataStore::~FlowDataStore() = default;
 unsigned DataBus::get_id(PubKey const&) { return 0; }
 void DataBus::publish(unsigned int, unsigned int, DataEvent&, Flow*) { }
 int DetectionEngine::queue_event(unsigned int, unsigned int) { return 0; }
+IpsContext* DetectionEngine::get_next_context() { return nullptr; }
+void DetectionEngine::wait_for_context() { }
+IpsContextData* DetectionEngine::get_data(unsigned) { return test_context_data; }
+IpsContextData* DetectionEngine::get_data(unsigned, IpsContext*) { return test_context_data; }
+void DetectionEngine::set_data(unsigned, IpsContextData* context_data)
+{ test_context_data = context_data; }
+void IpsContext::set_context_data(unsigned, IpsContextData* context_data)
+{ test_context_data = context_data; }
 fd_status_t File_Decomp_StopFree(fd_session_t*) { return File_Decomp_OK; }
 Inspector::Inspector() { }
 Inspector::~Inspector() = default;
@@ -93,6 +109,8 @@ HttpCommon::SectionType HttpInspect::get_type_expected(snort::Flow*, HttpCommon:
 void HttpInspect::finish_hx_body(snort::Flow*, HttpCommon::SourceId, HttpCommon::HXBodyState,
     bool) const { }
 void HttpInspect::set_hx_body_state(snort::Flow*, HttpCommon::SourceId, HttpCommon::HXBodyState) const { }
+void HttpInspect::signal_request_line_invalid(snort::Flow*, HttpCommon::SourceId,
+    HttpEnums::RequestLineInvalidReasonCode) const { }
 bool HttpInspect::get_fp_buf(snort::InspectionBuffer::Type, snort::Packet*,
     snort::InspectionBuffer&) { return false; }
 void HttpInspect::eval(snort::Packet*) { }
@@ -111,7 +129,7 @@ const snort::StreamBuffer HttpStreamSplitter::reassemble(snort::Flow*, unsigned,
     return buf;
 }
 bool HttpStreamSplitter::finish(snort::Flow*) { return false; }
-void HttpStreamSplitter::prep_partial_flush(snort::Flow*, uint32_t, uint32_t, uint32_t,
+void HttpStreamSplitter::prep_partial_flush(const snort::Flow*, uint32_t, uint32_t, uint32_t,
     HttpEnums::PartialFlushType) { }
 
 HttpMsgHeader::HttpMsgHeader(const uint8_t* buffer, const uint16_t buf_size,
@@ -205,11 +223,10 @@ TEST(pub_sub_http_transaction_end_event_test, proxied_str_exists)
     const std::string result = "FORWARDED->odd X-FORWARDED-FOR->odd X-FORWARDED-FROM->odd "
         "CLIENT-IP->odd VIA->odd XROXY-CONNECTION->odd PROXY-CONNECTION->odd";
     test_number = 1;
-    std::string proxied = event.get_proxied();
-    CHECK(proxied == result);
+    const std::string proxied1 = event.get_proxied();
+    CHECK(proxied1 == result);
     test_number = 2;
-    proxied = event.get_proxied();
-    CHECK(proxied == result);
+    CHECK(event.get_proxied() == result);
 }
 
 int main(int argc, char** argv)

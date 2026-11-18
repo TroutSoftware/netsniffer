@@ -873,7 +873,8 @@ bool HttpMsgBody::run_detection(snort::Packet* p)
             decompressed_file_body.set(mb->file.length(), mb->file.start());
 
             js_ctx_tmp = session_data->js_ctx[source_id];
-            session_data->js_ctx[source_id] = acquire_js_ctx_mime();
+            HttpJSNorm* const js_ctx_mime = acquire_js_ctx_mime();
+            session_data->js_ctx[source_id] = js_ctx_mime;
 
             // When multiple attachments appear in a single TCP segment,
             // the detection engine caches the results of the rule options after
@@ -882,11 +883,19 @@ bool HttpMsgBody::run_detection(snort::Packet* p)
 
             DetectionEngine::detect(p);
 
+            HttpJSNorm* const js_ctx_detect = session_data->js_ctx[source_id];
+            if ((js_ctx_detect != js_ctx_tmp) && (js_ctx_detect != js_ctx_mime))
+            {
+                delete js_ctx_detect;
+                session_data->js_ctx[source_id] = nullptr;
+            }
+
             if (!is_last_attachment || last_attachment_complete)
                 clear_js_ctx_mime();
 
             session_data->js_ctx[source_id] = js_ctx_tmp;
 
+            norm_js_data.reset();
             ole_data.reset();
             decompressed_vba_data.reset();
             decompressed_file_body.reset();
@@ -910,6 +919,12 @@ void HttpMsgBody::clear()
         session_data->partial_mime_bufs[source_id] = mime_bufs;
         mime_bufs = nullptr;
         session_data->partial_mime_last_complete[source_id] = last_attachment_complete;
+    }
+    else if ((session_data->cutter[source_id] == nullptr) or tcp_close)
+    {
+        delete session_data->js_ctx[source_id];
+        session_data->js_ctx[source_id] = nullptr;
+        clear_js_ctx_mime();
     }
 
     if (request != nullptr)
@@ -1084,7 +1099,7 @@ void HttpMsgBody::print_body_section(FILE* output, const char* body_type_str)
     fprintf(output, "octets seen %" PRIi64 "\n", body_octets);
     detect_data.print(output, "Detect data");
     if ((mime_bufs != nullptr) && !mime_bufs->empty())
-        for (MimeBufs& mb : *mime_bufs)
+        for (const MimeBufs& mb : *mime_bufs)
         {
             mb.file.print(output, "MIME data");
             mb.vba.print(output, "MIME OLE data");

@@ -39,6 +39,10 @@
 #include "pop_module.h"
 #include "pop_paf.h"
 
+#ifdef UNIT_TEST
+#include "catch/snort_catch.h"
+#endif
+
 using namespace snort;
 
 // Indices in the buffer array exposed by InspectApi
@@ -129,9 +133,10 @@ PopFlowData::~PopFlowData()
 
 unsigned PopFlowData::inspector_id = 0;
 
-static POPData* get_session_data(Flow* flow)
+static POPData* get_session_data(const Flow* flow)
 {
-    PopFlowData* fd = (PopFlowData*)flow->get_flow_data(PopFlowData::inspector_id);
+    PopFlowData* fd = static_cast<PopFlowData*>(
+        flow->get_flow_data(PopFlowData::inspector_id));
     return fd ? &fd->session : nullptr;
 }
 
@@ -217,6 +222,7 @@ static void POP_SearchFree()
     pop_resp_search_mpse = nullptr;
 }
 
+// cppcheck-suppress constParameterPointer
 static void POP_ResetState(Flow* ssn)
 {
     POPData* pop_ssn = get_session_data(ssn);
@@ -263,7 +269,7 @@ static void POP_GetEOL(const uint8_t* ptr, const uint8_t* end,
     *eolm = tmp_eolm;
 }
 
-static inline int InspectPacket(Packet* p)
+static inline int InspectPacket(const Packet* p)
 {
     return p->has_paf_payload();
 }
@@ -303,6 +309,7 @@ static int POP_Setup(Packet* p, POPData* ssn)
     return pkt_dir;
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int POP_SearchStrFound(void* id, void* , int index, void* , void* )
 {
     int search_id = (int)(uintptr_t)id;
@@ -325,7 +332,7 @@ static int POP_SearchStrFound(void* id, void* , int index, void* , void* )
  * @return          pointer into p->data where we stopped looking at data
  *                  will be end of line or end of packet
  */
-static const uint8_t* POP_HandleCommand(Packet* p, POPData* pop_ssn, const uint8_t* ptr, const
+static const uint8_t* POP_HandleCommand(const Packet* p, POPData* pop_ssn, const uint8_t* ptr, const
     uint8_t* end)
 {
     const uint8_t* eol;   /* end of line */
@@ -379,6 +386,7 @@ static const uint8_t* POP_HandleCommand(Packet* p, POPData* pop_ssn, const uint8
             IsSSL(ptr, end - ptr, p->packet_flags))
         {
             pop_ssn->state = STATE_TLS_DATA;
+            pop_paf_set_tls_data(p->flow);
 
             /* Ignore data */
             return end;
@@ -425,7 +433,7 @@ static const uint8_t* POP_HandleCommand(Packet* p, POPData* pop_ssn, const uint8
  *
  * @return  none
  */
-static void POP_ProcessClientPacket(Packet* p, POPData* pop_ssn)
+static void POP_ProcessClientPacket(const Packet* p, POPData* pop_ssn)
 {
     const uint8_t* ptr = p->data;
     const uint8_t* end = p->data + p->dsize;
@@ -529,6 +537,7 @@ static void POP_ProcessServerPacket(Packet* p, POPData* pop_ssn)
                 (IsSSL(ptr, end - ptr, p->packet_flags)))
             {
                 pop_ssn->state = STATE_TLS_DATA;
+                pop_paf_set_tls_data(p->flow);
                 return;
             }
             else if (pop_ssn->session_flags & POP_FLAG_CHECK_SSL)
@@ -567,6 +576,7 @@ static void snort_pop(POP_PROTO_CONF* config, Packet* p)
          */
         pop_ssn = SetNewPOPData(config, p);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !pop_ssn )
         {
             /* Could not get/create the session data for this packet. */
@@ -610,6 +620,7 @@ static void snort_pop(POP_PROTO_CONF* config, Packet* p)
             if (IsTlsServerHello(p->data, p->data + p->dsize))
             {
                 pop_ssn->state = STATE_TLS_DATA;
+                pop_paf_set_tls_data(p->flow);
             }
             else if ( !p->test_session_flags(SSNFLAG_MIDSTREAM)
                 && !Stream::missed_packets(p->flow, SSN_DIR_BOTH))
@@ -750,7 +761,7 @@ void Pop::show(const SnortConfig*) const
 
 void Pop::eval(Packet* p)
 {
-    Profile profile(popPerfStats);  // cppcheck-suppress unreadVariable
+    Profile profile(popPerfStats);
 
     // precondition - what we registered for
     assert(p->has_tcp_data());
@@ -842,7 +853,7 @@ static void pop_term()
 
 static Inspector* pop_ctor(Module* m)
 {
-    PopModule* mod = (PopModule*)m;
+    PopModule* mod = static_cast<PopModule*>(m);
     return new Pop(mod->get_data());
 }
 
@@ -895,4 +906,110 @@ SO_PUBLIC const BaseApi* snort_plugins[] =
 };
 #else
 const BaseApi* sin_pop = &pop_api.base;
+#endif
+
+#ifdef UNIT_TEST
+TEST_CASE("pop_paf_server bare lf flood aborts", "[pop]")
+{
+    PopSplitter splitter(false);
+    const uint8_t lf = '\n';
+    uint32_t fp = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( unsigned i = 0; i <= POP_MAX_OCTETS + 1; i++ )
+    {
+        status = splitter.scan(nullptr, &lf, 1, PKT_FROM_SERVER, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+}
+
+TEST_CASE("pop_paf_server minimal fake response flood aborts", "[pop]")
+{
+    const char* lines[] = { "+\n", "-\n", "+NO\n", "-ER\n", nullptr };
+
+    for ( unsigned l = 0; lines[l]; l++ )
+    {
+        PopSplitter splitter(false);
+        const uint8_t* line = (const uint8_t*)lines[l];
+        uint32_t line_len = strlen(lines[l]);
+        uint32_t fp = 0;
+        StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+        for ( uint32_t sent = 0; sent <= (POP_MAX_OCTETS + line_len); sent += line_len )
+        {
+            status = splitter.scan(nullptr, line, line_len, PKT_FROM_SERVER, &fp);
+            if ( status != StreamSplitter::FLUSH )
+                break;
+        }
+
+        REQUIRE((status == StreamSplitter::ABORT));
+    }
+}
+
+TEST_CASE("pop_paf_server valid replies never abort", "[pop]")
+{
+    const char* lines[] = { "+OK\n", "+OK done\n", "-ERR bad\n", nullptr };
+
+    for ( unsigned l = 0; lines[l]; l++ )
+    {
+        PopSplitter splitter(false);
+        const uint8_t* line = (const uint8_t*)lines[l];
+        uint32_t line_len = strlen(lines[l]);
+        uint32_t fp = 0;
+
+        for ( uint32_t sent = 0; sent < (POP_MAX_OCTETS * 2); sent += line_len )
+        {
+            StreamSplitter::Status status =
+                splitter.scan(nullptr, line, line_len, PKT_FROM_SERVER, &fp);
+            REQUIRE((status == StreamSplitter::FLUSH));
+            REQUIRE((fp == line_len));
+        }
+    }
+}
+
+TEST_CASE("pop_paf_client bare lf flood aborts", "[pop]")
+{
+    PopSplitter splitter(false);
+    Packet p;
+    const uint8_t lf = '\n';
+    uint32_t fp = 0;
+    unsigned flushes = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( unsigned i = 0; i <= POP_MAX_OCTETS + 1; i++ )
+    {
+        status = splitter.scan(&p, &lf, 1, PKT_FROM_CLIENT, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+        flushes++;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+    REQUIRE((flushes == POP_MAX_OCTETS));
+}
+
+TEST_CASE("pop_paf_client valid short commands never abort", "[pop]")
+{
+    const char* cmds[] = { "NOOP\n", "STAT\n", "QUIT\n", nullptr };
+
+    for ( unsigned c = 0; cmds[c]; c++ )
+    {
+        PopSplitter splitter(false);
+        Packet p;
+        const uint8_t* line = (const uint8_t*)cmds[c];
+        uint32_t line_len = strlen(cmds[c]);
+        uint32_t fp = 0;
+
+        for ( uint32_t sent = 0; sent < (POP_MAX_OCTETS * 2); sent += line_len )
+        {
+            StreamSplitter::Status status =
+                splitter.scan(&p, line, line_len, PKT_FROM_CLIENT, &fp);
+            REQUIRE((status == StreamSplitter::FLUSH));
+            REQUIRE((fp == line_len));
+        }
+    }
+}
 #endif

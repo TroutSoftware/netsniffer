@@ -60,6 +60,7 @@
 using namespace snort;
 
 static THREAD_LOCAL RegexOffload* offloader = nullptr;
+static THREAD_LOCAL bool packet_abandoned = false;
 bool DetectionEngine::offload_enabled = false;
 
 static unsigned de_pub_id = 0;
@@ -71,7 +72,7 @@ static unsigned de_pub_id = 0;
 void DetectionEngine::thread_init()
 {
     const SnortConfig* sc = SnortConfig::get_conf();
-    FastPatternConfig* fp = sc->fast_pattern_config;
+    const FastPatternConfig* fp = sc->fast_pattern_config;
     const MpseApi* offload_search_api = fp->get_offload_search_api();
 
     // Note: offload_threads is really the maximum number of offload_requests
@@ -108,7 +109,6 @@ void DetectionEngine::thread_term()
 }
 
 // Not sure why cppcheck doesn't think context is initialized
-// cppcheck-suppress uninitMemberVar
 DetectionEngine::DetectionEngine()
 {
     context = Analyzer::get_switcher()->interrupt();
@@ -123,6 +123,9 @@ DetectionEngine::~DetectionEngine()
 {
     if ( context == Analyzer::get_switcher()->get_context() )
     {
+        if ( packet_abandoned )
+            clear_events(context->packet);
+
         // finish_packet is called here so that we clear wire packets at the right time
         // FIXIT-L if might not be needed anymore with wire packet checks in finish_packet
         finish_packet(context->packet, true);
@@ -274,7 +277,9 @@ void DetectionEngine::finish_inspect(Packet* p, bool inspected)
     // this also handles block pending state
     // must only be done for terminal packets to avoid yoinking stream_tcp state
     // while processing a PDU
-    if ( !p->has_parent() and !p->is_rebuilt() )
+    const bool defrag_closed_release = p->is_defrag() and p->flow and
+        (p->flow->session_state & STREAM_STATE_CLOSED);
+    if ( !p->has_parent() and (!p->is_rebuilt() or defrag_closed_release) )
         Stream::check_flow_closed(p);
 
     clear_events(p);
@@ -298,6 +303,9 @@ void DetectionEngine::finish_packet(Packet* p, bool flow_deletion)
     if ( flow_deletion or p->is_rebuilt() )
         sw->complete();
 }
+
+IpsContext* DetectionEngine::get_next_context()
+{ return Analyzer::get_switcher()->get_next(); }
 
 uint8_t* DetectionEngine::get_next_buffer(unsigned& max)
 {
@@ -340,12 +348,13 @@ void DetectionEngine::set_data(unsigned id, IpsContextData* p)
 IpsContextData* DetectionEngine::get_data(unsigned id)
 { return Analyzer::get_switcher()->get_context()->get_context_data(id); }
 
+// cppcheck-suppress constParameterPointer ; mutable context data can be returned through this API
 IpsContextData* DetectionEngine::get_data(unsigned id, IpsContext* context)
 {
     if ( context )
         return context->get_context_data(id);
 
-    ContextSwitcher* sw = Analyzer::get_switcher();
+    const ContextSwitcher* sw = Analyzer::get_switcher();
 
     if ( !sw )
         return nullptr;
@@ -463,7 +472,6 @@ bool DetectionEngine::offload(Packet* p)
 
     if ( p->flow ? p->flow->context_chain.front() : sw->non_flow_chain.front() )
     {
-        // cppcheck-suppress unreadVariable
         Profile profile(mpsePerfStats);
         p->context->searches.search_sync();
         sw->suspend();
@@ -495,7 +503,7 @@ void DetectionEngine::idle()
     }
 }
 
-void DetectionEngine::onload(Flow* flow)
+void DetectionEngine::onload(const Flow* flow)
 {
     if ( flow->is_suspended() )
         pc.onload_waits++;
@@ -513,7 +521,6 @@ void DetectionEngine::onload(Flow* flow)
 
 void DetectionEngine::onload()
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(mpsePerfStats);
     Packet* p;
 
@@ -575,7 +582,7 @@ void DetectionEngine::resume(Packet* p)
 
 void DetectionEngine::wait_for_context()
 {
-    ContextSwitcher* sw = Analyzer::get_switcher();
+    const ContextSwitcher* sw = Analyzer::get_switcher();
 
     if ( !sw->idle_count() )
     {
@@ -684,7 +691,7 @@ bool DetectionEngine::inspect(Packet* p)
 // See fpFinalSelectEvent()
 int DetectionEngine::queue_event(const OptTreeNode* otn)
 {
-    RuleTreeNode* rtn = getRtnFromOtn(otn);
+    const RuleTreeNode* rtn = getRtnFromOtn(otn);
 
     if ( !rtn )
     {
@@ -710,7 +717,7 @@ int DetectionEngine::queue_event(const OptTreeNode* otn)
 
 int DetectionEngine::queue_event(unsigned gid, unsigned sid)
 {
-    OptTreeNode* otn = OtnLookup(SnortConfig::get_conf()->otn_map, gid, sid);
+    const OptTreeNode* otn = OtnLookup(SnortConfig::get_conf()->otn_map, gid, sid);
 
     if ( !otn )
         return 0;
@@ -737,6 +744,39 @@ int DetectionEngine::queue_event(unsigned gid, unsigned sid)
     return 0;
 }
 
+int DetectionEngine::log_builtin_event(unsigned gid, unsigned sid, int rate_action)
+{
+    const IpsContext* c = get_context();
+
+    if ( !c or !c->conf or !c->packet )
+        return 0;
+
+    const OptTreeNode* otn = OtnLookup(c->conf->otn_map, gid, sid);
+
+    if ( !otn )
+        return 0;
+
+    Packet* p = c->packet;
+
+    IpsQueuingEvent data_event(otn->sigInfo);
+    DataBus::publish(get_pub_id(), DetectionEventIds::BUILTIN, data_event, p->flow);
+
+    // below threshold: already published above, must not be logged or re-filtered
+    if ( rate_action < 0 )
+        return 0;
+
+    const uint32_t packet_flags = p->packet_flags & (PKT_PASS_RULE | PKT_STATELESS);
+
+    fpLogEvent(otn, p, rate_action);
+
+    p->packet_flags &= ~(PKT_PASS_RULE | PKT_STATELESS);
+    p->packet_flags |= packet_flags;
+
+    sfthreshold_reset();
+
+    return 0;
+}
+
 static int log_events(void* event, void* user)
 {
     if ( !event || !user )
@@ -744,15 +784,7 @@ static int log_events(void* event, void* user)
 
     EventNode* en = (EventNode*)event;
 
-    if ( !en->rtn )
-    {
-        en->rtn = getRtnFromOtn(en->otn);
-
-        if ( !en->rtn || !en->rtn->enabled() )
-            return 0;  // not enabled
-    }
-
-    fpLogEvent(en->rtn, en->otn, (Packet*)user);
+    fpLogEvent(en->otn, (Packet*)user);
     sfthreshold_reset();
 
     return 0;
@@ -767,7 +799,6 @@ static int log_events(void* event, void* user)
 */
 int DetectionEngine::log_events(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(eventqPerfStats);
     SF_EVENTQ* pq = p->context->equeue;
     sfeventq_action(pq, ::log_events, (void*)p);
@@ -780,6 +811,8 @@ void DetectionEngine::clear_events(Packet* p)
     pc.log_limit += sfeventq_reset(pq);
 }
 
+void DetectionEngine::set_packet_abandoned(bool abandoned)
+{ packet_abandoned = abandoned; }
+
 unsigned DetectionEngine::get_pub_id()
 { return de_pub_id; }
-

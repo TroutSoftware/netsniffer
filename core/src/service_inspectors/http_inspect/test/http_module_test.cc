@@ -66,8 +66,8 @@ unsigned get_instance_id()
 unsigned ThreadConfig::get_instance_max() { return 1; }
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 int32_t str_to_code(const char*, const StrCode []) { return 0; }
 int32_t str_to_code(const uint8_t*, const int32_t, const StrCode []) { return 0; }
@@ -87,7 +87,7 @@ TEST_GROUP(http_peg_count_test)
 
     void setup() override
     {
-        PegCount* counts = mod.get_counts();
+        const PegCount* counts = mod.get_counts();
         for (unsigned k=0; k < PEG_COUNT_MAX; k++)
         {
             CHECK(counts[k] == 0);
@@ -114,7 +114,7 @@ TEST(http_peg_count_test, increment)
     {
        HttpModule::increment_peg_counts(PEG_INSPECT);
     }
-    PegCount* counts = mod.get_counts();
+    const PegCount* counts = mod.get_counts();
     CHECK(counts[PEG_SCAN] == 13);
     CHECK(counts[PEG_INSPECT] == 27816);
 }
@@ -137,4 +137,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

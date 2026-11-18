@@ -286,7 +286,7 @@ static int sfthd_create_threshold_local(
      */
     if ( sfthd_item->sfthd_node_list->count > 0 )
     {
-        THD_NODE* p;
+        const THD_NODE* p;
         if ( !sfthd_item->sfthd_node_list->tail )
         {
             // Paranoid check: if there is a count, there should be a tail
@@ -313,7 +313,7 @@ static int sfthd_create_threshold_local(
         for ( auto ndata = sflist_first(sfthd_item->sfthd_node_list, &lnode);
              ndata != nullptr; ndata = sflist_next(&lnode) )
         {
-            THD_NODE* sfthd_n = static_cast<THD_NODE*>(ndata);
+            const THD_NODE* sfthd_n = static_cast<THD_NODE*>(ndata);
             if ( sfthd_node->priority > sfthd_n->priority )
             {
                 sflist_add_before(sfthd_item->sfthd_node_list, lnode, sfthd_node);
@@ -453,7 +453,7 @@ static inline int sfthd_test_suppress(
  *  Do the appropriate test for the Threshold Object Type
  */
 static inline int sfthd_test_non_suppress(
-    THD_NODE* sfthd_node,
+    const THD_NODE* sfthd_node,
     THD_IP_NODE* sfthd_ip_node,
     time_t curtime)
 {
@@ -761,7 +761,7 @@ int sfthd_test_threshold(
         if ( sfthd_hash != nullptr )
         {
             tThdItemKey key = { policy_id, sig_id };
-            THD_ITEM* sfthd_item = static_cast<THD_ITEM*>(sfthd_hash->find(&key));
+            const THD_ITEM* sfthd_item = static_cast<THD_ITEM*>(sfthd_hash->find(&key));
 
             if ( sfthd_item != nullptr and sfthd_item->sfthd_node_list != nullptr )
             {
@@ -806,18 +806,14 @@ int sfthd_test_threshold(
 
 #ifdef THD_DEBUG
 
-static char* printIP(unsigned u, char* buf, unsigned len)
-{
-    SnortSnprintf(buf, len, "%d.%d.%d.%d", (u>>24)&0xff, (u>>16)&0xff, (u>>8)&0xff, u&0xff);
-    return s;
-}
 /*!
  *   A function to print the thresholding objects to stdout.
  *
  */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 int sfthd_show_objects(ThresholdObjects* thd_objs)
 {
-    THD_ITEM* sfthd_item;
+    const THD_ITEM* sfthd_item;
     THD_NODE* sfthd_node;
     unsigned gen_id;
     GHashNode* item_hash_node;

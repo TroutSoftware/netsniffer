@@ -73,12 +73,11 @@ bool FileTypeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    return types == ((const FileTypeOption&) ips).types;
+    return types == (static_cast<const FileTypeOption&>(ips)).types;
 }
 
 IpsOption::EvalStatus FileTypeOption::eval(Cursor&, Packet* pkt)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(fileTypePerfStats);
 
     if (!pkt->flow)
@@ -89,7 +88,7 @@ IpsOption::EvalStatus FileTypeOption::eval(Cursor&, Packet* pkt)
     if (!files)
         return NO_MATCH;
 
-    FileContext* file = files->get_current_file_context();
+    const FileContext* file = files->get_current_file_context();
 
     if (!file)
         return NO_MATCH;
@@ -239,7 +238,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* file_type_ctor(Module* m, IpsInfo&)
 {
-    FileTypeModule* mod = (FileTypeModule*)m;
+    FileTypeModule* mod = static_cast<FileTypeModule*>(m);
     return new FileTypeOption(mod->types);
 }
 

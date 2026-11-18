@@ -57,9 +57,9 @@ enum
 #define MANIFEST_SEPARATORS         ",\r\n"
 #define MIN_MANIFEST_COLUMNS         3
 
-static char block_info[] = "blocklist";
-static char allow_info[] = "allowlist";
-static char monitor_info[] = "monitorlist";
+static const char block_info[] = "blocklist";
+static const char allow_info[] = "allowlist";
+static const char monitor_info[] = "monitorlist";
 
 // Support backward compatibility
 #define WHITE_TYPE_KEYWORD       "white"
@@ -114,7 +114,7 @@ static inline IPrepInfo* get_last_index(IPrepInfo* rep_info, uint8_t* base, int*
     /* Move to the end of current info*/
     while (rep_info->next)
     {
-        rep_info =  (IPrepInfo*)&base[rep_info->next];
+        rep_info = reinterpret_cast<IPrepInfo*>(&base[rep_info->next]);
     }
 
     for (i = 0; i < NUM_INDEX_PER_ENTRY; i++)
@@ -134,7 +134,7 @@ static inline IPrepInfo* get_last_index(IPrepInfo* rep_info, uint8_t* base, int*
     }
 }
 
-int ReputationParser::duplicate_info(IPrepInfo* dest_info, IPrepInfo* current_info, uint8_t* base)
+int ReputationParser::duplicate_info(IPrepInfo* dest_info, const IPrepInfo* current_info, uint8_t* base)
 {
     int bytes_allocated = 0;
 
@@ -155,8 +155,8 @@ int ReputationParser::duplicate_info(IPrepInfo* dest_info, IPrepInfo* current_in
             dest_info->next = next_info;
         }
         bytes_allocated += sizeof(IPrepInfo);
-        current_info =  (IPrepInfo*)&base[current_info->next];
-        dest_info =  (IPrepInfo*)&base[next_info];
+        current_info = reinterpret_cast<IPrepInfo*>(&base[current_info->next]);
+        dest_info = reinterpret_cast<IPrepInfo*>(&base[next_info]);
     }
 
     return bytes_allocated;
@@ -186,8 +186,8 @@ int64_t ReputationParser::update_entry_info_impl(INFO* current, INFO new_entry, 
     if (*current == new_entry)
         return bytes_allocated;
 
-    current_info = (IPrepInfo*)&base[*current];
-    new_info = (IPrepInfo*)&base[new_entry];
+    current_info = reinterpret_cast<IPrepInfo*>(&base[*current]);
+    new_info = reinterpret_cast<IPrepInfo*>(&base[new_entry]);
 
     /*The latest information is always the last entry
      */
@@ -226,7 +226,7 @@ int64_t ReputationParser::update_entry_info_impl(INFO* current, INFO new_entry, 
 
     while (dest_info->next)
     {
-        dest_info =  (IPrepInfo*)&base[dest_info->next];
+        dest_info = reinterpret_cast<IPrepInfo*>(&base[dest_info->next]);
     }
 
     for (i = 0; i < NUM_INDEX_PER_ENTRY; i++)
@@ -250,7 +250,7 @@ int64_t ReputationParser::update_entry_info_impl(INFO* current, INFO new_entry, 
         if (!ipInfo_ptr)
             return -1;
         dest_info->next = ipInfo_ptr;
-        next_info = (IPrepInfo*)&base[dest_info->next];
+        next_info = reinterpret_cast<IPrepInfo*>(&base[dest_info->next]);
         next_info->list_indexes[0] = new_index;
         bytes_allocated += sizeof(IPrepInfo);
     }
@@ -442,7 +442,7 @@ static int snort_pton(char const* src, SfCidr* dest)
     return 1;
 }
 
-int ReputationParser::process_line(char* line, INFO info, const ReputationConfig& config)
+int ReputationParser::process_line(const char* line, INFO info, const ReputationConfig& config)
 {
     SfCidr address;
 
@@ -493,7 +493,7 @@ static int update_path_to_file(char* full_filename, unsigned int max_size, const
     return 1;
 }
 
-static char* get_list_type_name(ListFile* list_info)
+static const char* get_list_type_name(const ListFile* list_info)
 {
     if (!list_info)
         return nullptr;
@@ -522,7 +522,7 @@ void ReputationParser::load_list_file(ListFile* list_info, const ReputationConfi
     int addrline = 0;
     FILE* fp = nullptr;
     char* cmt = nullptr;
-    char* list_type_name;
+    const char* list_type_name;
     IPrepInfo* ip_info;
     MEM_OFFSET ip_info_ptr;
     uint8_t* base;
@@ -547,8 +547,8 @@ void ReputationParser::load_list_file(ListFile* list_info, const ReputationConfi
     ip_info_ptr = table.segment_snort_calloc(1, sizeof(IPrepInfo));
     if (!(ip_info_ptr))
         return;
-    base = (uint8_t*)data.ip_list;
-    ip_info = ((IPrepInfo*)&base[ip_info_ptr]);
+    base = reinterpret_cast<uint8_t*>(data.ip_list);
+    ip_info = reinterpret_cast<IPrepInfo*>(&base[ip_info_ptr]);
     ip_info->list_indexes[0] = list_info->list_index;
 
     if ( SnortConfig::log_verbose() )
@@ -671,7 +671,7 @@ void ReputationParser::ip_list_init(uint32_t max_entries, const ReputationConfig
     }
 }
 
-static int num_lines_in_file(char* fname)
+static int num_lines_in_file(const char* fname)
 {
     FILE* fp;
     int numlines = 0;
@@ -953,4 +953,3 @@ void ReputationParser::read_manifest(const char* manifest_file, const Reputation
 
     fs.close();
 }
-

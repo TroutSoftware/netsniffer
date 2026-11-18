@@ -45,6 +45,7 @@ public:
     static void setup();
     static void clear();
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     bool is_ips_policy_inline()
     { return pkt->context->conf->ips_inline_mode(); }
 
@@ -80,8 +81,8 @@ public:
     void set_ack(uint32_t ack_num)
     { ack = ack_num; }
 
-    void set_end_seq(uint32_t seq)
-    { end_seq = seq; }
+    void set_end_seq(uint32_t seq_num)
+    { end_seq = seq_num; }
 
     uint32_t get_end_seq() const
     { return end_seq; }
@@ -150,14 +151,22 @@ public:
     uint64_t get_packet_number() const
     { return packet_number; }
 
-    void rewrite_payload(uint16_t offset, uint8_t* from, uint16_t length)
+    void rewrite_payload(unsigned offset, const uint8_t* from, unsigned length)
     {
+        if ( offset > pkt->dsize or length > pkt->dsize - offset )
+            return;
+
         memcpy(const_cast<uint8_t*>(pkt->data + offset), from, length);
         set_packet_flags(PKT_MODIFIED);
     }
 
-    void rewrite_payload(uint16_t offset, uint8_t* from)
-    { rewrite_payload(offset, from, pkt->dsize); }
+    void rewrite_payload(unsigned offset, const uint8_t* from)
+    {
+        if ( offset > pkt->dsize )
+            return;
+
+        rewrite_payload(offset, from, pkt->dsize - offset);
+    }
 
     TcpStreamTracker* get_listener() const
     { return listener; }
@@ -203,4 +212,3 @@ private:
 };
 
 #endif
-

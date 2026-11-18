@@ -30,6 +30,13 @@
 
 using namespace snort;
 
+static const Parameter modbus_params[] =
+{
+    { "small_pdus_limit", Parameter::PT_INT, "0:65534", "32",
+      "max consecutive empty Modbus PDUs before PAF abort" },
+    { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
+};
+
 THREAD_LOCAL ProfileStats modbus_prof;
 
 //-------------------------------------------------------------------------
@@ -42,6 +49,8 @@ const PegInfo peg_names[] =
     { CountType::SUM, "frames", "total Modbus messages" },
     { CountType::NOW, "concurrent_sessions", "total concurrent modbus sessions" },
     { CountType::MAX, "max_concurrent_sessions", "maximum concurrent modbus sessions" },
+    { CountType::SUM, "small_pdu_aborts",
+        "flows aborted after exceeding the small-frame flush budget" },
 
     { CountType::END, nullptr, nullptr }
 };
@@ -50,7 +59,7 @@ const PegInfo* ModbusModule::get_pegs() const
 { return peg_names; }
 
 PegCount* ModbusModule::get_counts() const
-{ return (PegCount*)&modbus_stats; }
+{ return reinterpret_cast<PegCount*>(&modbus_stats); }
 
 //-------------------------------------------------------------------------
 // rules
@@ -79,6 +88,13 @@ const RuleMap* ModbusModule::get_rules() const
 //-------------------------------------------------------------------------
 
 ModbusModule::ModbusModule() :
-    Module(MODBUS_NAME, MODBUS_HELP)
+    Module(MODBUS_NAME, MODBUS_HELP, modbus_params)
 { }
 
+bool ModbusModule::set(const char*, Value& v, SnortConfig*)
+{
+    if ( v.is("small_pdus_limit") )
+        small_pdus_limit = v.get_uint16();
+
+    return true;
+}

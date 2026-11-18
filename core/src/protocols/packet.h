@@ -25,6 +25,7 @@
 // payload data only, no headers.
 
 #include <daq_common.h>
+#include <cstring>
 
 #include "flow/flow.h"
 #include "framework/decode_data.h"
@@ -231,6 +232,13 @@ struct SO_PUBLIC Packet
         return false;
     }
 
+    // True once an inner IP tuple has been successfully decoded after a
+    // UDP-tunnel or TEB dispatch.  Reassembled PDUs lose this state to reset(),
+    // so callers that can receive one must inherit the discriminator from the
+    // Flow's key.
+    bool is_tunnel_encapsulated() const
+    { return (proto_bits & PROTO_BIT__TUNNEL_DECAP) != 0; }
+
     bool has_ip_hdr() const
     { return ((proto_bits & PROTO_BIT__ANY_IP) != 0); }
 
@@ -302,6 +310,7 @@ struct SO_PUBLIC Packet
     bool is_from_client_originally() const
     { return (!flow || flow->flags.client_initiated) ? is_from_client() : is_from_server(); }
 
+    // cppcheck-suppress unusedFunction ; installed packet API accessor
     bool is_from_server_originally() const
     { return (!flow || flow->flags.client_initiated) ? is_from_server() : is_from_client(); }
 
@@ -336,6 +345,7 @@ struct SO_PUBLIC Packet
     void clear_offloaded()
     { ts_packet_flags &= (~TS_PKT_OFFLOADED); }
 
+    // cppcheck-suppress unusedFunction ; installed packet API accessor
     bool is_pkt_injected() const
     { return (ts_packet_flags & TS_PKT_INJECT) != 0; }
 
@@ -416,13 +426,19 @@ private:
 inline void SetExtraData(Packet* p, const uint32_t xid) { p->xtradata_mask |= BIT(xid); }
 
 inline uint16_t extract_16bits(const uint8_t* const p)
-{ return ntohs(*(const uint16_t*)(p)); }
+{
+    uint16_t value;
+    std::memcpy(&value, p, sizeof(value));
+    return ntohs(value);
+}
 
 inline uint32_t extract_32bits(const uint8_t* p)
 {
     assert(p);
 
-    return ntohl(*(const uint32_t*)p);
+    uint32_t value;
+    std::memcpy(&value, p, sizeof(value));
+    return ntohl(value);
 }
 
 inline uint16_t alignedNtohs(const uint16_t* ptr)

@@ -58,12 +58,13 @@ public:
     static Packet* get_current_packet();
     static Packet* get_current_wire_packet();
     static Packet* set_next_packet(const Packet* parent = nullptr, Flow* flow = nullptr);
+    static IpsContext* get_next_context();
     static uint8_t* get_next_buffer(unsigned& max);
 
     static void enable_offload();
     static bool offload(Packet*);
 
-    static void onload(Flow*);
+    static void onload(const Flow*);
     static void onload();
     static void idle();
 
@@ -94,6 +95,13 @@ public:
     static int queue_event(const OptTreeNode*);
     static int queue_event(unsigned gid, unsigned sid);
 
+    static int log_builtin_event(unsigned gid, unsigned sid, int rate_action);
+    static void clear_events(Packet*);
+
+    // while the current packet is abandoned by stack unwinding, contexts released
+    // by ~DetectionEngine discard their queued events instead of logging them
+    static void set_packet_abandoned(bool abandoned = true);
+
     static void disable_all(Packet*);
     static bool all_disabled(Packet*);
 
@@ -120,20 +128,19 @@ private:
     static void resume_ready_suspends(const IpsContextChain&);
 
     static int log_events(Packet*);
-    static void clear_events(Packet*);
     static void finish_inspect_with_latency(Packet*);
     static void finish_inspect(Packet*, bool inspected);
     static void finish_packet(Packet*, bool flow_deletion = false);
 
 private:
     static bool offload_enabled;
-    IpsContext* context;
+    IpsContext* context = nullptr;
 };
 
 DataPointer DetectionEngine::get_alt_buffer(const Packet* p)
 {
     assert(p);
-    auto& alt_buf = p->context->alt_data;
+    const auto& alt_buf = p->context->alt_data;
 
     return { alt_buf.data, alt_buf.len };
 }
@@ -165,9 +172,9 @@ static inline void set_file_data(const uint8_t* p, unsigned n, uint64_t id, bool
     DetectionEngine::set_file_data(dp, id, is_accum, no_flow);
 }
 
+// cppcheck-suppress unusedFunction ; cppcheck 2.21 misses Analyzer's inline-helper call
 static inline void clear_file_data()
 { set_file_data(nullptr, 0); }
 
 } // namespace snort
 #endif
-

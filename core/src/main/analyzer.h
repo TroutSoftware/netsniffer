@@ -69,6 +69,7 @@ public:
         STARTED,
         RUNNING,
         PAUSED,
+        STOPPING,
         STOPPED,
         FAILED,
         NUM_STATES
@@ -100,6 +101,7 @@ public:
     bool process_rebuilt_packet(snort::Packet*, const DAQ_PktHdr_t*, const uint8_t* pkt, uint32_t pktlen);
     void finalize_daq_message(DAQ_Msg_h, DAQ_Verdict);
     void add_to_retry_queue(DAQ_Msg_h, snort::Flow*);
+    void clear_current_daq_message();
 
     // Functions called by analyzer commands
     void start();
@@ -110,13 +112,21 @@ public:
     void reload_daq();
     void reinit(const snort::SnortConfig*);
     void rotate();
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     snort::SFDAQInstance* get_daq_instance() { return daq_instance; }
     void reap_commands();
 
     bool is_idling() const
     { return idling; }
 
+    // Fully paused means PAUSED with no queued, running, or delayed commands.
+    bool is_fully_paused() const;
+
 private:
+#ifdef UNIT_TEST_BUILD
+    friend class AnalyzerTestAccess;
+#endif
+
     void analyze();
     bool handle_command();
     void handle_commands();
@@ -133,6 +143,7 @@ private:
     void term();
     void show_source();
     void add_command_to_uncompleted_queue(snort::AnalyzerCommand*);
+    void finish_command();
     void add_command_to_completed_queue(snort::AnalyzerCommand*);
 
 private:
@@ -153,8 +164,9 @@ private:
     RetryQueue* retry_queue;
     OopsHandler* oops_handler;
     ContextSwitcher* switcher = nullptr;
-    std::mutex pending_work_queue_mutex;
+    mutable std::mutex pending_work_queue_mutex;
     std::queue<snort::AnalyzerCommand*> pending_work_queue;
+    unsigned unfinished_commands = 0;
     std::list<UncompletedAnalyzerCommand*> uncompleted_work_queue;
     std::queue<snort::AnalyzerCommand*> completed_work_queue;
     std::mutex completed_work_queue_mutex;
@@ -163,4 +175,3 @@ private:
 extern THREAD_LOCAL snort::ProfileStats daqPerfStats;
 
 #endif
-

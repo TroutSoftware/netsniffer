@@ -144,9 +144,10 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* file_meta_ctor(Module* p, IpsInfo& info)
 {
-    FileMetaModule* m = (FileMetaModule*)p;
+    const FileMetaModule* m = static_cast<FileMetaModule*>(p);
     IpsOption::set_file_id(info, m->fmc.file_id);
     return nullptr;
 }
@@ -186,4 +187,3 @@ const BaseApi* ips_file_meta[] =
     &file_meta_api.base,
     nullptr
 };
-

@@ -31,9 +31,9 @@
 
 TEST_GROUP(payload_injector_translate_test)
 {
-    uint8_t* http2_payload; // cppcheck-suppress unusedVariable
-    uint32_t payload_len;   // cppcheck-suppress unusedVariable
-    InjectionReturnStatus status;   // cppcheck-suppress unusedVariable
+    uint8_t* http2_payload;
+    uint32_t payload_len;
+    InjectionReturnStatus status;
 };
 
 TEST(payload_injector_translate_test, basic_hdr_translation)
@@ -623,7 +623,7 @@ TEST(payload_injector_translate_test, http_page_is_nullptr)
 
 TEST(payload_injector_translate_test, http_page_is_0_length)
 {
-    uint8_t http_page[] = { 1 };
+    const uint8_t http_page[] = { 1 };
 
     InjectionControl control;
     control.http_page = http_page;
@@ -640,7 +640,7 @@ TEST(payload_injector_translate_test, 7_bit_int_min_max)
     // Translate 0
     uint8_t* cur = out;
     InjectionReturnStatus status = write_7_bit_prefix_int(0, cur, out_free_space);
-    uint8_t expected_out[] = { 0 };
+    const uint8_t expected_out[] = { 0 };
     CHECK(status == INJECTION_SUCCESS);
     CHECK(out_free_space == 5);
     CHECK(memcmp(out, expected_out, 1) == 0);
@@ -649,7 +649,7 @@ TEST(payload_injector_translate_test, 7_bit_int_min_max)
     cur = out;
     out_free_space = sizeof(out);
     status = write_7_bit_prefix_int(UINT32_MAX, cur, out_free_space);
-    uint8_t expected_out2[] = { 0x7f, 0x80, 0xff, 0xff, 0xff, 0xf };
+    const uint8_t expected_out2[] = { 0x7f, 0x80, 0xff, 0xff, 0xff, 0xf };
     CHECK(status == INJECTION_SUCCESS);
     CHECK(out_free_space == 0);
     CHECK(memcmp(out, expected_out2, 6) == 0);
@@ -659,4 +659,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

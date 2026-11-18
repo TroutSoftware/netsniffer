@@ -42,6 +42,7 @@
 #include "filters/sfthreshold.h"
 #include "flow/ha_module.h"
 #include "framework/module.h"
+#include "framework/reload_survivor_subscriptions_impl.h"
 #include "host_tracker/host_tracker_module.h"
 #include "host_tracker/host_cache_module.h"
 #include "js_norm/js_norm_module.h"
@@ -54,6 +55,9 @@
 #include "managers/module_manager.h"
 #include "managers/plugin_manager.h"
 #include "memory/memory_module.h"
+#ifdef CRASH_MITIGATOR
+#include "mitigator/mitigator_module.h"
+#endif
 #include "packet_io/active.h"
 #include "packet_io/active_counts.h"
 #include "packet_io/packet_tracer_module.h"
@@ -73,6 +77,7 @@
 #include "target_based/host_attributes.h"
 #include "target_based/snort_protocols.h"
 #include "trace/trace_module.h"
+
 
 #include "network_module.h"
 #include "snort_config.h"
@@ -114,6 +119,7 @@ public:
     bool set(const char*, Value&, SnortConfig*) override;
     bool end(const char*, int, SnortConfig*) override;
 
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     Usage get_usage() const override
     { return CONTEXT; }
 };
@@ -197,7 +203,11 @@ static const Parameter search_engine_params[] =
       "set fast pattern algorithm - choose available search engine" },
 
     { "offload_search_method", Parameter::PT_DYNAMIC, (void*)&get_search_methods, nullptr,
+#ifdef ENABLE_DETECTION_OFFLOAD
       "set fast pattern offload algorithm - choose available search engine" },
+#else
+      "detection offload is disabled (no-op): formerly the fast pattern offload algorithm" },
+#endif
 
 #ifdef HAVE_HYPERSCAN
     { "rule_db_dir", Parameter::PT_STRING, nullptr, nullptr,
@@ -312,8 +322,12 @@ bool SearchEngineModule::set(const char*, Value& v, SnortConfig* sc)
     }
     else if ( v.is("offload_search_method") )
     {
+#ifdef ENABLE_DETECTION_OFFLOAD
         if ( !fp->set_offload_search_method(v.get_string()) )
             return false;
+#else
+        ParseWarning(WARN_CONF, "search_engine.offload_search_method is deprecated and has no effect");
+#endif
     }
 
     else if ( v.is("split_any_any") )
@@ -424,7 +438,7 @@ static int dump_mp_stats(lua_State* L)
         return 0;
 
     ControlConn* ctrlconn = ControlConn::query_from_lua(L);
-    
+
     auto mod_name = luaL_optstring(L, 1, nullptr);
 
     if (mod_name and strlen(mod_name) == 0)
@@ -442,7 +456,7 @@ static int dump_mp_events(lua_State* L)
         return 0;
 
     ControlConn* ctrlconn = ControlConn::query_from_lua(L);
-    
+
     auto mod_name = luaL_optstring(L, 1, nullptr);
 
     if (mod_name and strlen(mod_name) == 0)
@@ -454,6 +468,7 @@ static int dump_mp_events(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int show_mp_channel_status(lua_State* L)
 {
     ControlConn* ctrlconn = ControlConn::query_from_lua(L);
@@ -500,7 +515,9 @@ public:
         Module("mp_data_bus", mp_data_bus_help, mp_data_bus_params) { }
 
     bool set(const char*, Value&, SnortConfig*) override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool begin(const char*, int, SnortConfig*) override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool end(const char*, int, SnortConfig*) override;
     const Command* get_commands() const override;
     const PegInfo* get_pegs() const override;
@@ -542,7 +559,7 @@ bool MPDataBusModule::set(const char*, Value& v, SnortConfig*)
         MPDataBus::hold_events = v.get_bool();
     }
 #endif
-    else 
+    else
     {
         WarningMessage("MPDataBus: Unknown parameter '%s' in mp_data_bus module\n", v.get_name());
         return false;
@@ -578,16 +595,57 @@ void MPDataBusModule::sum_stats(bool dump_stats)
 {
     if (get_instance_id() != 0)
         return;
-    
+
     if(SnortConfig::get_conf()->mp_dbus)
     {
         auto stats = SnortConfig::get_conf()->mp_dbus->get_stats_copy();
         for (int i = 0; i < get_num_counts(); i++)
         {
-            set_peg_count(i, ((PegCount*)&stats)[i], dump_stats);
+            set_peg_count(i, reinterpret_cast<PegCount*>(&stats)[i], dump_stats);
         }
     }
 }
+
+//-------------------------------------------------------------------------
+// reload_survivor module
+//-------------------------------------------------------------------------
+
+#define reload_survivor_help \
+    "reload survivor subscription registry statistics"
+
+class ReloadSurvivorSubscriptionsModule : public Module
+{
+public:
+    ReloadSurvivorSubscriptionsModule() :
+        Module("reload_survivor", reload_survivor_help) { }
+
+    const PegInfo* get_pegs() const override
+    { return snort::rss_pegs; }
+
+    PegCount* get_counts() const override
+    { return const_cast<PegCount*>(counts[get_instance_id()].data()); }
+
+    // dump/shutdown path calls prep_counts, not sum_stats(true); snapshot must happen here
+    void prep_counts(bool) override
+    {
+        if (get_instance_id() != 0)
+            return;
+
+        snort::rss_stats_to_pegcounts(snort::rss_stats, counts[0].data());
+    }
+
+    void reset_stats() override
+    {
+        snort::rss_stats.reset();
+        Module::reset_stats();
+    }
+
+    bool global_stats() const override
+    { return true; }
+
+    Usage get_usage() const override
+    { return GLOBAL; }
+};
 
 //-------------------------------------------------------------------------
 // reference module
@@ -670,8 +728,8 @@ static const Parameter alerts_params[] =
     { "order", Parameter::PT_STRING, nullptr, nullptr,
       "change the order of rule action application" },
 
-    { "rate_filter_memcap", Parameter::PT_INT, "0:max32", "1048576",
-      "set available MB of memory for rate_filters" },
+    { "rate_filter_memcap", Parameter::PT_INT, "0:max32", "16777216",
+      "set available bytes of memory for rate_filters" },
 
     { "reference_net", Parameter::PT_STRING, nullptr, nullptr,
       "set the CIDR for homenet "
@@ -880,7 +938,7 @@ bool OutputModule::set(const char*, Value& v, SnortConfig* sc)
 
     else if ( v.is("obfuscate") )
         v.update_mask(sc->output_flags, OUTPUT_FLAG__OBFUSCATE);
-    
+
     else if ( v.is("log_buffered") )
     {
         if ( v.get_bool() )
@@ -1723,6 +1781,7 @@ public:
     bool begin(const char*, int, SnortConfig*) override;
     bool end(const char*, int, SnortConfig*) override;
 
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     Usage get_usage() const override
     { return CONTEXT; }
 
@@ -1839,9 +1898,10 @@ public:
 
     PegCount* get_counts() const override
     {
-        return (PegCount*)&event_filter_stats;
+        return reinterpret_cast<PegCount*>(&event_filter_stats);
     }
 
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     Usage get_usage() const override
     { return CONTEXT; }
 
@@ -1921,7 +1981,7 @@ static const Parameter rate_filter_params[] =
       "take this action on future hits until timeout" },
 
     { "timeout", Parameter::PT_INT, "0:max32", "1",
-      "count interval" },
+      "seconds the new action applies before reverting (0 = never revert)" },
 
     { "apply_to", Parameter::PT_ADDR_LIST, nullptr, nullptr,
       "restrict filter to these addresses according to track" },
@@ -1932,10 +1992,10 @@ static const Parameter rate_filter_params[] =
 #define rate_filter_help \
     "configure rate filters (which change rule actions)"
 
-extern THREAD_LOCAL RateFilterStats rate_filter_stats;
 const PegInfo rate_filter_peg_names[] =
 {
     { CountType::SUM, "no_memory", "number of times rate filter ran out of memory" },
+    { CountType::SUM, "recoveries", "number of tracked addresses dropped to make room for another" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -1958,7 +2018,7 @@ public:
 
     PegCount* get_counts() const override
     {
-        return (PegCount*)&rate_filter_stats;
+        return reinterpret_cast<PegCount*>(&rate_filter_stats);
     }
 
     Usage get_usage() const override
@@ -2010,9 +2070,8 @@ bool RateFilterModule::set(const char*, Value& v, SnortConfig*)
     return true;
 }
 
-bool RateFilterModule::begin(const char*, int, SnortConfig* sc)
+bool RateFilterModule::begin(const char*, int, SnortConfig*)
 {
-    SFRF_Alloc(sc->rate_filter_config->memcap);
     thdx.init();
     return true;
 }
@@ -2318,6 +2377,7 @@ void add_independent_modules()
     PluginManager::add_module(new ProcessModule);
     PluginManager::add_module(new ProfilerModule);
     PluginManager::add_module(new ReferencesModule);
+    PluginManager::add_module(new ReloadSurvivorSubscriptionsModule);
     PluginManager::add_module(new SearchEngineModule);
     PluginManager::add_module(new SFDAQModule);
     PluginManager::add_module(new PayloadInjectorModule);
@@ -2357,6 +2417,9 @@ void add_independent_modules()
 void add_dependent_modules()
 {
     PluginManager::add_module(new TraceModule);
+#ifdef CRASH_MITIGATOR
+    PluginManager::add_module(new MitigatorModule);
+#endif
 }
 
 #ifdef UNIT_TEST

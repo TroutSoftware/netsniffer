@@ -183,7 +183,7 @@ public:
     { return pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&stats; }
+    { return reinterpret_cast<PegCount*>(&stats); }
 
     UdpCodecConfig* get_data()
     {
@@ -249,9 +249,9 @@ public:
 
 private:
 
-    bool valid_checksum_from_daq(const RawData&);
-    bool valid_checksum4(const RawData&, const DecodeData&);
-    bool valid_checksum6(const RawData&, const CodecData&, const DecodeData&);
+    static bool valid_checksum_from_daq(const RawData&);
+    static bool valid_checksum4(const RawData&, const DecodeData&);
+    static bool valid_checksum6(const RawData&, const CodecData&, const DecodeData&);
 
     void UDPMiscTests(const DecodeData&, const CodecData&, uint32_t pay_len);
     UdpCodecConfig* config;
@@ -286,7 +286,8 @@ bool UdpCodec::valid_checksum4(const RawData& raw, const DecodeData& snort)
     ph.hdr.protocol = IpProtocol::UDP;
     ph.hdr.len = htons((uint16_t) raw.len);
 
-    return (checksum::udp_cksum((const uint16_t*) raw.data, raw.len, ph) == 0);
+    // cppcheck-suppress knownConditionTrueFalse ; zero is the valid packet checksum result
+    return (checksum::udp_cksum(raw.data, raw.len, ph) == 0);
 }
 
 bool UdpCodec::valid_checksum6(const RawData& raw, const CodecData& codec, const DecodeData& snort)
@@ -300,7 +301,8 @@ bool UdpCodec::valid_checksum6(const RawData& raw, const CodecData& codec, const
     ph6.hdr.protocol = codec.ip6_csum_proto;
     ph6.hdr.len = htons((uint16_t) raw.len);
 
-    return (checksum::udp_cksum((const uint16_t*) raw.data, raw.len, ph6) == 0);
+    // cppcheck-suppress knownConditionTrueFalse ; zero is the valid packet checksum result
+    return (checksum::udp_cksum(raw.data, raw.len, ph6) == 0);
 }
 
 void UdpCodec::get_protocol_ids(std::vector<ProtocolId>& v)
@@ -333,7 +335,7 @@ bool UdpCodec::decode(const RawData& raw, CodecData& codec, DecodeData& snort)
         const uint16_t ip_len = snort.ip_api.get_ip6h()->len();
         /* subtract the distance from udp header to 1st ip6 extension
            This gives the length of the UDP "payload", when fragmented */
-        uhlen = ip_len - ((const uint8_t*)udph - snort.ip_api.ip_data());
+        uhlen = ip_len - (reinterpret_cast<const uint8_t*>(udph) - snort.ip_api.ip_data());
         fragmented_udp_flag = true;
     }
     else
@@ -375,6 +377,7 @@ bool UdpCodec::decode(const RawData& raw, CodecData& codec, DecodeData& snort)
              * 2) UDP header chksum value is 0.
              */
             if (!fragmented_udp_flag && udph->uh_chk)
+                // cppcheck-suppress knownConditionTrueFalse ; result depends on packet contents
                 valid = valid_checksum4(raw, snort);
             else
                 valid = true;
@@ -393,6 +396,7 @@ bool UdpCodec::decode(const RawData& raw, CodecData& codec, DecodeData& snort)
              * (UDP checksum is not optional in IP6)
              */
             else if (!fragmented_udp_flag)
+                // cppcheck-suppress knownConditionTrueFalse ; result depends on packet contents
                 valid = valid_checksum6(raw, codec, snort);
             else
                 valid = true;
@@ -528,7 +532,7 @@ bool UdpCodec::encode(const uint8_t* const raw_in, const uint16_t /*raw_len*/,
         ps.hdr.zero = 0;
         ps.hdr.protocol = IpProtocol::UDP;
         ps.hdr.len = udph_out->uh_len;
-        udph_out->uh_chk = checksum::udp_cksum((uint16_t*)udph_out, len, ps);
+        udph_out->uh_chk = checksum::udp_cksum(udph_out, len, ps);
     }
     else if (ip_api.is_ip6())
     {
@@ -539,7 +543,7 @@ bool UdpCodec::encode(const uint8_t* const raw_in, const uint16_t /*raw_len*/,
         ps6.hdr.zero = 0;
         ps6.hdr.protocol = IpProtocol::UDP;
         ps6.hdr.len = udph_out->uh_len;
-        udph_out->uh_chk = checksum::udp_cksum((uint16_t*)udph_out, len, ps6);
+        udph_out->uh_chk = checksum::udp_cksum(udph_out, len, ps6);
     }
 
     enc.next_proto = IpProtocol::UDP;
@@ -568,7 +572,7 @@ void UdpCodec::update(const ip::IpApi& ip_api, const EncodeFlags flags,
             ps.hdr.zero = 0;
             ps.hdr.protocol = IpProtocol::UDP;
             ps.hdr.len = htons((uint16_t)updated_len);
-            h->uh_chk = checksum::udp_cksum((uint16_t*)h, updated_len, ps);
+            h->uh_chk = checksum::udp_cksum(h, updated_len, ps);
         }
         else if (ip_api.is_ip6())
         {
@@ -579,7 +583,7 @@ void UdpCodec::update(const ip::IpApi& ip_api, const EncodeFlags flags,
             ps6.hdr.zero = 0;
             ps6.hdr.protocol = IpProtocol::UDP;
             ps6.hdr.len = htons((uint16_t)updated_len);
-            h->uh_chk = checksum::udp_cksum((uint16_t*)h, updated_len, ps6);
+            h->uh_chk = checksum::udp_cksum(h, updated_len, ps6);
         }
     }
 }
@@ -613,7 +617,7 @@ static void mod_dtor(Module* m)
 
 static Codec* ctor(Module* m)
 {
-    UdpModule* mod = (UdpModule*)m;
+    UdpModule* mod = static_cast<UdpModule*>(m);
     // Codecs can be instantiated without modules. In which case use
     // the snort defaults for config.
     UdpCodecConfig* cfg = mod ? (mod->get_data()) : (new UdpCodecConfig());
@@ -654,4 +658,3 @@ const BaseApi* cd_udp[] =
     &udp_api.base,
     nullptr
 };
-

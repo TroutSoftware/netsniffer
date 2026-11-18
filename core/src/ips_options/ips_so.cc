@@ -96,7 +96,7 @@ bool SoOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const SoOption& rhs = (const SoOption&)ips;
+    const SoOption& rhs = static_cast<const SoOption&>(ips);
 
     if ( soid != rhs.soid )
         return false;
@@ -112,7 +112,6 @@ bool SoOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus SoOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(soPerfStats);
     return func(data, c, p);
 }
@@ -189,7 +188,7 @@ static void mod_dtor(Module* m)
 static IpsOption* so_ctor(Module* p, IpsInfo& info)
 {
     void* data = nullptr;
-    SoModule* m = (SoModule*)p;
+    SoModule* m = static_cast<SoModule*>(p);
     const char* name = m->name.c_str();
     bool relative_flag = m->relative_flag;
     const char* soid = IpsOption::get_soid(info);

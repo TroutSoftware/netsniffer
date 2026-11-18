@@ -56,14 +56,18 @@ StreamSplitter::Status Http2DataCutter::skip_over_frame(Http2Stream* const strea
         if (!session_data->frame_lengths[source_id].empty())
         {
             session_data->frame_lengths[source_id].pop();
-            assert(session_data->frame_lengths[source_id].empty());
+
+            if (!session_data->frame_lengths[source_id].empty())
+            {
+                session_data->abort_flow[source_id] = true;
+                return StreamSplitter::ABORT;
+            }
         }
 
-        if (stream && ((frame_flags & FLAG_END_STREAM) != 0))
-        {
+        if (stream != nullptr and frame_flags & FLAG_END_STREAM)
             stream->set_end_stream_on_data_flush(source_id);
-            discarded_frame_cleanup(stream);
-        }
+
+        discarded_frame_cleanup(stream);
     }
 
     session_data->payload_discard[source_id] = true;
@@ -72,7 +76,7 @@ StreamSplitter::Status Http2DataCutter::skip_over_frame(Http2Stream* const strea
 
 bool Http2DataCutter::check_http_state(Http2Stream* const stream)
 {
-    HttpFlowData* const http_flow = stream->get_hi_flow_data();
+    const HttpFlowData* const http_flow = stream->get_hi_flow_data();
     if ((http_flow->get_type_expected(source_id) != SEC_BODY_HX))
     {
         stream->set_state(source_id, STREAM_ERROR);
@@ -96,7 +100,12 @@ StreamSplitter::Status Http2DataCutter::scan(const uint8_t* data, uint32_t lengt
 
     if (frame_bytes_seen == 0)
     {
-        assert(session_data->frame_lengths[source_id].size() == 1);
+        if (session_data->frame_lengths[source_id].size() != 1)
+        {
+            session_data->abort_flow[source_id] = true;
+            return StreamSplitter::ABORT;
+        }
+
         data_len = session_data->frame_lengths[source_id].front() -
             session_data->padding_length[source_id];
         data_bytes_read = 0;
@@ -108,10 +117,7 @@ StreamSplitter::Status Http2DataCutter::scan(const uint8_t* data, uint32_t lengt
         }
 
         if (!check_http_state(stream))
-        {
             return skip_over_frame(stream, length, flush_offset, data_offset, frame_flags);
-        }
-
     }
 
     const uint32_t cur_data_offset = data_offset;
@@ -193,7 +199,13 @@ StreamSplitter::Status Http2DataCutter::scan(const uint8_t* data, uint32_t lengt
             else
             {
                 session_data->payload_discard[source_id] = true;
-                assert(!session_data->frame_lengths[source_id].empty());
+
+                if (session_data->frame_lengths[source_id].empty())
+                {
+                    session_data->abort_flow[source_id] = true;
+                    return StreamSplitter::ABORT;
+                }
+
                 session_data->frame_lengths[source_id].pop();
             }
         }
@@ -209,7 +221,6 @@ StreamSplitter::Status Http2DataCutter::scan(const uint8_t* data, uint32_t lengt
 
 void Http2DataCutter::reassemble(const uint8_t* data, unsigned len)
 {
-    uint32_t cur_data = 0;
     uint32_t cur_data_offset = 0;
 
     unsigned cur_pos = 0;
@@ -226,7 +237,12 @@ void Http2DataCutter::reassemble(const uint8_t* data, unsigned len)
 
             if (reassemble_hdr_bytes_read == FRAME_HEADER_LENGTH)
             {
-                assert(!session_data->frame_lengths[source_id].empty());
+                if (session_data->frame_lengths[source_id].empty())
+                {
+                    session_data->abort_flow[source_id] = true;
+                    return;
+                }
+
                 reassemble_hdr_bytes_read = 0;
                 reassemble_data_len = session_data->frame_lengths[source_id].front();
                 session_data->frame_lengths[source_id].pop();
@@ -266,7 +282,8 @@ void Http2DataCutter::reassemble(const uint8_t* data, unsigned len)
           {
             reassemble_state = SEND_DATA;
             const uint32_t missing = reassemble_data_len - reassemble_data_bytes_read;
-            cur_data = ((len - cur_pos) >= missing) ? missing : (len - cur_pos);
+            const uint32_t cur_data =
+                ((len - cur_pos) >= missing) ? missing : (len - cur_pos);
             reassemble_data_bytes_read += cur_data;
             cur_pos += cur_data;
 
@@ -286,6 +303,7 @@ void Http2DataCutter::reassemble(const uint8_t* data, unsigned len)
                 reassemble_bytes_sent = 0;
                 if (frame_buf.data != nullptr)
                 {
+                    delete[] session_data->frame_data[source_id];
                     session_data->frame_data[source_id] = frame_buf.data;
                     session_data->frame_data_size[source_id] = frame_buf.length;
                 }
@@ -313,10 +331,10 @@ void Http2DataCutter::discarded_frame_cleanup(Http2Stream* const stream)
     reassemble_data_bytes_read = 0;
     reassemble_state = GET_FRAME_HDR;
 
-    if (!stream->is_end_stream_on_data_flush(source_id))
+    if (stream == nullptr or !stream->is_end_stream_on_data_flush(source_id))
         return;
 
-    if(stream->get_state(source_id) != STREAM_ERROR)
+    if (stream->get_state(source_id) < STREAM_COMPLETE)
     {
         if (session_data->concurrent_files > 0)
             session_data->concurrent_files -= 1;

@@ -96,6 +96,12 @@ PegCount FlowControl::get_uni_ip_flows() const
 PegCount FlowControl::get_num_flows() const
 { return cache->flows_size(); }
 
+PegCount FlowControl::get_released_max_flow_mem() const
+{ return cache->get_released_max_flow_mem(); }
+
+PegCount FlowControl::get_released_total_flow_mem() const
+{ return cache->get_released_total_flow_mem(); }
+
 
 //-------------------------------------------------------------------------
 // cache foo
@@ -113,8 +119,27 @@ unsigned FlowControl::get_flows_allocated() const
 Flow* FlowControl::find_flow(const FlowKey* key)
 { return cache->find(key); }
 
+Flow* FlowControl::find_flow_either_tunnel_state(const FlowKey& key)
+{
+    assert(!key.flags.tunnel_encapsulated);
+    if ( Flow* flow = cache->find(&key) )
+        return flow;
+
+    // Tuple-only metadata cannot disambiguate when both variants exist.  Keep
+    // the historical bare-flow preference and use the tunneled key on a miss.
+    FlowKey tunneled_key = key;
+    tunneled_key.flags.tunnel_encapsulated = true;
+    return cache->find(&tunneled_key);
+}
+
 Flow* FlowControl::new_flow(const FlowKey* key)
 { return cache->allocate(key); }
+
+void FlowControl::unlink_uni(Flow* flow)
+{ cache->unlink_uni(flow); }
+
+void FlowControl::relink_uni(Flow* flow)
+{ cache->relink_uni(flow); }
 
 void FlowControl::release_flow(const FlowKey* key)
 {
@@ -124,10 +149,9 @@ void FlowControl::release_flow(const FlowKey* key)
 
 bool FlowControl::move_to_allowlist(Flow* f)
 {
-    // Only TCP is retained, since it ends on close. UDP has no close, so its idle
-    // timeout is its only EOF trigger and the allowlist LRU skips idle
-    // pruning, which would combine flows with shared 5-tuples into one event.
-    if ( f->key->pkt_type != PktType::TCP )
+    // Preserve the flow only if it is a TCP or UDP flow,
+    // as only these flow types contain appid-related info needed at the EOF event.
+    if ( f->key->pkt_type != PktType::TCP and f->key->pkt_type != PktType::UDP )
         return false;
     return cache->move_to_allowlist(f);
 }
@@ -160,9 +184,7 @@ void FlowControl::timeout_flows(unsigned max, time_t cur_time)
 
 Flow* FlowControl::stale_flow_cleanup(FlowCache* cache, Flow* flow, Packet* p)
 {
-    // treat a tunnel traffic / bare packet mismatch as stale
-    if ( (p->pkth->flags & DAQ_PKT_FLAG_NEW_FLOW)
-         or (flow->flags.udp_tunneled != p->is_udp_tunneled()) )
+    if ( p->pkth->flags & DAQ_PKT_FLAG_NEW_FLOW )
     {
         flow_log("Session: deleting snort session, reason: stale and not cleaned \n");
 
@@ -220,6 +242,11 @@ bool FlowControl::set_key(FlowKey* key, Packet* p)
         reversed = key->init(p->context->conf, type, ip_proto, ip_api.get_src(), p->ptrs.sp,
             ip_api.get_dst(), p->ptrs.dp, vlanId, mplsId, *p->pkth);
     }
+
+    // Keep inner tuples decoded after a UDP-tunnel or TEB dispatch in a key
+    // space of their own.
+    key->flags.tunnel_encapsulated = p->is_tunnel_encapsulated();
+
     return reversed;
 }
 
@@ -454,6 +481,7 @@ static void log_stale_packet(snort::Packet *p, snort::Flow *flow, bool drop_pack
 
 static inline bool is_packet_stale(const Flow* flow, const Packet* p)
 {
+    // cppcheck-suppress syntaxError ; timercmp's comparison operator is a macro argument
     return timercmp(&flow->prev_packet_time, &p->pkth->ts, >);
 }
 
@@ -522,7 +550,6 @@ bool FlowControl::process(PktType type, Packet* p, bool* new_flow)
             }
 
             flow->flow_id = p->pkth->flow_id;
-            flow->flags.udp_tunneled = p->is_udp_tunneled();
             if ( p->is_tcp() and p->ptrs.tcph->is_syn_ack() )
                 flow->flags.key_is_reversed = !reversed;
             else
@@ -557,6 +584,54 @@ static inline void restart_inspection(Flow* flow, Packet* p)
     flow->last_verdict = MAX_DAQ_VERDICT;
 }
 
+bool FlowControl::apply_flow_state(Flow* flow, Packet* p, bool new_flow)
+{
+    switch ( flow->flow_state )
+    {
+    case Flow::FlowState::SETUP:
+        flow->set_state(Flow::FlowState::ALLOW);
+        return false;
+
+    case Flow::FlowState::INSPECT:
+        assert(flow->ssn_client);
+        assert(flow->ssn_server);
+        return true;
+
+    case Flow::FlowState::ALLOW:
+        if ( new_flow )
+            Stream::stop_inspection(flow, p, SSN_DIR_BOTH, -1, 0);
+        else
+            DetectionEngine::disable_all(p);
+        return false;
+
+    case Flow::FlowState::BLOCK:
+        if ( new_flow )
+            Stream::drop_traffic(p, SSN_DIR_BOTH);
+        else
+            p->active->block_again();
+
+        p->active->set_drop_reason("session");
+        DetectionEngine::disable_all(p);
+        flow_log("Session: session has been blocked, drop\n");
+        return false;
+
+    case Flow::FlowState::RESET:
+        if ( new_flow )
+            Stream::drop_traffic(p, SSN_DIR_BOTH);
+        else
+            p->active->reset_again();
+
+        // Apply any existing block response; RESET always stops processing.
+        (void)Stream::blocked_flow(p);
+        p->active->set_drop_reason("session");
+        DetectionEngine::disable_all(p);
+        flow_log("Session: session has been reset\n");
+        return false;
+    }
+
+    return false;
+}
+
 unsigned FlowControl::process(Flow* flow, Packet* p, bool new_ha_flow)
 {
     unsigned news = 0;
@@ -585,6 +660,9 @@ unsigned FlowControl::process(Flow* flow, Packet* p, bool new_ha_flow)
             // flow expired, must recheck eligibility
             if ( !want_flow(flow->pkt_type, p, false) )
             {
+                if ( flow->flow_state != Flow::FlowState::SETUP )
+                    (void)apply_flow_state(flow, p, false);
+
                 flow->session_state |= STREAM_STATE_CLOSED;
                 return 0;  // flow will be deleted
             }
@@ -666,47 +744,7 @@ unsigned FlowControl::process(Flow* flow, Packet* p, bool new_ha_flow)
     if ( p->proto_bits & PROTO_BIT__MPLS )
         flow->set_mpls_layer_per_dir(p);
 
-    switch ( flow->flow_state )
-    {
-    case Flow::FlowState::SETUP:
-        flow->set_state(Flow::FlowState::ALLOW);
-        break;
-
-    case Flow::FlowState::INSPECT:
-        assert(flow->ssn_client);
-        assert(flow->ssn_server);
-        break;
-
-    case Flow::FlowState::ALLOW:
-        if ( news )
-            Stream::stop_inspection(flow, p, SSN_DIR_BOTH, -1, 0);
-        else
-            DetectionEngine::disable_all(p);
-        break;
-
-    case Flow::FlowState::BLOCK:
-        if ( news )
-            Stream::drop_traffic(p, SSN_DIR_BOTH);
-        else
-            p->active->block_again();
-
-        p->active->set_drop_reason("session");
-        DetectionEngine::disable_all(p);
-        flow_log("Session: session has been blocked, drop\n");
-        break;
-
-    case Flow::FlowState::RESET:
-        if ( news )
-            Stream::drop_traffic(p, SSN_DIR_BOTH);
-        else
-            p->active->reset_again();
-
-        Stream::blocked_flow(p);
-        p->active->set_drop_reason("session");
-        DetectionEngine::disable_all(p);
-        flow_log("Session: session has been reset\n");
-        break;
-    }
+    apply_flow_state(flow, p, news != 0);
 
     return news;
 }

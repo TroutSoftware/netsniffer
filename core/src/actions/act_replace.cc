@@ -52,8 +52,11 @@ const PegInfo replace_pegs[] =
 // queue foo
 //--------------------------------------------------------------------------
 
-static inline void Replace_ApplyChange(Packet* p, std::string& data, unsigned offset)
+static inline void Replace_ApplyChange(Packet* p, const std::string& data, unsigned offset)
 {
+    if ( offset >= p->dsize )
+        return;
+
     uint8_t* start = const_cast<uint8_t*>(p->data) + offset;
     const uint8_t* end = p->data + p->dsize;
     unsigned len;
@@ -141,7 +144,7 @@ public:
     { return replace_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&replace_stats; }
+    { return reinterpret_cast<PegCount*>(&replace_stats); }
 };
 
 //-------------------------------------------------------------------------
@@ -189,4 +192,3 @@ const BaseApi* act_replace[] =
     &rep_api.base,
     nullptr
 };
-

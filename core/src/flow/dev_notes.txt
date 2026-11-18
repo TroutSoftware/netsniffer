@@ -161,6 +161,7 @@ pending-update mask is 16 bits, so a maximum of 16 clients total are allowed.
 When peers register divergent name sets the standby will hit unknown_client_idx
 or client_consume_errors counters.
 
+
 SideChannel reload limitation
 -----------------------------
 SideChannelManager is configured once at process startup (snort.cc calls
@@ -176,3 +177,185 @@ supported, but adding, removing, or repointing a side_channel{} configuration
 is not honored at reload time -- the new SideChannel definition will be
 ignored and HA will continue to use (or fail to find) the startup-time
 channel.  Changes to side_channel{} require a process restart.
+
+06/03/2026
+==== Per-Flow Memory Tracking
+
+Flow::get_mem_usage() returns a running byte count of heap allocations
+relevant to the flow. get_peak_mem_usage() returns the high water mark for the current
+logical session. Flow::restart() resets the peak to the current retained footprint so a
+reused Flow object does not carry the previous session's peak forward. Both accessors are
+intended to be O(1) so they can be queried often (e.g on pruning).
+
+The choice to use a push model here, rather than summing the flow's allocations on demand
+is deliberate. It allows us to query the flow's memory utilization quickly (and frequently,
+in the case of pruning) with limited perf hit, at the cost of accuracy.
+
+The count is kept in two ways:
+1) Fixed footprints which are accounted for automatically. Every FlowData object
+that's attached via set_flow_data() has its size_of() added by FlowDataStore on attach,
+and is subtracted on detach (set/erase/clear). Because the same value is being added
+and removed, this will ensure we don't drift over time and "leak" allocations.
+
+2) Dynamic footprints, which are pushed at the site of allocation. Inspectors that grow
+heap allocations can call flow->add_mem(n) at allocation, and sub_mem(n) at deallocation.
+This is for objects and buffers not covered by a FlowData size_of(). Currently pushed:
+  - the per-protocol Session object itself (sizeof(*this)), in the ctor/dtor of
+    tcp/udp/icmp/ip/file/user session (stream/*).
+  - queued TCP reassembly segments (stream/tcp/tcp_reassembly_segments.cc).
+  - HTTP decompression state (http_inspect, via the zlib/brotli allocator hooks in
+    http_compress_stream.cc).
+  - FlowStash items: the StashItem wrapper plus each item's key/string capacity, on the
+    stash write path (flow_stash.cc). A stashed generic object's own heap is the object's
+    responsibility to push.
+  - appid_ha.cc consume path repeats the sizeof(AppIdSessionApi) add that
+    allocate_session() would otherwise do, since it bypasses it.
+HTTP/HTTP2 reassembly buffers are not yet tracked.
+
+sub_mem's under-subtraction handling is deliberately two-tier. In debug builds
+assert(bytes + sizeof(Flow) <= mem_bytes) is a tripwire: any subtraction that would push
+mem_bytes below its sizeof(Flow) baseline is an alloc/dealloc mismatch and aborts loudly.
+In release builds (assert compiled out) the subtraction clamps at zero rather than back up
+to sizeof(Flow). This is intentional: it prevents an unsigned wrap-around that would blow
+up the MAX/SUM pegs with a ~2^64 value, and it leaves an out-of-range value (below
+sizeof(Flow), possibly zero) that visibly flags the mismatch in production -- clamping up
+to a plausible sizeof(Flow) would hide the bug instead.
+
+=== Adding a new FlowData subclass
+
+Put one macro (from flow_data.h) in a public/protected section:
+
+  FLOW_DATA_SIZE_OF(MyFlowData)                  // sizeof(*this)
+  FLOW_DATA_SIZE_OF_EXTRA(MyFlowData, EXTRA)     // + always-present heap stuff
+
+The EXTRA macro covers objects that this class owns for its whole lifetime, e.g
+members that are new'd at construction and freed in the destructor. 
+
+Skipping the macro isn't a build error, we let size_of() default to just sizeof(FlowData), so
+the class still works and is counted, but we undercount in this scenario.
+
+For transient buffers that are grown during packet processing, use the add_mem/sub_mem calls from
+the above section.
+
+=== Observability:
+  * dump_flow_memory_summary control (live view, stream module): walks the cache
+    reading get_mem_usage()/get_peak_mem_usage() and prints a per-protocol and ALL
+    summary (count/total/avg/cur_max/peak_max), a current-bytes histogram, and the
+    top-N flows by peak (optional arg: N, default 10).
+
+  * dump_flows / dump_flows_binary controls (stream module): per-flow dump. The
+    text form prints "flow_mem N bytes"; the binary form serializes flow_mem
+    (get_mem_usage) and peak_flow_mem (get_peak_mem_usage) in the
+    DumpFlowsBinaryDescriptor wire record. That record is a raw byte image with no
+    version framing, so its layout is an external contract shared by tools/show_flows
+    and the out-of-tree correlate_conns consumer; the static_assert on its size is
+    the tripwire for keeping those consumers in sync.
+
+  * stream.flow_mem trace option (trace framework): logs each flow's current and
+    peak memory as it is released, retired, or reload-deleted (flow_cache.cc).
+    Emitted at debug
+    verbosity like the stream_tcp traces, so enable it with
+    trace = { modules = { stream = { flow_mem = 7 } } } -- a low-level
+    "enable all" won't trip it.
+
+  * Stream base peg counters, sampled at release/retire and reload-driven
+    delete (flow_cache.cc):
+    - released_max_flow_mem (MAX): largest peak_mem_usage seen at release on
+      this thread during the interval.
+    - released_total_flow_mem (SUM): cumulative get_mem_usage() released
+      across all flows.
+
+08/28/2026
+Blocked flows and prune candidacy
+The uni list holds uni-prune candidates, not every unidirectional flow.
+prune_unis() cannot reclaim a blocked flow, so a flow leaves the list when it
+blocks; Flow::set_block_flags() is the single idempotent funnel that sets the
+SSNFLAG_DROP_* bits and drops candidacy.  Only uni pruning reads the list, so the
+flow stays in the hash table and its protocol LRU, found by find() and counted by
+current_flows.  uni_flows and uni_ip_flows count candidates.
+
+prune_unis() unlinks any blocked flow it meets, since HA import ordering or a direct
+session_flags write can block one without the funnel; when that unlink alone
+satisfies the exit condition the reclaim is recorded EXCESS, not UNI.
+max_blocked_unlink_per_prune caps the unlinking, and cleanup_flows is 1, so a call
+may unlink up to the cap while reclaiming one flow; a deeper backlog drains over
+several allocations through prune_excess() until the list falls to max_uni.
+
+prune_excess() is bounded by max_excess_examined_per_prune, which fixes what one
+allocation pays to walk past flows it cannot take.  It round robins the allowlist and
+per-protocol LRUs, releasing an oldest flow free to take and rotating past one that
+is not, so a run of blocked or offloaded heads costs a walk rather than a reclaim.
+Only a head actually read spends budget, so empty LRUs cost a pointer read and a
+single-protocol deployment keeps its budget.  A lap finding every reachable LRU empty
+ends the walk, which is what terminates it when the rest sit in an LRU the rotation
+never visits.
+
+Reclaiming nothing falls back to prune_multiple(), bounded by config.prune_flows.
+prune_one() checks neither block state nor save_me, making the fallback both where
+excess pruning can take a blocked flow and what holds the cache at max_flows.
+prune_flows is "1:max32" default 10, so it is zero only when the stream module never
+configures -- a unit test, or no -c -- and only then can excess pruning return zero
+while over max_flows.  Zero disables every prune_multiple() caller, not just this one:
+the flow memcap prunes through the same function, Stream::prune_flows() registered as
+the MemoryCap prune handler, so a blocked flow is never exempt from memory reclaim and
+block state cannot pin the cache above the cap.
+
+Reclaiming nothing includes exhausting the budget with reclaimable flows deeper than
+the bound, so above the bound the preference inverts: a blocked run longer than the
+bound ahead of an eligible flow costs prune_flows blocked flows and spares the
+eligible one.  That is the price of a fixed per-allocation cost, paid to hold
+max_flows.  The inversion is transient, because a declined head is rotated to MRU and
+the next call resumes past it, so the walk re-reads nothing and crosses a run of N
+blocked flows in N reads: with 300 blocked ahead of one eligible and prune_flows 1,
+the calls read 256 then 44 and the second takes the eligible flow.  The cost is per
+over-cap episode and bounded by the backlog, not by the packet rate, and an episode
+ends as soon as the walk reaches an eligible flow.
+
+A reclaim of prune_flows leaves the cache prune_flows below max_flows, and allocate()
+prunes only at max_flows, so the allocations that fill that gap back in never reach
+prune_excess() at all.  Anything sampling the walk has to allow for that gap; the
+larger prune_flows is, the more allocations pass between walks.
+
+Leaving the list is not permanent.  Flow::update_uni_candidacy() compares the
+session_flags from before a write and moves the flow off or back on if the write
+changed its block state; set_block_flags() and restart() go through it, and
+relink_uni() is a no-op for a listed flow.  Relinking undoes only what the block
+took, so the flow must have been a candidate apart from the block -- not
+bidirectional before the write -- and still be one after; without the first,
+restart() would relink a flow unlinked for two way traffic, and without the second an
+HA import turning a blocked unidirectional flow bidirectional would relink it.  A
+write bypassing both reconciles itself, since StreamHAClient::consume() assigns
+ssn_state wholesale and the drop bits are HA critical, so a standby learns both block
+and unblock.
+
+restart() is also reached from Flow::reset() during teardown, so the flow must leave
+the list after its reset, not before, or the list keeps a node about to be freed;
+release() and retire() get that from remove(), and the reload delete path unlinks
+explicitly.
+
+LRU round robin bookkeeping
+The loops walking every per-protocol LRU carry a bitmask of the LRUs they are done
+with and stop when all are set.  Two rules keep them terminating.
+
+* A branch declining to reclaim the head must retire that LRU or advance its cursor;
+  doing neither faces the same head with the same mask forever.  timeout() advances
+  with lru_next(), retires the LRU when that runs out, and tracks the protocols in
+  play as a mask rather than an index, so nothing depends on where the previous pass
+  stopped.
+
+* The exit test must cover exactly the LRUs the loop visits, so there are two.
+  prune_idle() and delete_active_flows() walk first_proto through max_protocols and
+  never touch PktType::NONE, so they use all_proto_lrus_checked() against
+  proto_lru_mask.  prune_multiple() starts at zero and wraps through it, so it uses
+  all_lrus_checked() and the full mask; the protocol-only test would let it stop
+  before draining PktType::NONE.
+
+LRU zero is nearly a one way door, which is why the excess walk carries an empty lap
+terminator no real run needs.  allocate() indexes by the key's pkt_type and will put
+a flow there, but purge(), prune_idle(), timeout() and delete_active_flows() start at
+first_proto, and prune_multiple() reaches zero only through prune_one(), which
+refuses the table's last node -- so such a flow prunes down to one and no further.
+Production never gets there, since a key's pkt_type comes from a decoded packet; that
+also makes the terminator untestable, as draining the LRU to prove the walk exits
+leaves a flow the cache cannot free.  It stays so termination does not rest on LRU
+zero being empty.

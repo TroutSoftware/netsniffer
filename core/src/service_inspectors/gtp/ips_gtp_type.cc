@@ -85,7 +85,7 @@ bool GtpTypeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const GtpTypeOption& rhs = (const GtpTypeOption&)ips;
+    const GtpTypeOption& rhs = static_cast<const GtpTypeOption&>(ips);
 
     for ( int v = 0; v <= MAX_GTP_VERSION_CODE; ++v )
         if ( types[v] != rhs.types[v] )
@@ -96,13 +96,13 @@ bool GtpTypeOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus GtpTypeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(gtp_type_prof);
 
     if ( !p or !p->flow )
         return NO_MATCH;
 
-    GtpFlowData* gfd = (GtpFlowData*)p->flow->get_flow_data(GtpFlowData::inspector_id);
+    GtpFlowData* gfd = static_cast<GtpFlowData*>(
+        p->flow->get_flow_data(GtpFlowData::inspector_id));
 
     if ( !gfd )
         return NO_MATCH;
@@ -233,7 +233,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    GtpTypeModule* mod = (GtpTypeModule*)m;
+    const GtpTypeModule* mod = static_cast<GtpTypeModule*>(m);
     return new GtpTypeOption(mod->types);
 }
 
@@ -268,4 +268,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_gtp_type = &ips_api.base;
-

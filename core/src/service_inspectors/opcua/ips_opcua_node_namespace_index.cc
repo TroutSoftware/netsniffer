@@ -75,13 +75,13 @@ bool OpcuaNodeNamespaceIndexOption::operator==(const IpsOption& ips) const
         return false;
     }
 
-    const OpcuaNodeNamespaceIndexOption& rhs = (const OpcuaNodeNamespaceIndexOption&) ips;
+    const OpcuaNodeNamespaceIndexOption& rhs =
+        static_cast<const OpcuaNodeNamespaceIndexOption&>(ips);
     return (node_namespace_index == rhs.node_namespace_index);
 }
 
 IpsOption::EvalStatus OpcuaNodeNamespaceIndexOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(opcua_node_namespace_index_prof);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -89,7 +89,8 @@ IpsOption::EvalStatus OpcuaNodeNamespaceIndexOption::eval(Cursor&, Packet* p)
         return NO_MATCH;
     }
 
-    OpcuaFlowData* opcuafd = (OpcuaFlowData*) p->flow->get_flow_data(OpcuaFlowData::inspector_id);
+    OpcuaFlowData* opcuafd = static_cast<OpcuaFlowData*>(
+        p->flow->get_flow_data(OpcuaFlowData::inspector_id));
     if ( !opcuafd )
     {
         return NO_MATCH;
@@ -166,6 +167,7 @@ bool OpcuaNodeNamespaceIndexModule::set(const char*, Value& v, SnortConfig*)
 {
     assert(v.is("~"));
     unsigned long n;
+    // cppcheck-suppress knownConditionTrueFalse ; conversion depends on the rule option text
     if (v.strtoul(n))
     {
         node_namespace_index = static_cast<uint8_t>(n);
@@ -189,9 +191,11 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    const OpcuaNodeNamespaceIndexModule* mod = (const OpcuaNodeNamespaceIndexModule*) m;
+    const OpcuaNodeNamespaceIndexModule* mod =
+        static_cast<const OpcuaNodeNamespaceIndexModule*>(m);
     return new OpcuaNodeNamespaceIndexOption(mod->node_namespace_index);
 }
 
@@ -227,4 +231,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_opcua_node_namespace_index = &ips_api.base;
-

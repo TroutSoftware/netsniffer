@@ -203,7 +203,7 @@ struct DCE2_SsnData
     DCE2_Policy server_policy;
     DCE2_Policy client_policy;
     int flags;
-    uint64_t alert_mask;
+    uint64_t alert_mask[2];
     DCE2_Roptions ropts;
     void* config;
 
@@ -234,12 +234,13 @@ inline void DCE2_ResetRopts(DCE2_SsnData* sd, const snort::Packet* p)
     DceContextData::clear_current_ropts(p, sd->trans);
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline void DCE2_SsnSetNoInspect(DCE2_SsnData* sd)
 {
     sd->flags |= DCE2_SSN_FLAG__NO_INSPECT;
 }
 
-inline int DCE2_SsnNoInspect(DCE2_SsnData* sd)
+inline int DCE2_SsnNoInspect(const DCE2_SsnData* sd)
 {
     return sd->flags & DCE2_SSN_FLAG__NO_INSPECT;
 }
@@ -249,14 +250,14 @@ inline bool DCE2_GcDceDefrag(dce2CommonProtoConf* config)
     return (config->disable_defrag ? false : true);
 }
 
-inline bool DCE2_GcMaxFrag(dce2CommonProtoConf* config)
+inline bool DCE2_GcMaxFrag(const dce2CommonProtoConf* config)
 {
     if (config->max_frag_len != DCE2_SENTINEL)
         return true;
     return false;
 }
 
-inline uint16_t DCE2_GcMaxFragLen(dce2CommonProtoConf* config)
+inline uint16_t DCE2_GcMaxFragLen(const dce2CommonProtoConf* config)
 {
     if (DCE2_GcMaxFrag(config))
         return (uint16_t)config->max_frag_len;
@@ -347,7 +348,7 @@ inline bool DCE2_SsnIsSambaPolicy(DCE2_SsnData* sd)
     return false;
 }
 
-inline DCE2_Policy DCE2_SsnGetServerPolicy(DCE2_SsnData* sd)
+inline DCE2_Policy DCE2_SsnGetServerPolicy(const DCE2_SsnData* sd)
 {
     return sd->server_policy;
 }
@@ -366,7 +367,7 @@ inline DCE2_Policy DCE2_SsnGetServerPolicy(DCE2_SsnData* sd)
  *  bool  -  true if Samba, false if not
  *
  ********************************************************************/
-inline bool DCE2_SsnIsServerSambaPolicy(DCE2_SsnData* sd)
+inline bool DCE2_SsnIsServerSambaPolicy(const DCE2_SsnData* sd)
 {
     DCE2_Policy policy = DCE2_SsnGetServerPolicy(sd);
 
@@ -388,10 +389,10 @@ inline void dce_alert(uint32_t gid, uint32_t sid, dce2CommonStats* stats, DCE2_S
 {
     if ( ((dce2CommonProtoConf*)sd.config)->limit_alerts )
     {
-        // Assuming the maximum sid for dce is less than 64
-        if ( sd.alert_mask & ((uint64_t)1 << sid) )
+        // Assuming the maximum sid for dce is less than 128
+        if ( sd.alert_mask[sid >> 6] & ((uint64_t)1 << (sid & 63)) )
             return;
-        sd.alert_mask |= ((uint64_t)1 << sid);
+        sd.alert_mask[sid >> 6] |= ((uint64_t)1 << (sid & 63));
     }
     snort::DetectionEngine::queue_event(gid,sid);
     stats->events++;
@@ -401,7 +402,7 @@ bool dce2_set_common_config(const snort::Value&, dce2CommonProtoConf&);
 void print_dce2_common_config(const dce2CommonProtoConf&);
 bool dce2_set_co_config(const snort::Value&, dce2CoProtoConf&);
 void print_dce2_co_config(const dce2CoProtoConf&);
-bool dce2_paf_abort(DCE2_SsnData*);
+bool dce2_paf_abort(const DCE2_SsnData*);
 void DCE2_Detect(DCE2_SsnData*);
 snort::Packet* DCE2_GetRpkt(snort::Packet*, DCE2_RpktType, const uint8_t*, uint32_t);
 uint16_t DCE2_GetRpktMaxData(DCE2_RpktType);
@@ -410,4 +411,3 @@ DCE2_TransType get_dce2_trans_type(const snort::Packet* p);
 void reset_using_rpkt();
 
 #endif
-

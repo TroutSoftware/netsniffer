@@ -27,6 +27,7 @@
 #include "gtp_parser.h"
 
 #include <arpa/inet.h>
+#include <cstring>
 
 #include "detection/detection_engine.h"
 #include "log/messages.h"
@@ -101,7 +102,7 @@ static void convertToHex(char* output, int outputSize, const uint8_t* input, int
 }
 
 /* Display the information elements*/
-static void printInfoElements(GTP_IEData* info_elements, GTPMsg* msg)
+static void printInfoElements(const GTP_IEData* info_elements, const GTPMsg* msg)
 {
     for (int i=0; i < MAX_GTP_IE_CODE + 1; i++)
     {
@@ -149,12 +150,6 @@ static int gtp_processInfoElements(
         const GTP_InfoElement* ie = &config.infov[msg->version][type];
         uint16_t length;
 
-        if ( nullptr == ie )
-        {
-            gtp_stats.unknownIEs++;
-            return false;
-        }
-
         /*For fixed length, use the table*/
         if (ie->length)
         {
@@ -169,7 +164,7 @@ static int gtp_processInfoElements(
                 alert(GTP_EVENT_BAD_IE_LEN);
                 return false;
             }
-            ieHdr = (const GTP_IE_Hdr*)start;
+            ieHdr = reinterpret_cast<const GTP_IE_Hdr*>(start);
             length = ntohs(ieHdr->length);
             /*Check the length */
             if (length > UINT16_MAX - GTP_MIN_HEADER_LEN - sizeof(*ieHdr))
@@ -244,7 +239,7 @@ static int gtp_parse_v0(GTPMsg* msg, const uint8_t* buff, uint16_t gtp_len)
 {
     const GTP_C_Hdr* hdr;
 
-    hdr = (const GTP_C_Hdr*)buff;
+    hdr = reinterpret_cast<const GTP_C_Hdr*>(buff);
     msg->header_len = GTP_HEADER_LEN_V0;
 
     /*Check the length field. */
@@ -288,13 +283,13 @@ static int gtp_parse_v0(GTPMsg* msg, const uint8_t* buff, uint16_t gtp_len)
 static int gtp_parse_v1(GTPMsg* msg, const uint8_t* buff, uint16_t gtp_len)
 {
     const GTP_C_Hdr* hdr;
-    const uint32_t* teid;
+    uint32_t teid;
 
-    hdr = (const GTP_C_Hdr*)buff;
+    hdr = reinterpret_cast<const GTP_C_Hdr*>(buff);
     /*TEID value at 5-8 octets*/
-    teid = (const uint32_t*)(buff + 4);
+    std::memcpy(&teid, buff + 4, sizeof(teid));
 
-    if ((msg->msg_type > 3) && (*teid == 0))
+    if ((msg->msg_type > 3) && (teid == 0))
     {
         alert(GTP_EVENT_MISSING_TEID);
     }
@@ -385,13 +380,13 @@ static int gtp_parse_v1(GTPMsg* msg, const uint8_t* buff, uint16_t gtp_len)
 static int gtp_parse_v2(GTPMsg* msg, const uint8_t* buff, uint16_t gtp_len)
 {
     const GTP_C_Hdr* hdr;
-    const uint32_t* teid;
+    uint32_t teid;
 
-    hdr = (const GTP_C_Hdr*)buff;
+    hdr = reinterpret_cast<const GTP_C_Hdr*>(buff);
     /*TEID value at 5-8 octet*/
-    teid = (const uint32_t*)(buff + 4);
+    std::memcpy(&teid, buff + 4, sizeof(teid));
 
-    if ((msg->msg_type > 3) && (hdr->flag & 0x08) && (*teid == 0))
+    if ((msg->msg_type > 3) && (hdr->flag & 0x08) && (teid == 0))
     {
         alert(GTP_EVENT_MISSING_TEID);
     }
@@ -432,7 +427,7 @@ int gtp_parse(const GTPConfig& config, GTPMsg* msg, const uint8_t* buff, uint16_
         return false;
 
     /*The first 3 bits are version number*/
-    const GTP_C_Hdr* hdr = (const GTP_C_Hdr*)buff;
+    const GTP_C_Hdr* hdr = reinterpret_cast<const GTP_C_Hdr*>(buff);
     msg->version = (hdr->flag & 0xE0) >> 5;
     msg->msg_type = hdr->type;
     msg->gtp_header = buff;
@@ -443,14 +438,6 @@ int gtp_parse(const GTPConfig& config, GTPMsg* msg, const uint8_t* buff, uint16_
     /*Check whether this is GTP or GTP' based on version, flag and msg_type. Exit if GTP'*/
     if (checkPrime(msg->version, hdr->flag, msg->msg_type))
         return false;
-
-    const GTP_MsgType* msgType = &config.msgv[msg->version][msg->msg_type];
-
-    if ( nullptr == msgType )
-    {
-        gtp_stats.unknownTypes++;
-        return false;
-    }
 
     // FIXIT-L need to implement stats retrieval from module
     //gtp_stats.messages[msg->version][msg->msg_type]++;
@@ -489,4 +476,3 @@ int gtp_parse(const GTPConfig& config, GTPMsg* msg, const uint8_t* buff, uint16_
     }
     return status;
 }
-

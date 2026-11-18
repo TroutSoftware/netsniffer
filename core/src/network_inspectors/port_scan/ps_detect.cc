@@ -51,12 +51,12 @@ using namespace snort;
 PADDING_GUARD_BEGIN
 struct PS_HASH_KEY
 {
-    int protocol;
+    int protocol = 0;
     SfIp scanner;
-    int16_t group;
+    int16_t group = 0;
     SfIp scanned;
-    uint16_t pad;
-    uint32_t asid;
+    uint16_t pad = 0;
+    uint32_t asid = 0;
 };
 PADDING_GUARD_END
 
@@ -69,7 +69,7 @@ public:
 
     bool is_node_recovery_ok(HashNode* hnode) override
     {
-        PS_TRACKER* tracker = (PS_TRACKER*)hnode->data;
+        const PS_TRACKER* tracker = (PS_TRACKER*)hnode->data;
 
         if ( !tracker->priority_node )
             return true;
@@ -97,7 +97,6 @@ PS_PKT::PS_PKT(Packet* p)
 
 PortscanConfig::PortscanConfig()
 {
-    memset(this, 0, sizeof(*this));
 }
 
 PortscanConfig::~PortscanConfig()
@@ -195,7 +194,7 @@ bool PortScan::ps_filter_ignore(PS_PKT* ps_pkt)
     int reverse_pkt = 0;
     const SfIp* scanner, * scanned;
 
-    p = (Packet*)ps_pkt->pkt;
+    p = ps_pkt->pkt;
 
     if(!p->ptrs.ip_api.is_ip())
         return true;
@@ -309,7 +308,13 @@ static PS_TRACKER* ps_tracker_get(PS_HASH_KEY* key)
         return ht;
 
     auto prev_count = portscan_hash->get_num_nodes();
-    if ( portscan_hash->insert((void*)key, nullptr) != HASH_OK )
+    int status = portscan_hash->insert((void*)key, nullptr);
+
+    // Pin is a keep-preference, not a lifetime guard: force one LRU eviction and retry.
+    if ( status == HASH_NOMEM and portscan_hash->delete_lru_node() )
+        status = portscan_hash->insert((void*)key, nullptr);
+
+    if ( status != HASH_OK )
         return nullptr;
 
     ++spstats.trackers;
@@ -329,7 +334,7 @@ bool PortScan::ps_tracker_lookup(
     PS_PKT* ps_pkt, PS_TRACKER** scanner, PS_TRACKER** scanned)
 {
     PS_HASH_KEY key;
-    Packet* p = (Packet*)ps_pkt->pkt;
+    const Packet* p = ps_pkt->pkt;
 
     if (ps_get_proto(ps_pkt, &key.protocol) == -1)
         return false;
@@ -396,7 +401,7 @@ int PortScan::ps_get_proto(PS_PKT* ps_pkt, int* proto)
     if (!ps_pkt || !ps_pkt->pkt || !proto)
         return -1;
 
-    p = (Packet*)ps_pkt->pkt;
+    p = ps_pkt->pkt;
     *proto = 0;
 
     if ( config->detect_scans & PS_PROTO_TCP )
@@ -600,10 +605,10 @@ static int ps_update_open_ports(PS_PROTO* proto, unsigned short port)
 **    - TCP 3-way handshake packets (we decrement the counter)
 **    - TCP reset packets on unestablished streams.
 */
-void PortScan::ps_tracker_update_tcp(PS_PKT* ps_pkt, PS_TRACKER* scanner,
+void PortScan::ps_tracker_update_tcp(const PS_PKT* ps_pkt, PS_TRACKER* scanner,
     PS_TRACKER* scanned)
 {
-    Packet* p = (Packet*)ps_pkt->pkt;
+    const Packet* p = ps_pkt->pkt;
     unsigned win = config->tcp_window;
 
     SfIp cleared;
@@ -769,7 +774,7 @@ void PortScan::ps_tracker_update_tcp(PS_PKT* ps_pkt, PS_TRACKER* scanner,
 void PortScan::ps_tracker_update_ip(PS_PKT* ps_pkt, PS_TRACKER* scanner,
     PS_TRACKER* scanned)
 {
-    Packet* p = (Packet*)ps_pkt->pkt;
+    Packet* p = ps_pkt->pkt;
 
     if ( !p->ptrs.ip_api.is_ip() )
         return;
@@ -801,7 +806,7 @@ void PortScan::ps_tracker_update_ip(PS_PKT* ps_pkt, PS_TRACKER* scanner,
         if (scanned)
         {
             ps_proto_update(&scanned->proto, 1, 0, win, p->ptrs.ip_api.get_src(),
-                (unsigned short)p->get_ip_proto_next(), packet_time());
+                static_cast<unsigned short>(p->get_ip_proto_next()), packet_time());
         }
         if (scanner)
         {
@@ -814,7 +819,7 @@ void PortScan::ps_tracker_update_ip(PS_PKT* ps_pkt, PS_TRACKER* scanner,
 void PortScan::ps_tracker_update_udp(
     PS_PKT* ps_pkt, PS_TRACKER* scanner, PS_TRACKER* scanned)
 {
-    Packet* p = (Packet*)ps_pkt->pkt;
+    Packet* p = ps_pkt->pkt;
     unsigned win = config->udp_window;
 
     SfIp cleared;
@@ -869,7 +874,7 @@ void PortScan::ps_tracker_update_udp(
 void PortScan::ps_tracker_update_icmp(
     PS_PKT* ps_pkt, PS_TRACKER* scanner, PS_TRACKER*)
 {
-    Packet* p = (Packet*)ps_pkt->pkt;
+    Packet* p = ps_pkt->pkt;
     unsigned win = config->icmp_window;
 
     if (p->ptrs.icmph)
@@ -946,7 +951,7 @@ bool PortScan::ps_tracker_update(PS_PKT* ps_pkt, PS_TRACKER* scanner, PS_TRACKER
 }
 
 static bool ps_alert_one_to_one(
-    const PS_ALERT_CONF& conf, PS_PROTO* scanner, PS_PROTO* scanned)
+    const PS_ALERT_CONF& conf, const PS_PROTO* scanner, PS_PROTO* scanned)
 {
     //  Let's evaluate the scanned host.
     if (scanned && !scanned->alerts)
@@ -991,7 +996,7 @@ static bool ps_alert_one_to_one(
 }
 
 static bool ps_alert_one_to_one_decoy(
-    const PS_ALERT_CONF& conf, PS_PROTO* scanner, PS_PROTO* scanned)
+    const PS_ALERT_CONF& conf, const PS_PROTO* scanner, PS_PROTO* scanned)
 {
     if (scanned && !scanned->alerts)
     {
@@ -1028,7 +1033,7 @@ static bool ps_alert_one_to_one_decoy(
 }
 
 static bool ps_alert_many_to_one(
-    const PS_ALERT_CONF& conf, PS_PROTO* scanner, PS_PROTO* scanned)
+    const PS_ALERT_CONF& conf, const PS_PROTO* scanner, PS_PROTO* scanned)
 {
     if (scanned && !scanned->alerts)
     {
@@ -1197,7 +1202,7 @@ void PortScan::ps_alert_icmp(PS_PROTO* scanner, PS_PROTO* scanned)
 **    - Filtered Portscan?
 */
 bool PortScan::ps_tracker_alert(
-    PS_PKT* ps_pkt, PS_TRACKER* scanner, PS_TRACKER* scanned)
+    const PS_PKT* ps_pkt, PS_TRACKER* scanner, PS_TRACKER* scanned)
 {
     PS_PROTO* scanner_proto = nullptr;
     PS_PROTO* scanned_proto = nullptr;
@@ -1271,7 +1276,7 @@ int PortScan::ps_detect(PS_PKT* ps_pkt)
     if (ps_filter_ignore(ps_pkt))
         return 0;
 
-    Packet* p = (Packet*)ps_pkt->pkt;
+    const Packet* p = ps_pkt->pkt;
 
     do
     {
@@ -1305,4 +1310,3 @@ int PortScan::ps_detect(PS_PKT* ps_pkt)
 
     return 1;
 }
-

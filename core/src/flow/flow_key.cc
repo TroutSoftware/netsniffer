@@ -24,6 +24,9 @@
 
 #include "flow/flow_key.h"
 
+#include <array>
+#include <cstring>
+
 #include "hash/hash_key_operations.h"
 #include "main/snort_config.h"
 #include "protocols/icmp4.h"
@@ -270,6 +273,7 @@ bool FlowKey::init(
     init_mpls(sc, mplsId);
 
     padding = flags.padding_bits = 0;
+    flags.tunnel_encapsulated = false;
 
     flags.group_used = significant_groups;
     init_groups(ingress_group, egress_group, reversed);
@@ -315,6 +319,7 @@ bool FlowKey::init(
     init_mpls(sc, mplsId);
 
     padding = flags.padding_bits = 0;
+    flags.tunnel_encapsulated = false;
     flags.group_used = 0 != (pkt_hdr.flags & DAQ_PKT_FLAG_SIGNIFICANT_GROUPS);
     init_groups(pkt_hdr.ingress_group, pkt_hdr.egress_group, reversed);
 
@@ -358,6 +363,7 @@ bool FlowKey::init(
     init_mpls(sc, mplsId);
 
     padding = flags.padding_bits = 0;
+    flags.tunnel_encapsulated = false;
 
     flags.group_used = 0 != (pkt_hdr.flags & DAQ_PKT_FLAG_SIGNIFICANT_GROUPS);
     init_groups(pkt_hdr.ingress_group, pkt_hdr.egress_group, reversed);
@@ -375,7 +381,9 @@ unsigned FlowHashKeyOps::do_hash(const unsigned char* k, int)
     uint32_t a, b, c;
     a = b = c = hardener;
 
-    const uint32_t* d = (const uint32_t*)k;
+    static_assert(sizeof(FlowKey) % sizeof(uint32_t) == 0);
+    std::array<uint32_t, sizeof(FlowKey) / sizeof(uint32_t)> d;
+    std::memcpy(d.data(), k, sizeof(FlowKey));
 
     a += d[0];   // IPv6 lo[0]
     b += d[1];   // IPv6 lo[1]
@@ -425,5 +433,3 @@ bool FlowHashKeyOps::key_compare(const void* k1, const void* k2, size_t)
 {
     return FlowKey::is_equal(static_cast<const FlowKey*>(k1), static_cast<const FlowKey*>(k2));
 }
-
-

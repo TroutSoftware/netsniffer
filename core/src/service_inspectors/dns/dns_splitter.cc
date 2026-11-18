@@ -39,8 +39,8 @@ StreamSplitter::Status DnsSplitter::scan(
 {
     assert(len > 0);
 
-    DnsFlowData* fd;
-    fd = (DnsFlowData*)((p->flow)->get_flow_data(DnsFlowData::inspector_id));
+    const DnsFlowData* fd;
+    fd = static_cast<DnsFlowData*>(p->flow->get_flow_data(DnsFlowData::inspector_id));
     if (fd && (fd->session.flags & DNS_FLAG_NOT_DNS))
     {
         dnsstats.aborted_sessions++;
@@ -49,7 +49,16 @@ StreamSplitter::Status DnsSplitter::scan(
 
     if ( partial )
     {
-        *fp = size + *data + 1;
+        uint32_t msg_len = size + *data;
+
+        if ( msg_len < DNS_SPLITTER_MIN_USEFUL_LENGTH
+            and ++tiny_msg_count > DNS_SPLITTER_MAX_TINY_MSGS )
+        {
+            dnsstats.aborted_sessions++;
+            return ABORT;
+        }
+
+        *fp = msg_len + 1;
         partial = false;
         return FLUSH;
     }
@@ -61,7 +70,15 @@ StreamSplitter::Status DnsSplitter::scan(
         return SEARCH;
     }
 
-    *fp = (*data << 8) + data[1] + 2;
+    uint32_t msg_len = (*data << 8) + data[1];
+
+    if ( msg_len < DNS_SPLITTER_MIN_USEFUL_LENGTH
+        and ++tiny_msg_count > DNS_SPLITTER_MAX_TINY_MSGS )
+    {
+        dnsstats.aborted_sessions++;
+        return ABORT;
+    }
+
+    *fp = msg_len + 2;
     return FLUSH;
 }
-

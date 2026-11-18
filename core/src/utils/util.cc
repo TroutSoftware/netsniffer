@@ -35,7 +35,7 @@
 
 #include "util_cstring.h"
 
-#ifdef UNIT_TEST
+#if defined(UNIT_TEST) && !defined(CATCH_TEST_BUILD)
 #include "catch/snort_catch.h"
 #endif
 
@@ -112,7 +112,8 @@ const char* get_error(int errnum)
 char* snort_strndup(const char* src, size_t n)
 {
     char* dst = (char*)snort_calloc(n + 1);
-    return strncpy(dst, src, n);
+    strncpy(dst, src, n);
+    return dst;
 }
 
 char* snort_strdup(const char* str)
@@ -145,7 +146,7 @@ void ts_print(const struct timeval* tvp, char* timebuf, bool yyyymmdd)
     if (!tvp)
     {
         // manual page (for linux) says tz is never used, so..
-        memset((char*)&tz, 0, sizeof(tz));
+        memset(&tz, 0, sizeof(tz));
         gettimeofday(&tv, &tz);
         tvp = &tv;
     }
@@ -327,7 +328,6 @@ bool rotate_file_for_max_size(const char* file_owner, const char* old_file,
     else  // Otherwise, if it does exist, append data from current stats file to it
     {
         char read_buf[4096];
-        size_t num_read, num_wrote;
         FILE* rotate_fh;
         int rotate_index = 0;
         char rotate_file_with_index[PATH_MAX];
@@ -399,7 +399,7 @@ bool rotate_file_for_max_size(const char* file_owner, const char* old_file,
                     }
                 }
 
-                num_read = strlen(read_buf);
+                const size_t num_read = strlen(read_buf);
 
                 if (num_read > 0)
                 {
@@ -434,8 +434,8 @@ bool rotate_file_for_max_size(const char* file_owner, const char* old_file,
                         }
                     }
 
-                    num_wrote = fprintf(rotate_fh, "%s", read_buf);
-                    if ((num_wrote != num_read) && ferror(rotate_fh))
+                    const int num_wrote = fprintf(rotate_fh, "%s", read_buf);
+                    if (num_wrote < 0 or static_cast<size_t>(num_wrote) != num_read)
                     {
                         // A bad write occurred
                         ErrorMessage("%s: Error writing to "
@@ -463,11 +463,11 @@ bool rotate_file_for_max_size(const char* file_owner, const char* old_file,
 
 }
 
-#ifdef UNIT_TEST
+#if defined(UNIT_TEST) && !defined(CATCH_TEST_BUILD)
 TEST_CASE("uint8_to_printable_str go over all options", "[util]")
 {
     std::string print_str;
-    uint8_t pattern[] = { 0, 'a', '(', 'd', ')', 1, '\r', 2, '\n','n'};
+    const uint8_t pattern[] = { 0, 'a', '(', 'd', ')', 1, '\r', 2, '\n','n'};
     uint8_to_printable_str(pattern, 10, print_str);
     CHECK((strcmp(print_str.c_str(),"|00 |a(d)|01 0d 02 0a |n") == 0));
 }
@@ -475,7 +475,7 @@ TEST_CASE("uint8_to_printable_str go over all options", "[util]")
 TEST_CASE("uint8_to_printable_str empty buffer", "[util]")
 {
     std::string print_str;
-    uint8_t* pattern = nullptr;
+    const uint8_t* pattern = nullptr;
     uint8_to_printable_str(pattern, 0, print_str);
     CHECK((strcmp(print_str.c_str(),"") == 0));
 }
@@ -483,7 +483,7 @@ TEST_CASE("uint8_to_printable_str empty buffer", "[util]")
 TEST_CASE("uint8_to_printable_str end with |", "[util]")
 {
     std::string print_str;
-    uint8_t pattern[] = { 'a', 0 };
+    const uint8_t pattern[] = { 'a', 0 };
     uint8_to_printable_str(pattern, 2, print_str);
     CHECK((strcmp(print_str.c_str(),"a|00 |") == 0));
 }

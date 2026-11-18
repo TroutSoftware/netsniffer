@@ -160,7 +160,7 @@ bool LuaJitOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const LuaJitOption& rhs = (const LuaJitOption&)ips;
+    const LuaJitOption& rhs = static_cast<const LuaJitOption&>(ips);
 
     if ( config != rhs.config )
         return false;
@@ -170,14 +170,12 @@ bool LuaJitOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus LuaJitOption::eval(Cursor& c, Packet*)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(luaIpsPerfStats);
 
     cursor = &c;
 
-    lua_State* L = states[get_instance_id()];
-
     {
+        lua_State* L = states[get_instance_id()];
         Lua::ManageStack ms(L, 1);
 
         lua_getglobal(L, opt_eval);
@@ -219,7 +217,7 @@ static IpsOption* opt_ctor(Module* m, struct IpsInfo&)
     if ( !chunk )
         return nullptr;
 
-    LuaJitModule* mod = (LuaJitModule*)m;
+    LuaJitModule* mod = static_cast<LuaJitModule*>(m);
     return new LuaJitOption(key, *chunk, mod);
 }
 
@@ -254,4 +252,3 @@ const IpsApi ips_lua_api =
 };
 
 const IpsApi* ips_luajit = &ips_lua_api;
-

@@ -27,6 +27,7 @@
 #include <dlfcn.h>
 
 #include "main/snort_config.h"
+#include "mitigator/mitigator_api.h"
 #include "profiler/profiler.h"
 #include "protocols/packet.h"
 #include "stream/stream.h"
@@ -71,17 +72,6 @@ static inline int check_ssl_appid_for_reinspect(AppId app_id, OdpContext& odp_ct
         return 0;
 }
 
-// FIXIT-M: All the AppIdHttpSession::set/update functions make an
-// internal copy. That needs to change, as that's already the 2nd copy - the
-// first copy happens when third party calls ThirdPartyAppIDAttributeData::set
-// functions and that's unavoidable.
-// Consider passing all the metadata pointers (e.g. host, url, etc.)
-// to AppIdHttpSession directly from the thirdparty.so callbacks.
-//
-// Or, register observers with ThirdPartyAppIDAttributeData and modify the
-// set functions to copy the tp buffers directly into the appropriate observer.
-//
-// Or, replace ThirdParty with 1st Party http_inspect.
 static inline void process_http_session(const Packet& p, AppIdSession& asd,
     ThirdPartyAppIDAttributeData& attribute_data, AppidChangeBits& change_bits)
 {
@@ -176,16 +166,11 @@ static inline void process_http_session(const Packet& p, AppIdSession& asd,
         }
     }
 
-    // FIXIT-M: except for request/response, these cases are duplicate.
-    if ( (field=attribute_data.http_request_via(own)) != nullptr )
-    {
-        if ( hsession->get_field(MISC_VIA_FID) )
-            if (!asd.get_session_flags(APPID_SESSION_APP_REINSPECT))
-                hsession->set_chp_finished(false);
+    field = attribute_data.http_request_via(own);
+    if (!field)
+        field = attribute_data.http_response_via(own);
 
-        hsession->set_field(MISC_VIA_FID, field, change_bits);
-    }
-    else if ( (field=attribute_data.http_response_via(own)) != nullptr )
+    if (field)
     {
         if ( hsession->get_field(MISC_VIA_FID) )
             if (!asd.get_session_flags(APPID_SESSION_APP_REINSPECT))
@@ -476,7 +461,7 @@ static inline void process_third_party_results(const Packet& p, AppIdSession& as
 
 static inline void check_terminate_tp_module(AppIdSession& asd, uint16_t tpPktCount)
 {
-    AppIdHttpSession* hsession = asd.get_http_session();
+    AppIdHttpSession* hsession = asd.get_current_http_session();
 
     if ((tpPktCount >= asd.get_odp_ctxt().max_tp_flow_depth) ||
         (asd.get_session_flags(APPID_SESSION_HTTP_SESSION | APPID_SESSION_APP_REINSPECT) ==
@@ -535,7 +520,7 @@ static void clear_tp_reinspect(AppIdSession& asd, const Packet* p, AppidSessionD
     }
 }
 
-bool do_tp_discovery(ThirdPartyAppIdContext& tp_appid_ctxt, AppIdSession& asd, IpProtocol protocol,
+static bool tp_discovery(ThirdPartyAppIdContext& tp_appid_ctxt, AppIdSession& asd, IpProtocol protocol,
     Packet* p, AppidSessionDirection& direction, AppidChangeBits& change_bits)
 {
     AppId tp_app_id = asd.get_tp_app_id();
@@ -753,3 +738,14 @@ bool do_tp_discovery(ThirdPartyAppIdContext& tp_appid_ctxt, AppIdSession& asd, I
     return true;
 }
 
+SETUP_MITIGATOR(tp_mitigator, "appid",
+{
+    MitigationPolicy{ MitigationAction::Ignore, 1u },
+    MitigationPolicy{ MitigationAction::Abort, 2u }
+});
+
+bool do_tp_discovery(ThirdPartyAppIdContext& tp_appid_ctxt, AppIdSession& asd, IpProtocol protocol,
+    Packet* p, AppidSessionDirection& direction, AppidChangeBits& change_bits)
+{
+    return tp_mitigator(tp_discovery, tp_appid_ctxt, asd, protocol, p, direction, change_bits);
+}

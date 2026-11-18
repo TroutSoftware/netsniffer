@@ -23,6 +23,7 @@
 
 #include "udp_session.h"
 
+#include "flow/flow_control.h"
 #include "flow/session.h"
 #include "framework/data_bus.h"
 #include "hash/xhash.h"
@@ -31,6 +32,7 @@
 #include "pub_sub/intrinsic_event_ids.h"
 #include "pub_sub/stream_event_ids.h"
 #include "stream/stream.h"
+#include "trace/trace_api.h"
 
 #include "udp_ha.h"
 #include "udp_module.h"
@@ -54,7 +56,7 @@ THREAD_LOCAL ProfileStats udp_perf_stats;
 
 //-------------------------------------------------------------------------
 
-static void UdpSessionCleanup(Flow* lwssn)
+static void UdpSessionCleanup(const Flow* lwssn)
 {
     if ( lwssn->ssn_state.session_flags & SSNFLAG_SEEN_SENDER )
         udpStats.released++;
@@ -65,31 +67,60 @@ static void UdpSessionCleanup(Flow* lwssn)
 //-------------------------------------------------------------------------
 
 UdpSession::UdpSession(Flow* f) : Session(f)
-{ }
+{
+    if (flow)
+        flow->add_mem(sizeof(*this));
+}
 
 UdpSession::~UdpSession()
-{ }
+{
+    if (flow)
+        flow->sub_mem(sizeof(*this));
+}
 
 bool UdpSession::setup(Packet* p)
 {
+    return setup(p, false);
+}
+
+bool UdpSession::setup_after_restart(Packet* p)
+{
+    return setup(p, true);
+}
+
+bool UdpSession::setup(Packet* p, bool is_restart)
+{
     ssn_time.tv_sec = p->pkth->ts.tv_sec;
     ssn_time.tv_usec = p->pkth->ts.tv_usec;
+    payload_bytes_seen_client = 0;
+    payload_bytes_seen_server = 0;
     flow->ssn_state.session_flags |= SSNFLAG_SEEN_SENDER;
 
     flow->pkt_type = p->type();
     flow->ip_proto = (uint8_t)p->get_ip_proto_next();
     flow->ssn_state.direction = FROM_CLIENT;
 
-    StreamUdpConfig* pc = get_udp_cfg(flow->ssn_server);
+    const StreamUdpConfig* pc = get_udp_cfg(flow->ssn_server);
     flow->set_default_session_timeout(pc->session_timeout, false);
 
-    SESSION_STATS_ADD(udpStats)
+    trace_logf(stream_udp_trace, TRACE_UDP_STATE, p,
+        "session setup (%s), timeout=%u\n", is_restart ? "restart" : "new",
+        pc->session_timeout);
+
+    if ( is_restart )
+        udpStats.created++;
+    else
+        SESSION_STATS_ADD(udpStats)
 
     DataBus::publish(intrinsic_pub_id, IntrinsicEventIds::FLOW_STATE_CHANGE, p);
 
     if ( flow->ssn_state.ignore_direction != SSN_DIR_NONE )
     {
-        udpStats.sessions--; // incremented in SESSIONS_STATS_ADD
+        trace_logf(stream_udp_trace, TRACE_UDP_STATE, p,
+            "session ignored (ignore_direction=%d)\n", flow->ssn_state.ignore_direction);
+
+        if ( !is_restart )
+            udpStats.sessions--; // incremented in SESSION_STATS_ADD
         return false;
     }
 
@@ -161,6 +192,10 @@ int UdpSession::process_udp(Flow* lwssn, Packet* p)
         {
             lwssn->ssn_state.session_flags |= SSNFLAG_ESTABLISHED;
             DataBus::publish(Stream::get_pub_id(), StreamEventIds::UDP_BIDIRECTIONAL, p);
+
+            trace_logf(stream_udp_trace, TRACE_UDP_STATE, p,
+                "established: bidirectional (session_flags=0x%08x)\n",
+                lwssn->ssn_state.session_flags);
         }
     }
 
@@ -172,18 +207,21 @@ int UdpSession::process_udp(Flow* lwssn, Packet* p)
 
 int UdpSession::process(Packet* p)
 {
-    Profile profile(udp_perf_stats);    // cppcheck-suppress unreadVariable
+    Profile profile(udp_perf_stats);
 
     // Check if the session is expired.
     // Should be done before we do something with the packet...
     if ( Stream::expired_flow(flow, p) )
     {
+        trace_logf(stream_udp_trace, TRACE_UDP_STATE, p,
+            "session expired\n");
+
         udpStats.timeouts++;
         UdpSessionCleanup(flow);
-        flow->restart();
-        flow->ssn_state.session_flags |= SSNFLAG_SEEN_SENDER;
-        udpStats.created++;
+        flow->restart(*p);
         UdpHAManager::process_deletion(*flow);
+        if ( !FlowControl::apply_flow_state(flow, p, false) )
+            return 0;
     }
 
     process_udp(flow, p);
@@ -194,6 +232,7 @@ int UdpSession::process(Packet* p)
     return 0;
 }
 
+// cppcheck-suppress unusedFunction ; called virtually through the Session interface
 void UdpSession::count_stale_packet()
 {
     udpStats.stale_packets++;

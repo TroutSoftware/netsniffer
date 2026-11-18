@@ -82,6 +82,10 @@ if ( HAVE_BROTLI )
     LIST(APPEND EXTERNAL_INCLUDES ${BROTLI_INCLUDE_DIRS})
 endif()
 
+if ( HAVE_CISCO_SHIM )
+    LIST(APPEND EXTERNAL_INCLUDES ${SHIM_INCLUDE_DIR})
+endif ()
+
 include_directories(BEFORE ${LUAJIT_INCLUDE_DIR})
 include_directories(AFTER ${EXTERNAL_INCLUDES})
 
@@ -112,6 +116,7 @@ add_subdirectory(hash)
 add_subdirectory(js_norm)
 add_subdirectory(latency)
 add_subdirectory(log)
+add_subdirectory(mitigator)
 add_subdirectory(main)
 add_subdirectory(managers)
 add_subdirectory(memory)
@@ -234,6 +239,10 @@ target_link_libraries( snort
     ${EXTERNAL_LIBRARIES}
     ${EXTRA_LIBRARIES}
 )
+
+if ( CRASH_MITIGATOR )
+    target_link_libraries( snort mitigator )
+endif ( CRASH_MITIGATOR )
 
 # Solaris requires libnsl and libsocket for various network-related library functions
 if ( CMAKE_SYSTEM_NAME STREQUAL SunOS )

@@ -23,6 +23,7 @@
 
 #include "port_table.h"
 
+#include <cstring>
 #include <memory>
 
 #include "hash/ghash.h"
@@ -101,11 +102,12 @@ public:
     unsigned do_hash(const unsigned char* k, int) override
     {
         unsigned hash = seed;
-        const plx_t* plx = *(plx_t* const*)k;
+        const plx_t* plx;
+        memcpy(&plx, k, sizeof(plx));
 
         for ( int i = 0; i < plx->n; i++ )
         {
-            unsigned char* pc_ptr = (unsigned char*)&plx->p[i];
+            const unsigned char* pc_ptr = (unsigned char*)&plx->p[i];
 
             for ( unsigned j = 0; j < sizeof(void*); j++ )
             {
@@ -149,7 +151,8 @@ public:
 
     unsigned do_hash(const unsigned char* k, int) override
     {
-        const PortObject* po = *(PortObject* const*)k;
+        const PortObject* po;
+        memcpy(&po, k, sizeof(po));
         return PortObjectHash(po, seed, scale, hardener);
     }
 
@@ -213,9 +216,9 @@ static PortObject2* _merge_N_pol(
     if ( pol_cnt > 1 )
     {
         for ( int i = 1; i < pol_cnt; i++ )
-            PortObjectAppendEx2(ponew, (PortObject*)pol[i]);
+            PortObjectAppendEx2(ponew, reinterpret_cast<PortObject*>(pol[i]));
 
-        PortObjectNormalize((PortObject*)ponew);
+        PortObjectNormalize(reinterpret_cast<PortObject*>(ponew));
     }
 
     // Add the Merged PortObject2 to the PortObject2 hash table keyed by ports.
@@ -337,7 +340,8 @@ static PortObject2* PortTableCompileMergePortObjectList2(
             PortObject2AppendPortObject2(ponew, posnew);
 
             /* Remove Ports in ponew from posnew */
-            PortObjectRemovePorts( (PortObject*)posnew, (PortObject*)ponew);
+            PortObjectRemovePorts(reinterpret_cast<PortObject*>(posnew),
+                reinterpret_cast<PortObject*>(ponew));
         }
 
     }
@@ -397,7 +401,7 @@ static inline void update_port_lists(PortObject* po, SF_LIST** parray)
 }
 
 // Create optimized port lists per port
-static inline SF_LIST** create_port_lists(PortTable* p)
+static inline SF_LIST** create_port_lists(const PortTable* p)
 {
     SF_LIST** parray = (SF_LIST**)snort_calloc(sizeof(SF_LIST*), SFPO_MAX_PORTS);
     assert(parray);
@@ -520,11 +524,8 @@ static void PortTableCompileMergePortObjects(PortTable* p)
             parray[ i ] = po->port_list->test(i);
 
         /* Release bit buffer for each port object */
-        if ( po->port_list )
-        {
-            delete po->port_list;
-            po->port_list = nullptr;
-        }
+        delete po->port_list;
+        po->port_list = nullptr;
 
         /* Build a PortObjectItem list from the char array */
         SF_LIST* plist = PortObjectItemListFromBits(parray, SFPO_MAX_PORTS);
@@ -537,12 +538,12 @@ static void PortTableCompileMergePortObjects(PortTable* p)
 
 #ifdef DEBUG
 //  Verify all rules in 'po' list are in 'po2' hash
-static void _po2_include_po_rules(PortObject2* po2, PortObject* po)
+static void _po2_include_po_rules(PortObject2* po2, const PortObject* po)
 {
     SF_LNODE* rpos;
 
     /* get each rule in po */
-    for ( int* pid = (int*)sflist_first(po->rule_list, &rpos);
+    for ( const int* pid = (int*)sflist_first(po->rule_list, &rpos);
         pid;
         pid = (int*)sflist_next(&rpos) )
     {
@@ -571,7 +572,7 @@ static void PortTableConsistencyCheck(PortTable* p)
 
         for ( int i = 0; i < SFPO_MAX_PORTS; i++ )
         {
-            if ( PortObjectHasPort( (PortObject*)po, i) )
+            if ( PortObjectHasPort(reinterpret_cast<PortObject*>(po), i) )
             {
                 assert(!parray[i]);
                 parray[i] = 1;
@@ -592,9 +593,9 @@ static void PortTableConsistencyCheck(PortTable* p)
 static void PortTableConsistencyCheck2(PortTable* p)
 {
     SF_LNODE* pos;
-    PortObject2* lastpo = nullptr;
+    const PortObject2* lastpo = nullptr;
 
-    for ( PortObject* ipo = (PortObject*)sflist_first(p->pt_polist, &pos);
+    for ( const PortObject* ipo = (PortObject*)sflist_first(p->pt_polist, &pos);
         ipo;
         ipo = (PortObject*)sflist_next(&pos) )
     {
@@ -677,6 +678,7 @@ void PortTableFinalize(PortTable* p)
     p->pt_mpxo_hash = nullptr;
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 PortObject* PortTableFindInputPortObjectPorts(PortTable* pt, PortObject* pox)
 {
     if ( !pt or !pox )
@@ -706,7 +708,7 @@ int PortTableAddObject(PortTable* p, PortObject* po)
         return -1;
 
     /* Search for the Port Object in the input list, by address */
-    for ( PortObject* pox = (PortObject*)sflist_first(p->pt_polist, &lpos);
+    for ( const PortObject* pox = (PortObject*)sflist_first(p->pt_polist, &lpos);
         pox!=nullptr;
         pox = (PortObject*)sflist_next(&lpos) )
     {
@@ -743,6 +745,7 @@ int PortTableCompile(PortTable* p)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 void PortTablePrintInputEx(PortTable* p, rim_print_f print_index_map)
 {
     SF_LNODE* pos;
@@ -771,6 +774,7 @@ int PortTablePrintCompiledEx(PortTable* p, rim_print_f print_index_map)
     return 0;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void PortTablePrintInput(PortTable* p)
 {
     LogMessage("*** %d PortObjects in Table\n", p->pt_polist->count);
@@ -788,6 +792,8 @@ void PortTablePrintInput(PortTable* p)
    Prints the original (normalized) RuleGroups and
    as specified by the user
 */
+// cppcheck-suppress unusedFunction ; externally visible C-style API symbol
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 void PortTablePrintUserRules(PortTable* p)
 {
     /* normalized user PortObjects and rule ids */
@@ -806,6 +812,7 @@ void PortTablePrintUserRules(PortTable* p)
 /*
     Prints the Unique Port Groups and rules that reference them
 */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void PortTablePrintRuleGroups(PortTable* p)
 {
     /* normalized user PortObjects and rule ids */
@@ -867,6 +874,7 @@ void RuleListSortUniq(SF_LIST* rl)
 /**Sort and make rule index in all port objects unique. Multiple policies may add
  * the same rule which can lead to duplication.
  */
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 void PortTableSortUniqRules(PortTable* p)
 {
     SF_LNODE* pos = nullptr;

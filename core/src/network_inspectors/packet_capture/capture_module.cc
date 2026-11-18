@@ -160,6 +160,7 @@ static int enable(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int disable(lua_State* L)
 {
     main_broadcast_command(new PacketCaptureDebug(nullptr, -1, nullptr, true, nullptr, 0), 
@@ -249,7 +250,7 @@ const PegInfo* CaptureModule::get_pegs() const
 { return cap_names; }
 
 PegCount* CaptureModule::get_counts() const
-{ return (PegCount*)&cap_count_stats; }
+{ return reinterpret_cast<PegCount*>(&cap_count_stats); }
 
 bool is_path_valid(const std::string& path)
 {

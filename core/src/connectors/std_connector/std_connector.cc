@@ -27,6 +27,7 @@
 
 #include <iostream>
 #include <string>
+#include <climits>
 
 #include "profiler/profiler_defs.h"
 #include "log/text_log.h"
@@ -154,7 +155,7 @@ const PegInfo* StdConnectorModule::get_pegs() const
 { return std_connector_pegs; }
 
 PegCount* StdConnectorModule::get_counts() const
-{ return (PegCount*)&std_connector_stats; }
+{ return reinterpret_cast<PegCount*>(&std_connector_stats); }
 
 //-------------------------------------------------------------------------
 // connector stuff
@@ -195,11 +196,12 @@ StdConnector::~StdConnector()
 
 bool StdConnector::internal_transmit_message(const ConnectorMsg& msg)
 {
-    if ( !msg.get_data() or msg.get_length() == 0 )
+    if ( !msg.get_data() or msg.get_length() == 0 or msg.get_length() >= INT_MAX )
         return false;
 
     if (!buffered)
-        return TextLog_Print(text_log, "%.*s\n", msg.get_length(), msg.get_data())
+        return TextLog_Write(text_log, (const char*)msg.get_data(), (int)msg.get_length())
+            and TextLog_NewLine(text_log)
             and ++std_connector_stats.messages_transmitted;
 
 #ifdef REG_TEST
@@ -267,7 +269,7 @@ static void mod_dtor(Module* m)
 
 static Connector* std_connector_tinit(const ConnectorConfig& config)
 {
-    const StdConnectorConfig& conf = (const StdConnectorConfig&)config;
+    const StdConnectorConfig& conf = static_cast<const StdConnectorConfig&>(config);
 
     return new StdConnector(conf);
 }
@@ -277,7 +279,7 @@ static void std_connector_tterm(Connector* connector)
 
 static ConnectorCommon* std_connector_ctor(Module* m)
 {
-    StdConnectorModule* mod = (StdConnectorModule*)m;
+    StdConnectorModule* mod = static_cast<StdConnectorModule*>(m);
     ConnectorCommon* std_connector_common = new StdConnectorCommon(mod->get_and_clear_config());
 
     return std_connector_common;
@@ -318,4 +320,3 @@ const BaseApi* std_connector[] =
     &std_connector_api.base,
     nullptr
 };
-

@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "framework/reload_survivor_subscriptions_impl.h"
 #include "main/policy.h"
 #include "main/snort_config.h"
 #include "protocols/packet.h"
@@ -60,7 +61,7 @@ private:
 class PacketEvent : public DataEvent
 {
 public:
-    PacketEvent(Packet* p)
+    PacketEvent(const Packet* p)
     { packet = p; }
 
     const Packet* get_packet() const override
@@ -78,6 +79,8 @@ DataBus::DataBus() = default;
 
 DataBus::~DataBus()
 {
+    rss_on_bus_destroyed(this);
+
     for ( const auto& p : pub_sub )
     {
         for ( const auto* h : p )
@@ -178,6 +181,7 @@ void DataBus::publish_to_all_network_policies(unsigned pub_id, unsigned evt_id)
 // private methods
 //--------------------------------------------------------------------------
 
+// cppcheck-suppress constParameterCallback
 static bool compare(DataHandler* a, DataHandler* b)
 {
     if ( a->order and b->order )
@@ -220,6 +224,10 @@ void DataBus::_publish(unsigned pid, unsigned eid, DataEvent& e, Flow* f) const
     const SubList& subs = pub_sub[idx];
 
     for ( auto* h : subs )
-        h->handle(e, f);
+    {
+        if ( h->live.load(std::memory_order_acquire) )
+            h->handle(e, f);
+        else
+            rss_stats.dead_handler_skips.fetch_add(1, std::memory_order_relaxed);
+    }
 }
-

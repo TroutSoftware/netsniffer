@@ -74,7 +74,7 @@ struct S7commplusDataHeader
 
 using namespace snort;
 
-static bool S7commPlusProtocolDecode(S7commplusSessionData* session, Packet* p)
+static bool S7commPlusProtocolDecode(S7commplusSessionData* session, const Packet* p)
 {
     const S7commplusHeader* s7commplus_header;
     const S7commplusDataHeader* s7commplus_data_header;
@@ -86,7 +86,7 @@ static bool S7commPlusProtocolDecode(S7commplusSessionData* session, Packet* p)
 
     offset = sizeof(TpktHeader) + sizeof(CotpHeader);
 
-    s7commplus_header = (const S7commplusHeader*)(p->data + offset);
+    s7commplus_header = reinterpret_cast<const S7commplusHeader*>(p->data + offset);
     /* Set the session data. Swap byte order for 16-bit fields. */
     session->s7commplus_proto_id = s7commplus_header->proto_id;
     session->s7commplus_proto_version = s7commplus_header->proto_version;
@@ -112,7 +112,7 @@ static bool S7commPlusProtocolDecode(S7commplusSessionData* session, Packet* p)
         offset += sizeof(S7commplusHeader) + INTEGRITY_PART_LEN ;
     }
 
-    s7commplus_data_header = (const S7commplusDataHeader*)(p->data + offset);
+    s7commplus_data_header = reinterpret_cast<const S7commplusDataHeader*>(p->data + offset);
     /* Set the session data. Swap byte order for 16-bit fields. */
     session->s7commplus_opcode = s7commplus_data_header->opcode;
     session->s7commplus_reserved_1 = ntohs(s7commplus_data_header->reserved_1);
@@ -122,7 +122,7 @@ static bool S7commPlusProtocolDecode(S7commplusSessionData* session, Packet* p)
     return true;
 }
 
-bool S7commplusDecode(Packet* p, S7commplusFlowData* mfd)
+bool S7commplusDecode(const Packet* p, S7commplusFlowData* mfd)
 {
     const TpktHeader* tpkt_header;
     const CotpHeader* cotp_header;
@@ -132,8 +132,8 @@ bool S7commplusDecode(Packet* p, S7commplusFlowData* mfd)
     if (p->dsize < TPKT_MIN_PACKET_LEN)
         return false;
 
-    tpkt_header = (const TpktHeader*)p->data;
-    cotp_header = (const CotpHeader*)(p->data + sizeof(TpktHeader));
+    tpkt_header = reinterpret_cast<const TpktHeader*>(p->data);
+    cotp_header = reinterpret_cast<const CotpHeader*>(p->data + sizeof(TpktHeader));
     tpkt_length = ntohs(tpkt_header->length);
 
     /* It might be a TPKT/COTP packet for other purpose, e.g. connect */
@@ -147,7 +147,7 @@ bool S7commplusDecode(Packet* p, S7commplusFlowData* mfd)
         return true;
     }
 
-    s7commplus_header = (const S7commplusHeader*)(p->data +
+    s7commplus_header = reinterpret_cast<const S7commplusHeader*>(p->data +
         sizeof(TpktHeader) + sizeof(CotpHeader));
 
     if (s7commplus_header->proto_id == S7COMMPLUS_PROTOCOL_ID)
@@ -160,4 +160,3 @@ bool S7commplusDecode(Packet* p, S7commplusFlowData* mfd)
         return false;
     }
 }
-

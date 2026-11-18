@@ -43,56 +43,56 @@ static void trim(string& str)
 template<uint8_t T>
 static const char* get_c2s_cipher(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_encryption_algorithms_client_to_server() : "";
 }
 
 template<uint8_t T>
 static const char* get_s2c_cipher(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_encryption_algorithms_server_to_client() : "";
 }
 
 template<uint8_t T>
 static const char* get_c2s_mac(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_mac_algorithms_client_to_server() : "";
 }
 
 template<uint8_t T>
 static const char* get_s2c_mac(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_mac_algorithms_server_to_client() : "";
 }
 
 template<uint8_t T>
 static const char* get_c2s_compression(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_compression_algorithms_client_to_server() : "";
 }
 
 template<uint8_t T>
 static const char* get_s2c_compression(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_compression_algorithms_server_to_client() : "";
 }
 
 template<uint8_t T>
 static const char* get_kex(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_kex_algorithms() : "";
 }
 
 template<uint8_t T>
 static const char* get_host_key(const DataEvent* event, const Flow*)
 {
-    auto e = (const SshAlgoEvent*)event;
+    auto e = static_cast<const SshAlgoEvent*>(event);
     return T == e->get_direction() ? e->get_server_host_key_algorithms() : "";
 }
 
@@ -171,6 +171,7 @@ static std::string match(const char* client_list, const std::string& server_list
 class SshExtractorFlowData : public ExtractorFlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(SshExtractorFlowData)
     static constexpr ServiceType type_id = ServiceType::SSH;
 
     SshExtractorFlowData(SshExtractor& owner, const Flow& origin)
@@ -421,7 +422,6 @@ void log(ExtractorLogger* logger, const T& fields, const SshExtractorFlowData* f
 
 void SshExtractor::Version::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     const SshEvent& ssh_event = *((SshEvent*)&event);
@@ -474,7 +474,6 @@ void SshExtractor::Version::handle(DataEvent& event, Flow* flow)
 
 void SshExtractor::Validation::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!owner.filter(flow))
@@ -537,7 +536,6 @@ void SshExtractor::Validation::handle(DataEvent& event, Flow* flow)
 
 void SshExtractor::dump(const SshExtractorFlowData& fd)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!logger)

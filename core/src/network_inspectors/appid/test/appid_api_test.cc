@@ -53,6 +53,7 @@ using namespace snort;
 static SnortProtocolId dummy_http2_protocol_id = 1;
 char const* APPID_UT_ORG_UNIT = "Google";
 THREAD_LOCAL bool TimeProfilerStats::enabled = false;
+THREAD_LOCAL AppIdDebug* appidDebug = nullptr;
 #define ShadowTraffic_Type_Domain_Fronting    0x00000010
 
 bool mock_inspector_exist = true;
@@ -83,24 +84,27 @@ void AppIdModule::reset_stats() {}
 class DummyInspector : public snort::Inspector
 {
 public:
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     void eval(Packet*) override {};
 };
 
 void DataBus::publish(unsigned, unsigned, DataEvent& event, Flow*)
 {
-    AppidEvent* appid_event = (AppidEvent*)&event;
-    char* test_log = (char*)mock().getData("test_log").getObjectPointer();
+    const AppidEvent* appid_event = static_cast<AppidEvent*>(&event);
+    char* test_log = static_cast<char*>(mock().getData("test_log").getObjectPointer());
     snprintf(test_log, 256, "Published change_bits == %s",
         appid_event->get_change_bitset().to_string().c_str());
     mock().actualCall("publish");
 }
 
+// cppcheck-suppress constParameterReference
 void AppIdSession::publish_appid_event(AppidChangeBits& change_bits, const Packet& p, bool, uint32_t)
 {
     AppidEvent app_event(change_bits, false, 0, this->get_api(), p);
     DataBus::publish(0, AppIdEventIds::ANY_CHANGE, app_event, p.flow);
 }
 
+// cppcheck-suppress constParameterReference
 void AppIdSession::examine_ssl_metadata(AppidChangeBits& change_bits, bool partial_inspect)
 {
     if (tsession == nullptr)
@@ -259,13 +263,13 @@ TEST_GROUP(appid_api)
 
 TEST_GROUP(appid_api_no_session)
 {
-    void setup()
+    void setup() override
     {
         mock_init_appid_pegs();
         flow_no_session = new Flow;
     }
 
-    void teardown()
+    void teardown() override
     {
         mock_cleanup_appid_pegs();
         delete flow_no_session;
@@ -405,10 +409,10 @@ TEST(appid_api, ssl_app_group_id_lookup_zero_len_data)
 
 TEST(appid_api, set_tls_null_byte_string_no_leak)
 {
-    char* null_sni = snort_strdup("\0");
-    char* null_cname = snort_strdup("\0");
-    char* null_alt_name = snort_strdup("\0");
-    char* null_org_unit = snort_strdup("\0");
+    const char* null_sni = snort_strdup("\0");
+    const char* null_cname = snort_strdup("\0");
+    const char* null_alt_name = snort_strdup("\0");
+    const char* null_org_unit = snort_strdup("\0");
 
     mock_session->tsession->set_tls_sni(null_sni, 0);
     mock_session->tsession->set_tls_cname(null_cname, 0);
@@ -426,8 +430,6 @@ TEST(appid_api_no_session, ssl_app_group_id_lookup)
     AppId service, client, payload = APP_ID_NONE;
     bool val = false;
 
-    AppidChangeBits change_bits;
-    
     flow_no_session->free_flow_data(1);
     val = appid_api.ssl_app_group_id_lookup(flow_no_session, (const char*)APPID_UT_TLS_HOST, (const char*)APPID_UT_TLS_HOST,
         (const char*)APPID_UT_TLS_HOST, (const char*)APPID_UT_TLS_HOST, false, service, client, payload);

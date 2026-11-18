@@ -109,7 +109,7 @@ using namespace std;
         (s).clear();                                                    \
         CHECK((exp_len) == (s).tellp());                                \
                                                                         \
-        ostreambuf_infl* b = reinterpret_cast<ostreambuf_infl*>((s).rdbuf()); \
+        const auto* b = static_cast<ostreambuf_infl*>((s).rdbuf());     \
         auto act = b->data();                                           \
         auto act_len = b->data_len();                                   \
                                                                         \
@@ -124,7 +124,7 @@ using namespace std;
         (s).clear();                                                    \
         CHECK((exp_len) == (s).tellp());                                \
                                                                         \
-        ostreambuf_infl* b = reinterpret_cast<ostreambuf_infl*>((s).rdbuf()); \
+        const auto* b = static_cast<ostreambuf_infl*>((s).rdbuf());     \
         auto act = b->data();                                           \
         auto act_len = b->data_len();                                   \
                                                                         \
@@ -1565,7 +1565,7 @@ TEST_CASE("output buffer - basic", "[Stream buffers]")
         int off_c = b.pubseekoff(-exp_len, ios_base::cur, ios_base::out);
         CHECK(off_c == 0);
 
-        char* act_seq = new char[exp_len];
+        char* act_seq = new char[exp_len]();
         CHECK(b.sgetn(act_seq, exp_len) == exp_len);
         CHECK(!memcmp(exp, act_seq, exp_len));
         delete[] act_seq;
@@ -1603,7 +1603,7 @@ TEST_CASE("output buffer - basic", "[Stream buffers]")
         memcpy(buf, exp, exp_len);
         b.pubsetbuf(buf, exp_len);
 
-        char* act_seq = new char[exp_len + 1];
+        char* act_seq = new char[exp_len + 1]();
         CHECK(b.sgetn(act_seq, exp_len + 1) == exp_len);
         CHECK(!memcmp(exp, act_seq, exp_len));
         delete[] act_seq;

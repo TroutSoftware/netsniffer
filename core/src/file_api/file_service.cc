@@ -31,10 +31,12 @@
 
 #include "log/log_stats.h"
 #include "log/messages.h"
+#include "main.h"
 #include "main/snort_config.h"
 #include "managers/inspector_manager.h"
 #include "mime/file_mime_process.h"
 #include "search_engines/search_tool.h"
+#include "utils/stats/snapshot.h"
 
 #include "file_cache.h"
 #include "file_capture.h"
@@ -71,10 +73,46 @@ void FileService::reset()
     file_capture_enabled = false;
 }
 
-void FileService::print_cache_usage()
+void FileService::collect_cache_usage(stats::Builder& builder, stats::Group& group)
 {
-    if (file_cache)
-        LogCount("File cache entries", file_cache->get_num_entries());
+    if (!file_cache)
+        return;
+
+    const auto entries = file_cache->get_num_entries();
+    if (entries > 0)
+        builder.counter(group, "File cache entries", static_cast<uint64_t>(entries));
+}
+
+FileCacheClearStatus FileService::get_file_cache_clear_status()
+{
+    // Pausing this process cannot stop cache writes from another process.
+    const SnortConfig* sc = SnortConfig::get_conf();
+    if ( !sc )
+        return FileCacheClearStatus::UNAVAILABLE;
+
+    if ( sc->max_procs != 1 or sc->mp_dbus )
+        return FileCacheClearStatus::MULTIPROCESS;
+
+    if ( !file_cache )
+        return FileCacheClearStatus::NOT_INITIALIZED;
+
+    // Packet threads can still use pointers to entries after a cache lookup.
+    // Freeing entries is safe only when every packet thread is fully paused.
+    if ( !main_packet_threads_fully_paused() )
+        return FileCacheClearStatus::PACKET_THREADS_BUSY;
+
+    return FileCacheClearStatus::READY;
+}
+
+FileCacheClearResult FileService::clear_file_cache()
+{
+    FileCacheClearResult result;
+    result.status = get_file_cache_clear_status();
+
+    if ( result.status == FileCacheClearStatus::READY )
+        result.report = file_cache->clear();
+
+    return result;
 }
 
 void FileService::post_init()
@@ -133,7 +171,10 @@ void FileService::verify_reload(const SnortConfig* sc)
 void FileService::close()
 {
     if (file_cache)
+    {
         delete file_cache;
+        file_cache = nullptr;
+    }
 
     MimeSession::exit();
     FileCapture::exit();
@@ -172,7 +213,7 @@ bool FileService::is_file_service_enabled()
  */
 int64_t FileService::get_max_file_depth(FileConfig *fc)
 {
-    FileConfig* file_config = fc ? fc : get_file_config();
+    const FileConfig* file_config = fc ? fc : get_file_config();
 
     if (!file_config)
         return -1;
@@ -219,7 +260,7 @@ uint64_t get_file_processed_size(Flow* flow)
     if (!file_flows)
         return 0;
 
-    FileContext* context = file_flows->get_current_file_context();
+    const FileContext* context = file_flows->get_current_file_context();
 
     if ( !context )
         return 0;

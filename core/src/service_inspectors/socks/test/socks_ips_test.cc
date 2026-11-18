@@ -55,14 +55,14 @@ FlowDataStore::~FlowDataStore() = default;
 FlowData* FlowDataStore::get(unsigned) const { return stored_flow_data; }
 void FlowDataStore::set(FlowData* fd) { stored_flow_data = fd; }
 void FlowDataStore::erase(unsigned) {}
-void FlowDataStore::erase(FlowData*) {}
 void FlowDataStore::clear() {}
 bool FlowDataStore::empty() const { return stored_flow_data == nullptr; }
 void FlowDataStore::call_handlers(Packet*, FlowDataHandlerType) const {}
 
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 
-// cppcheck-suppress uninitMemberVar ; mock class - only data/dsize used in tests
 Packet::Packet(bool) { }
 Packet::~Packet() = default;
 

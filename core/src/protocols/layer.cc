@@ -163,12 +163,16 @@ const vlan::VlanTagHdr* get_outer_vlan_layer(const Packet* const p)
     return reinterpret_cast<const vlan::VlanTagHdr*>(lyr->start);
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 const cisco_meta_data::CiscoMetaDataHdr* get_cisco_meta_data_layer(const Packet* const p)
 {
     assert( p->proto_bits & PROTO_BIT__CISCO_META_DATA );
 
     const Layer* lyr = find_layer(p->layers, p->num_layers, ProtocolId::ETHERTYPE_CISCO_META,
         ProtocolId::ETHERTYPE_CISCO_META);
+
+    if (lyr == nullptr)
+        return nullptr;
 
     return reinterpret_cast<const cisco_meta_data::CiscoMetaDataHdr*>(lyr->start);
 }
@@ -214,7 +218,7 @@ const ip::IP6Frag* get_inner_ip6_frag(const Packet* const pkt)
                 return reinterpret_cast<const ip::IP6Frag*>(lyr->start);
 
             // Only check until current ip6h header
-            if (lyr->start == (const uint8_t*)ip6h)
+            if (lyr->start == reinterpret_cast<const uint8_t*>(ip6h))
                 return nullptr;
 
             lyr--;

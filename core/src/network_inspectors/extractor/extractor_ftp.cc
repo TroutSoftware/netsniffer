@@ -47,19 +47,19 @@ namespace req
 {
 static pair<const char*, uint16_t> get_cmd(const DataEvent* event, const Flow*)
 {
-    const auto& req = ((const FtpRequestEvent*)event)->get_request();
+    const auto& req = static_cast<const FtpRequestEvent*>(event)->get_request();
     return {req.cmd_begin, req.cmd_size};
 }
 
 static pair<const char*, uint16_t> get_arg(const DataEvent* event, const Flow*)
 {
-    const auto& req = ((const FtpRequestEvent*)event)->get_request();
+    const auto& req = static_cast<const FtpRequestEvent*>(event)->get_request();
     return {req.param_begin, req.param_size};
 }
 
 static pair<const char*, uint16_t> get_user(const DataEvent* event, const Flow*)
 {
-    const auto& req = ((const FtpRequestEvent*)event)->get_request();
+    const auto& req = static_cast<const FtpRequestEvent*>(event)->get_request();
     const auto cmd = string(req.cmd_begin, req.cmd_size);
     if (cmd == "USER")
         return {req.param_begin, req.param_size};
@@ -99,9 +99,9 @@ FtpRequestExtractor::FtpRequestExtractor(Extractor& i, uint32_t t, const vector<
 void FtpRequestExtractor::internal_tinit(const snort::Connector::ID* service_id)
 { log_id = service_id; }
 
+// cppcheck-suppress duplInheritedMember ; derived handler intentionally hides base no-op for typed dispatch
 void FtpRequestExtractor::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!filter(flow))
@@ -148,43 +148,43 @@ namespace resp
 {
 static pair<const char*, uint16_t> get_code(const DataEvent* event, const Flow*)
 {
-    const auto& response = ((const FtpResponseEvent*)event)->get_response();
+    const auto& response = static_cast<const FtpResponseEvent*>(event)->get_response();
     return {response.rsp_begin, response.rsp_size};
 }
 
 static pair<const char*, uint16_t> get_msg(const DataEvent* event, const Flow*)
 {
-    const auto& response = ((const FtpResponseEvent*)event)->get_response();
+    const auto& response = static_cast<const FtpResponseEvent*>(event)->get_response();
     return {response.msg_begin, response.msg_size};
 }
 
 static const SfIp& get_orig_ip(const DataEvent* event, const Flow*)
 {
-    if (((const FtpResponseEvent*)event)->is_passive())
-        return ((const FtpResponseEvent*)event)->get_client_ip();
+    if (static_cast<const FtpResponseEvent*>(event)->is_passive())
+        return static_cast<const FtpResponseEvent*>(event)->get_client_ip();
     else
-        return ((const FtpResponseEvent*)event)->get_server_ip();
+        return static_cast<const FtpResponseEvent*>(event)->get_server_ip();
 }
 
 static const SfIp& get_resp_ip(const DataEvent* event, const Flow*)
 {
-    if (((const FtpResponseEvent*)event)->is_passive())
-        return ((const FtpResponseEvent*)event)->get_server_ip();
+    if (static_cast<const FtpResponseEvent*>(event)->is_passive())
+        return static_cast<const FtpResponseEvent*>(event)->get_server_ip();
     else
-        return ((const FtpResponseEvent*)event)->get_client_ip();
+        return static_cast<const FtpResponseEvent*>(event)->get_client_ip();
 }
 
 static uint64_t get_resp_port(const DataEvent* event, const Flow*)
 {
-    if (((const FtpResponseEvent*)event)->is_passive())
-        return (uint64_t)((const FtpResponseEvent*)event)->get_server_port();
+    if (static_cast<const FtpResponseEvent*>(event)->is_passive())
+        return static_cast<uint64_t>(static_cast<const FtpResponseEvent*>(event)->get_server_port());
     else
-        return (uint64_t)((const FtpResponseEvent*)event)->get_client_port();
+        return static_cast<uint64_t>(static_cast<const FtpResponseEvent*>(event)->get_client_port());
 }
 
 static uint64_t get_file_size(const DataEvent* event, const Flow*)
 {
-    const auto& resp = ((const FtpResponseEvent*)event)->get_response();
+    const auto& resp = static_cast<const FtpResponseEvent*>(event)->get_response();
     const auto& code = string(resp.rsp_begin, resp.rsp_size);
 
     if (code == FILE_STATUS_OK)
@@ -195,7 +195,7 @@ static uint64_t get_file_size(const DataEvent* event, const Flow*)
 
 static int8_t get_mode(const DataEvent* event, const Flow*)
 {
-    return ((const FtpResponseEvent*)event)->get_mode();
+    return static_cast<const FtpResponseEvent*>(event)->get_mode();
 }
 
 static const map<string, ExtractorEvent::StrGetFn> sub_str_getters =
@@ -266,9 +266,9 @@ void ExtractorEvent::log<vector<FtpResponseExtractor::SubField>, DataEvent*, Flo
     }
 }
 
+// cppcheck-suppress duplInheritedMember ; derived handler intentionally hides base no-op for typed dispatch
 void FtpResponseExtractor::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!filter(flow))
@@ -298,6 +298,7 @@ vector<const char*> FtpResponseExtractor::get_field_names() const
 class FtpExtractorFlowData : public ExtractorFlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(FtpExtractorFlowData)
     static constexpr ServiceType type_id = ServiceType::FTP;
 
     FtpExtractorFlowData(FtpExtractor& owner, const Flow& origin)
@@ -539,7 +540,6 @@ static const string commands_to_log = "RETR, STOR, PASV, PORT, DELE, APPE, EPRT,
 
 void FtpExtractor::Req::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!owner.filter(flow))
@@ -595,7 +595,6 @@ void FtpExtractor::Req::handle(DataEvent& event, Flow* flow)
 
 void FtpExtractor::Resp::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!owner.filter(flow))
@@ -641,7 +640,6 @@ void FtpExtractor::Resp::handle(DataEvent& event, Flow* flow)
 
 void FtpExtractor::dump(const FtpExtractorFlowData& fd)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!logger)

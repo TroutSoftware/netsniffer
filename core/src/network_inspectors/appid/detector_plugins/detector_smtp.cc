@@ -195,7 +195,7 @@ int SmtpClientDetector::extract_version_and_add_client_app(
     ClientSMTPData* const client_data, AppIdSession& asd, AppId appId,
     AppidChangeBits& change_bits)
 {
-    uint8_t* v_end = client_data->version + MAX_VERSION_SIZE - 1;
+    const uint8_t* v_end = client_data->version + MAX_VERSION_SIZE - 1;
 
     //  The prefix_len includes the NUL character, but product does not, so
     //  subtract 1 from length to skip.
@@ -220,7 +220,6 @@ int SmtpClientDetector::identify_client_version(ClientSMTPData* const fd, const 
 {
     const uint8_t* p;
     AppId appId = APP_ID_SMTP;
-    uint8_t* v_end = fd->version + MAX_VERSION_SIZE - 1;
     unsigned len = data_end - product;
     if (len >= sizeof(MICROSOFT) && memcmp(product, MICROSOFT, sizeof(MICROSOFT)-1) == 0)
     {
@@ -274,6 +273,7 @@ int SmtpClientDetector::identify_client_version(ClientSMTPData* const fd, const 
         if (p >= data_end || *(data_end - 1) != ')' || *p == ')' || isspace(*p))
             return 1;
 
+        const uint8_t* v_end = fd->version + MAX_VERSION_SIZE - 1;
         uint8_t* v;
         for (v = fd->version; v < v_end && p < data_end - 1; v++,p++)
         {
@@ -356,7 +356,7 @@ SMTPDetectorData::~SMTPDetectorData()
 
 SMTPDetectorData* SmtpClientDetector::get_common_data(AppIdSession& asd)
 {
-    SMTPDetectorData* dd = (SMTPDetectorData*)data_get(asd);
+    SMTPDetectorData* dd = static_cast<SMTPDetectorData*>(data_get(asd));
     if (!dd)
     {
         dd = new SMTPDetectorData;
@@ -678,7 +678,8 @@ static inline int smtp_validate_reply(const uint8_t* data, uint16_t* offset, uin
         return 0;
     }
 
-    const ServiceSMTPCode* code_hdr = (const ServiceSMTPCode* )(data + *offset);
+    const ServiceSMTPCode* code_hdr =
+        reinterpret_cast<const ServiceSMTPCode*>(data + *offset);
 
     if (code_hdr->code[0] < '1' || code_hdr->code[0] > '5')
         return -1;
@@ -725,7 +726,7 @@ static inline int smtp_validate_reply(const uint8_t* data, uint16_t* offset, uin
                 if (size - (*offset + 1) < (int)sizeof(ServiceSMTPCode))
                     return -1;
 
-                code_hdr = (const ServiceSMTPCode*)(data + *offset + 1);
+                code_hdr = reinterpret_cast<const ServiceSMTPCode*>(data + *offset + 1);
 
                 if (code_hdr->code[0] < '1' || code_hdr->code[0] > '5')
                     return -1;
@@ -887,4 +888,3 @@ fail:
     fail_service(args.asd, args.pkt, args.dir);
     return APPID_NOMATCH;
 }
-

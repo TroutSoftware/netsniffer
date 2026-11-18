@@ -98,7 +98,8 @@ bool HttpParamIpsOption::operator==(const IpsOption& ips) const
 
 bool HttpParamIpsOption::retry(Cursor& current_cursor)
 {
-    HttpCursorData* cd = (HttpCursorData*)current_cursor.get_data(HttpCursorData::id);
+    HttpCursorData* cd = static_cast<HttpCursorData*>(
+        current_cursor.get_data(HttpCursorData::id));
 
     if (cd)
         return cd->retry();
@@ -108,7 +109,6 @@ bool HttpParamIpsOption::retry(Cursor& current_cursor)
 
 IpsOption::EvalStatus HttpParamIpsOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(HttpParamRuleOptModule::http_param_ps);
 
     const HttpInspect* const hi = eval_helper(p);

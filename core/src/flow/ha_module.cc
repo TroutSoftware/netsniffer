@@ -73,6 +73,9 @@ static const PegInfo ha_pegs[] =
     { CountType::SUM, "unknown_key_type", "messages received with an unknown flow key type" },
     { CountType::SUM, "unknown_client_idx", "messages received with an unknown client index" },
     { CountType::SUM, "client_consume_errors", "client data consume failure count" },
+    { CountType::SUM, "session_client_not_first", "non-session client received first without a local flow" },
+    { CountType::SUM, "duplicate_client_segment", "messages received with a duplicate client segment" },
+    { CountType::SUM, "missing_session_client", "updates without a required session client" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -106,7 +109,7 @@ const PegInfo* HighAvailabilityModule::get_pegs() const
 
 PegCount* HighAvailabilityModule::get_counts() const
 {
-    return (PegCount*) &ha_stats;
+    return reinterpret_cast<PegCount*>(&ha_stats);
 }
 
 ProfileStats* HighAvailabilityModule::get_profile() const
@@ -165,4 +168,3 @@ void HAReloadTuner::tswap()
 {
     HighAvailabilityManager::thread_reinit();
 }
-

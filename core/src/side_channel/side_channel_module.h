@@ -31,7 +31,7 @@ struct SideChannelConfig
 {
     PortBitSet* ports = nullptr;
     SCConnectors connectors;
-    ScMsgFormat format;
+    ScMsgFormat format = ScMsgFormat::BINARY;
 };
 
 extern THREAD_LOCAL SimpleStats sc_stats;
@@ -47,7 +47,7 @@ public:
     bool end(const char*, int, snort::SnortConfig*) override;
 
     PegCount* get_counts() const override
-    { return (PegCount*)&sc_stats; }
+    { return reinterpret_cast<PegCount*>(&sc_stats); }
 
     const PegInfo* get_pegs() const override
     { return snort::simple_pegs; }
@@ -62,4 +62,3 @@ private:
 };
 
 #endif
-

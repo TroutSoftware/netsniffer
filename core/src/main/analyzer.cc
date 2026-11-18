@@ -37,6 +37,7 @@
 #include "detection/ips_context.h"
 #include "detection/event_trace.h"
 #include "detection/tag.h"
+#include "file_api/file_capture.h"
 #include "file_api/file_service.h"
 #include "filters/detection_filter.h"
 #include "filters/rate_filter.h"
@@ -58,6 +59,7 @@
 #include "managers/module_manager.h"
 #include "managers/plugin_manager.h"
 #include "memory/memory_cap.h"
+#include "mitigator/mitigator_api.h"
 #include "packet_io/active.h"
 #include "packet_io/packet_tracer.h"
 #include "packet_io/sfdaq.h"
@@ -76,12 +78,15 @@
 
 #include "analyzer_command.h"
 #include "oops_handler.h"
+#include "process.h"
 #include "snort.h"
 #include "snort_config.h"
 #include "thread_config.h"
 
 using namespace snort;
 using namespace std;
+
+SETUP_PACKET_MITIGATOR(packet_mitigator);
 
 static MainHook_f main_hook = snort_ignore;
 
@@ -126,6 +131,7 @@ public:
         if (!empty())
         {
             const Entry& entry = queue.front();
+            // cppcheck-suppress syntaxError ; timercmp's comparison operator is a macro argument
             if (!now || !timercmp(now, &entry.next_try, <))
             {
                 DAQ_Msg_h msg = entry.msg;
@@ -311,7 +317,10 @@ static DAQ_Verdict distill_verdict(Packet* p)
             daq_stats.internal_whitelist++;
         }
         else if ( p->flow )
+        {
+            RateFilter_SessionRelease(*p->flow);
             p->flow->handle_allowlist();
+        }
     }
 
     if ( p->flow )
@@ -402,7 +411,6 @@ void Analyzer::post_process_daq_pkt_msg(Packet* p)
         p->pkth = nullptr;  // No longer avail after finalize_message.
 
         {
-            // cppcheck-suppress unreadVariable
             Profile profile(daqPerfStats);
             p->daq_instance->finalize_message(p->daq_msg, verdict);
         }
@@ -457,7 +465,7 @@ void Analyzer::process_daq_pkt_msg(DAQ_Msg_h msg, bool retry)
 
     PacketManager::decode(p, pkthdr, data, data_len, false, retry);
 
-    if (process_packet(p))
+    if (packet_mitigator(p, process_packet, p))
     {
         post_process_daq_pkt_msg(p);
         switcher->stop();
@@ -499,7 +507,6 @@ void Analyzer::process_daq_msg(DAQ_Msg_h msg, bool retry)
     }
     oops_handler->set_current_message(nullptr, nullptr);
     {
-        // cppcheck-suppress unreadVariable
         Profile profile(daqPerfStats);
         daq_instance->finalize_message(msg, verdict);
     }
@@ -542,9 +549,13 @@ void Analyzer::post_process_packet(Packet* p)
     switcher->stop();
 }
 
+void Analyzer::clear_current_daq_message()
+{
+    oops_handler->set_current_message(nullptr, nullptr);
+}
+
 void Analyzer::finalize_daq_message(DAQ_Msg_h msg, DAQ_Verdict verdict)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(daqPerfStats);
     daq_instance->finalize_message(msg, verdict);
 }
@@ -571,7 +582,8 @@ void Analyzer::set_state(State s)
 {
     state = s;
     main_poke(id);
-    ThreadConfig::update_thread_status(s == State::RUNNING);
+    const bool watchdog_active = s == State::RUNNING or s == State::STOPPING;
+    ThreadConfig::update_thread_status(watchdog_active);
 }
 
 const char* Analyzer::get_state_string()
@@ -585,6 +597,7 @@ const char* Analyzer::get_state_string()
         case State::STARTED:     return "STARTED";
         case State::RUNNING:     return "RUNNING";
         case State::PAUSED:      return "PAUSED";
+        case State::STOPPING:    return "STOPPING";
         case State::STOPPED:     return "STOPPED";
         case State::FAILED:      return "FAILED";
         default: assert(false);
@@ -687,6 +700,9 @@ void Analyzer::init_unprivileged()
 
     // init filters hash tables that depend on alerts
     sfthreshold_alloc(sc->threshold_config->memcap, sc->threshold_config->memcap);
+
+    if ( sc->rate_filter_config->count )
+        SFRF_Alloc(sc->rate_filter_config->memcap);
 }
 
 void Analyzer::reinit(const SnortConfig* sc)
@@ -694,6 +710,9 @@ void Analyzer::reinit(const SnortConfig* sc)
     PluginManager::thread_reinit(sc);
     Active::thread_init(sc);
     TraceApi::thread_reinit(sc->trace_config);
+
+    if ( sc->rate_filter_config->count )
+        SFRF_Alloc(sc->rate_filter_config->memcap);
 }
 
 void Analyzer::term()
@@ -709,7 +728,6 @@ void Analyzer::term()
     while ((msg = retry_queue->get()) != nullptr)
     {
         daq_stats.retries_discarded++;
-        // cppcheck-suppress unreadVariable
         Profile profile(daqPerfStats);
         daq_instance->finalize_message(msg, DAQ_VERDICT_BLOCK);
     }
@@ -720,6 +738,7 @@ void Analyzer::term()
     InspectorManager::thread_term();
     PluginManager::thread_term(false);
     memory::MemoryCap::thread_term();
+    FileCapture::flush();
     ModuleManager::accumulate(sc);
 
     EventManager::close_outputs();
@@ -878,6 +897,13 @@ void Analyzer::execute(AnalyzerCommand* ac)
         daq_instance->interrupt();
 }
 
+bool Analyzer::is_fully_paused() const
+{
+    std::lock_guard<std::mutex> lock(pending_work_queue_mutex);
+    return pending_work_queue.empty() and unfinished_commands == 0 and
+        state.load() == State::PAUSED;
+}
+
 bool Analyzer::handle_command()
 {
     AnalyzerCommand* ac = nullptr;
@@ -887,6 +913,7 @@ bool Analyzer::handle_command()
     {
         ac = pending_work_queue.front();
         pending_work_queue.pop();
+        ++unfinished_commands;
     }
     pending_work_queue_mutex.unlock();
 
@@ -894,11 +921,22 @@ bool Analyzer::handle_command()
         return false;
 
     if ( ac->execute(*this) )
+    {
         add_command_to_completed_queue(ac);
+        finish_command();
+    }
     else
         add_command_to_uncompleted_queue(ac);
 
     return true;
+}
+
+void Analyzer::finish_command()
+{
+    std::lock_guard<std::mutex> lock(pending_work_queue_mutex);
+    assert(unfinished_commands > 0);
+    if ( unfinished_commands > 0 )
+        --unfinished_commands;
 }
 
 void Analyzer::add_command_to_uncompleted_queue(AnalyzerCommand* aci)
@@ -936,6 +974,7 @@ void Analyzer::handle_uncompleted_commands()
             add_command_to_completed_queue(cac->command);
             it = uncompleted_work_queue.erase(it);
             delete cac;
+            finish_command();
         }
         else
             ++it;
@@ -957,7 +996,6 @@ DAQ_RecvStatus Analyzer::process_messages()
 
     DAQ_RecvStatus rstat;
     {
-        // cppcheck-suppress unreadVariable
         Profile profile(daqPerfStats);
         rstat = daq_instance->receive_messages(max_recv);
     }
@@ -991,8 +1029,7 @@ DAQ_RecvStatus Analyzer::process_messages()
 
     if (exit_after_cnt && (exit_after_cnt -= num_recv) == 0)
         stop();
-
-    if (pause_after_cnt && (pause_after_cnt -= num_recv) == 0)
+    else if (pause_after_cnt && (pause_after_cnt -= num_recv) == 0)
         pause();
     return rstat;
 }
@@ -1087,6 +1124,7 @@ void Analyzer::run(bool paused)
 
 void Analyzer::stop()
 {
+    set_state(State::STOPPING);
     exit_requested = true;
 }
 
@@ -1124,4 +1162,3 @@ void Analyzer::rotate()
 {
     DataBus::publish(intrinsic_pub_id, IntrinsicEventIds::THREAD_ROTATE, nullptr);
 }
-

@@ -76,7 +76,7 @@ static uint16_t crcLookUpTable[256] =
     true:    Segment queued successfully.
     false:  Data copy failed. Segment did not fit in reassembly buffer.
 */
-static bool dnp3_queue_segment(dnp3_reassembly_data_t* rdata, char* buf, uint16_t buflen)
+static bool dnp3_queue_segment(dnp3_reassembly_data_t* rdata, const char* buf, uint16_t buflen)
 {
     if (rdata == nullptr || buf == nullptr)
         return false;
@@ -112,7 +112,7 @@ void dnp3_reassembly_reset(dnp3_reassembly_data_t* rdata)
 */
 static bool dnp3_reassemble_transport(dnp3_reassembly_data_t* rdata, char* buf, uint16_t buflen)
 {
-    dnp3_transport_header_t* trans_header;
+    const dnp3_transport_header_t* trans_header;
 
     if (rdata == nullptr || buf == nullptr || buflen < sizeof(dnp3_transport_header_t) ||
         (buflen > DNP3_MAX_TRANSPORT_LEN))
@@ -121,7 +121,7 @@ static bool dnp3_reassemble_transport(dnp3_reassembly_data_t* rdata, char* buf, 
     }
 
     /* Take the first byte as a transport header, cut it off of the buffer. */
-    trans_header = (dnp3_transport_header_t*)buf;
+    trans_header = reinterpret_cast<dnp3_transport_header_t*>(buf);
     buf += sizeof(dnp3_transport_header_t);
     buflen -= sizeof(dnp3_transport_header_t);
 
@@ -203,7 +203,7 @@ static bool dnp3_reassemble_transport(dnp3_reassembly_data_t* rdata, char* buf, 
 }
 
 /* Check for reserved application-level function codes. */
-static void dnp3_check_reserved_function(dnp3_session_data_t* session)
+static void dnp3_check_reserved_function(const dnp3_session_data_t* session)
 {
     if ( !(dnp3_func_is_defined( (uint16_t)session->func)) )
     {
@@ -224,13 +224,13 @@ static bool dnp3_process_application(dnp3_session_data_t* session)
        Only the outstation sends Internal Indications. */
     if (session->direction == DNP3_CLIENT)
     {
-        dnp3_app_request_header_t* request = nullptr;
+        const dnp3_app_request_header_t* request = nullptr;
         rdata = &(session->client_rdata);
 
         if (rdata->buflen < sizeof(dnp3_app_request_header_t))
             return false;
 
-        request = (dnp3_app_request_header_t*)(rdata->buffer);
+        request = reinterpret_cast<dnp3_app_request_header_t*>(rdata->buffer);
 
         session->func = request->function;
     }
@@ -242,7 +242,7 @@ static bool dnp3_process_application(dnp3_session_data_t* session)
         if (rdata->buflen < sizeof(dnp3_app_response_header_t))
             return false;
 
-        response = (dnp3_app_response_header_t*)(rdata->buffer);
+        response = reinterpret_cast<dnp3_app_response_header_t*>(rdata->buffer);
 
         session->func = response->function;
         session->indications = ntohs(response->indications);
@@ -371,7 +371,7 @@ bool dnp3_full_reassembly(const dnp3ProtoConf& config, dnp3_session_data_t* sess
     ++dnp3_stats.dnp3_link_layer_frames;
 
     /* Step 1: Decode header and skip to data */
-    link = (const dnp3_link_header_t*)pdu_start;
+    link = reinterpret_cast<const dnp3_link_header_t*>(pdu_start);
 
     if (link->len < DNP3_MIN_TRANSPORT_LEN)
     {
@@ -410,8 +410,16 @@ bool dnp3_full_reassembly(const dnp3ProtoConf& config, dnp3_session_data_t* sess
            via the get_buf() inspector api */
         if ((ret == true) && (packet->is_udp()))
         {
+            const uint8_t* saved_data = packet->data;
+            const uint16_t saved_dsize = packet->dsize;
+
+            packet->data = pdu_start;
+            packet->dsize = pdu_length;
+
             DetectionEngine::detect(packet);
 
+            packet->data = saved_data;
+            packet->dsize = saved_dsize;
             /* Since detection was done, reset reassembly state to avoid double alerts
                on the last PDU */
             dnp3_reassembly_reset(rdata);
@@ -422,4 +430,3 @@ bool dnp3_full_reassembly(const dnp3ProtoConf& config, dnp3_session_data_t* sess
 
     return true;
 }
-

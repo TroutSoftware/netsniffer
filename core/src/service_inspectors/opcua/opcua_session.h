@@ -42,14 +42,14 @@ public:
     bool is_chunked                  = false;
     bool is_complete_msg             = false;
 
-    uint8_t* chunk_data              = nullptr;
-    uint32_t chunk_data_len          = 0;
+    uint8_t chunk_metadata[OPCUA_CHUNK_METADATA_BUF_SIZE] = { };
+    uint8_t chunk_metadata_len = 0;
+    uint32_t accumulated_chunk_data_len = 0;
 
     void reset_chunk_data()
     {
-        delete [] chunk_data;
-        chunk_data = new uint8_t[OPCUA_CHUNK_DATA_BUF_SIZE];
-        chunk_data_len = 0;
+        chunk_metadata_len = 0;
+        accumulated_chunk_data_len = 0;
     }
 
     void reset()
@@ -69,6 +69,7 @@ public:
 class OpcuaFlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(OpcuaFlowData)
     OpcuaFlowData();
     ~OpcuaFlowData() override;
 

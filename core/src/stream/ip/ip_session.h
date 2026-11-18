@@ -33,45 +33,59 @@ extern THREAD_LOCAL IpStats ip_stats;
 /* tracker for a fragmented packet set */
 struct FragTracker
 {
-    IpProtocol ip_proto;      /* IP protocol */
+    IpProtocol ip_proto = {}; /* IP protocol */
 
-    uint8_t ttl;           /* ttl used to detect evasions */
-    uint8_t alerted;
-    uint32_t frag_flags;   /* bit field */
+    uint8_t ttl = 0;           /* ttl used to detect evasions */
+    uint8_t alerted = 0;
+    uint32_t frag_flags = 0;   /* bit field */
 
-    uint32_t frag_bytes;   /* number of fragment bytes stored, based
+    uint32_t frag_bytes = 0; /* number of fragment bytes stored, based
                              * on aligned fragment offsets/sizes
                              */
 
-    uint32_t calculated_size; /* calculated size of reassembled pkt, based on
+    uint32_t calculated_size = 0; /* calculated size of reassembled pkt, based on
                                 * last frag offset
                                 */
 
-    uint32_t frag_pkts;   /* number of frag pkts stored under this tracker */
+    uint32_t frag_pkts = 0; /* number of frag pkts stored under this tracker */
 
     struct timeval frag_time; /* time we started tracking this frag */
 
-    Fragment* fraglist;      /* list of fragments */
-    Fragment* fraglist_tail; /* tail ptr for easy appending */
-    int fraglist_count;       /* handy dandy counter */
+    Fragment* fraglist = nullptr;      /* list of fragments */
+    Fragment* fraglist_tail = nullptr; /* tail ptr for easy appending */
+    int fraglist_count = 0;            /* handy dandy counter */
 
-    uint32_t alert_gid[MAX_FRAG_ALERTS]; /* flag alerts seen in a frag list  */
-    uint32_t alert_sid[MAX_FRAG_ALERTS]; /* flag alerts seen in a frag list  */
-    uint8_t alert_count;                 /* count alerts seen in a frag list */
+    uint32_t alert_gid[MAX_FRAG_ALERTS] = {}; /* flag alerts seen in a frag list  */
+    uint32_t alert_sid[MAX_FRAG_ALERTS] = {}; /* flag alerts seen in a frag list  */
+    uint8_t alert_count = 0;                  /* count alerts seen in a frag list */
 
-    uint8_t ip_options_len;  /* length of ip options for this set of frags */
-    uint8_t* ip_options_data; /* ip options from offset 0 packet */
-    uint8_t copied_ip_options_len;  /* length of 'copied' ip options */
+    uint8_t ip_options_len = 0;          /* length of ip options for this set of frags */
+    uint8_t* ip_options_data = nullptr;  /* ip options from offset 0 packet */
+    uint8_t copied_ip_options_len = 0;   /* length of 'copied' ip options */
 
-    FragEngine* engine;
+    FragEngine* engine = nullptr;
 
-    int ordinal;
+    int ordinal = 0;
 
-    int application_protocol;
-    uint32_t frag_policy;
+    int application_protocol = 0;
+    uint32_t frag_policy = 0;
 
     // Count of IP fragment overlap for each packet id.
-    uint32_t overlap_count;
+    uint32_t overlap_count = 0;
+
+    // post-condition: the tracker describes no stored fragments
+    void clear_fragments(uint32_t keep_flags)
+    {
+        fraglist = nullptr;
+        fraglist_tail = nullptr;
+        fraglist_count = 0;
+        frag_flags &= keep_flags;
+        frag_bytes = 0;
+        calculated_size = 0;
+        frag_pkts = 0;
+        overlap_count = 0;
+        alert_count = 0;
+    }
 };
 
 class IpSession : public Session
@@ -81,6 +95,7 @@ public:
     ~IpSession() override;
 
     bool setup(snort::Packet*) override;
+    bool setup_after_restart(snort::Packet*) override;
     int process(snort::Packet*) override;
     void clear() override;
 
@@ -91,6 +106,9 @@ public:
 
 public:
     FragTracker tracker = {};
+
+private:
+    bool setup(const snort::Packet*, bool is_restart);
 };
 
 #endif

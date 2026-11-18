@@ -376,7 +376,7 @@ static bool pcre_search(
     unsigned start_offset,
     int& found_offset)
 {
-    PCRE2_SIZE* ovector;
+    const PCRE2_SIZE* ovector;
     bool matched;
 
     found_offset = -1;
@@ -549,9 +549,9 @@ bool PcreOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const PcreOption& rhs = (const PcreOption&)ips;
-    PcreData* left = config;
-    PcreData* right = rhs.config;
+    const PcreOption& rhs = static_cast<const PcreOption&>(ips);
+    const PcreData* left = config;
+    const PcreData* right = rhs.config;
 
     if (( strcmp(left->expression, right->expression) == 0) &&
         ( left->options == right->options))
@@ -564,7 +564,6 @@ bool PcreOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus PcreOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(pcrePerfStats);
 
     // short circuit this for testing pcre performance impact
@@ -677,7 +676,7 @@ const PegInfo* PcreModule::get_pegs() const
 { return pcre_pegs; }
 
 PegCount* PcreModule::get_counts() const
-{ return (PegCount*)&pcre_stats; }
+{ return reinterpret_cast<PegCount*>(&pcre_stats); }
 
 #ifdef HAVE_HYPERSCAN
 bool PcreModule::begin(const char* name, int v, SnortConfig* sc)
@@ -740,7 +739,7 @@ static void mod_dtor(Module* m)
 static IpsOption* pcre_ctor(Module* p, IpsInfo& info)
 {
     pcre_counts.pcre_rules++;
-    PcreModule* m = (PcreModule*)p;
+    PcreModule* m = static_cast<PcreModule*>(p);
 
 #ifdef HAVE_HYPERSCAN
     Module* mod_regex = m->get_mod_regex();

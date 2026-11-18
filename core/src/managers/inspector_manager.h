@@ -92,6 +92,7 @@ public:
     static void thread_term_removed();
     static void thread_drain_pending_tterm();
     static void thread_drain_pending_tterm_if_pending(const Inspector*);
+    static bool is_pending_tterm(const Inspector*);
     static void thread_reinit(const SnortConfig*);
 
     static void execute(Packet*);
@@ -100,6 +101,10 @@ public:
 
     static void clear(Packet*);
     static void empty_trash();
+
+#ifdef UNIT_TEST_BUILD
+    static void clear_stale_service_inspector_for_test(Packet*);
+#endif
 
     static Inspector* get_binder();
 
@@ -132,4 +137,3 @@ private:
 };
 }
 #endif
-

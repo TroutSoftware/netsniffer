@@ -123,6 +123,8 @@ static const PegInfo dce2_smb_pegs[] =
       "total number of SMBv2 read packets seen with invalid structure size" },
     { CountType::SUM, "v2_read_rtrkr_misng",
       "total number of SMBv2 read response packets ignored due to missing read request tracker" },
+    { CountType::SUM, "v2_read_resp_ftrkr_misng",
+      "total number of SMBv2 read response packets whose file data went uninspected because the file tracker was gone" },
     { CountType::SUM, "v2_read_resp_hdr_err",
       "total number of SMBv2 read response packets ignored due to corrupted header" },
     { CountType::SUM, "v2_read_req_hdr_err",
@@ -180,6 +182,9 @@ static const PegInfo dce2_smb_pegs[] =
     { CountType::SUM, "v2_total_session_trackers", "total number of session trackers" },
     { CountType::SUM, "v2_total_tree_trackers", "total number of tree trackers" },
     { CountType::SUM, "v2_total_file_trackers", "total number of file trackers" },
+    { CountType::MAX, "v2_max_file_trackers", "maximum file trackers held concurrently on a packet thread" },
+    { CountType::SUM, "v2_ftracker_evicted", "file trackers evicted to stay within the smb memcap" },
+    { CountType::SUM, "v2_ftracker_evict_live", "evictions forced to discard reassembly or in-progress transfer state" },
     { CountType::SUM, "v2_updated_file_flows", "total number of updated file flows due to parent flow cleanup" },
     { CountType::SUM, "v2_ignored_file_processing", "total number of file processing ignored" },
     { CountType::SUM, "v2_mc_file_transfers", "total multichannel files transferred" },
@@ -187,6 +192,12 @@ static const PegInfo dce2_smb_pegs[] =
     { CountType::SUM, "v2_ioctl_err_resp", "total number of ioctl errors responses" },
     { CountType::SUM, "v2_ioctl_inv_str_sz", "total number of ioctl invalid structure size" },
     { CountType::SUM, "v2_ioctl_ignored", "total number of SMBv2 IOCTL packets ignored due to missing trackers or invalid share type" },
+    { CountType::SUM, "smb_empty_nbss_batches",
+      "total number of empty-NBSS-frame batches accumulated by the SMB PAF splitter" },
+    { CountType::SUM, "smb_nbss_hdr_rejected",
+      "total number of NBSS headers with a known type but an invalid flags or trailer length" },
+    { CountType::SUM, "v2_empty_nbss_frames_consumed",
+      "total number of empty NBSS frames consumed before the SMB2 header in rebuilt packets" },
     { CountType::SUM, "total_sessions", "total smb sessions" },/* not used */
     { CountType::END, nullptr, nullptr }
 };
@@ -243,6 +254,9 @@ static const Parameter s_params[] =
     { "smb_max_file_chunks", Parameter::PT_INT, "1:65535", "1024",
       "maximum out-of-order file data chunks buffered per tracker" },
 
+    { "smb_max_writex_detects", Parameter::PT_INT, "0:255", "10",
+      "maximum file data detections per SMB message on the chained WriteAndX path, 0 is unlimited" },
+
     { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
 
@@ -290,6 +304,9 @@ static const RuleMap dce2_smb_rules[] =
     { DCE2_SMB_INVALID_FILE_OFFSET, DCE2_SMB_INVALID_FILE_OFFSET_STR },
     { DCE2_SMB_BAD_NEXT_COMMAND_OFFSET, DCE2_SMB_BAD_NEXT_COMMAND_OFFSET_STR },
     { DCE2_SMB_EXCESSIVE_FILE_CHUNKS, DCE2_SMB_EXCESSIVE_FILE_CHUNKS_STR },
+    { DCE2_SMB_SEG_BUFFER_OVERRUN, DCE2_SMB_SEG_BUFFER_OVERRUN_STR },
+    { DCE2_SMB_EXCESSIVE_WRITEX_RAW, DCE2_SMB_EXCESSIVE_WRITEX_RAW_STR },
+    { DCE2_SMB_EXCESSIVE_CHAINED_WRITEX, DCE2_SMB_EXCESSIVE_CHAINED_WRITEX_STR },
     { 0, nullptr }
 };
 
@@ -299,7 +316,7 @@ static std::string get_shares(DCE2_List* shares)
 
     if ( shares )
     {
-        for (dce2SmbShare* share = (dce2SmbShare*)DCE2_ListFirst(shares);
+        for (const dce2SmbShare* share = (dce2SmbShare*)DCE2_ListFirst(shares);
             share;
             share = (dce2SmbShare*)DCE2_ListNext(shares))
         {
@@ -350,7 +367,7 @@ const PegInfo* Dce2SmbModule::get_pegs() const
 
 PegCount* Dce2SmbModule::get_counts() const
 {
-    return (PegCount*)&dce2_smb_stats;
+    return reinterpret_cast<PegCount*>(&dce2_smb_stats);
 }
 
 ProfileStats* Dce2SmbModule::get_profile() const
@@ -520,6 +537,9 @@ bool Dce2SmbModule::set(const char*, Value& v, SnortConfig*)
     else if ( v.is("smb_max_file_chunks") )
         config.smb_max_file_chunks = v.get_uint16();
 
+    else if ( v.is("smb_max_writex_detects") )
+        config.smb_max_writex_detects = v.get_uint8();
+
     else if ( v.is("memcap") )
         config.memcap = v.get_size();
 
@@ -548,5 +568,5 @@ void print_dce2_smb_conf(const dce2SmbProtoConf& config)
     ConfigLogger::log_flag("smb_legacy_mode", config.legacy_mode);
     ConfigLogger::log_limit("smb_max_credit", config.smb_max_credit, 0, 1);
     ConfigLogger::log_limit("smb_max_file_chunks", config.smb_max_file_chunks, 0, 1);
+    ConfigLogger::log_limit("smb_max_writex_detects", config.smb_max_writex_detects, 0, 1);
 }
-

@@ -72,6 +72,12 @@ void set_network_policy(NetworkPolicy*)
 void set_inspection_policy(InspectionPolicy*)
 { }
 
+void WarningMessage(const char*, ...)
+{ }
+
+unsigned SnortConfig::get_reload_id()
+{ return 0; }
+
 THREAD_LOCAL PacketCount pc;
 }
 
@@ -104,7 +110,7 @@ static unsigned s_next = 0;
 
 void UTestHandler::handle(DataEvent& event, Flow*)
 {
-    UTestEvent* evt = (UTestEvent*)&event;
+    UTestEvent* evt = static_cast<UTestEvent*>(&event);
     evt_msg = evt->get_message();
     seq = ++s_next;
 }
@@ -232,4 +238,3 @@ int main(int argc, char** argv)
     MemoryLeakWarningPlugin::turnOffNewDeleteOverloads();
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

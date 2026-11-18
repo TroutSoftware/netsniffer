@@ -80,7 +80,7 @@ bool IpOptOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IpOptOption& rhs = (const IpOptOption&)ips;
+    const IpOptOption& rhs = static_cast<const IpOptOption&>(ips);
     const IpOptionData* left = &config;
     const IpOptionData* right = &rhs.config;
 
@@ -95,7 +95,6 @@ bool IpOptOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus IpOptOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(ipOptionPerfStats);
 
     if ( !p->is_ip4() )
@@ -238,7 +237,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* ipopts_ctor(Module* p, IpsInfo&)
 {
-    IpOptModule* m = (IpOptModule*)p;
+    const IpOptModule* m = static_cast<IpOptModule*>(p);
     return new IpOptOption(m->data);
 }
 
@@ -281,4 +280,3 @@ const BaseApi* ips_ipopts[] =
     &ipopts_api.base,
     nullptr
 };
-

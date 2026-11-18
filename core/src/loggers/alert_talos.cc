@@ -44,10 +44,10 @@ struct AlertLog
         void print();
         string key;
         string msg;
-        uint32_t gid;
-        uint32_t sid;
-        uint32_t rev;
-        unsigned count;
+        uint32_t gid = 0;
+        uint32_t sid = 0;
+        uint32_t rev = 0;
+        unsigned count = 0;
     };
     map<string, Rule> alerts;
 };
@@ -206,7 +206,7 @@ static void mod_dtor(Module* m)
 { delete m; }
 
 static Logger* talos_ctor(Module* mod)
-{ return new TalosLogger((TalosModule*)mod); }
+{ return new TalosLogger(static_cast<TalosModule*>(mod)); }
 
 static void talos_dtor(Logger* p)
 { delete p; }
@@ -239,4 +239,3 @@ const BaseApi* alert_talos[] =
     &talos_api.base,
     nullptr
 };
-

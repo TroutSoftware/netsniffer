@@ -51,20 +51,20 @@ using namespace snort;
 THREAD_LOCAL RateFilterStats rate_filter_stats;
 
 PADDING_GUARD_BEGIN
-typedef struct
+typedef struct tSFRFTrackingNodeKey
 {
     ///policy identifier
-    PolicyId policyId;
+    PolicyId policyId = 0;
 
     // threshold identity
-    int tid;
+    int tid = 0;
 
     /* Stores either source or destination IP address on a matching packet, depending on
      * whether dos threshold is tracking by source or destination IP address. For tracking
      * by rule, it is cleared out (all 0s).
      */
     SfIp ip;
-    uint16_t padding;
+    uint16_t tunnel_carried = 0;
 } tSFRFTrackingNodeKey;
 PADDING_GUARD_END
 
@@ -92,33 +92,52 @@ typedef struct
     /*  time when new action was activated due to rate limit exceeding.
     */
     time_t revertTime;
+
+    /* distinguishes this use of the node from any earlier one under the same key
+     */
+    uint64_t generation;
 } tSFRFTrackingNode;
 
+namespace
+{
+class RateFilterHash : public XHash
+{
+public:
+    RateFilterHash(int rows, int key_size, int data_size, unsigned long cap)
+        : XHash(rows, key_size, data_size, cap) { }
+
+protected:
+    void free_user_data(HashNode* hnode) override
+    {
+        if ( hnode->data )
+            *(tSFRFTrackingNode*)hnode->data = tSFRFTrackingNode();
+    }
+};
+}
+
 static XHash* rf_hash = nullptr;
+static uint64_t rf_generation = 0;
 
-static int checkThreshold(tSFRFConfigNode*, tSFRFTrackingNode*, time_t curTime);
-static int checkSamplingPeriod(tSFRFConfigNode*, tSFRFTrackingNode*, time_t curTime);
+static int checkThreshold(const tSFRFConfigNode*, tSFRFTrackingNode*, time_t curTime);
+static int checkSamplingPeriod(const tSFRFConfigNode*, tSFRFTrackingNode*, time_t curTime);
 
-static tSFRFTrackingNode* getSFRFTrackingNode(const SfIp*, unsigned tid, time_t curTime);
-
-static void updateDependentThresholds(RateFilterConfig* config, unsigned gid, unsigned sid,
-    const SfIp* sip, const SfIp* dip, time_t curTime);
+static tSFRFTrackingNode* getSFRFTrackingNode(
+    const SfIp*, bool tunnel_carried, unsigned tid, PolicyId, time_t curTime);
 
 #define SFRF_BYTES (sizeof(tSFRFTrackingNodeKey) + sizeof(tSFRFTrackingNode))
 
-static void SFRF_New(unsigned nbytes)
+void SFRF_Alloc(unsigned nbytes)
 {
-    int nrows;
-
     /* Calc max ip nodes for this memory */
     if ( nbytes < SFRF_BYTES )
         nbytes = SFRF_BYTES;
 
-    nrows = nbytes / (SFRF_BYTES);
+    std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
 
     /* Create global hash table for all of the IP Nodes */
-    std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
-    rf_hash = new XHash(nrows, sizeof(tSFRFTrackingNodeKey), sizeof(tSFRFTrackingNode), nbytes);
+    if ( !rf_hash )
+        rf_hash = new RateFilterHash(nbytes / SFRF_BYTES, sizeof(tSFRFTrackingNodeKey),
+            sizeof(tSFRFTrackingNode), nbytes);
 }
 
 void SFRF_Delete()
@@ -132,11 +151,35 @@ void SFRF_Delete()
     rf_hash = nullptr;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void SFRF_Flush()
 {
     std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
     if ( rf_hash )
         rf_hash->clear_hash();
+}
+
+void SFRF_ReleaseGauges(const SFRFGaugeKeys& gauges)
+{
+    std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
+
+    if ( !rf_hash )
+        return;
+
+    for ( const SFRFGaugeKey& gauge : gauges )
+    {
+        tSFRFTrackingNodeKey key;
+
+        key.ip = gauge.ip;
+        key.tunnel_carried = gauge.tunnel_carried;
+        key.tid = gauge.tid;
+        key.policyId = gauge.policyId;
+
+        tSFRFTrackingNode* dynNode = (tSFRFTrackingNode*)rf_hash->get_user_data(&key, 0, false);
+
+        if ( dynNode && dynNode->generation == gauge.generation && dynNode->count )
+            dynNode->count--;
+    }
 }
 
 static void SFRF_ConfigNodeFree(void* item)
@@ -159,27 +202,6 @@ static void SFRF_SidNodeFree(void* item)
     tSFRFSidNode* pSidnode = (tSFRFSidNode*)item;
     sflist_free_all(pSidnode->configNodeList, SFRF_ConfigNodeFree);
     snort_free(pSidnode);
-}
-
-int SFRF_Alloc(unsigned int memcap)
-{
-    sfrf_hash_mutex.lock();
-    const XHash* current_rf_hash = rf_hash;
-    sfrf_hash_mutex.unlock();
-
-    if ( current_rf_hash == nullptr )
-    {
-        SFRF_New(memcap);
-
-        sfrf_hash_mutex.lock();
-        if ( rf_hash == nullptr )
-        {
-            sfrf_hash_mutex.unlock();
-            return -1;
-        }
-        sfrf_hash_mutex.unlock();
-    }
-    return 0;
 }
 
 int SFRF_ConfigAdd(SnortConfig*, RateFilterConfig* rf_config, tSFRFConfigNode* cfgNode)
@@ -281,13 +303,26 @@ int SFRF_ConfigAdd(SnortConfig*, RateFilterConfig* rf_config, tSFRFConfigNode* c
     return 0;
 }
 
-static int SFRF_TestObject(tSFRFConfigNode* cfgNode, const SfIp* ip, time_t curTime,
-    SFRF_COUNT_OPERATION op)
+static inline bool SFRF_IsConnectGauge(const tSFRFConfigNode* cfgNode)
+{
+    return cfgNode->gid == GID_SESSION && cfgNode->sid == SESSION_EVENT_SETUP
+        && cfgNode->seconds == 0;
+}
+
+static int SFRF_TestObject(const tSFRFConfigNode* cfgNode, const SfIp* ip,
+    PolicyId policy_id, time_t curTime,
+    SFRF_COUNT_OPERATION op, SFRFGaugeKeys* gauges, bool tunnel_carried)
 {
     tSFRFTrackingNode* dynNode;
     int retValue = -1;
+    const bool gauge = SFRF_IsConnectGauge(cfgNode);
 
-    dynNode = getSFRFTrackingNode(ip, cfgNode->tid, curTime);
+    if ( op == SFRF_COUNT_INCREMENT && gauge && !gauges )
+        return retValue;
+
+    std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
+
+    dynNode = getSFRFTrackingNode(ip, tunnel_carried, cfgNode->tid, policy_id, curTime);
 
     if ( dynNode == nullptr )
         return retValue;
@@ -301,15 +336,11 @@ static int SFRF_TestObject(tSFRFConfigNode* cfgNode, const SfIp* ip, time_t curT
         if ( (dynNode->count+1) != 0 )
         {
             dynNode->count++;
-        }
-        break;
-    case SFRF_COUNT_DECREMENT:
-        if ( cfgNode->seconds == 0 )
-        {
-            // count can be decremented only for total count, and not for rate
-            if ( dynNode->count != 0 )
+
+            if ( gauge )
             {
-                dynNode->count--;
+                gauges->push_back(
+                    { policy_id, cfgNode->tid, dynNode->generation, *ip, tunnel_carried } );
             }
         }
         break;
@@ -326,7 +357,8 @@ static int SFRF_TestObject(tSFRFConfigNode* cfgNode, const SfIp* ip, time_t curT
     // but the decrement will never come so we "fix" it here
     // if the count were not incremented in such cases, the
     // threshold would never be exceeded.
-    if ( !cfgNode->seconds && (dynNode->count > cfgNode->count)
+    if ( !cfgNode->seconds && !gauge
+      && (dynNode->count > cfgNode->count)
       && IpsAction::is_valid_action(cfgNode->newAction) )
     {
         IpsAction* act = get_ips_policy()->action[cfgNode->newAction];
@@ -342,10 +374,11 @@ static inline int SFRF_AppliesTo(tSFRFConfigNode* pCfg, const SfIp* ip)
 }
 
 int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, PolicyId policy_id,
-    const SfIp* sip, const SfIp* dip, time_t curTime, SFRF_COUNT_OPERATION op)
+    const SfIp* sip, const SfIp* dip, time_t curTime, SFRF_COUNT_OPERATION op,
+    SFRFGaugeKeys* gauges, bool tunnel_carried)
 {
     GHash* genHash;
-    tSFRFSidNode* pSidNode;
+    const tSFRFSidNode* pSidNode;
     tSFRFConfigNode* cfgNode;
     int newStatus = -1;
     int status = -1;
@@ -353,11 +386,6 @@ int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, Pol
 
     if ( gid >= SFRF_MAX_GENID )
         return status; /* bogus gid */
-
-    // Some events (like 'TCP connection closed' raised by inspector may
-    // not have any configured threshold but may impact thresholds for other
-    // events (like 'TCP connection opened'
-    updateDependentThresholds(config, gid, sid, sip, dip, curTime);
 
     /*
      *  Get the hash table for this gid
@@ -375,6 +403,13 @@ int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, Pol
     key.policyId = policy_id;
 
     pSidNode = (tSFRFSidNode*)genHash->find((void*)&key);
+
+    if ( !pSidNode && policy_id )
+    {
+        key.policyId = 0;
+        pSidNode = (tSFRFSidNode*)genHash->find((void*)&key);
+    }
+
     if ( !pSidNode )
     {
         return status;
@@ -400,14 +435,16 @@ int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, Pol
         case SFRF_TRACK_BY_SRC:
             if ( SFRF_AppliesTo(cfgNode, sip) )
             {
-                newStatus = SFRF_TestObject(cfgNode, sip, curTime, op);
+                newStatus = SFRF_TestObject(cfgNode, sip, policy_id, curTime,
+                    op, gauges, tunnel_carried);
             }
             break;
 
         case SFRF_TRACK_BY_DST:
             if ( SFRF_AppliesTo(cfgNode, dip) )
             {
-                newStatus = SFRF_TestObject(cfgNode, dip, curTime, op);
+                newStatus = SFRF_TestObject(cfgNode, dip, policy_id, curTime,
+                    op, gauges, tunnel_carried);
             }
             break;
 
@@ -415,7 +452,8 @@ int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, Pol
         {
             SfIp cleared;
             cleared.clear();
-            newStatus = SFRF_TestObject(cfgNode, &cleared, curTime, op);
+            newStatus = SFRF_TestObject(cfgNode, &cleared, policy_id, curTime,
+                op, gauges, false);
         }
         break;
 
@@ -434,9 +472,10 @@ int SFRF_TestThreshold(RateFilterConfig* config, unsigned gid, unsigned sid, Pol
     return status;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void SFRF_ShowObjects(RateFilterConfig* config)
 {
-    tSFRFSidNode* pSidnode;
+    const tSFRFSidNode* pSidnode;
     tSFRFConfigNode* cfgNode;
     unsigned int gid;
     GHashNode* sidHashNode;
@@ -488,7 +527,7 @@ void SFRF_ShowObjects(RateFilterConfig* config)
  * @returns 0 if continuing with old sampling period.
  *          1 if new sampling period is started.
  */
-static int checkSamplingPeriod(tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynNode, time_t curTime)
+static int checkSamplingPeriod(const tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynNode, time_t curTime)
 {
     if ( cfgNode->seconds )
     {
@@ -535,7 +574,7 @@ static int checkSamplingPeriod(tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynN
  * @returns 0 if threshold is not reached
  *          1 otherwise
  */
-static int checkThreshold(tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynNode, time_t curTime)
+static int checkThreshold(const tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynNode, time_t curTime)
 {
     /* Once newAction is activated, it stays active for the revert timeout, unless ANR
      * causes the node itself to disappear.
@@ -574,37 +613,24 @@ static int checkThreshold(tSFRFConfigNode* cfgNode, tSFRFTrackingNode* dynNode, 
     return IpsAction::get_max_types() + cfgNode->newAction;
 }
 
-static void updateDependentThresholds(RateFilterConfig* config, unsigned gid,
-    unsigned sid, const SfIp* sip, const SfIp* dip, time_t curTime)
-{
-    if ( gid == GID_SESSION &&
-        sid == SESSION_EVENT_CLEAR )
-    {
-        // decrementing counters - this results in the following sequence:
-        // 1. sfdos_thd_test_threshold(gid internal, sid DEL)
-        // 2.    updateDependentThresholds(gid internal, sid DEL)
-        // 3.    |   sfdos_thd_test_threshold(gid internal, sid ADD)
-        // 4.    |       updateDependentThresholds(gid internal, sid ADD)
-        // 5.    continue with regularly scheduled programming (ie step 1)
-
-        SFRF_TestThreshold(config, gid, SESSION_EVENT_SETUP, get_network_policy()->policy_id,
-            sip, dip, curTime, SFRF_COUNT_DECREMENT);
-        return;
-    }
-}
-
-static tSFRFTrackingNode* getSFRFTrackingNode(const SfIp* ip, unsigned tid, time_t curTime)
+// caller holds sfrf_hash_mutex
+static tSFRFTrackingNode* getSFRFTrackingNode(
+    const SfIp* ip, bool tunnel_carried, unsigned tid, PolicyId policy_id, time_t curTime)
 {
     tSFRFTrackingNode* dynNode = nullptr;
     tSFRFTrackingNodeKey key;
 
     /* Setup key */
     key.ip = *(ip);
+    key.tunnel_carried = tunnel_carried;
     key.tid = tid;
-    key.policyId = get_inspection_policy()->policy_id;
-    key.padding = 0;
+    key.policyId = policy_id;
 
-    std::lock_guard<std::mutex> lock(sfrf_hash_mutex);
+    if ( !rf_hash )
+        return nullptr;
+
+    const PegCount prunes = rf_hash->get_stats().memcap_prunes;
+
     // Check for any Permanent sid objects for this gid or add this one ...
     if ( rf_hash->insert(&key, nullptr) == HASH_NOMEM )
     {
@@ -613,6 +639,9 @@ static tSFRFTrackingNode* getSFRFTrackingNode(const SfIp* ip, unsigned tid, time
         return dynNode;
     }
 
+    if ( rf_hash->get_stats().memcap_prunes != prunes )
+        rate_filter_stats.recoveries++;
+
     dynNode = (tSFRFTrackingNode*)rf_hash->get_user_data();
     if ( dynNode->filterState == FS_NEW )
     {
@@ -620,6 +649,7 @@ static tSFRFTrackingNode* getSFRFTrackingNode(const SfIp* ip, unsigned tid, time
         dynNode->tstart = curTime;
         dynNode->tlast = curTime;
         dynNode->filterState = FS_OFF;
+        dynNode->generation = ++rf_generation;
     }
 
     return dynNode;

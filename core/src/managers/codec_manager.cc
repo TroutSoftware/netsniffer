@@ -100,12 +100,14 @@ CodecManager::~CodecManager()
         if (!cd or cd == s_protocols[0])
             continue;
 
-        CodecApiWrapper* wrap = (CodecApiWrapper*)PluginManager::get_interface(cd->get_name());
+        CodecApiWrapper* wrap = static_cast<CodecApiWrapper*>(
+            PluginManager::get_interface(cd->get_name()));
         wrap->api->dtor(cd);
     }
     if (s_protocols[0])
     {
-        CodecApiWrapper* wrap = (CodecApiWrapper*)PluginManager::get_interface(s_protocols[0]->get_name());
+        CodecApiWrapper* wrap = static_cast<CodecApiWrapper*>(
+            PluginManager::get_interface(s_protocols[0]->get_name()));
         wrap->api->dtor(s_protocols[0]);
     }
 }
@@ -206,8 +208,8 @@ void CodecManager::instantiate()
 {
     auto create = [](PlugInterface* pin, void* pv)
     {
-        CodecApiWrapper* wrap = (CodecApiWrapper*)pin;
-        ((CodecManager*)pv)->instantiate(*wrap, nullptr);
+        CodecApiWrapper* wrap = static_cast<CodecApiWrapper*>(pin);
+        static_cast<CodecManager*>(pv)->instantiate(*wrap, nullptr);
         PluginManager::set_instantiated(wrap->api->base.name);
     };
 
@@ -262,8 +264,8 @@ void CodecManager::thread_term()
     PacketManager::accumulate(); // statistics
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 uint8_t CodecManager::get_grinder()
 {
     return grinder;
 }
-

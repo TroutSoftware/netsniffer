@@ -191,11 +191,11 @@ void XHash::initialize_node(HashNode *hnode, const void *key, void *data, int in
 {
     assert(type < num_lru_caches);
 
-    hnode->key = (char*) (hnode) + sizeof(HashNode);
+    hnode->key = reinterpret_cast<char*>(hnode) + sizeof(HashNode);
     memcpy(hnode->key, key, keysize);
     if ( datasize )
     {
-        hnode->data = (char*) (hnode) + sizeof(HashNode) + keysize;
+        hnode->data = reinterpret_cast<char*>(hnode) + sizeof(HashNode) + keysize;
         if ( data )
             memcpy (hnode->data, data, datasize);
     }
@@ -311,7 +311,7 @@ void* XHash::get_user_data(const void* key, uint8_t type, bool touch)
     assert(type < num_lru_caches);
 
     int rindex = 0;
-    HashNode* hnode = find_node_row(key, rindex, type, touch);
+    const HashNode* hnode = find_node_row(key, rindex, type, touch);
     return ( hnode ) ? hnode->data : nullptr;
 }
 
@@ -353,7 +353,7 @@ int XHash::release_node(const void* key, uint8_t type)
 
     unsigned hashkey = hashkey_ops->do_hash((const unsigned char*)key, keysize);
 
-    unsigned index = hashkey & (nrows - 1);
+    unsigned index = hashkey_ops->get_row(hashkey, nrows);
     for (HashNode* hnode = table[index]; hnode; hnode = hnode->next)
     {
         if ( hashkey_ops->key_compare(hnode->key, key, keysize) )
@@ -419,8 +419,7 @@ HashNode* XHash::find_node_row(const void* key, int& rindex, uint8_t type, bool 
     assert(type < num_lru_caches);
     unsigned hashkey = hashkey_ops->do_hash((const unsigned char*)key, keysize);
 
-    /* Modulus is slow. Switched to a table size that is a power of 2. */
-    rindex  = hashkey & (nrows - 1);
+    rindex = hashkey_ops->get_row(hashkey, nrows);
     for (HashNode* hnode = table[rindex]; hnode; hnode = hnode->next )
     {
         if ( hashkey_ops->key_compare(hnode->key, key, keysize) )
@@ -522,35 +521,40 @@ void* XHash::get_lru_user_data(uint8_t type)
 
 void* XHash::get_walk_user_data(uint8_t type)
 {
-    HashNode* walk_node = lru_caches[type]->get_walk_node();
+    const HashNode* walk_node = lru_caches[type]->get_walk_node();
     return walk_node ? walk_node->data : nullptr;
 }
 
 void* XHash::get_next_walk_user_data(uint8_t type)
 {
-    HashNode* walk_node = lru_caches[type]->get_next_walk_node();
+    const HashNode* walk_node = lru_caches[type]->get_next_walk_node();
     return walk_node ? walk_node->data : nullptr;
 }
+
+// Bound the walk so a fully-pinned cache is not re-scanned end-to-end each insert.
+#define XHASH_MAX_RECOVERY_WALK 64
 
 HashNode* XHash::release_lru_node(uint8_t type)
 {
     assert(type < num_lru_caches);
-    HashNode* hnode = lru_caches[type]->get_lru_node();
-    while ( hnode )
+    HashLruCache* cache = lru_caches[type];
+
+    unsigned candidates = 0;
+    for ( HashNode* hnode = cache->get_lru_node();
+        hnode and candidates < XHASH_MAX_RECOVERY_WALK;
+        hnode = cache->get_next_lru_node(), ++candidates )
     {
         if ( is_node_recovery_ok(hnode) )
         {
-            lru_caches[type]->remove_node(hnode);
+            cache->remove_node(hnode);
             free_user_data(hnode);
             unlink_node(hnode);
             --num_nodes;
             ++stats.memcap_prunes;
-            break;
+            return hnode;
         }
-        else
-            hnode = lru_caches[type]->get_next_lru_node ();
     }
-    return hnode;
+    return nullptr;
 }
 
 void XHash::switch_node_lru_cache(HashNode* hnode, uint8_t old_type, uint8_t new_type)
@@ -604,7 +608,7 @@ bool XHash::delete_a_node()
 
 int XHash::tune_memory_resources(unsigned work_limit, unsigned& num_freed)
 {
-    while ( work_limit-- and mem_allocator->is_over_capacity() )
+    while ( work_limit-- && mem_allocator->is_over_capacity() )
     {
         if ( !delete_a_node() )
             break;

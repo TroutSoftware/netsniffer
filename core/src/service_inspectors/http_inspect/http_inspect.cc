@@ -28,19 +28,19 @@
 #include <sstream>
 
 #include "detection/detection_engine.h"
-#include "service_inspectors/http2_inspect/http2_flow_data.h"
+#include "flow/stream_flow.h"
 #include "log/unified2.h"
 #include "protocols/packet.h"
 #include "pub_sub/http_event_ids.h"
 #include "stream/stream.h"
 
-#include "http_cache_data.h"
 #include "http_common.h"
 #include "http_context_data.h"
 #include "http_cutter.h"
 #include "http_enum.h"
 #include "http_field_buffer.h"
 #include "http_js_norm.h"
+#include "http_module.h"
 #include "http_msg_body.h"
 #include "http_msg_body_chunk.h"
 #include "http_msg_body_cl.h"
@@ -51,6 +51,7 @@
 #include "http_msg_status.h"
 #include "http_msg_trailer.h"
 #include "http_param.h"
+#include "http_stream_splitter.h"
 #include "http_test_manager.h"
 
 using namespace snort;
@@ -196,6 +197,8 @@ void HttpInspect::show(const SnortConfig*) const
 #endif
     ConfigLogger::log_limit("max_request_size", params->max_request_size, -1, 0);
     ConfigLogger::log_limit("max_request_line_length", params->max_request_line_length, -1, 0);
+    ConfigLogger::log_limit("maximum_header_value_length",
+        params->maximum_header_value_length, -1, 0);
 
     if (!params->allowed_methods.empty())
     {
@@ -212,11 +215,19 @@ void HttpInspect::show(const SnortConfig*) const
             methods += (methods.empty() ? "" : " ") + m;
         ConfigLogger::log_value("disallowed_methods", methods.c_str());
     }
+
+    if (!params->allowed_content_type.empty())
+    {
+        std::string types;
+        for (const auto& t : params->allowed_content_type)
+            types += (types.empty() ? "" : " ") + t;
+        ConfigLogger::log_value("allowed_content_type", types.c_str());
+    }
 }
 
 PduSection HttpInspect::get_latest_is(const Packet* p)
 {
-    HttpMsgSection* current_section = HttpContextData::get_snapshot(p);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(p);
 
     if (current_section == nullptr)
         return PS_NONE;
@@ -231,7 +242,7 @@ PduSection HttpInspect::get_latest_is(const Packet* p)
 
 SourceId HttpInspect::get_latest_src(const Packet* p)
 {
-    HttpMsgSection* current_section = HttpContextData::get_snapshot(p);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(p);
 
     if (current_section == nullptr)
         return SRC__NOT_COMPUTE;
@@ -283,38 +294,46 @@ bool HttpInspect::get_buf(unsigned id, Packet* p, InspectionBuffer& b)
     return true;
 }
 
-const Field& HttpInspect::http_get_buf(Packet* p, const HttpBufferInfo& buffer_info) const
+const Field& HttpInspect::http_get_buf(const Packet* p, const HttpBufferInfo& buffer_info) const
 {
-    HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
-
-    // No section is attached (pre-assembly or post-clear); serve cache-backed buffers directly.
-    if (current_section == nullptr)
+    // Cheap path first: a current_section always means no splitter snapshot exists for this context
+    HttpMsgSection* const current_section = HttpContextData::get_snapshot(p->flow, p->context);
+    if (current_section != nullptr)
     {
-        HttpFlowData* const session_data = http_get_flow_data(p->flow);
-        if ((session_data != nullptr) && (session_data->transaction[SRC_CLIENT] != nullptr))
+        assert(([&]()
         {
-            HttpMsgRequest* const request = session_data->transaction[SRC_CLIENT]->get_request();
-            if (request != nullptr)
-                return request->get_classic_buffer(buffer_info);
-        }
-
-        const bool request_size_or_detail =
-            (buffer_info.type == HTTP_BUFFER_REQUEST_SIZE) ||
-            (buffer_info.type == HTTP_BUFFER_REQUEST_LINE_LENGTH) ||
-            (buffer_info.type == DETAIL_119_298) ||
-            (buffer_info.type == DETAIL_119_299) ||
-            (buffer_info.type == DETAIL_119_300);
-
-        if (!request_size_or_detail)
-            return Field::FIELD_NULL;
-
-        return HttpTmpFieldBuffer::get_buffer_data(buffer_info.type);
+            const HttpContextDataView view = HttpContextData::get_view(p);
+            return !view.splitter_snapshots[0] and !view.splitter_snapshots[1] and
+                !view.splitter_snapshots[2];
+        })());
+        return current_section->get_classic_buffer(buffer_info);
     }
 
-    return current_section->get_classic_buffer(buffer_info);
+    if (is_wire_reportable_buffer(buffer_info.type))
+    {
+        const HttpContextDataView context_data = HttpContextData::get_view(p);
+        if (context_data.splitter_snapshots[0] or context_data.splitter_snapshots[1] or
+            context_data.splitter_snapshots[2])
+        {
+            return get_http_tmp_buffer(buffer_info,
+                context_data.splitter_snapshots[static_cast<unsigned>(SplitterSlot::SLOT_300)],
+                context_data.splitter_snapshots[static_cast<unsigned>(SplitterSlot::SLOT_299)],
+                context_data.splitter_snapshots[static_cast<unsigned>(SplitterSlot::SLOT_298)]);
+        }
+    }
+
+    HttpFlowData* const session_data = http_get_flow_data(p->flow);
+    if ((session_data != nullptr) && (session_data->transaction[SRC_CLIENT] != nullptr))
+    {
+        HttpMsgRequest* const request = session_data->transaction[SRC_CLIENT]->get_request();
+        if (request != nullptr)
+            return request->get_classic_buffer(buffer_info);
+    }
+
+    return Field::FIELD_NULL;
 }
 
-const Field& HttpInspect::http_get_param_buf(Cursor& c, Packet* p,
+const Field& HttpInspect::http_get_param_buf(Cursor& c, const Packet* p,
     const HttpParam& param) const
 {
     HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
@@ -325,7 +344,8 @@ const Field& HttpInspect::http_get_param_buf(Cursor& c, Packet* p,
     return current_section->get_param_buffer(c, param);
 }
 
-int32_t HttpInspect::http_get_num_headers(Packet* p,
+// cppcheck-suppress unusedFunction ; supplied as a pointer-to-member rule-option callback
+int32_t HttpInspect::http_get_num_headers(const Packet* p,
     const HttpBufferInfo& buffer_info) const
 {
     const HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
@@ -336,7 +356,8 @@ int32_t HttpInspect::http_get_num_headers(Packet* p,
     return current_section->get_num_headers(buffer_info);
 }
 
-int32_t HttpInspect::http_get_max_header_line(Packet* p,
+// cppcheck-suppress unusedFunction ; supplied as a pointer-to-member rule-option callback
+int32_t HttpInspect::http_get_max_header_line(const Packet* p,
     const HttpBufferInfo& buffer_info) const
 {
     const HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
@@ -347,7 +368,8 @@ int32_t HttpInspect::http_get_max_header_line(Packet* p,
     return current_section->get_max_header_line(buffer_info);
 }
 
-int32_t HttpInspect::http_get_num_cookies(Packet* p,
+// cppcheck-suppress unusedFunction ; supplied as a pointer-to-member rule-option callback
+int32_t HttpInspect::http_get_num_cookies(const Packet* p,
     const HttpBufferInfo& buffer_info) const
 {
     const HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
@@ -358,7 +380,7 @@ int32_t HttpInspect::http_get_num_cookies(Packet* p,
     return current_section->get_num_cookies(buffer_info);
 }
 
-VersionId HttpInspect::http_get_version_id(Packet* p,
+VersionId HttpInspect::http_get_version_id(const Packet* p,
     const HttpBufferInfo& buffer_info) const
 {
     const HttpMsgSection* const current_section = HttpContextData::get_snapshot(p);
@@ -371,7 +393,7 @@ VersionId HttpInspect::http_get_version_id(Packet* p,
 
 HttpCommon::SectionType HttpInspect::get_type_expected(snort::Flow* flow, HttpCommon::SourceId source_id) const
 {
-    HttpFlowData* session_data = http_get_flow_data(flow);
+    const HttpFlowData* session_data = http_get_flow_data(flow);
     return session_data->get_type_expected(source_id);
 }
 
@@ -388,6 +410,30 @@ void HttpInspect::set_hx_body_state(snort::Flow* flow, HttpCommon::SourceId sour
     session_data->set_hx_body_state(source_id, state);
 }
 
+void HttpInspect::signal_request_line_invalid(snort::Flow* flow, HttpCommon::SourceId source_id,
+    HttpEnums::RequestLineInvalidReasonCode reason) const
+{
+    const HttpFlowData* const session_data = http_get_flow_data(flow);
+
+    HttpModule::increment_peg_counts(PEG_REQUEST_LINE_NOT_VALID);
+
+    if (session_data)
+    {
+        if (!session_data->events[source_id]->create_event_if_new(EVENT_REQUEST_LINE_NOT_VALID))
+            return;
+    }
+    else
+        DetectionEngine::queue_event(HTTP_GID, EVENT_REQUEST_LINE_NOT_VALID);
+
+    HttpContextData::capture_splitter(SplitterSlot::SLOT_300, HttpContextData::CaptureMode::FirstWriteWins,
+        [&](HttpSplitterSnapshot& snap)
+    {
+        snap.reason_code_detail_300 = reason;
+        snap.version_id = HttpStreamSplitter::get_httpx_version_id(
+            session_data ? session_data->for_httpx : true, flow);
+    });
+}
+
 bool HttpInspect::get_fp_buf(InspectionBuffer::Type ibt, Packet* p, InspectionBuffer& b)
 {
     assert(ibt == InspectionBuffer::IBT_VBA or ibt == InspectionBuffer::IBT_JS_DATA);
@@ -398,9 +444,10 @@ bool HttpInspect::get_fp_buf(InspectionBuffer::Type ibt, Packet* p, InspectionBu
     return get_buf(ibt, p, b);
 }
 
+// cppcheck-suppress constParameterPointer
 int HttpInspect::get_xtra_trueip(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
-    HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
 
     if (current_section == nullptr)
         return 0;
@@ -418,9 +465,10 @@ int HttpInspect::get_xtra_trueip(Flow* flow, uint8_t** buf, uint32_t* len, uint3
     return 1;
 }
 
+// cppcheck-suppress constParameterPointer
 int HttpInspect::get_xtra_uri(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
-    HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
 
     if (current_section == nullptr)
         return 0;
@@ -439,9 +487,10 @@ int HttpInspect::get_xtra_uri(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t
     return 1;
 }
 
+// cppcheck-suppress constParameterPointer
 int HttpInspect::get_xtra_host(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
-    HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
 
     if (current_section == nullptr)
         return 0;
@@ -463,6 +512,7 @@ int HttpInspect::get_xtra_host(Flow* flow, uint8_t** buf, uint32_t* len, uint32_
 // The name of this method reflects its legacy purpose. We actually return the normalized data
 // from a response message body which may include other forms of normalization in addition to
 // JavaScript normalization. But if you don't turn JavaScript normalization on you get nothing.
+// cppcheck-suppress constParameterPointer
 int HttpInspect::get_xtra_jsnorm(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
     HttpMsgSection* current_section = HttpContextData::get_snapshot(flow);
@@ -489,7 +539,7 @@ int HttpInspect::get_xtra_jsnorm(Flow* flow, uint8_t** buf, uint32_t* len, uint3
 
 void HttpInspect::disable_detection(Packet* p)
 {
-    HttpFlowData* session_data = http_get_flow_data(p->flow);
+    const HttpFlowData* session_data = http_get_flow_data(p->flow);
     if (!session_data->for_httpx)
     {
         assert(p->context);
@@ -500,9 +550,9 @@ void HttpInspect::disable_detection(Packet* p)
 HttpFlowData* HttpInspect::http_get_flow_data(const Flow* flow)
 {
     if (flow->stream_intf)
-        return (HttpFlowData*)flow->stream_intf->get_stream_flow_data(flow);
+        return static_cast<HttpFlowData*>(flow->stream_intf->get_stream_flow_data(flow));
     else
-        return (HttpFlowData*)flow->get_flow_data(HttpFlowData::inspector_id);
+        return static_cast<HttpFlowData*>(flow->get_flow_data(HttpFlowData::inspector_id));
 }
 
 void HttpInspect::http_set_flow_data(Flow* flow, HttpFlowData* flow_data)
@@ -521,7 +571,6 @@ void HttpInspect::eval(Packet* p)
 
 void HttpInspect::eval(Packet* p, SourceId source_id, const uint8_t* data, uint16_t dsize)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(HttpModule::get_profile_stats());
 
     HttpFlowData* session_data = http_get_flow_data(p->flow);
@@ -565,6 +614,9 @@ void HttpInspect::eval(Packet* p, SourceId source_id, const uint8_t* data, uint1
     {
         p->set_detect_limit(session_data->detect_depth_remaining[source_id]);
     }
+
+    if ( !session_data->is_for_httpx() )
+        HttpContextData::claim_pending_section_buffer(p->context, data);
 
     process(data, dsize, p->flow, source_id, true, p);
 
@@ -699,7 +751,6 @@ void HttpInspect::process(const uint8_t* data, const uint16_t dsize, Flow* const
 
 void HttpInspect::clear(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(HttpModule::get_profile_stats());
 
     HttpFlowData* const session_data = http_get_flow_data(p->flow);
@@ -713,7 +764,8 @@ void HttpInspect::clear(Packet* p)
     HttpMsgSection* current_section = nullptr;
     if(p->flow->stream_intf)
     {
-        current_section = (HttpMsgSection*)p->flow->stream_intf->get_hi_msg_section(p->flow);
+        current_section = static_cast<HttpMsgSection*>(
+            p->flow->stream_intf->get_hi_msg_section(p->flow));
         assert(current_section != nullptr);
         p->flow->stream_intf->set_hi_msg_section(p->flow, nullptr);
     }
@@ -722,7 +774,7 @@ void HttpInspect::clear(Packet* p)
 
     if ( current_section == nullptr )
     {
-        clear_tmp_fields();
+        HttpContextData::clear_tmp_buffers(p->context);
         //assert(false); //FIXIT-M This happens with stream_user
         return;
     }
@@ -743,19 +795,19 @@ void HttpInspect::clear(Packet* p)
 
 const uint8_t* HttpInspect::adjust_log_packet(Packet* p, uint16_t& length)
 {
-    HttpMsgSection*  current_section = HttpContextData::get_snapshot(p);
+    const HttpMsgSection* current_section = HttpContextData::get_snapshot(p);
     if (current_section == nullptr ||
         current_section->get_inspection_section() != PS_HEADER)
         return nullptr;
 
     HttpMsgSection* other_section = nullptr;
     unsigned id;
-    if ((HttpMsgHeader*)current_section == current_section->get_header(SRC_CLIENT))
+    if (current_section == current_section->get_header(SRC_CLIENT))
     {
         other_section = current_section->get_request();
         id = HTTP_BUFFER_RAW_REQUEST;
     }
-    else if ((HttpMsgHeader*)current_section == current_section->get_header(SRC_SERVER))
+    else if (current_section == current_section->get_header(SRC_SERVER))
     {
         other_section = current_section->get_status();
         id = HTTP_BUFFER_RAW_STATUS;

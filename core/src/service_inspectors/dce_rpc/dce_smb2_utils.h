@@ -22,9 +22,12 @@
 #ifndef DCE_SMB2_UTILS_H
 #define DCE_SMB2_UTILS_H
 
+#include <cstddef>
+
 #include "dce_smb.h"
 #include "dce_smb2.h"
 #include "file_api/file_flows.h"
+#include "utils/endian.h"
 
 Smb2SidHashKey get_key(uint64_t sid);
 
@@ -45,10 +48,14 @@ public:
     void update(int size)
     {
         if ( size < 0 )
-            assert(current_size >= (size_t)-size);
-        current_size += size;
-        if ( size > 0)
         {
+            size_t decrement = (size_t)(-size);
+            assert(current_size >= decrement);
+            current_size = (decrement > current_size) ? 0 : (current_size - decrement);
+        }
+        else
+        {
+            current_size += size;
             if ( stats.cache_max < current_size )
                 stats.cache_max = current_size;
         }
@@ -76,6 +83,19 @@ inline void DCE2_SmbSessionCacheInit(const size_t cache_size)
     smb2_session_cache = new SmbSessionCache(cache_size, dce2_smb_stats);
 }
 
+// Create before the session cache and destroy after it: file tracker destructors erase from here.
+inline void DCE2_Smb2FtrackerLruInit()
+{
+    if (!smb2_ftracker_lru)
+        smb2_ftracker_lru = new DCE2_Smb2FtrackerLruList();
+}
+
+inline void DCE2_Smb2FtrackerLruTerm()
+{
+    delete smb2_ftracker_lru;
+    smb2_ftracker_lru = nullptr;
+}
+
 inline void DCE2_SmbSessionCacheUpdateSize(int size)
 {
     smb2_session_cache->update(size);
@@ -83,12 +103,15 @@ inline void DCE2_SmbSessionCacheUpdateSize(int size)
 
 inline std::shared_ptr<DCE2_Smb2SessionTracker> DCE2_SmbSessionCacheFindElseCreate(uint64_t sid)
 {
-    bool is_new = false;
-    auto& session_ptr =  smb2_session_cache->find_else_create(get_key(sid), &is_new);
-    if (is_new)
+    Smb2SidHashKey key = get_key(sid);
+    std::shared_ptr<DCE2_Smb2SessionTracker> session_ptr = smb2_session_cache->find(key);
+    if (!session_ptr)
     {
-        session_ptr.reset(new DCE2_Smb2SessionTracker(sid));
+        session_ptr = std::make_shared<DCE2_Smb2SessionTracker>(sid);
+        smb2_session_cache->add(key, session_ptr);
     }
+    else
+        smb2_session_cache->stats.cache_hits++;
     return session_ptr;
 }
 
@@ -100,22 +123,43 @@ inline bool DCE2_SmbSessionCacheRemove(const Smb2SidHashKey& key)
 // SMB2 functions for fetching sid, tid, request type and so on.
 inline uint64_t Smb2Sid(const Smb2Hdr* hdr)
 {
-    return snort::alignedNtohq(&(((const Smb2SyncHdr*)hdr)->session_id));
+    const auto* bytes = reinterpret_cast<const uint8_t*>(hdr);
+    return LETOHLL_UNALIGNED(bytes + offsetof(Smb2SyncHdr, session_id));
 }
 
 inline uint32_t Smb2Tid(const Smb2Hdr* hdr)
 {
-    return snort::alignedNtohl(&(((const Smb2SyncHdr*)hdr)->tree_id));
+    const auto* bytes = reinterpret_cast<const uint8_t*>(hdr);
+    return LETOHL(bytes + offsetof(Smb2SyncHdr, tree_id));
 }
 
 inline uint64_t Smb2Mid(const Smb2Hdr* hdr)
 {
-    return snort::alignedNtohq(&(((const Smb2SyncHdr*)hdr)->message_id));
+    const auto* bytes = reinterpret_cast<const uint8_t*>(hdr);
+    return LETOHLL_UNALIGNED(bytes + offsetof(Smb2SyncHdr, message_id));
+}
+
+// An async interim response (MS-SMB2 3.3.4.2) tells the client the operation is still running.
+// It carries an ERROR Response body with no error in it, so it must be dropped before
+// StructureSize is used to tell a request from a response -- 9 is also the TREE_CONNECT
+// Request and SESSION_SETUP Response size, and matches no CLOSE, READ, WRITE or SET_INFO body
+// at all.  STATUS_PENDING has severity SUCCESS, so Smb2Error() does not and should not
+// recognise it.  Only a server sends an interim response, hence the direction test: without it
+// a client could suppress inspection of its own traffic by setting two header bits.
+inline bool Smb2AsyncInterim(const Smb2Hdr* hdr, uint16_t structure_size)
+{
+    if (structure_size != SMB2_ERROR_RESPONSE_STRUC_SIZE)
+        return false;
+
+    const uint32_t flags = snort::alignedNtohl(&hdr->flags);
+
+    return (flags & SMB2_FLAGS_SERVER_TO_REDIR) and (flags & SMB2_FLAGS_ASYNC_COMMAND) and
+        SMB2_STATUS_PENDING == snort::alignedNtohl(&hdr->status);
 }
 
 inline bool Smb2Error(const Smb2Hdr* hdr)
 {
-    return (hdr->status != SMB_NT_STATUS__SUCCESS);
+    return (SMB_NT_STATUS_SEVERITY__ERROR == (uint8_t)(snort::alignedNtohl(&hdr->status) >> 30));
 }
 
 inline std::shared_ptr<DCE2_Smb2SessionTracker> DCE2_Smb2FindSidInSsd(DCE2_Smb2SsnData* ssd, const
@@ -127,11 +171,7 @@ inline std::shared_ptr<DCE2_Smb2SessionTracker> DCE2_Smb2FindSidInSsd(DCE2_Smb2S
 inline void DCE2_Smb2InsertSidInSsd(DCE2_Smb2SsnData* ssd, const uint64_t sid,
     std::shared_ptr<DCE2_Smb2SessionTracker> stracker)
 {
-    // add ssd in session tracker's tcp trackers database
-    if (ssd->flow_key)
-    {
-        stracker->insertConnectionTracker(ssd->flow_key, ssd);
-    }
+    stracker->insertConnectionTracker(ssd->flow_id, ssd);
     ssd->insert_session_tracker(sid, std::move(stracker));
 }
 
@@ -140,6 +180,14 @@ inline void DCE2_Smb2RemoveSidInSsd(DCE2_Smb2SsnData* ssd, const uint64_t sid)
     ssd->remove_session_tracker(sid);
 }
 
+// Nodes scanned in from the tail, capped so eviction cannot be turned into CPU exhaustion.
+static constexpr unsigned SMB2_FTRACKER_EVICT_SCAN = 32;
+// is_ftracker_active walks every channel of a session, so bound how often one scan pays for it.
+static constexpr unsigned SMB2_FTRACKER_ACTIVE_TESTS = 4;
+
+DCE2_Smb2FileTracker* DCE2_Smb2CreateFileTracker(const uint64_t file_id,
+    DCE2_Smb2TreeTracker* ttr, DCE2_Smb2SessionTracker* str);
+
 DCE2_Smb2TreeTracker* DCE2_Smb2InsertTid(DCE2_Smb2SsnData*, const uint32_t tid, uint8_t share_type,
     DCE2_Smb2SessionTracker*);
 
@@ -147,4 +195,3 @@ DCE2_Smb2SessionTracker* DCE2_Smb2FindElseCreateSid(DCE2_Smb2SsnData*, const uin
     force_cache_update = true);
 
 #endif
-

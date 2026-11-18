@@ -186,6 +186,7 @@ static int VendorVersionParse(const uint8_t* data, uint16_t init_offset,
     if (vvp_parse_type == VVP_PARSE_WU)
     {
         /* Search for the version string */
+        // cppcheck-suppress knownConditionTrueFalse ; match depends on the observed FTP banner
         if ((p = service_strstr(p, end-p, optionalVersion, versionLen)))
         {
             /* If we like the version we will just assign the vendor */
@@ -203,6 +204,7 @@ static int VendorVersionParse(const uint8_t* data, uint16_t init_offset,
             CopyVersionString(fd, ver, verlen);
         }
     }
+    // cppcheck-suppress knownConditionTrueFalse ; match depends on the observed FTP banner
     else if ((p = service_strstr(p, end - p, vendorCandidate, vendorCandidateLen)))
     {
         /* Found vendorCandidate string */
@@ -213,6 +215,7 @@ static int VendorVersionParse(const uint8_t* data, uint16_t init_offset,
         if (optionalVersion)
         {
             /* Search for the version string */
+            // cppcheck-suppress knownConditionTrueFalse ; match depends on the observed FTP banner
             if ((p = service_strstr(p, end - p, optionalVersion, versionLen)))
             {
                 /* Found the version string.  Move just past the version string */
@@ -416,7 +419,7 @@ static int ftp_validate_reply(const uint8_t* data, uint16_t& offset, uint16_t si
             if (size - offset < (int)sizeof(ServiceFTPCode))
                 return -1;
 
-            code_hdr = (const ServiceFTPCode*)(data + offset);
+            code_hdr = reinterpret_cast<const ServiceFTPCode*>(data + offset);
 
             fd.code = 0;
             ret_code = check_ret_digit_code(code_hdr->code, 3, 1, fd.code, fd);
@@ -518,7 +521,7 @@ static int ftp_validate_reply(const uint8_t* data, uint16_t& offset, uint16_t si
             }
             else
             {
-                code_hdr = (const ServiceFTPCode*)(data + offset);
+                code_hdr = reinterpret_cast<const ServiceFTPCode*>(data + offset);
                 tmp = 0;
 
                 if (check_ret_digit_code(code_hdr->code, 3, 1, tmp, fd) and (code_hdr->sp == ' '
@@ -588,7 +591,7 @@ static int ftp_validate_reply(const uint8_t* data, uint16_t& offset, uint16_t si
                 }
                 else
                 {
-                    code_hdr = (const ServiceFTPCode*)(data + offset);
+                    code_hdr = reinterpret_cast<const ServiceFTPCode*>(data + offset);
                     tmp = 0;
 
                     if (check_ret_digit_code(code_hdr->code, 3,1, tmp, fd) and tmp == fd.code)
@@ -893,6 +896,7 @@ static int ftp_validate_eprt(const uint8_t* data, uint16_t size, SfIp* address, 
     }
     tmp_str[index] = '\0'; // make the copied portion be nul terminated.
 
+    // cppcheck-suppress knownConditionTrueFalse ; parse result depends on the supplied FTP address
     if (address->pton(addrFamilySupported, tmp_str) != SFIP_SUCCESS)
         return -1;
 
@@ -924,6 +928,7 @@ void FtpServiceDetector::create_expected_session(AppIdSession& asd, const Packet
     AppIdSession* fp = AppIdSession::create_future_session(pkt, cliIp, cliPort, srvIp, srvPort,
         protocol, asd.config.snort_proto_ids[PROTO_INDEX_FTP_DATA], odp_ctxt, swap_flow_app_direction);
 
+    // cppcheck-suppress knownConditionTrueFalse ; future-session creation can fail at runtime
     if (fp) // initialize data session
     {
         uint64_t encrypted_flags = asd.get_session_flags(APPID_SESSION_ENCRYPTED | APPID_SESSION_DECRYPTED);
@@ -960,7 +965,8 @@ int FtpServiceDetector::validate(AppIdDiscoveryArgs& args)
         return APPID_INPROCESS;
     }
 
-    ServiceFTPData* fd = (ServiceFTPData*)data_get(args.asd);
+    ServiceFTPData* fd = static_cast<ServiceFTPData*>(data_get(args.asd));
+    // cppcheck-suppress knownConditionTrueFalse ; detector data is created on the first session packet
     if (!fd)
     {
         fd = new ServiceFTPData;
@@ -1340,7 +1346,7 @@ inprocess:
             add_service(args.change_bits, args.asd, args.pkt, args.dir,
                 flags == APPID_SESSION_ENCRYPTED ? APP_ID_FTPS : APP_ID_FTP_CONTROL,
                 fd->vendor[0] ? fd->vendor : nullptr,
-                fd->version[0] ? fd->version : nullptr, nullptr);
+                fd->version[0] ? fd->version : nullptr);
         }
         return APPID_SUCCESS;
 
@@ -1356,4 +1362,3 @@ fail:
         return APPID_NOMATCH;
     }
 }
-

@@ -26,14 +26,22 @@
 #include "service_inspectors/http_inspect/http_event.h"
 #include "service_inspectors/http_inspect/http_flow_data.h"
 #include "service_inspectors/http_inspect/http_inspect.h"
+#include "service_inspectors/http_inspect/http_msg_section.h"
+#include "service_inspectors/http_inspect/http_transaction.h"
 
 #include <CppUTest/TestHarness.h>
 
 class HttpUnitTestSetup
 {
 public:
+    static constexpr size_t MAX_ATTACHMENT_SIZE = HttpTransaction::MAX_ATTACHMENT_SIZE;
+
+    // Returns mutable fixture state to the tests.
+    // cppcheck-suppress constParameterPointer
     static HttpCommon::SectionType* get_section_type(HttpFlowData* flow_data)
         { assert(flow_data!=nullptr); return flow_data->section_type; }
+    // Returns mutable fixture state to the tests.
+    // cppcheck-suppress constParameterPointer
     static HttpCommon::SectionType* get_type_expected(HttpFlowData* flow_data)
         { assert(flow_data!=nullptr); return flow_data->type_expected; }
     static void half_reset(HttpFlowData* flow_data, HttpCommon::SourceId source_id)
@@ -48,8 +56,23 @@ public:
         flow_data->partial_buffer[source_id] = buf;
         flow_data->partial_buffer_length[source_id] = length;
     }
-    static HttpInfractions* get_infractions(HttpFlowData* flow_data, HttpCommon::SourceId source_id)
+    static HttpInfractions* get_infractions(
+        const HttpFlowData* flow_data, HttpCommon::SourceId source_id)
         { assert(flow_data!=nullptr); return flow_data->infractions[source_id]; }
+    static void clear_infractions(HttpFlowData* flow_data, HttpCommon::SourceId source_id)
+    {
+        assert(flow_data != nullptr);
+        delete flow_data->infractions[source_id];
+        flow_data->infractions[source_id] = nullptr;
+    }
+    static void add_transaction_infraction(HttpTransaction* transaction,
+        HttpCommon::SourceId source_id, HttpEnums::Infraction infraction)
+    {
+        assert(transaction != nullptr);
+        assert(transaction->infractions[source_id] == nullptr);
+        transaction->infractions[source_id] = new HttpInfractions;
+        *transaction->infractions[source_id] += infraction;
+    }
     static void set_partial_flush(HttpFlowData* flow_data, HttpCommon::SourceId source_id,
         bool partial_flush, uint32_t num_excess)
     {
@@ -57,6 +80,30 @@ public:
         flow_data->partial_flush[source_id] = partial_flush ? HttpEnums::PF_DETECT :
             HttpEnums::PF_NONE;
         flow_data->num_excess[source_id] = num_excess;
+    }
+    static void archive_status_section(HttpTransaction* transaction, HttpMsgStatus* status)
+    {
+        assert(transaction != nullptr);
+        transaction->archive_status(status);
+    }
+    static unsigned archive_status_length(const HttpTransaction* transaction)
+    {
+        assert(transaction != nullptr);
+        return section_list_length(transaction->archive_status_list);
+    }
+    static const HttpMsgSection* archive_status_head(const HttpTransaction* transaction)
+    {
+        assert(transaction != nullptr);
+        return transaction->archive_status_list;
+    }
+
+private:
+    static unsigned section_list_length(const HttpMsgSection* list)
+    {
+        unsigned count = 0;
+        for (const HttpMsgSection* node = list; node != nullptr; node = node->next)
+            count++;
+        return count;
     }
 };
 

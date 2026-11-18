@@ -52,6 +52,7 @@ public:
     static void sterm();
 
     bool setup(snort::Packet*) override;
+    bool setup_after_restart(snort::Packet*) override;
     void restart(snort::Packet* p) override;
     bool precheck(snort::Packet* p) override;
     int process(snort::Packet*) override;
@@ -82,19 +83,18 @@ public:
     void flush_server(snort::Packet*) override;
     void flush_talker(snort::Packet*, bool final_flush = false) override;
     void flush_listener(snort::Packet*, bool final_flush = false) override;
-    // cppcheck-suppress virtualCallInConstructor
-
     void reset();
     void start_proxy();
-    void clear_session(bool free_flow_data, bool flush_segments, bool restart, snort::Packet* p = nullptr);
-    TcpStreamTracker::TcpState get_talker_state(const TcpSegmentDescriptor& tsd);
-    TcpStreamTracker::TcpState get_listener_state(const TcpSegmentDescriptor& tsd);
+    void clear_session(
+        bool free_flow_data, bool flush_segments, bool restart_session, snort::Packet* p = nullptr);
+    static TcpStreamTracker::TcpState get_talker_state(const TcpSegmentDescriptor& tsd);
+    static TcpStreamTracker::TcpState get_listener_state(const TcpSegmentDescriptor& tsd);
     TcpStreamTracker::TcpState get_peer_state(const TcpStreamTracker& me)
     { return me.client_tracker ? server.get_tcp_state() : client.get_tcp_state(); }
 
     void init_new_tcp_session(const TcpSegmentDescriptor&);
     void update_perf_base_state(char new_state);
-    void update_timestamp_tracking(TcpSegmentDescriptor&);
+    static void update_timestamp_tracking(TcpSegmentDescriptor&);
     void update_paws_timestamps(const TcpSegmentDescriptor&);
     void update_session_on_rst(TcpSegmentDescriptor&, bool, TcpStreamTracker::TcpState);
     bool handle_syn_on_reset_session(TcpSegmentDescriptor&);
@@ -113,7 +113,7 @@ public:
     { pkt_action_mask |= flag; }
 
     void set_established(const TcpSegmentDescriptor&);
-    void set_pseudo_established(snort::Packet*);
+    static void set_pseudo_established(snort::Packet*);
     void check_for_pseudo_established(snort::Packet*);
     bool check_for_one_sided_session(snort::Packet*);
     bool is_data_transferred_asymmetrically() const;
@@ -122,7 +122,7 @@ public:
     void check_for_session_hijack(const TcpSegmentDescriptor&);
     bool check_for_window_slam(TcpSegmentDescriptor& tsd);
     void mark_packet_for_drop(TcpSegmentDescriptor&);
-    void handle_data_segment(TcpSegmentDescriptor&, bool flush = true);
+    void handle_data_segment(TcpSegmentDescriptor&, bool should_flush = true);
     bool validate_packet_established_session(TcpSegmentDescriptor&);
     void handle_late_synack(TcpSegmentDescriptor&);
 
@@ -151,6 +151,7 @@ public:
     uint8_t ecn = 0;
 
 private:
+    bool setup(snort::Packet*, bool is_restart);
     int process_tcp_packet(TcpSegmentDescriptor&, const snort::Packet*);
     void set_os_policy();
     void swap_trackers();
@@ -170,7 +171,7 @@ private:
     void set_packet_header_foo(const TcpSegmentDescriptor&);
     void update_session_on_server_packet(TcpSegmentDescriptor&);
     void update_session_on_client_packet(TcpSegmentDescriptor&);
-    bool is_hole_present(TcpStreamTracker*, snort::Packet*);
+    static bool is_hole_present(TcpStreamTracker*, snort::Packet*);
     TcpStateMachine* tsm;
     bool splitter_init = false;
     bool no_ack = false;
@@ -183,4 +184,3 @@ private:
 };
 
 #endif
-

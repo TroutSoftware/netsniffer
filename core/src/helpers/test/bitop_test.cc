@@ -90,4 +90,3 @@ TEST_CASE( "bitop", "[bitop]" )
         CHECK(true == is_clear(bitop, k + 2));
     }
 }
-

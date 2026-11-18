@@ -28,6 +28,7 @@
 
 #include "extractor_enums.h"
 #include "extractor_logger.h"
+#include "extractor_rate_filter.h"
 
 class Extractor;
 class ServiceConfig;
@@ -56,6 +57,7 @@ public:
     void tinit(ExtractorLogger* logger);
     void tterm();
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_tenant() const { return tenant_id; }
     const std::vector<std::string>& get_events() const { return events; }
     const std::vector<std::string>& get_fields() const { return fields; }
@@ -66,6 +68,7 @@ protected:
 
     virtual const snort::Connector::ID& internal_tinit() = 0;
     virtual const snort::Connector::ID& get_log_id() = 0;
+    virtual void show_options(std::string&) const { }
 
     void add_events(const std::vector<std::string>& vals);
     void add_fields(const std::vector<std::string>& vals);
@@ -217,12 +220,14 @@ public:
     static const ServiceBlueprint blueprint;
 
     BuiltinExtractorService(uint32_t tenant, const std::vector<std::string>& fields,
-        const std::vector<std::string>& events, ServiceType, Extractor&);
+        const std::vector<std::string>& events, const SamplingConfig&, ServiceType, Extractor&);
 
 private:
     const snort::Connector::ID& internal_tinit() override;
     const snort::Connector::ID& get_log_id() override;
+    void show_options(std::string&) const override;
 
+    const SamplingConfig sampling;
     static THREAD_LOCAL snort::Connector::ID log_id;
 };
 

@@ -85,6 +85,7 @@ public:
 
 GTP_IEData* get_infos()
 {
+    // cppcheck-suppress constVariablePointer
     GtpContextData* gcd = IpsContextData::get<GtpContextData>(gtp_ips_id);
 
     return gcd->gtp_ies;
@@ -128,7 +129,6 @@ GtpInspect::GtpInspect(const std::vector<GtpStuff>& v)
 
 void GtpInspect::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(gtp_inspect_prof);
 
     // preconditions - what we registered for
@@ -155,7 +155,7 @@ int GtpInspect::get_message_type(int version, const char* name)
 
 int get_message_type(int version, const char* name, snort::SnortConfig*)
 {
-    GtpInspect* ins = (GtpInspect*)PigPen::get_inspector(GTP_NAME, GTP_USE);
+    GtpInspect* ins = static_cast<GtpInspect*>(PigPen::get_inspector(GTP_NAME, GTP_USE));
 
     if ( !ins )
         return -1;
@@ -177,7 +177,7 @@ int GtpInspect::get_info_type(int version, const char* name)
 
 int get_info_type(int version, const char* name, SnortConfig*)
 {
-    GtpInspect* ins = (GtpInspect*)PigPen::get_inspector(GTP_NAME, GTP_USE);
+    GtpInspect* ins = static_cast<GtpInspect*>(PigPen::get_inspector(GTP_NAME, GTP_USE));
 
     if ( !ins )
         return -1;
@@ -207,7 +207,7 @@ static void gtp_term()
 
 static Inspector* gtp_ctor(Module* m)
 {
-    GtpInspectModule* mod = (GtpInspectModule*)m;
+    GtpInspectModule* mod = static_cast<GtpInspectModule*>(m);
     // this move assures the stuff is cleared
     std::vector<GtpStuff> v = std::move(mod->config);
     return new GtpInspect(v);
@@ -270,4 +270,3 @@ const BaseApi* sin_gtp[] =
     ips_gtp_version,
     nullptr
 };
-

@@ -166,7 +166,7 @@ bool PerfMonFlowIPDebug::execute(Analyzer&)
 static int enable_flow_ip_profiling(lua_State* L)
 {
     PerfMonitor* perf_monitor =
-        (PerfMonitor*)PigPen::get_inspector(PERF_NAME, Module::GLOBAL);
+        static_cast<PerfMonitor*>(PigPen::get_inspector(PERF_NAME, Module::GLOBAL));
 
     if (!perf_monitor)
     {
@@ -188,10 +188,11 @@ static int enable_flow_ip_profiling(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int disable_flow_ip_profiling(lua_State* L)
 {
     PerfMonitor* perf_monitor =
-        (PerfMonitor*)PigPen::get_inspector(PERF_NAME, Module::GLOBAL);
+        static_cast<PerfMonitor*>(PigPen::get_inspector(PERF_NAME, Module::GLOBAL));
 
     if (!perf_monitor)
     {
@@ -217,12 +218,14 @@ static int disable_flow_ip_profiling(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int show_flow_ip_profiling(lua_State* L)
 {
     bool status = false;
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
 
-    PerfMonitor* perf_monitor = (PerfMonitor*)PigPen::get_inspector(PERF_NAME, Module::GLOBAL);
+    PerfMonitor* perf_monitor =
+        static_cast<PerfMonitor*>(PigPen::get_inspector(PERF_NAME, Module::GLOBAL));
 
     if (perf_monitor)
         status = perf_monitor->is_flow_ip_enabled();
@@ -390,21 +393,21 @@ const PegInfo* PerfMonModule::get_pegs() const
 { return perf_module_pegs; }
 
 PegCount* PerfMonModule::get_counts() const
-{ return (PegCount*)&pmstats; }
+{ return reinterpret_cast<PegCount*>(&pmstats); }
 
 const Command* PerfMonModule::get_commands() const
 { return perf_module_cmds; }
 
-void ModuleConfig::set_name(const std::string& name)
-{ this->name = name; }
+void ModuleConfig::set_name(const std::string& module_name)
+{ name = module_name; }
 
-void ModuleConfig::set_peg_names(Value& peg_names)
+void ModuleConfig::set_peg_names(Value& names)
 {
     std::string tok;
-    peg_names.set_first_token();
+    names.set_first_token();
 
-    while ( peg_names.get_next_token(tok) )
-        this->peg_names[tok] = false;
+    while ( names.get_next_token(tok) )
+        peg_names[tok] = false;
 }
 
 bool ModuleConfig::confirm_parse()

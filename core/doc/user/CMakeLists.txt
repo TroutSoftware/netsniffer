@@ -31,9 +31,11 @@ set (
     perf_monitor.txt
     pop_imap.txt
     port_scan.txt
+    security.txt
     sensitive_data.txt
     side_channel.txt
     smtp.txt
+    stream_allowlist.txt
     snort2x.png
     snort3x.png
     snort_user.txt

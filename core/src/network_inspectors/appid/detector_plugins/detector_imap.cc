@@ -550,6 +550,7 @@ void ImapClientDetector::do_custom_reload()
     cmd_matcher->reload();
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int pattern_match(void* id, void*, int match_end_pos, void* data, void*)
 {
     unsigned long idx = (unsigned long)id;
@@ -563,7 +564,7 @@ static int pattern_match(void* id, void*, int match_end_pos, void* data, void*)
 
 ImapDetectorData* ImapClientDetector::get_common_data(AppIdSession& asd)
 {
-    ImapDetectorData* dd = (ImapDetectorData*)data_get(asd);
+    ImapDetectorData* dd = static_cast<ImapDetectorData*>(data_get(asd));
     if (!dd)
     {
         dd = new ImapDetectorData;
@@ -630,7 +631,7 @@ int ImapClientDetector::validate(AppIdDiscoveryArgs& args)
         {
             /*processing tags */
             char* p = tag;
-            char* p_end = p + sizeof(tag) - 1;
+            const char* p_end = p + sizeof(tag) - 1;
             for (; (s < end) && isImapTagChar(*s); s++)
             {
                 if (p < p_end)
@@ -661,7 +662,7 @@ int ImapClientDetector::validate(AppIdDiscoveryArgs& args)
             args.asd.clear_session_flags(APPID_SESSION_CLIENT_GETS_SERVER_PACKETS);
             return APPID_SUCCESS;
         }
-        AppIdFlowContentPattern* cmd = nullptr;
+        const AppIdFlowContentPattern* cmd = nullptr;
         unsigned long pattern_index = num_imap_client_patterns;
         unsigned length = end - s;
         cmd_matcher->find_all((const char*)s, (length > longest_pattern ? longest_pattern : length),
@@ -700,7 +701,7 @@ int ImapClientDetector::validate(AppIdDiscoveryArgs& args)
                 strncpy(fd->imapCmdTag, tag, sizeof(fd->imapCmdTag));
                 {
                     char* p = fd->username;
-                    char* p_end = p + sizeof(fd->username) - 1;
+                    const char* p_end = p + sizeof(fd->username) - 1;
 
                     if (*s == '"')
                     {
@@ -885,7 +886,7 @@ int ImapServiceDetector::validate(AppIdDiscoveryArgs& args)
         return APPID_NOMATCH;
 
     ImapDetectorData* dd;
-    ImapServiceData* id;
+    const ImapServiceData* id;
 
     if (args.dir != APP_ID_FROM_RESPONDER)
         goto inprocess;
@@ -945,4 +946,3 @@ inprocess:
     service_inprocess(args.asd, args.pkt, args.dir);
     return APPID_INPROCESS;
 }
-

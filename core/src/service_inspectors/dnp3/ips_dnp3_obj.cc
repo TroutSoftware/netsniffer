@@ -47,7 +47,7 @@ using namespace snort;
 static THREAD_LOCAL ProfileStats dnp3_obj_perf_stats;
 
 static IpsOption::EvalStatus dnp3_decode_object(
-    uint8_t* buf, uint16_t buflen, uint8_t rule_group, uint8_t rule_var)
+    const uint8_t* buf, uint16_t buflen, uint8_t rule_group, uint8_t rule_var)
 {
     uint8_t group, var;
 
@@ -99,7 +99,7 @@ bool Dnp3ObjOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const Dnp3ObjOption& rhs = (const Dnp3ObjOption&)ips;
+    const Dnp3ObjOption& rhs = static_cast<const Dnp3ObjOption&>(ips);
 
     return ((group == rhs.group) &&
            (var == rhs.var));
@@ -107,7 +107,6 @@ bool Dnp3ObjOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus Dnp3ObjOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(dnp3_obj_perf_stats);
 
     size_t header_size;
@@ -115,13 +114,14 @@ IpsOption::EvalStatus Dnp3ObjOption::eval(Cursor&, Packet* p)
     if ((p->has_tcp_data() && !p->is_full_pdu()) || !p->flow || !p->dsize)
         return NO_MATCH;
 
-    Dnp3FlowData* fd = (Dnp3FlowData*)p->flow->get_flow_data(Dnp3FlowData::inspector_id);
+    Dnp3FlowData* fd = static_cast<Dnp3FlowData*>(
+        p->flow->get_flow_data(Dnp3FlowData::inspector_id));
 
     if (!fd)
         return NO_MATCH;
 
     dnp3_session_data_t* dnp3_session = &fd->dnp3_session;
-    dnp3_reassembly_data_t* rdata;
+    const dnp3_reassembly_data_t* rdata;
 
     if (dnp3_session->direction == DNP3_CLIENT)
     {
@@ -143,7 +143,7 @@ IpsOption::EvalStatus Dnp3ObjOption::eval(Cursor&, Packet* p)
     if (rdata->buflen < header_size)
         return NO_MATCH;
 
-    uint8_t* obj_buffer = (uint8_t*)rdata->buffer + header_size;
+    const uint8_t* obj_buffer = rdata->buffer + header_size;
     uint16_t obj_buflen = rdata->buflen - header_size;
 
     return dnp3_decode_object(obj_buffer, obj_buflen, group, var);
@@ -220,7 +220,7 @@ static void dnp3_obj_mod_dtor(Module* m)
 
 static IpsOption* dnp3_obj_ctor(Module* p, IpsInfo&)
 {
-    Dnp3ObjModule* m = (Dnp3ObjModule*)p;
+    const Dnp3ObjModule* m = static_cast<Dnp3ObjModule*>(p);
     return new Dnp3ObjOption(m->group, m->var);
 }
 
@@ -260,4 +260,3 @@ static const IpsApi dnp3_obj_api =
 
 // added to snort_plugins in dnp3.cc
 const BaseApi* ips_dnp3_obj = &dnp3_obj_api.base;
-

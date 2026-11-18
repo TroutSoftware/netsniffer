@@ -91,7 +91,7 @@ bool get_string(std::istringstream& data_stream,
  *          data stream
  *
  */
-std::string get_remain_data(std::istringstream& data_stream, bool trim = true);
+std::string get_remain_data(std::istringstream& data_stream, bool trim_data = true);
 
 std::string get_rule_option_args(std::istringstream& data_stream);
 
@@ -121,8 +121,7 @@ std::string& sanitize_lua_string(std::string& s);
 std::size_t get_substr_length(const std::string& s, std::size_t max_length);
 
 bool case_compare(std::string, std::string);
-bool is_regular_file(std::string& path);
+bool is_regular_file(const std::string& path);
 }  // namespace util
 
 #endif
-

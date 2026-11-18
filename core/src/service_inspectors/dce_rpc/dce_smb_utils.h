@@ -162,6 +162,9 @@ DCE2_SmbFileTracker* DCE2_SmbFindFileTracker(DCE2_SmbSsnData*,
     const uint16_t, const uint16_t, const uint16_t);
 DCE2_Ret DCE2_SmbProcessRequestData(DCE2_SmbSsnData*, const uint16_t,
     const uint8_t*, uint32_t, uint64_t);
+DCE2_Ret DCE2_SmbProcessRequestDataWriteAndX(DCE2_SmbSsnData*, const uint16_t,
+    const uint8_t*, uint32_t, uint64_t);
+void DCE2_SmbResetWriteAndXDetect();
 DCE2_Ret DCE2_SmbProcessResponseData(DCE2_SmbSsnData*,
     const uint8_t*, uint32_t);
 void DCE2_SmbInitRdata(uint8_t*, int);
@@ -331,7 +334,7 @@ inline bool SmbErrorRangeNotLocked(const SmbNtHdr* hdr)
 
 // Convenience function to determine whether or not the transaction is complete
 // for one side, i.e. all data and parameters sent.
-inline bool DCE2_SmbIsTransactionComplete(DCE2_SmbTransactionTracker* ttracker)
+inline bool DCE2_SmbIsTransactionComplete(const DCE2_SmbTransactionTracker* ttracker)
 {
     if ((ttracker->tdcnt == ttracker->dsent)
         && (ttracker->tpcnt == ttracker->psent))

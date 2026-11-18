@@ -33,14 +33,8 @@
 using namespace snort;
 using namespace std;
 
-static bool handle_protocol(SshEvent& event, SshAppIdInfo* fd)
+static bool handle_protocol(const SshEvent& event, SshAppIdInfo* fd)
 {
-    // FIXIT-L
-    // There isn't any real specification on what separates the vendor name from version number. It
-    // seems to usually be an underscore or dash, but there are some clients where this pattern
-    // isn't followed. For example, in the Bitvise SSH client, the version string has the version
-    // number first, separated by a space from the subsequent client identification. Parsing may
-    // need to be enhanced to handle unusual version strings for new client apps.
     const string& protocol = event.get_version_str();
 
     const char* vendor_begin = strchr(protocol.c_str() + sizeof(SSH_BANNER) - 1, '-');
@@ -104,7 +98,7 @@ static void client_success(const SshAppIdInfo& fd, AppIdSession& asd, AppidChang
     asd.set_client_inferred_service_id(APP_ID_SSH);
 }
 
-static void service_success(SshAppIdInfo& fd, const Packet& p, AppIdSession& asd,
+static void service_success(const SshAppIdInfo& fd, const Packet& p, AppIdSession& asd,
     AppidChangeBits& change_bits)
 {
     int16_t group;
@@ -132,7 +126,7 @@ static void service_success(SshAppIdInfo& fd, const Packet& p, AppIdSession& asd
     asd.set_service_detected();
 }
 
-static void handle_success(SshEventFlowData& data, const SshEvent& event,
+static void handle_success(const SshEventFlowData& data, const SshEvent& event,
     AppIdSession& asd, AppidChangeBits& change_bits)
 {
     service_success(data.service_info, *event.get_packet(), asd, change_bits);
@@ -163,8 +157,9 @@ void SshEventHandler::handle(DataEvent& event, Flow* flow)
     if (is_appid_cpu_profiling_running)
         per_appid_event_cpu_timer.start();
     
-    SshEventFlowData* data = (SshEventFlowData* )asd->get_flow_data(SshEventFlowData::get_id());
-    Packet* p = DetectionEngine::get_current_packet();
+    SshEventFlowData* data = static_cast<SshEventFlowData*>(
+        asd->get_flow_data(SshEventFlowData::get_id()));
+    const Packet* p = DetectionEngine::get_current_packet();
 
     if (data and data->failed)
     {
@@ -178,7 +173,8 @@ void SshEventHandler::handle(DataEvent& event, Flow* flow)
         asd->add_flow_data(data, SshEventFlowData::get_id());
     }
 
-    SshEvent& ssh_event = (SshEvent&)event;
+    // cppcheck-suppress constVariableReference ; protocol handling updates event parse state
+    SshEvent& ssh_event = static_cast<SshEvent&>(event);
     SshAppIdInfo* fd;
     if (ssh_event.get_direction() == PKT_FROM_SERVER)
         fd = &data->service_info;

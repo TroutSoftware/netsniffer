@@ -23,9 +23,14 @@
 
 #define APPID_MOCK_INSPECTOR_H // avoiding mocked inspector
 
+#include "detection/detection_engine.h"
 #include "framework/data_bus.h"
 #include "helpers/discovery_filter.h"
 #include "host_tracker/host_cache.h"
+#ifdef CRASH_MITIGATOR
+#include "mitigator/mitigator_types.h"
+#include "mitigator/mitigator_module.h"
+#endif
 #include "network_inspectors/appid/appid_discovery.cc"
 #include "network_inspectors/appid/appid_peg_counts.h"
 #include "packet_io/packet_tracer.h"
@@ -135,12 +140,24 @@ unsigned DataBus::get_id(const PubKey&)
 
 void DataBus::publish(unsigned, unsigned, DataEvent& event, Flow*)
 {
-    AppidEvent* appid_event = (AppidEvent*)&event;
-    char* test_log = (char*)mock().getData("test_log").getObjectPointer();
+    const AppidEvent* appid_event = static_cast<AppidEvent*>(&event);
+    char* test_log = static_cast<char*>(mock().getData("test_log").getObjectPointer());
     snprintf(test_log, 256, "Published change_bits == %s",
         appid_event->get_change_bitset().to_string().c_str());
     mock().actualCall("publish");
 }
+
+#ifdef CRASH_MITIGATOR
+// Stubs for mitigator
+THREAD_LOCAL MitigatorStats mitigator_stats;
+void create_context(const MitigationConfig&) {}
+static THREAD_LOCAL sigset_t s_pre_signal_mask_stub;
+void mitigator_save_pre_signal_mask(const sigset_t& mask) { s_pre_signal_mask_stub = mask; }
+const sigset_t& mitigator_pre_signal_mask() { return s_pre_signal_mask_stub; }
+void DetectionEngine::set_packet_abandoned(bool) { }
+bool mitigator_disable() { return true; }
+int DetectionEngine::queue_event(unsigned, unsigned) { return 0; }
+#endif
 } // namespace snort
 void AppIdModule::reset_stats() {}
 DiscoveryFilter::~DiscoveryFilter() {}
@@ -161,6 +178,7 @@ void ApplicationDescriptor::set_id(AppId app_id){my_id = app_id;}
 void ServiceAppDescriptor::set_id(AppId app_id, OdpContext& odp_ctxt)
 {
     set_id(app_id);
+    // cppcheck-suppress knownConditionTrueFalse ; this test mock intentionally returns fixed flags
     deferred = odp_ctxt.get_app_info_mgr().get_app_info_flags(app_id, APPINFO_FLAG_DEFER);
 }
 void ServiceAppDescriptor::set_port_service_id(AppId){}
@@ -170,7 +188,8 @@ void ClientAppDescriptor::update_user(AppId, const char*, AppidChangeBits&){}
 AppIdModule::AppIdModule(): Module("appid_mock", "appid_mock_help") {}
 AppIdModule::~AppIdModule() = default;
 void AppIdModule::sum_stats(bool) {}
-void AppIdModule::show_dynamic_stats() {}
+void AppIdModule::collect_dynamic_stats(snort::stats::Builder&,
+    const snort::stats::DynamicStatsPolicy&) const {}
 bool AppIdModule::begin(char const*, int, SnortConfig*) { return true; }
 bool AppIdModule::end(char const*, int, SnortConfig*) { return true; }
 bool AppIdModule::set(char const*, Value&, SnortConfig*) { return true; }
@@ -219,20 +238,20 @@ const char* AppInfoManager::get_app_name(int32_t)
     return nullptr;
 }
 
-uint32_t AppInfoManager::getAttributeBits(AppId)
+AppInfoAttrsType AppInfoManager::getAttributeBits(AppId)
 {
     return 0;
 }
 
 // Stubs for AppIdSession
 void AppIdSession::sync_with_snort_protocol_id(AppId, Packet*,AppidChangeBits&) {}
-void AppIdSession::check_app_detection_restart(AppidChangeBits&, ThirdPartyAppIdContext*) {}
-void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, char*) {}
+void AppIdSession::check_app_detection_restart(AppidChangeBits&, const ThirdPartyAppIdContext*) {}
+void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, const char*) {}
 void AppIdSession::examine_rtmp_metadata(AppidChangeBits&) {}
 void AppIdSession::update_encrypted_app_id(AppId) {}
 bool AppIdSession::is_tp_processing_done() const {return false;}
 AppId AppIdSession::pick_ss_payload_app_id(AppId) const { return get_payload_id(); }
-bool AppIdSession::need_to_delete_tp_conn(ThirdPartyAppIdContext*) const { return true; }
+bool AppIdSession::need_to_delete_tp_conn(const ThirdPartyAppIdContext*) const { return true; }
 void AppIdSession::process_shadow_traffic_appids() {}
 void AppIdSession::examine_ssl_metadata(AppidChangeBits&,bool) {}
 
@@ -242,6 +261,7 @@ AppIdSession* AppIdSession::allocate_session(const Packet*, IpProtocol,
     return nullptr;
 }
 
+// cppcheck-suppress constParameterReference
 void AppIdSession::publish_appid_event(AppidChangeBits& change_bits, const Packet& p, bool, uint32_t)
 {
     AppidEvent app_event(change_bits, false, 0, this->get_api(), p);
@@ -313,7 +333,7 @@ const HostAppIdsVal* HostPortCache::find_on_first_pkt(const SfIp*, uint16_t, IpP
     return nullptr;
 }
 
-void AppIdServiceState::check_reset(AppIdSession&, const SfIp*, uint16_t,
+void AppIdServiceState::check_reset(const AppIdSession&, const SfIp*, uint16_t,
     int16_t, uint32_t) {}
 bool do_tp_discovery(ThirdPartyAppIdContext& , AppIdSession&, IpProtocol,
     Packet*, AppidSessionDirection&, AppidChangeBits&)
@@ -365,6 +385,7 @@ void AppIdSession::set_ss_application_ids(AppId service_id, AppId client_id, App
 }
 
 AppIdHttpSession* AppIdSession::get_http_session(uint32_t) const { return nullptr; }
+AppIdHttpSession* AppIdSession::get_current_http_session() const { return nullptr; }
 
 TEST_GROUP(appid_discovery_tests)
 {
@@ -415,7 +436,7 @@ TEST(appid_discovery_tests, event_published_when_ignoring_flow)
     p.ptrs.ip_api.set(ip, ip);
     AppIdModule app_module;
     AppIdInspector ins(app_module);
-    AppIdContext& app_ctxt = ins.get_ctxt();
+    const AppIdContext& app_ctxt = ins.get_ctxt();
     AppIdSession* asd = new AppIdSession(IpProtocol::TCP, &ip, 21, ins, app_ctxt.get_odp_ctxt(), 0
 #ifndef DISABLE_TENANT_ID
     ,0
@@ -455,7 +476,7 @@ TEST(appid_discovery_tests, event_published_when_processing_flow)
     p.ptrs.tcph = nullptr;
     AppIdModule app_module;
     AppIdInspector ins(app_module);
-    AppIdContext& app_ctxt = ins.get_ctxt();
+    const AppIdContext& app_ctxt = ins.get_ctxt();
     AppIdSession* asd = new AppIdSession(IpProtocol::TCP, &ip, 21, ins, app_ctxt.get_odp_ctxt(), 0
 #ifndef DISABLE_TENANT_ID
     ,0
@@ -513,7 +534,7 @@ TEST(appid_discovery_tests, change_bits_for_non_http_appid)
     p.ptrs.ip_api.set(ip, ip);
     AppIdModule app_module;
     AppIdInspector ins(app_module);
-    AppIdContext& app_ctxt = ins.get_ctxt();
+    const AppIdContext& app_ctxt = ins.get_ctxt();
     AppIdSession* asd = new AppIdSession(IpProtocol::TCP, &ip, 21, ins, app_ctxt.get_odp_ctxt(), 0
 #ifndef DISABLE_TENANT_ID
     ,0
@@ -570,8 +591,8 @@ TEST(appid_discovery_tests, change_bits_to_string)
         " tls-host, url, user-agent, response, referrer, dns-host, dns-response-host, service-info, client-info,"
         " user-info, netbios-name, netbios-domain, finished, tls-version, protocol-id");
 
-    // Failure of this test is a reminder that enum is changed, hence translator needs update
-    CHECK_EQUAL(APPID_MAX_BIT, 23);
+    static_assert(APPID_MAX_BIT == 23,
+        "update change_bits_to_string when AppidChangeBit changes");
 }
 
 int main(int argc, char** argv)

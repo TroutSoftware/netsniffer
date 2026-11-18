@@ -94,8 +94,8 @@ char* snort_strdup(const char* str)
 }
 // LCOV_EXCL_START
 DiscoveryFilter::~DiscoveryFilter(){}
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 // LCOV_EXCL_STOP
 
 // Stubs for modules, config
@@ -151,13 +151,13 @@ AppIdConfig stub_config;
 AppIdContext stub_ctxt(stub_config);
 OdpContext stub_odp_ctxt(stub_config, nullptr);
 AppIdSession::AppIdSession(IpProtocol, const snort::SfIp* ip, uint16_t, AppIdInspector& inspector,
-    OdpContext& odpctxt, uint32_t
+    OdpContext& context, uint32_t
 #ifndef DISABLE_TENANT_ID
     ,uint32_t
 #endif
     ) : snort::FlowData(inspector_id),
         inspector(inspector),
-        config(stub_config), api(*(new snort::AppIdSessionApi(this, *ip))), odp_ctxt(odpctxt)
+        config(stub_config), api(*(new snort::AppIdSessionApi(this, *ip))), odp_ctxt(context)
 {
     
 }
@@ -187,7 +187,8 @@ void AppIdPegCounts::inc_payload_count(AppId) { }
 
 THREAD_LOCAL AppIdStats appid_stats;
 void AppIdModule::sum_stats(bool) { }
-void AppIdModule::show_dynamic_stats() { }
+void AppIdModule::collect_dynamic_stats(snort::stats::Builder&,
+    const snort::stats::DynamicStatsPolicy&) const { }
 
 // Stubs for appid_session.cc
 static bool test_service_strstr_enabled = false;
@@ -274,15 +275,18 @@ snort::SearchTool::SearchTool(bool, const char*) { }
 
 ServiceDetector::ServiceDetector() {}
 void ServiceDetector::register_appid(AppId appId, unsigned extractsInfo, OdpContext& odp_ctxt) {}
-int ServiceDetector::add_service_consume_subtype(AppIdSession& asd, const snort::Packet* pkt,
-    AppidSessionDirection dir, AppId appId, const char* vendor, const char* version,
-    AppIdServiceSubtype* subtype, AppidChangeBits& change_bits)
-    { return 0; }
+// cppcheck-suppress-begin constParameterReference
 int ServiceDetector::add_service(AppidChangeBits& change_bits, AppIdSession& asd,
-    const snort::Packet* pkt, AppidSessionDirection dir, AppId appId, const char* vendor,
-    const char* version, AppIdServiceSubtype* subtype)
+    const snort::Packet*, AppidSessionDirection dir, AppId appId, const char* vendor,
+    const char*)
     { return 0; }
-int ServiceDetector::service_inprocess(AppIdSession& asd, const snort::Packet* pkt, AppidSessionDirection dir) { return 0; }
+int ServiceDetector::add_service_with_subtypes(AppidChangeBits& change_bits, AppIdSession& asd,
+    const snort::Packet*, AppidSessionDirection dir, AppId appId, const char* vendor,
+    const char*, AppIdServiceSubtypeList& subtypes)
+    { return 0; }
+// cppcheck-suppress-end constParameterReference
+int ServiceDetector::service_inprocess(
+    AppIdSession&, const snort::Packet*, AppidSessionDirection dir) { return 0; }
 
 snort::AppIdSessionApi::AppIdSessionApi(const AppIdSession*, const SfIp&)
 { }
@@ -299,6 +303,6 @@ void AppIdInspector::tear_down(snort::SnortConfig*, bool) { }
 
 ClientDetector::ClientDetector() { }
 
-void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, char*) { }
+void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, const char*) { }
 int AppIdSession::add_flow_data_id(uint16_t, ServiceDetector*) { return 0; }
 #endif

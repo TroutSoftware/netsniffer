@@ -23,20 +23,25 @@
 
 #include "extractor_detection.h"
 
+#include <atomic>
+
 #include "packet_io/active.h"
 #include "profiler/profiler.h"
 #include "pub_sub/detection_events.h"
 
 #include "extractor.h"
+#include "extractor_rate_filter.h"
 
 using namespace snort;
 using namespace std;
 
 namespace builtin
 {
+static atomic<uint64_t> next_binding_id { 0 };
+
 static const char* get_msg(const DataEvent* event, const Flow*)
 {
-    return ((const IpsQueuingEvent*)event)->get_stripped_msg().c_str();
+    return static_cast<const IpsQueuingEvent*>(event)->get_stripped_msg().c_str();
 }
 
 static const char* get_proto(const DataEvent*, const Flow*)
@@ -59,12 +64,12 @@ static const char* get_source(const DataEvent*, const Flow* flow)
 
 static uint64_t get_sid(const DataEvent* event, const Flow*)
 {
-    return (uint64_t)((const IpsQueuingEvent*)event)->get_sid();
+    return static_cast<uint64_t>(static_cast<const IpsQueuingEvent*>(event)->get_sid());
 }
 
 static uint64_t get_gid(const DataEvent* event, const Flow*)
 {
-    return (uint64_t)((const IpsQueuingEvent*)event)->get_gid();
+    return static_cast<uint64_t>(static_cast<const IpsQueuingEvent*>(event)->get_gid());
 }
 
 static const map<string, ExtractorEvent::BufGetFn> sub_buf_getters =
@@ -83,8 +88,9 @@ static const map<string, ExtractorEvent::NumGetFn> gid_sid_getters =
 
 THREAD_LOCAL const snort::Connector::ID* BuiltinExtractor::log_id = nullptr;
 
-BuiltinExtractor::BuiltinExtractor(Extractor& i, uint32_t t, const vector<string>& fields)
-    : ExtractorEvent(ServiceType::IPS_BUILTIN, i, t)
+BuiltinExtractor::BuiltinExtractor(Extractor& i, uint32_t t, const vector<string>& fields,
+    const SamplingConfig& config)
+    : ExtractorEvent(ServiceType::IPS_BUILTIN, i, t), binding_id(++builtin::next_binding_id), sampling(config)
 {
     for (const auto& f : fields)
     {
@@ -106,15 +112,21 @@ BuiltinExtractor::BuiltinExtractor(Extractor& i, uint32_t t, const vector<string
 void BuiltinExtractor::internal_tinit(const snort::Connector::ID* service_id)
 { log_id = service_id; }
 
+// cppcheck-suppress duplInheritedMember ; derived handler intentionally hides base no-op for typed dispatch
 void BuiltinExtractor::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!filter(flow))
         return;
 
     extractor_stats.total_events++;
+
+    const auto& ips_event = static_cast<const IpsQueuingEvent&>(event);
+
+    if (!builtin::should_log(*flow, binding_id, ips_event.get_gid(), ips_event.get_sid(),
+        get_timestamp(&event, flow).tv_sec, sampling))
+        return;
 
     logger->open_record();
     log(nts_fields, &event, flow);
@@ -128,7 +140,7 @@ namespace ips
 {
 static const char* get_msg(const DataEvent* event, const Flow*)
 {
-    return ((const IpsRuleEvent*)event)->get_stripped_msg().c_str();
+    return static_cast<const IpsRuleEvent*>(event)->get_stripped_msg().c_str();
 }
 
 static const char* get_action(const DataEvent*, const Flow*)
@@ -144,7 +156,7 @@ static const char* get_action(const DataEvent*, const Flow*)
 
 static const char* get_ips_action(const DataEvent* event, const Flow*)
  {
-    return ((const IpsRuleEvent*)event)->get_action();
+    return static_cast<const IpsRuleEvent*>(event)->get_action();
  }
 
 static const char* whd_to_text(Active::ActiveWouldReason reason)
@@ -186,7 +198,7 @@ static const char* get_ids_reason(const DataEvent*, const Flow*)
 
 static const vector<const char*>& get_refs(const DataEvent* event, const Flow*)
 {
-    return ((const IpsRuleEvent*)event)->get_references();
+    return static_cast<const IpsRuleEvent*>(event)->get_references();
 }
 
 static const char* get_proto(const DataEvent*, const Flow*)
@@ -209,17 +221,17 @@ static const char* get_source(const DataEvent*, const Flow* flow)
 
 static uint64_t get_sid(const DataEvent* event, const Flow*)
 {
-    return (uint64_t)((const IpsRuleEvent*)event)->get_sid();
+    return static_cast<uint64_t>(static_cast<const IpsRuleEvent*>(event)->get_sid());
 }
 
 static uint64_t get_gid(const DataEvent* event, const Flow*)
 {
-    return (uint64_t)((const IpsRuleEvent*)event)->get_gid();
+    return static_cast<uint64_t>(static_cast<const IpsRuleEvent*>(event)->get_gid());
 }
 
 static uint64_t get_rev(const DataEvent* event, const Flow*)
 {
-    return (uint64_t)((const IpsRuleEvent*)event)->get_rev();
+    return static_cast<uint64_t>(static_cast<const IpsRuleEvent*>(event)->get_rev());
 }
 
 static const map<string, ExtractorEvent::BufGetFn> sub_buf_getters =
@@ -273,9 +285,9 @@ IpsUserExtractor::IpsUserExtractor(Extractor& i, uint32_t t, const vector<string
 void IpsUserExtractor::internal_tinit(const snort::Connector::ID* service_id)
 { log_id = service_id; }
 
+// cppcheck-suppress duplInheritedMember ; derived handler intentionally hides base no-op for typed dispatch
 void IpsUserExtractor::handle(DataEvent& event, Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(extractor_perf_stats);
 
     if (!filter(flow))

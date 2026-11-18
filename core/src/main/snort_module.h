@@ -42,6 +42,7 @@ enum
     TRACE_INSPECTOR_MANAGER = 0,
     TRACE_MAIN,
     TRACE_MIME,
+    TRACE_CONF,
 };
 
 class SnortModule : public snort::Module
@@ -63,6 +64,7 @@ public:
     bool global_stats() const override
     { return true; }
 
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     void sum_stats(bool dump_stats) override
     { Module::sum_stats(dump_stats); }
 

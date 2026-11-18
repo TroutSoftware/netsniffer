@@ -62,21 +62,21 @@ static void update_constraints(PacketConstraints* new_cs)
 
 void TraceApi::global_init()
 {
-    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    TraceModule* tm = static_cast<TraceModule*>(PluginManager::get_module("trace"));
     assert(tm);
     tm->init();
 }
 
 void TraceApi::reset()
 {
-    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    TraceModule* tm = static_cast<TraceModule*>(PluginManager::get_module("trace"));
     assert(tm);
     tm->reset();
 }
 
 void TraceApi::capture_outputs(SnortConfig* sc)
 {
-    TraceModule* tm = (TraceModule*)PluginManager::get_module("trace");
+    TraceModule* tm = static_cast<TraceModule*>(PluginManager::get_module("trace"));
     assert(tm);
     tm->capture_outputs(sc->trace_config);
     TraceLoggerManager::instantiate_default_loggers(sc->trace_config);
@@ -121,6 +121,9 @@ void TraceApi::thread_term()
         g_trace_logger_plug = nullptr;
     }
     g_trace_initialized = false;
+
+    if (SThreadType::STHREAD_TYPE_MAIN == get_thread_type())
+        clear_all_traces();
 }
 
 void TraceApi::clear_all_traces()

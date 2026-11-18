@@ -154,7 +154,7 @@ bool HostAttributesManager::load_hosts_file(snort::SnortConfig* sc, const char* 
     return false;
 }
 
-bool HostAttributesManager::add_host(HostAttributesEntry host, snort::SnortConfig* sc)
+bool HostAttributesManager::add_host(HostAttributesEntry host, const snort::SnortConfig* sc)
 {
     if ( !next_cache )
         next_cache = new HostAttributesSegmentedCache(sc->max_attribute_hosts, sc->segment_count_host);
@@ -184,6 +184,7 @@ void HostAttributesManager::load_failure_cleanup()
     next_cache = nullptr;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void HostAttributesManager::swap_cleanup()
 {
     delete old_cache;
@@ -288,11 +289,11 @@ PegCount* HostAttributesManager::get_peg_counts()
 {
     if ( active_cache )
     {
-        const LruCacheSharedStats* cache_stats = (const LruCacheSharedStats*) active_cache->get_counts();
+        const LruCacheSharedStats* cache_stats =
+            reinterpret_cast<const LruCacheSharedStats*>(active_cache->get_counts());
         host_attribute_stats.hosts_pruned = cache_stats->alloc_prunes;
         host_attribute_stats.total_hosts = active_cache->size();
     }
 
-    return (PegCount*)&host_attribute_stats;
+    return reinterpret_cast<PegCount*>(&host_attribute_stats);
 }
-

@@ -23,6 +23,10 @@
 #include "config.h"
 #endif
 
+#include <string>
+#include <vector>
+
+#include "detection/ips_context.h"
 #include "pub_sub/http_transaction_end_event.h"
 #include "pub_sub/http_form_data_event.h"
 #include "service_inspectors/http_inspect/http_common.h"
@@ -31,6 +35,8 @@
 #include "service_inspectors/http_inspect/http_inspect.h"
 #include "service_inspectors/http_inspect/http_module.h"
 #include "service_inspectors/http_inspect/http_msg_section.h"
+#include "service_inspectors/http_inspect/http_msg_start.h"
+#include "service_inspectors/http_inspect/http_msg_status.h"
 #include "service_inspectors/http_inspect/http_transaction.h"
 #include "service_inspectors/http2_inspect/http2_flow_data.h"
 
@@ -44,6 +50,11 @@ using namespace snort;
 using namespace HttpCommon;
 using namespace HttpEnums;
 
+namespace
+{
+    IpsContextData* test_context_data = nullptr;
+}
+
 namespace snort
 {
 // Stubs whose sole purpose is to make the test code link
@@ -53,11 +64,21 @@ FlowData::FlowData(unsigned) : id(0)
 FlowData::~FlowData() = default;
 FlowDataStore::~FlowDataStore() = default;
 int DetectionEngine::queue_event(unsigned int, unsigned int) { return 0; }
+IpsContext* DetectionEngine::get_next_context() { return nullptr; }
+void DetectionEngine::wait_for_context() { }
+IpsContextData* DetectionEngine::get_data(unsigned) { return test_context_data; }
+IpsContextData* DetectionEngine::get_data(unsigned, IpsContext*) { return test_context_data; }
+void DetectionEngine::set_data(unsigned, IpsContextData* context_data)
+{ test_context_data = context_data; }
+void IpsContext::set_context_data(unsigned, IpsContextData* context_data)
+{ test_context_data = context_data; }
 fd_status_t File_Decomp_StopFree(fd_session_t*) { return File_Decomp_OK; }
 uint32_t str_to_hash(const uint8_t *, size_t) { return 0; }
 FlowData* FlowDataStore::get(unsigned) const { return nullptr; }
 void FlowDataStore::set(FlowData*) { }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 unsigned DataBus::get_id(PubKey const&) { return 0; }
 void DataBus::publish(unsigned int, unsigned int, DataEvent&, Flow*) {}
 HttpTransactionEndEvent::HttpTransactionEndEvent(const HttpTransaction* const trans):
@@ -87,6 +108,40 @@ HttpParaList::~HttpParaList() {}
 
 void HttpFormDataEvent::format_as_uri() const { }
 
+static const std::string empty;
+const std::string& HttpTransactionEndEvent::get_filename(SourceId) const
+{ return empty; }
+
+const std::string& HttpTransactionEndEvent::get_content_type(SourceId) const
+{ return empty; }
+
+HttpMsgSection::HttpMsgSection(const uint8_t*, const uint16_t, HttpFlowData* session_data_,
+    SourceId source_id_, bool, Flow* flow_, const HttpParaList* params_) :
+    session_data(session_data_), flow(flow_), params(params_), transaction(nullptr),
+    trans_num(0), status_code_num(0), source_id(source_id_), version_id(VERS__NOT_PRESENT),
+    method_id(METH__NOT_PRESENT), tcp_close(false)
+{ }
+bool HttpMsgSection::run_detection(snort::Packet*) { return false; }
+void HttpMsgSection::clear() { }
+
+HttpMsgStart::HttpMsgStart(const uint8_t* buffer, const uint16_t buf_size,
+    HttpFlowData* session_data_, SourceId source_id_, bool buf_owner, Flow* flow_,
+    const HttpParaList* params_) : HttpMsgSection(buffer, buf_size, session_data_, source_id_,
+    buf_owner, flow_, params_), own_msg_buffer(buf_owner) { }
+HttpMsgStart::~HttpMsgStart() = default;
+void HttpMsgStart::analyze() { }
+
+HttpMsgStatus::HttpMsgStatus(const uint8_t* buffer, const uint16_t buf_size,
+    HttpFlowData* session_data_, SourceId source_id_, bool buf_owner, Flow* flow_,
+    const HttpParaList* params_) : HttpMsgStart(buffer, buf_size, session_data_, source_id_,
+    buf_owner, flow_, params_) { }
+void HttpMsgStatus::gen_events() { }
+void HttpMsgStatus::update_flow() { }
+void HttpMsgStatus::parse_start_line() { }
+#ifdef REG_TEST
+void HttpMsgStatus::print_section(FILE*) { }
+#endif
+
 unsigned Http2FlowData::inspector_id = 0;
 uint32_t Http2FlowData::get_processing_stream_id() const { return 0; }
 HttpInspect::HttpInspect(const HttpParaList* para) :
@@ -102,6 +157,8 @@ HttpCommon::SectionType HttpInspect::get_type_expected(snort::Flow*, HttpCommon:
 void HttpInspect::finish_hx_body(snort::Flow*, HttpCommon::SourceId, HttpCommon::HXBodyState,
     bool) const { }
 void HttpInspect::set_hx_body_state(snort::Flow*, HttpCommon::SourceId, HttpCommon::HXBodyState) const { }
+void HttpInspect::signal_request_line_invalid(snort::Flow*, HttpCommon::SourceId,
+    HttpEnums::RequestLineInvalidReasonCode) const { }
 bool HttpInspect::get_fp_buf(snort::InspectionBuffer::Type, snort::Packet*,
     snort::InspectionBuffer&) { return false; }
 void HttpInspect::eval(snort::Packet*) { }
@@ -120,7 +177,7 @@ const snort::StreamBuffer HttpStreamSplitter::reassemble(snort::Flow*, unsigned,
     return buf;
 }
 bool HttpStreamSplitter::finish(snort::Flow*) { return false; }
-void HttpStreamSplitter::prep_partial_flush(snort::Flow*, uint32_t, uint32_t, uint32_t,
+void HttpStreamSplitter::prep_partial_flush(const snort::Flow*, uint32_t, uint32_t, uint32_t,
     HttpEnums::PartialFlushType) { }
 
 THREAD_LOCAL PegCount HttpModule::peg_counts[PEG_COUNT_MAX] = { };
@@ -132,6 +189,13 @@ TEST_GROUP(http_transaction_test)
     HttpFlowData* flow_data = new HttpFlowData(flow, &params);
     SectionType* const section_type = HttpUnitTestSetup::get_section_type(flow_data);
     SectionType* const type_expected = HttpUnitTestSetup::get_type_expected(flow_data);
+
+    HttpTransaction* attach_transaction()
+    {
+        type_expected[SRC_CLIENT] = SEC_REQUEST;
+        section_type[SRC_CLIENT] = SEC_REQUEST;
+        return HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    }
 
     void setup() override
     {
@@ -152,7 +216,7 @@ TEST(http_transaction_test, simple_transaction)
     // Request
     type_expected[SRC_CLIENT] = SEC_REQUEST;
     section_type[SRC_CLIENT] = SEC_REQUEST;
-    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    const HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
     CHECK(trans != nullptr);
     type_expected[SRC_CLIENT] = SEC_HEADER;
     section_type[SRC_CLIENT] = SEC_HEADER;
@@ -187,7 +251,7 @@ TEST(http_transaction_test, orphan_response)
     // Response message without a request
     type_expected[SRC_CLIENT] = SEC_REQUEST;
     section_type[SRC_SERVER] = SEC_STATUS;
-    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow);
+    const HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow);
     CHECK(trans != nullptr);
     section_type[SRC_SERVER] = SEC_HEADER;
     CHECK(trans == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
@@ -198,6 +262,36 @@ TEST(http_transaction_test, orphan_response)
     }
     section_type[SRC_SERVER] = SEC_TRAILER;
     CHECK(trans == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
+}
+
+TEST(http_transaction_test, server_attachment_replaces_null_infractions)
+{
+    HttpUnitTestSetup::clear_infractions(flow_data, SRC_SERVER);
+    section_type[SRC_SERVER] = SEC_STATUS;
+
+    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow);
+    CHECK(trans->get_infractions(SRC_SERVER) != nullptr);
+}
+
+TEST(http_transaction_test, server_attachment_merges_existing_infractions)
+{
+    type_expected[SRC_CLIENT] = SEC_REQUEST;
+    section_type[SRC_CLIENT] = SEC_REQUEST;
+    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    HttpUnitTestSetup::add_transaction_infraction(trans, SRC_SERVER, INF_BAD_STAT_LINE);
+
+    HttpUnitTestSetup::half_reset(flow_data, SRC_CLIENT);
+    section_type[SRC_CLIENT] = SEC_REQUEST;
+    const HttpTransaction* next_trans =
+        HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    CHECK(trans != next_trans);
+    *HttpUnitTestSetup::get_infractions(flow_data, SRC_SERVER) += INF_BAD_HEADER;
+
+    section_type[SRC_SERVER] = SEC_STATUS;
+    POINTERS_EQUAL(trans, HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
+    CHECK(*trans->get_infractions(SRC_SERVER) & INF_BAD_STAT_LINE);
+    CHECK(*trans->get_infractions(SRC_SERVER) & INF_BAD_HEADER);
+    POINTERS_EQUAL(nullptr, HttpUnitTestSetup::get_infractions(flow_data, SRC_SERVER));
 }
 
 TEST(http_transaction_test, simple_pipeline)
@@ -237,7 +331,7 @@ TEST(http_transaction_test, concurrent_request_response)
     // Response starts before request completes, request completes first
     type_expected[SRC_CLIENT] = SEC_REQUEST;
     section_type[SRC_CLIENT] = SEC_REQUEST;
-    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    const HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
     CHECK(trans != nullptr);
     type_expected[SRC_CLIENT] = SEC_HEADER;
     section_type[SRC_CLIENT] = SEC_HEADER;
@@ -273,7 +367,7 @@ TEST(http_transaction_test, pipeline_underflow)
     // Underflow scenario with request, two responses, request, response
     type_expected[SRC_CLIENT] = SEC_REQUEST;
     section_type[SRC_CLIENT] = SEC_REQUEST;
-    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    const HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
     CHECK(trans != nullptr);
     type_expected[SRC_CLIENT] = SEC_HEADER;
     section_type[SRC_CLIENT] = SEC_HEADER;
@@ -293,7 +387,7 @@ TEST(http_transaction_test, pipeline_underflow)
     CHECK(trans == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
 
     section_type[SRC_CLIENT] = SEC_REQUEST;
-    HttpTransaction* trans2 = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    const HttpTransaction* trans2 = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
     CHECK((trans2 != nullptr) && (trans2 != trans));
     type_expected[SRC_CLIENT] = SEC_HEADER;
     section_type[SRC_CLIENT] = SEC_HEADER;
@@ -313,7 +407,7 @@ TEST(http_transaction_test, concurrent_request_response_underflow)
     // Response starts before request completes, response completes first, second response
     type_expected[SRC_CLIENT] = SEC_REQUEST;
     section_type[SRC_CLIENT] = SEC_REQUEST;
-    HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
+    const HttpTransaction* trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT, flow);
     CHECK(trans != nullptr);
     type_expected[SRC_CLIENT] = SEC_HEADER;
     section_type[SRC_CLIENT] = SEC_HEADER;
@@ -343,7 +437,7 @@ TEST(http_transaction_test, concurrent_request_response_underflow)
     type_expected[SRC_CLIENT] = SEC_REQUEST;
 
     section_type[SRC_SERVER] = SEC_STATUS;
-    HttpTransaction* trans2 = HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow);
+    const HttpTransaction* trans2 = HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow);
     CHECK((trans2 != nullptr) && (trans2 != trans));
     section_type[SRC_SERVER] = SEC_HEADER;
     CHECK(trans2 == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
@@ -554,8 +648,250 @@ TEST(http_transaction_test, pipeline_continue_pipeline)
     }
 }
 
+TEST(http_transaction_test, attachment_values_are_space_separated_in_order)
+{
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "one", "type1");
+    STRCMP_EQUAL("one", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "two", "type2");
+    STRCMP_EQUAL("one two", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 type2", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "three", "type3");
+    STRCMP_EQUAL("one two three", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 type2 type3", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, attachment_filename_and_content_type_exact_fit)
+{
+    static constexpr size_t cap = HttpUnitTestSetup::MAX_ATTACHMENT_SIZE;
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "file1", "type1");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    const std::string fname_filler(cap - 6, 'a');
+    const std::string ftype_filler(cap - 6, 'b');
+
+    trans->add_filename(SRC_CLIENT, fname_filler, ftype_filler);
+    CHECK_EQUAL("file1 " + fname_filler, trans->get_filename(SRC_CLIENT));
+    CHECK_EQUAL("type1 " + ftype_filler, trans->get_content_type(SRC_CLIENT));
+}
+
+TEST(http_transaction_test, attachment_oversized_first_value_is_dropped)
+{
+    auto* const trans = attach_transaction();
+
+    const std::string oversized(HttpUnitTestSetup::MAX_ATTACHMENT_SIZE + 1, 'x');
+
+    trans->add_filename(SRC_CLIENT, oversized, oversized);
+    CHECK(trans->get_filename(SRC_CLIENT).empty());
+    CHECK(trans->get_content_type(SRC_CLIENT).empty());
+}
+
+TEST(http_transaction_test, attachment_filename_overflow_drops_pair_and_caps_direction)
+{
+    static constexpr size_t cap = HttpUnitTestSetup::MAX_ATTACHMENT_SIZE;
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "file1", "type1");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    const std::string large_filename(cap - 5, 'x');
+
+    trans->add_filename(SRC_CLIENT, large_filename, "type2");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "x", "y");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, attachment_content_type_overflow_drops_pair_and_caps_direction)
+{
+    static constexpr size_t cap = HttpUnitTestSetup::MAX_ATTACHMENT_SIZE;
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "file1", "type1");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    const std::string large_content_type(cap - 5, 'x');
+
+    trans->add_filename(SRC_CLIENT, "file2", large_content_type);
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "file3", "type3");
+    STRCMP_EQUAL("file1", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, attachment_directions_are_capped_independently)
+{
+    auto* const trans = attach_transaction();
+
+    const std::string oversized(HttpUnitTestSetup::MAX_ATTACHMENT_SIZE + 1, 'x');
+
+    trans->add_filename(SRC_CLIENT, oversized, "type1");
+    CHECK(trans->get_filename(SRC_CLIENT).empty());
+    CHECK(trans->get_content_type(SRC_CLIENT).empty());
+
+    trans->add_filename(SRC_SERVER, "server1", "type1");
+    STRCMP_EQUAL("server1", trans->get_filename(SRC_SERVER).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_SERVER).c_str());
+
+    trans->add_filename(SRC_SERVER, "server2", "type2");
+    STRCMP_EQUAL("server1 server2", trans->get_filename(SRC_SERVER).c_str());
+    STRCMP_EQUAL("type1 type2", trans->get_content_type(SRC_SERVER).c_str());
+
+    trans->add_filename(SRC_CLIENT, "client2", "type2");
+    CHECK(trans->get_filename(SRC_CLIENT).empty());
+    CHECK(trans->get_content_type(SRC_CLIENT).empty());
+    STRCMP_EQUAL("server1 server2", trans->get_filename(SRC_SERVER).c_str());
+    STRCMP_EQUAL("type1 type2", trans->get_content_type(SRC_SERVER).c_str());
+}
+
+TEST(http_transaction_test, attachment_with_missing_name_or_type)
+{
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "doc.pdf", "");
+    STRCMP_EQUAL("doc.pdf", trans->get_filename(SRC_CLIENT).c_str());
+    CHECK(trans->get_content_type(SRC_CLIENT).empty());
+
+    trans->add_filename(SRC_CLIENT, "doc2.pdf", "application/pdf");
+    STRCMP_EQUAL("doc.pdf doc2.pdf", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("application/pdf", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_SERVER, "", "text/plain");
+    CHECK(trans->get_filename(SRC_SERVER).empty());
+    STRCMP_EQUAL("text/plain", trans->get_content_type(SRC_SERVER).c_str());
+
+    trans->add_filename(SRC_SERVER, "a.txt", "text/html");
+    STRCMP_EQUAL("a.txt", trans->get_filename(SRC_SERVER).c_str());
+    STRCMP_EQUAL("text/plain text/html", trans->get_content_type(SRC_SERVER).c_str());
+}
+
+TEST(http_transaction_test, attachment_missing_filenames_still_add_separator)
+{
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "a.bin", "type1");
+    STRCMP_EQUAL("a.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "", "type2");
+    STRCMP_EQUAL("a.bin ", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 type2", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "", "type3");
+    STRCMP_EQUAL("a.bin  ", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 type2 type3", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "d.bin", "type4");
+    STRCMP_EQUAL("a.bin   d.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 type2 type3 type4", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, attachment_missing_content_types_still_add_separator)
+{
+    auto* const trans = attach_transaction();
+
+    trans->add_filename(SRC_CLIENT, "a.bin", "type1");
+    STRCMP_EQUAL("a.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "b.bin", "");
+    STRCMP_EQUAL("a.bin b.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1 ", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "c.bin", "");
+    STRCMP_EQUAL("a.bin b.bin c.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1  ", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "d.bin", "type4");
+    STRCMP_EQUAL("a.bin b.bin c.bin d.bin", trans->get_filename(SRC_CLIENT).c_str());
+    STRCMP_EQUAL("type1   type4", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, attachment_multibyte_value_is_dropped_whole)
+{
+    static constexpr size_t cap = HttpUnitTestSetup::MAX_ATTACHMENT_SIZE;
+    auto* const trans = attach_transaction();
+
+    const std::string fname(cap - 1, 'a');
+
+    trans->add_filename(SRC_CLIENT, fname, "type1");
+    CHECK_EQUAL(fname.size(), trans->get_filename(SRC_CLIENT).size());
+    CHECK_EQUAL(fname, trans->get_filename(SRC_CLIENT));
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+
+    trans->add_filename(SRC_CLIENT, "\xc3\xa9", "type2");
+    CHECK_EQUAL(fname.size(), trans->get_filename(SRC_CLIENT).size());
+    CHECK_EQUAL(fname, trans->get_filename(SRC_CLIENT));
+    STRCMP_EQUAL("type1", trans->get_content_type(SRC_CLIENT).c_str());
+}
+
+TEST(http_transaction_test, interim_status_archive_limit)
+{
+    type_expected[SRC_CLIENT] = SEC_REQUEST;
+    section_type[SRC_CLIENT] = SEC_REQUEST;
+    HttpTransaction* const trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT,
+        flow);
+    CHECK(trans != nullptr);
+
+    static constexpr unsigned interim_count = 12;
+    // Field holds reason_phrase as a non-owning pointer; keep the phrases alive.
+    std::vector<std::string> phrases;
+    phrases.reserve(interim_count);
+    for (unsigned k = 1; k <= interim_count; k++)
+        phrases.emplace_back("interim " + std::to_string(k));
+
+    for (unsigned k = 0; k < interim_count; k++)
+    {
+        auto* const status = new HttpMsgStatus(nullptr, 0, flow_data, SRC_SERVER, false, flow,
+            &params);
+        status->set_parsed_status(100,
+            reinterpret_cast<const uint8_t*>(phrases[k].data()),
+            static_cast<int32_t>(phrases[k].size()));
+        HttpUnitTestSetup::archive_status_section(trans, status);
+    }
+
+    CHECK_EQUAL(1, HttpUnitTestSetup::archive_status_length(trans));
+
+    CHECK_EQUAL(100, trans->get_info_code());
+    const Field& info_msg = trans->get_info_msg();
+    STRNCMP_EQUAL(phrases.back().c_str(),
+        reinterpret_cast<const char*>(info_msg.start()), info_msg.length());
+    CHECK_EQUAL(static_cast<int32_t>(phrases.back().size()), info_msg.length());
+}
+
+TEST(http_transaction_test, interim_status_replacement_null_status_no_crash)
+{
+    // See dev_notes.txt "100-Continue interim status archiving" for the null-section path.
+    type_expected[SRC_CLIENT] = SEC_REQUEST;
+    section_type[SRC_CLIENT] = SEC_REQUEST;
+    HttpTransaction* const trans = HttpTransaction::attach_my_transaction(flow_data, SRC_CLIENT,
+        flow);
+    CHECK(trans != nullptr);
+
+    section_type[SRC_SERVER] = SEC_STATUS;
+    CHECK(trans == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
+    trans->set_one_hundred_response();
+
+    section_type[SRC_SERVER] = SEC_STATUS;
+    CHECK(trans == HttpTransaction::attach_my_transaction(flow_data, SRC_SERVER, flow));
+    CHECK_EQUAL(0, HttpUnitTestSetup::archive_status_length(trans));
+}
+
 int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

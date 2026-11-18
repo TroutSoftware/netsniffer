@@ -22,6 +22,7 @@
 #ifndef APPID_SESSION_API_H
 #define APPID_SESSION_API_H
 
+#include <list>
 #include <map>
 
 #include "flow/flow.h"
@@ -95,6 +96,7 @@ namespace snort
 #define APPID_SESSION_FIRST_PKT_CACHE_MATCHED    (1ULL << 45)
 #define APPID_SESSION_DO_NOT_DECRYPT        (1ULL << 46)
 #define APPID_SESSION_INITIATOR_SEEN        (1ULL << 48)
+#define APPID_SESSION_HTTP2_SESSION         (1ULL << 49)
 #define APPID_SESSION_IGNORE_ID_FLAGS \
     (APPID_SESSION_FUTURE_FLOW | \
     APPID_SESSION_NOT_A_SERVICE | \
@@ -109,20 +111,20 @@ class SO_PUBLIC AppIdSessionApi : public StashGenericObject
 public:
     AppId get_service_app_id() const;
     void get_service_info(const char*& vendor, const char*& version,
-        const AppIdServiceSubtype*& subtype) const;
-    const char* get_user_info(AppId& service, bool& login) const;
+        const AppIdServiceSubtypeList*& subtypes) const;
+    const char* get_user_info(AppId& user_service, bool& login) const;
     AppId get_misc_app_id(uint32_t stream_index = 0) const;
     AppId get_client_app_id(uint32_t stream_index = 0) const;
     AppId get_payload_app_id(uint32_t stream_index = 0) const;
     AppId get_referred_app_id(uint32_t stream_index = 0) const;
-    void get_app_id(AppId& service, AppId& client, AppId& payload, AppId& misc, AppId& referred,
-        uint32_t stream_index = 0) const;
-    void get_app_id(AppId* service, AppId* client, AppId* payload, AppId* misc, AppId* referred,
-        uint32_t stream_index = 0) const;
+    void get_app_id(AppId& service_app, AppId& client_app, AppId& payload_app, AppId& misc_app,
+        AppId& referred_app, uint32_t stream_index = 0) const;
+    void get_app_id(AppId* service_app, AppId* client_app, AppId* payload_app, AppId* misc_app,
+        AppId* referred_app, uint32_t stream_index = 0) const;
     bool is_appid_inspecting_session() const;
     bool is_appid_available(uint32_t stream_index = 0) const;
     const char* get_client_info(uint32_t stream_index = 0) const;
-    uint64_t get_appid_session_attribute(uint64_t flag) const;
+    uint64_t get_appid_session_attribute(uint64_t flag_mask) const;
     const SfIp* get_initiator_ip() const;
     const SfIp& get_service_ip() const;
     uint16_t get_service_port() const;
@@ -192,10 +194,13 @@ private:
     PayloadAppDescriptor payload;
 
     void set_ss_application_ids(AppId service, AppId client, AppId payload, AppId misc,
-        AppId referred, AppidChangeBits& change_bits, Flow& flow);
-    void set_ss_application_ids(AppId client, AppId payload, AppidChangeBits& change_bits, Flow& flow);
-    void set_ss_application_ids_payload(AppId payload, AppidChangeBits& change_bits, Flow& flow);
-    void set_application_ids_service(AppId service_id, AppidChangeBits& change_bits, Flow& flow);
+        AppId referred, AppidChangeBits& change_bits, Flow& target_flow);
+    void set_ss_application_ids(
+        AppId client, AppId payload, AppidChangeBits& change_bits, Flow& target_flow);
+    void set_ss_application_ids_payload(
+        AppId payload, AppidChangeBits& change_bits, Flow& target_flow);
+    void set_application_ids_service(
+        AppId service_id, AppidChangeBits& change_bits, Flow& target_flow);
     void set_netbios_name(AppidChangeBits& change_bits, const char* name);
     void set_netbios_domain(AppidChangeBits& change_bits, const char* domain);
     bool prefer_eve_client_over_appid_http_client() const;
@@ -213,7 +218,7 @@ private:
         netbios_domain = nullptr;
         snort_free(tls_sni);
         tls_sni = nullptr;
-        for (auto& pair : dsessions)
+        for (const auto& pair : dsessions)
             delete pair.second;
         dsessions.clear();
         delete dsession;
@@ -227,12 +232,12 @@ private:
         hsessions.clear();
     }
 
-    void set_tls_host(const char* host)
+    void set_tls_host(const char* host_name)
     {
-        if (host)
+        if (host_name)
         {
             snort_free(tls_host);
-            tls_host = snort_strdup(host);
+            tls_host = snort_strdup(host_name);
         }
     }
 

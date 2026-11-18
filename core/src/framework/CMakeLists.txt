@@ -47,6 +47,9 @@ add_library ( framework OBJECT
     mpse.cc
     mpse_batch.cc
     range.cc
+    reload_survivor_subscriptions.cc
+    reload_survivor_subscriptions_impl.h
+    survivor_flow_data.cc
     tracer.cc
     value.cc
 )

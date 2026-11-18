@@ -220,7 +220,7 @@ bool get_string(std::istringstream& stream,
     }
 }
 
-std::string get_remain_data(std::istringstream& stream, bool trim)
+std::string get_remain_data(std::istringstream& stream, bool should_trim)
 {
     // get string length
     const std::streamoff pos = stream.tellg();
@@ -235,7 +235,7 @@ std::string get_remain_data(std::istringstream& stream, bool trim)
     std::string arg_s(arg_c);
     delete[] arg_c;
 
-    if (trim)
+    if (should_trim)
         util::trim(arg_s);
 
     return arg_s;
@@ -282,7 +282,7 @@ bool file_exists(const std::string& name)
     return (stat (name.c_str(), &buffer) == 0);
 }
 
-bool is_regular_file(std::string& path)
+bool is_regular_file(const std::string& path)
 {
     struct stat s;
 

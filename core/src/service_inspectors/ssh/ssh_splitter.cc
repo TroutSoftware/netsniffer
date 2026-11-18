@@ -56,11 +56,11 @@ StreamSplitter::Status SshSplitter::ssh2_key_exchange_scan(
         {
             memcpy(header_buf + header_buf_len, data, need);
             header_buf_len = 0;
-            sshp = (const SSH2Packet*)header_buf;
+            sshp = reinterpret_cast<const SSH2Packet*>(header_buf);
         }
         else
         {
-            sshp = (const SSH2Packet*)data;
+            sshp = reinterpret_cast<const SSH2Packet*>(data);
         }
 
         uint32_t ssh_len = ntohl(sshp->packet_length) + SSH2_PACKET_LEN;
@@ -80,6 +80,11 @@ StreamSplitter::Status SshSplitter::ssh2_key_exchange_scan(
         }
         else
         {
+            if (++kex_pdu_count > SSH_MAX_KEX_PDUS)
+            {
+                sshstats.aborted_sessions++;
+                return StreamSplitter::ABORT;
+            }
             *fp = ssh_len - buffered;
             return StreamSplitter::FLUSH;
         }
@@ -124,7 +129,7 @@ StreamSplitter::Status SshSplitter::scan(
     Packet* p, const uint8_t* data, uint32_t len,
     uint32_t flags, uint32_t* fp)
 {
-    Flow* flow = p->flow;
+    const Flow* flow = p->flow;
     SSHData* sessp = get_session_data(flow);
 
     if (sessp and sessp->ssh_aborted)
@@ -186,4 +191,3 @@ StreamSplitter::Status SshSplitter::scan(
     }
     }
 }
-

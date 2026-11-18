@@ -190,9 +190,10 @@ ImapFlowData::~ImapFlowData()
 
 unsigned ImapFlowData::inspector_id = 0;
 
-static IMAPData* get_session_data(Flow* flow)
+static IMAPData* get_session_data(const Flow* flow)
 {
-    ImapFlowData* fd = (ImapFlowData*)flow->get_flow_data(ImapFlowData::inspector_id);
+    ImapFlowData* fd = static_cast<ImapFlowData*>(
+        flow->get_flow_data(ImapFlowData::inspector_id));
     return fd ? &fd->session : nullptr;
 }
 
@@ -280,6 +281,7 @@ static void IMAP_SearchFree()
     imap_resp_search_mpse = nullptr;
 }
 
+// cppcheck-suppress constParameterPointer
 static void IMAP_ResetState(Flow* ssn)
 {
     IMAPData* imap_ssn = get_session_data(ssn);
@@ -326,7 +328,7 @@ static void IMAP_GetEOL(const uint8_t* ptr, const uint8_t* end,
     *eolm = tmp_eolm;
 }
 
-static inline int InspectPacket(Packet* p)
+static inline int InspectPacket(const Packet* p)
 {
     return p->has_paf_payload();
 }
@@ -366,6 +368,7 @@ static int IMAP_Setup(Packet* p, IMAPData* ssn)
     return pkt_dir;
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int IMAP_SearchStrFound(void* id, void* , int index, void* , void* )
 {
     int search_id = (int)(uintptr_t)id;
@@ -388,7 +391,7 @@ static int IMAP_SearchStrFound(void* id, void* , int index, void* , void* )
  * @return          pointer into p->data where we stopped looking at data
  *                  will be end of line or end of packet
  */
-static const uint8_t* IMAP_HandleCommand(Packet* p, IMAPData* imap_ssn, const uint8_t* ptr, const
+static const uint8_t* IMAP_HandleCommand(const Packet* p, IMAPData* imap_ssn, const uint8_t* ptr, const
     uint8_t* end)
 {
     const uint8_t* eol;   /* end of line */
@@ -463,7 +466,7 @@ static const uint8_t* IMAP_HandleCommand(Packet* p, IMAPData* imap_ssn, const ui
  *
  * @return  none
  */
-static void IMAP_ProcessClientPacket(Packet* p, IMAPData* imap_ssn)
+static void IMAP_ProcessClientPacket(const Packet* p, IMAPData* imap_ssn)
 {
     const uint8_t* ptr = p->data;
     const uint8_t* end = p->data + p->dsize;
@@ -658,6 +661,7 @@ static void snort_imap(IMAP_PROTO_CONF* config, Packet* p)
          */
         imap_ssn = SetNewIMAPData(config, p);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !imap_ssn )
         {
             /* Could not get/create the session data for this packet. */
@@ -843,7 +847,6 @@ void Imap::show(const SnortConfig*) const
 
 void Imap::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(imapPerfStats);
 
     // precondition - what we registered for
@@ -942,7 +945,7 @@ static void imap_term()
 
 static Inspector* imap_ctor(Module* m)
 {
-    ImapModule* mod = (ImapModule*)m;
+    ImapModule* mod = static_cast<ImapModule*>(m);
     return new Imap(mod->get_data());
 }
 
@@ -1007,7 +1010,7 @@ TEST_CASE("imap_body_len_not_terminated", "[imap]")
     set_inspection_policy(&ins_policy);
     set_network_policy(&net_policy);
 
-    uint8_t data[] = "* FETCH (BODY[TEXT]{12345}\r\n";
+    const uint8_t data[] = "* FETCH (BODY[TEXT]{12345}\r\n";
     
     Packet p;
     Flow* flow = new Flow;
@@ -1062,5 +1065,46 @@ TEST_CASE("imap_body_len_valid", "[imap]")
 
     delete p.context;
     delete flow;
+}
+
+TEST_CASE("imap_paf_client bare lf flood aborts", "[imap]")
+{
+    ImapSplitter splitter(false);
+    const uint8_t lf = '\n';
+    uint32_t fp = 0;
+    unsigned flushes = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( unsigned i = 0; i <= IMAP_MAX_OCTETS + 1; i++ )
+    {
+        status = splitter.scan(nullptr, &lf, 1, PKT_FROM_CLIENT, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+        flushes++;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+    REQUIRE((flushes == IMAP_MAX_OCTETS));
+}
+
+TEST_CASE("imap_paf_client valid short commands never abort", "[imap]")
+{
+    const char* cmds[] = { "a NOOP\r\n", "a LOGOUT\r\n", nullptr };
+
+    for ( unsigned c = 0; cmds[c]; c++ )
+    {
+        ImapSplitter splitter(false);
+        const uint8_t* line = (const uint8_t*)cmds[c];
+        uint32_t line_len = strlen(cmds[c]);
+        uint32_t fp = 0;
+
+        for ( uint32_t sent = 0; sent < (IMAP_MAX_OCTETS * 2); sent += line_len )
+        {
+            StreamSplitter::Status status =
+                splitter.scan(nullptr, line, line_len, PKT_FROM_CLIENT, &fp);
+            REQUIRE((status == StreamSplitter::FLUSH));
+            REQUIRE((fp == line_len));
+        }
+    }
 }
 #endif

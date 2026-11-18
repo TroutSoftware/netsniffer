@@ -815,7 +815,7 @@ static void Term()
 
 static int SetupCheck(int i)
 {
-    ThreshData* p = thData + i;
+    const ThreshData* p = thData + i;
     if ( p->expect == p->create )
         return 1;
     printf("setup %d: exp %d, got %d\n", i, p->expect, p->create);
@@ -824,14 +824,14 @@ static int SetupCheck(int i)
 
 static int RuleCheck(int i)
 {
-    ThreshData* p = ruleData + i;
+    const ThreshData* p = ruleData + i;
     if ( p->expect == p->create )
         return 1;
     printf("rule %d: exp %d, got %d\n", i, p->expect, p->create);
     return 0;
 }
 
-static int EventTest(EventData* p, THD_NODE* rule)
+static int EventTest(const EventData* p, THD_NODE* rule)
 {
     // now is a float to clarify the impact of
     // just using truncated seconds on thresholds
@@ -857,7 +857,7 @@ static int EventTest(EventData* p, THD_NODE* rule)
 
 static int EventCheck(int i)
 {
-    EventData* p = evData + i;
+    const EventData* p = evData + i;
     int status = EventTest(p, nullptr);
 
     if ( p->expect == status )
@@ -966,4 +966,3 @@ TEST_CASE("sfthd detect", "[sfthd]")
     }
     Term();
 }
-

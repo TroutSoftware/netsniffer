@@ -44,7 +44,6 @@ using namespace snort;
 
 bool HttpStreamSplitter::finish(Flow* flow)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(HttpModule::get_profile_stats());
 
     HttpFlowData* session_data = HttpInspect::http_get_flow_data(flow);
@@ -200,7 +199,7 @@ bool HttpStreamSplitter::finish(Flow* flow)
         // If we were publishing a request or response body need to publish that body is complete
         if (session_data->publish_depth_remaining[source_id] > 0)
         {
-            HttpTransaction* transaction = session_data->transaction[source_id];
+            const HttpTransaction* transaction = session_data->transaction[source_id];
             if (transaction && transaction->should_publish_body(source_id))
             {
                 HttpBodyEvent http_body_event(nullptr, 0, (source_id == SRC_CLIENT), true);
@@ -237,10 +236,9 @@ bool HttpStreamSplitter::finish(Flow* flow)
     return false;
 }
 
-void HttpStreamSplitter::prep_partial_flush(Flow* flow, uint32_t num_flush,
+void HttpStreamSplitter::prep_partial_flush(const Flow* flow, uint32_t num_flush,
     uint32_t num_excess, uint32_t num_head_lines, PartialFlushType partial_flush_type)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(HttpModule::get_profile_stats());
 
     HttpFlowData* session_data = HttpInspect::http_get_flow_data(flow);
@@ -265,4 +263,3 @@ void HttpStreamSplitter::prep_partial_flush(Flow* flow, uint32_t num_flush,
         session_data->cutter[source_id]->get_octets_seen() - num_flush);
     session_data->partial_flush[source_id] = partial_flush_type;
 }
-

@@ -121,7 +121,7 @@ bool HashOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const HashOption& rhs = (const HashOption&)ips;
+    const HashOption& rhs = static_cast<const HashOption&>(ips);
 
     if (
         config->hash == rhs.config->hash &&
@@ -193,7 +193,6 @@ int HashOption::match(Cursor& c)
 
 IpsOption::EvalStatus HashOption::eval(Cursor& c, Packet*)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(hash_ps[idx]);
 
     int found = match(c);
@@ -370,7 +369,7 @@ static Module* md5_mod_ctor()
 
 static IpsOption* md5_opt_ctor(Module* p, IpsInfo&)
 {
-    HashModule* m = (HashModule*)p;
+    HashModule* m = static_cast<HashModule*>(p);
     HashMatchData* hmd = m->get_data();
     return new HashOption(IPS_OPT, HPI_MD5, hmd, md5, MD5_HASH_SIZE);
 }
@@ -414,7 +413,7 @@ static Module* sha256_mod_ctor()
 
 static IpsOption* sha256_opt_ctor(Module* p, IpsInfo&)
 {
-    HashModule* m = (HashModule*)p;
+    HashModule* m = static_cast<HashModule*>(p);
     HashMatchData* hmd = m->get_data();
     return new HashOption(IPS_OPT, HPI_SHA256, hmd, sha256, SHA256_HASH_SIZE);
 }
@@ -458,7 +457,7 @@ static Module* sha512_mod_ctor()
 
 static IpsOption* sha512_opt_ctor(Module* p, IpsInfo&)
 {
-    HashModule* m = (HashModule*)p;
+    HashModule* m = static_cast<HashModule*>(p);
     HashMatchData* hmd = m->get_data();
     return new HashOption(IPS_OPT, HPI_SHA512, hmd, sha512, SHA512_HASH_SIZE);
 }

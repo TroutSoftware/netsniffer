@@ -24,6 +24,7 @@
 
 #include <string>
 #include <map>
+#include <vector>
 #include <algorithm>
 
 #include "../../../flow/flow_data.h"
@@ -495,6 +496,188 @@ TEST(http2_hpack_decoder_decode_header_buffers, header_with_65536_long_cookie_ov
     CHECK(*infractions[HttpCommon::SRC_CLIENT] & hi::INF_DECODED_HEADER_BUFF_OUT_OF_SPACE);
 }
 
+// Append an HPACK integer with the given prefix and pattern to a byte vector.
+static void append_hpack_int(std::vector<uint8_t>& out, uint64_t value,
+    uint8_t prefix_bits, uint8_t head)
+{
+    const uint8_t limit = (1u << prefix_bits) - 1;
+    if (value < limit)
+    {
+        out.push_back(head | (uint8_t)value);
+        return;
+    }
+    out.push_back(head | limit);
+    value -= limit;
+    while (value >= 128)
+    {
+        out.push_back((uint8_t)((value & 0x7f) | 0x80));
+        value >>= 7;
+    }
+    out.push_back((uint8_t)value);
+}
+
+// Verify discarded indexed pseudo-headers count toward the per-block decode-work budget.
+TEST(http2_hpack_decoder_decode_header_buffers,
+    indexed_pseudo_header_refs_exceed_octet_budget)
+{
+    constexpr uint32_t value_len = 4050;
+    constexpr uint32_t gross_per_ref = 10 + 2 + value_len + 2;
+
+    const uint32_t num_refs =
+        (Http2Enums::MAX_OCTETS / gross_per_ref) + 1;
+
+    // Install a 4092-byte :authority entry in the dynamic table.
+    std::vector<uint8_t> setup_block;
+    setup_block.reserve(value_len + 8);
+
+    append_hpack_int(setup_block, 1, 6, 0x40);
+    append_hpack_int(setup_block, value_len, 7, 0x00);
+    setup_block.insert(
+        setup_block.end(), value_len, static_cast<uint8_t>('A'));
+
+    const bool setup_success = hpack_decoder->decode_headers(
+        setup_block.data(),
+        static_cast<uint32_t>(setup_block.size()),
+        start_client_line,
+        false);
+
+    CHECK_TRUE(setup_success);
+
+    Field setup_headers;
+    hpack_decoder->set_decoded_headers(setup_headers);
+
+    // Reference dynamic entry 62 until decoded work exceeds MAX_OCTETS.
+    std::vector<uint8_t> attack_block(num_refs, 0xbe);
+
+    const bool attack_success = hpack_decoder->decode_headers(
+        attack_block.data(),
+        static_cast<uint32_t>(attack_block.size()),
+        start_client_line,
+        false);
+
+    hpack_decoder->cleanup();
+
+    CHECK_FALSE(attack_success);
+
+    using hi = Http2Enums::Infraction;
+    CHECK_TRUE(
+        *infractions[HttpCommon::SRC_CLIENT] &
+        hi::INF_DECODED_HEADER_BUFF_OUT_OF_SPACE);
+}
+
+// Ensure repeated indexed cookie headers are charged against the decoded-work budget.
+TEST(http2_hpack_decoder_decode_header_buffers,
+    indexed_cookie_refs_exceed_octet_budget)
+{
+    constexpr uint32_t value_len = 420;
+    constexpr uint32_t gross_per_ref = 6 + 2 + value_len + 2;
+    const uint32_t num_refs =
+        (Http2Enums::MAX_OCTETS / gross_per_ref) + 1;
+
+    std::vector<uint8_t> setup_block;
+    setup_block.reserve(value_len + 8);
+
+    // Install a large cookie entry using static name index 32.
+    append_hpack_int(setup_block, 32, 6, 0x40);
+    append_hpack_int(setup_block, value_len, 7, 0x00);
+    setup_block.insert(
+        setup_block.end(), value_len, static_cast<uint8_t>('A'));
+
+    const bool setup_success = hpack_decoder->decode_headers(
+        setup_block.data(),
+        static_cast<uint32_t>(setup_block.size()),
+        start_client_line,
+        false);
+
+    CHECK_TRUE(setup_success);
+
+    Field setup_headers;
+    hpack_decoder->set_decoded_headers(setup_headers);
+
+    // Dynamic index 62 references the installed cookie entry.
+    std::vector<uint8_t> attack_block(num_refs, 0xbe);
+
+    const bool attack_success = hpack_decoder->decode_headers(
+        attack_block.data(),
+        static_cast<uint32_t>(attack_block.size()),
+        start_client_line,
+        false);
+
+    hpack_decoder->cleanup();
+
+    CHECK_FALSE(attack_success);
+
+    using hi = Http2Enums::Infraction;
+    CHECK_TRUE(
+        *infractions[HttpCommon::SRC_CLIENT] &
+        hi::INF_DECODED_HEADER_BUFF_OUT_OF_SPACE);
+}
+
+
+// Regression for unclamped HPACK dynamic-table sizing from an oversized
+// peer-advertised SETTINGS_HEADER_TABLE_SIZE.
+TEST_GROUP(http2_hpack_dynamic_table_size)
+{
+};
+
+// Mirrors the private HpackDynamicTable::MAX_TABLE_SIZE_LIMIT.
+static const uint32_t EXPECTED_TABLE_SIZE_CAP = 65536;
+
+TEST(http2_hpack_dynamic_table_size, huge_settings_size_is_clamped)
+{
+    HpackDynamicTable table;
+    table.update_size(0xFFFFFFFF);
+    CHECK_EQUAL(EXPECTED_TABLE_SIZE_CAP, table.get_max_size());
+}
+
+TEST(http2_hpack_dynamic_table_size, size_at_limit_is_unchanged)
+{
+    HpackDynamicTable table;
+    table.update_size(EXPECTED_TABLE_SIZE_CAP);
+    CHECK_EQUAL(EXPECTED_TABLE_SIZE_CAP, table.get_max_size());
+}
+
+TEST(http2_hpack_dynamic_table_size, small_size_is_unchanged)
+{
+    HpackDynamicTable table;
+    table.update_size(4096);
+    CHECK_EQUAL(4096, table.get_max_size());
+}
+
+// Clamping below the current contents must evict entries. Virtual index 62 is
+// the newest dynamic entry (HpackIndexTable::STATIC_MAX_INDEX == 61).
+TEST(http2_hpack_dynamic_table_size, clamp_down_evicts_entries)
+{
+    // Each entry costs name.length() + value.length() + 32 per-entry
+    // overhead = 100 + 100 + 32 = 232 bytes.
+    const uint32_t name_len = 100;
+    const uint32_t value_len = 100;
+    const uint32_t entry_size = name_len + value_len + 32;
+    uint8_t name_buf[name_len];
+    uint8_t value_buf[value_len];
+    memset(name_buf, 'n', name_len);
+    memset(value_buf, 'v', value_len);
+
+    HpackDynamicTable table;
+    CHECK(table.add_entry(Field(name_len, name_buf), Field(value_len, value_buf)));
+    CHECK(table.add_entry(Field(name_len, name_buf), Field(value_len, value_buf)));
+
+    // Both entries present: newest at 62, oldest at 63.
+    CHECK(table.get_entry(62) != nullptr);
+    CHECK(table.get_entry(63) != nullptr);
+
+    // Clamp to a size that holds exactly one entry (>= entry_size but <
+    // 2 * entry_size). The least-recently-added entry (index 63) is evicted.
+    table.update_size(entry_size + 1);
+    CHECK_EQUAL(entry_size + 1, table.get_max_size());
+    CHECK(table.get_entry(62) != nullptr);
+    POINTERS_EQUAL(nullptr, table.get_entry(63));
+
+    // Clamp below a single entry: the whole table is evicted.
+    table.update_size(entry_size - 1);
+    CHECK_EQUAL(entry_size - 1, table.get_max_size());
+    POINTERS_EQUAL(nullptr, table.get_entry(62));
+}
 
 int main(int argc, char** argv)
 {

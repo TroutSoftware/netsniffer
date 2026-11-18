@@ -140,6 +140,7 @@ TEST_CASE("normalization", "[JSNorm]")
 
 TEST_CASE("non-blocking events", "[JSNorm]")
 {
+    // cppcheck-suppress knownConditionTrueFalse ; test intentionally pins the event enum cardinality
     REQUIRE(EventSid::EVENT__MAX_VALUE == 10);
 
     JSNormConfig config;
@@ -195,6 +196,7 @@ TEST_CASE("non-blocking events", "[JSNorm]")
 
 TEST_CASE("blocking events", "[JSNorm]")
 {
+    // cppcheck-suppress knownConditionTrueFalse ; test intentionally pins the event enum cardinality
     REQUIRE(EventSid::EVENT__MAX_VALUE == 10);
 
     JSNormConfig config;
@@ -233,6 +235,30 @@ TEST_CASE("blocking events", "[JSNorm]")
         REQUIRE(dst_len != 0);
 
         CHECK(std::string((const char*)dst, dst_len) == tmp_exp);
+    }
+
+    SECTION("EVENT_IDENTIFIER_OVERFLOW on alias cap")
+    {
+        config.identifier_depth = 1;
+        config.ignored_ids.insert("eval");
+        config.ignored_ids.insert("console");
+
+        JSNorm tmp_jsn(&config, false);
+
+        std::string tmp_src = "a=eval;a=console;";
+        std::string tmp_exp = "var_0000=eval;eval=console;";
+
+        tmp_jsn.normalize(tmp_src.c_str(), tmp_src.size(), dst, dst_len);
+
+        REQUIRE(dst != nullptr);
+        REQUIRE(dst_len != 0);
+
+        CHECK(std::string((const char*)dst, dst_len) == tmp_exp);
+
+        tmp_jsn.normalize("b=eval;", 7, dst, dst_len);
+
+        CHECK(dst == nullptr);
+        CHECK(dst_len == 0);
     }
 
     SECTION("EVENT_BRACKET_NEST_OVERFLOW")

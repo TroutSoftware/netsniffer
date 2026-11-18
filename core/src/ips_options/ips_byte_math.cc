@@ -131,7 +131,7 @@ bool ByteMathOption::operator==(const IpsOption& ips) const
     if (!IpsOption::operator==(ips))
         return false;
 
-    const ByteMathOption& rhs = (const ByteMathOption&)ips;
+    const ByteMathOption& rhs = static_cast<const ByteMathOption&>(ips);
     const ByteMathData* left = &config;
     const ByteMathData* right = &rhs.config;
 
@@ -160,7 +160,6 @@ bool ByteMathOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus ByteMathOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(byteMathPerfStats);
 
     /* Get values from ips options variables, if present. */
@@ -660,8 +659,6 @@ TEST_CASE("ByteMathOption::operator== invalid", "[ips_byte_math]")
 
     SECTION("all fields is different")
     {
-        delete[] rhs_name;
-        rhs_name = new char[5];
         strcpy(rhs_name, "unix");
         ByteMathData data_rhs;
         INITIALIZE(data_rhs, 2, 25, 2, 255, rhs_name, BM_MULTIPLY, 1,
@@ -703,8 +700,6 @@ TEST_CASE("ByteMathOption::operator== invalid", "[ips_byte_math]")
     }
     SECTION("result_name is different")
     {
-        delete[] rhs_name;
-        rhs_name = new char[5];
         strcpy(rhs_name, "unix");
         ByteMathData data_rhs;
         INITIALIZE(data_rhs, 0, 25, 0, 255, rhs_name, BM_PLUS, 0, 0, 0, ENDIAN_BIG,
@@ -776,7 +771,6 @@ TEST_CASE("ByteMathOption::operator== invalid", "[ips_byte_math]")
         ByteMathOption rhs(data_rhs);
         CHECK(lhs != rhs);
     }
-    // cppcheck-suppress memleak
 }
 
 TEST_CASE("ByteMathOption::hash", "[ips_byte_math]")
@@ -1247,7 +1241,7 @@ TEST_CASE("Test of byte_math_ctor", "[ips_byte_math]")
         }
         else
         {
-            IpsOption* res_null = byte_math_ctor(&obj, info);
+            const IpsOption* res_null = byte_math_ctor(&obj, info);
             CHECK(res_null == nullptr);
             delete[] obj.data.result_name;
         }
@@ -1586,8 +1580,6 @@ TEST_CASE("ByteMathVerify invalid", "[ips_byte_math]")
     }
     SECTION("name not numeric check")
     {
-        delete[] name;
-        name = new char[5];
         strcpy(name, "6in4");
         obj.result_name = name;
         CHECK(false == ByteMathVerify(&obj));

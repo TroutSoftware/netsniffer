@@ -53,6 +53,7 @@ enum ConfigType
     ExpectedCursorPos,
     CheckOpenTag,
     CheckClosingTag,
+    CheckAliasLimitReached,
     TemporaryBuffer
 };
 
@@ -124,6 +125,7 @@ public:
     Field<int> expected_cursor_pos;
     Field<bool> check_open_tag;
     Field<bool> check_closing_tag;
+    Field<bool> check_alias_limit_reached;
 
     // Add check for contents of the temporary buffer
     Field<std::string> temporary_buffer;
@@ -135,8 +137,8 @@ protected:
 Config return_code(JSTokenizer::JSRet val);
 Config normalize_identifiers(bool val);
 Config normalize_as_external(bool val);
-Config ignored_ids_list(StringSet val);
-Config ignored_properties_list(StringSet val);
+Config ignored_ids_list(const StringSet& val);
+Config ignored_properties_list(const StringSet& val);
 Config norm_depth(int val);
 Config identifier_depth(int val);
 Config max_template_nesting(int val);
@@ -152,9 +154,9 @@ Config use_expected_for_last_pdu(bool val);
 Config expected_cursor_pos(int val);
 Config check_open_tag(bool val);
 Config check_closing_tag(bool val);
+Config check_alias_limit_reached(bool val);
 
 // Add check for contents of the temporary buffer
-Config temporary_buffer(std::string val);
+Config temporary_buffer(const std::string& val);
 
 #endif
-

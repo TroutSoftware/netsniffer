@@ -61,7 +61,11 @@
     "detail_119_298",             \
     "detail_119_299",             \
     "detail_119_300",             \
-    "detail_119_301"
+    "detail_119_301",             \
+    "detail_119_302",             \
+    "detail_119_304",             \
+    "detail_119_305",             \
+    "detail_119_306"
 
 class HttpApi
 {

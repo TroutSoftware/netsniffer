@@ -279,18 +279,18 @@ void snort::ThreadConfig::set_numa_mempolicy(const std::string& policy)
             policy.c_str());
 }
 
-int ThreadConfig::get_numa_node(hwloc_topology_t topology, hwloc_cpuset_t cpuset)
+int ThreadConfig::get_numa_node(hwloc_topology_t numa_topology, hwloc_cpuset_t cpuset)
 {
     if (hwloc->bitmap_iszero(cpuset))
         return -1;
 
-    int depth = hwloc->get_type_depth(topology, HWLOC_OBJ_NUMANODE);
+    int depth = hwloc->get_type_depth(numa_topology, HWLOC_OBJ_NUMANODE);
     if (depth == HWLOC_TYPE_DEPTH_UNKNOWN)
         return -1;
 
-    for (unsigned i = 0; i < hwloc->get_nbobjs_by_depth(topology, depth); ++i)
+    for (unsigned i = 0; i < hwloc->get_nbobjs_by_depth(numa_topology, depth); ++i)
     {
-        hwloc_obj_t node = hwloc->get_obj_by_depth(topology, depth, i);
+        hwloc_obj_t node = hwloc->get_obj_by_depth(numa_topology, depth, i);
         if (node and hwloc->bitmap_isincluded(cpuset, node->cpuset))
             return node->os_index;
     }
@@ -598,6 +598,7 @@ void ThreadConfig::preemptive_kick()
     kick_watchdog();
 }
 
+// cppcheck-suppress unusedFunction ; called from analyzer.cc in another translation unit
 void ThreadConfig::update_thread_status(bool status)
 {
     static const bool watchdog_is_enabled = (SnortConfig::get_conf()->watchdog_timer > 0);
@@ -613,7 +614,7 @@ void ThreadConfig::update_thread_status(bool status)
 
 TEST_CASE("Parse cpuset string negative test", "[ThreadConfig]")
 {
-    CpuSet* cpuset = ThreadConfig::validate_cpuset_string("totally a bad cpuset string");
+    const CpuSet* cpuset = ThreadConfig::validate_cpuset_string("totally a bad cpuset string");
     CHECK(cpuset == nullptr);
 }
 

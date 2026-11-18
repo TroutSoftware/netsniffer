@@ -104,7 +104,7 @@ static THREAD_LOCAL char tr_context[CONTEXT_LEN];
 static THREAD_LOCAL uint32_t tr_len = 0;
 
 static void fp_immediate(Packet*);
-static void fp_immediate(MpseGroup*, Packet*, const uint8_t*, unsigned);
+static void fp_immediate(const MpseGroup*, Packet*, const uint8_t*, unsigned);
 
 void populate_trace_data()
 {
@@ -165,48 +165,49 @@ static inline void fpLogOther(
 }
 
 /*
-**    This function takes the corresponding RTN and OTN for a snort rule
+**    This function takes OTN (and corresponding RTN) for a snort rule
 **    and logs the event and packet that was alerted upon.  This
 **    function was pulled out of fpEvalSomething, so now we can log an
 **    event no matter where we are.
 */
-int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
+int fpLogEvent(const OptTreeNode* otn, Packet* p, int rate_action)
 {
-    int action = -1, rateAction = -1;
-    int override, filterEvent = 0;
-
+    // for stream module
     if ( otn->stateless() )
-    {
-        /* Stateless rule, set the stateless bit */
         p->packet_flags |= PKT_STATELESS;
-    }
     else
-    {
-        /* Not stateless, clear the stateless bit if it was set
-         * from a previous rule.
-         */
         p->packet_flags &= ~PKT_STATELESS;
-    }
 
-    // perform rate filtering tests - impacts action taken
-    rateAction = RateFilter_Test(otn, p);
-    override = ( rateAction >= IpsAction::get_max_types() );
-    if ( override )
-        rateAction -= IpsAction::get_max_types();
+    // rate filtering tests (impacts action)
+    int action_rate = ( rate_action >= 0 ) ? rate_action : RateFilter_Test(otn, p);
+    bool action_override = action_rate >= IpsAction::get_max_types();
 
-    // internal events are no-ops
-    if ( (rateAction < 0) && EventIsInternal(otn->sigInfo.gid) )
+    if ( action_override )
+        action_rate -= IpsAction::get_max_types();
+
+    if ( action_rate < 0 && EventIsInternal(otn->sigInfo.gid) )
+        return 1; // internal events are no-ops
+
+    int action = action_rate;
+    IpsPolicy::ActionSelector action_selector = 0;
+
+    if ( action_rate < 0 )
     {
-        return 1;
-    }
-    action = (rateAction < 0) ? (int)rtn->action : rateAction;
-    const IpsPolicy::ActionSelector action_selector = (rateAction < 0) ? rtn->action_selector : 0;
+        const RuleTreeNode* rtn = getRtnFromOtn(otn);
 
-    // When rate filters kick in, event filters are still processed.
-    // perform event filtering tests - impacts logging
+        if ( !rtn || !rtn->enabled() )
+            return 0;  // not enabled in the policy
+
+        action = (int)rtn->action;
+        action_selector = rtn->action_selector;
+    }
+
+    // event filtering tests (impacts logging)
+    int event_filter = 0;
+
     if ( p->ptrs.ip_api.is_valid() )
     {
-        filterEvent = sfthreshold_test(
+        event_filter = sfthreshold_test(
             otn->sigInfo.gid, otn->sigInfo.sid,
             p->ptrs.ip_api.get_src(), p->ptrs.ip_api.get_dst(),
             p->pkth->ts.tv_sec, get_network_policy()->policy_id);
@@ -216,12 +217,12 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
         SfIp cleared;
         cleared.clear();
 
-        filterEvent = sfthreshold_test(
+        event_filter = sfthreshold_test(
             otn->sigInfo.gid, otn->sigInfo.sid,
             &cleared, &cleared, p->pkth->ts.tv_sec, get_network_policy()->policy_id);
     }
 
-    if ( (filterEvent < 0) || (filterEvent > 0 && !override) )
+    if ( (event_filter < 0) || (event_filter > 0 && !action_override) )
     {
         /*
         **  If InlineMode is on, then we still want to drop packets
@@ -255,9 +256,9 @@ int fpLogEvent(const RuleTreeNode* rtn, const OptTreeNode* otn, Packet* p)
     const SnortConfig* sc = p->context->conf;
 
     if ( (p->packet_flags & PKT_PASS_RULE) &&
-        (sc->get_eval_index(rtn->action) > sc->get_eval_index(IpsAction::get_type("pass"))) )
+        (sc->get_eval_index(action) > sc->get_eval_index(IpsAction::get_type("pass"))) )
     {
-        fpLogOther(p, otn, rtn->action, rtn->action_selector);
+        fpLogOther(p, otn, action, action_selector);
         return 1;
     }
 
@@ -387,7 +388,7 @@ static void detection_option_tree_evaluate(detection_option_tree_root_t* root,
 static void rule_tree_match(
     IpsContext* context, void* user, void* tree, int index, void* neg_list)
 {
-    PMX* pmx = (PMX*)user;
+    const PMX* pmx = (PMX*)user;
     Packet* pkt = context->packet;
 
     print_pattern(pmx->pmd, pkt);
@@ -613,7 +614,7 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
 
     unsigned tcnt = 0;
     int res = 0;
-    EventQueueConfig* eq = p->context->conf->event_queue_config;
+    const EventQueueConfig* eq = p->context->conf->event_queue_config;
 
     for ( unsigned i = 0; i < p->context->conf->num_rule_types; i++ )
     {
@@ -688,15 +689,11 @@ static inline int fpFinalSelectEvent(OtnxMatchData* omd, Packet* p)
 class MpseStash
 {
 public:
-    // for some reason cppcheck does not understand that all members are used in MpseStash::process
     struct MatchData
     {
-        // cppcheck-suppress unusedStructMember
         void* user;
         void* tree;
-        // cppcheck-suppress unusedStructMember
         void* list;
-        // cppcheck-suppress unusedStructMember
         int index;
     };
 
@@ -756,7 +753,6 @@ bool MpseStash::push(void* user, void* tree, int index, void* context, void* lis
 
     if ( !checker and qmax == queue.size() and is_packet_thread() )
     {
-        // cppcheck-suppress unreadVariable
         Profile rule_profile(rulePerfStats);
         process((IpsContext*)context, queue);
     }
@@ -808,7 +804,7 @@ void MpseStash::process(IpsContext* context, MatchStore& store)
 
 void fp_set_context(IpsContext& c)
 {
-    FastPatternConfig* fp = c.conf->fast_pattern_config;
+    const FastPatternConfig* fp = c.conf->fast_pattern_config;
     c.stash = new MpseStash(*fp);
     c.otnx = (OtnxMatchData*)snort_calloc(sizeof(OtnxMatchData));
     c.otnx->matchInfo = (MatchInfo*)snort_calloc(MAX_NUM_RULE_TYPES, sizeof(MatchInfo));
@@ -856,10 +852,10 @@ static inline int batch_search(
     return 0;
 }
 
-static int fp_search(RuleGroup* port_group, Packet* p, bool srvc)
+static int fp_search(const RuleGroup* port_group, Packet* p, bool srvc)
 {
     p->packet_flags |= PKT_FAST_PAT_EVAL;
-    Inspector* gadget = p->flow ? p->flow->gadget : nullptr;
+    const Inspector* gadget = p->flow ? p->flow->gadget : nullptr;
 
     debug_logf(detection_trace, TRACE_RULE_EVAL, p, "Fast pattern search, packet section %s\n",
         section_to_str[p->sect]);
@@ -936,7 +932,7 @@ static int fp_search(RuleGroup* port_group, Packet* p, bool srvc)
 }
 
 static inline void eval_fp(
-    RuleGroup* port_group, Packet* p, char ip_rule, bool srvc, bool force = false)
+    const RuleGroup* port_group, Packet* p, char ip_rule, bool srvc, bool force = false)
 {
     const uint8_t* tmp_payload = nullptr;
     uint16_t tmp_dsize = 0;
@@ -961,6 +957,7 @@ static inline void eval_fp(
 
     if ( DetectionEngine::content_enabled(p) or force)
     {
+        // cppcheck-suppress knownConditionTrueFalse ; search result depends on packet and rule patterns
         if ( fp_search(port_group, p, srvc) )
             return;
     }
@@ -980,7 +977,7 @@ static inline void eval_nfp(
     const uint8_t* tmp_payload = nullptr;
     uint16_t tmp_dsize = 0;
 
-    FastPatternConfig* fp = p->context->conf->fast_pattern_config;
+    const FastPatternConfig* fp = p->context->conf->fast_pattern_config;
 
     if (ip_rule)
     {
@@ -1160,7 +1157,7 @@ static void fpEvalPacketUdp(Packet* p, FPTask task)
     p->ptrs.udph = udph;
     p->ptrs.sp = ntohs(udph->uh_sport);
     p->ptrs.dp = ntohs(udph->uh_dport);
-    p->data = (const uint8_t*)udph + udp::UDP_HEADER_LEN;
+    p->data = reinterpret_cast<const uint8_t*>(udph) + udp::UDP_HEADER_LEN;
 
     ip::IpApi tmp_api;
     int8_t curr_layer = 0;
@@ -1261,7 +1258,6 @@ static void fpEvalPacket(Packet* p, FPTask task)
 
 void fp_partial(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile mpse_profile(mpsePerfStats);
     IpsContext* c = p->context;
     init_match_info(c);
@@ -1279,12 +1275,10 @@ void fp_complete(Packet* p, bool search)
 
     if ( search )
     {
-        // cppcheck-suppress unreadVariable
         Profile mpse_profile(mpsePerfStats);
         c->searches.search_sync();
     }
     {
-        // cppcheck-suppress unreadVariable
         Profile rule_profile(rulePerfStats);
 
         if (p->flow && p->flow->ips_cont)
@@ -1317,29 +1311,25 @@ static void fp_immediate(Packet* p)
     IpsContext* c = p->context;
     MpseStash* stash = c->stash;
     {
-        // cppcheck-suppress unreadVariable
         Profile mpse_profile(mpsePerfStats);
         c->searches.search_sync();
     }
     {
-        // cppcheck-suppress unreadVariable
         Profile rule_profile(rulePerfStats);
         stash->process(c);
         c->searches.items.clear();
     }
 }
 
-static void fp_immediate(MpseGroup* mpg, Packet* p, const uint8_t* buf, unsigned len)
+static void fp_immediate(const MpseGroup* mpg, Packet* p, const uint8_t* buf, unsigned len)
 {
     MpseStash* stash = p->context->stash;
     {
-        // cppcheck-suppress unreadVariable
         Profile mpse_profile(mpsePerfStats);
         int start_state = 0;
         mpg->get_normal_mpse()->search(buf, len, rule_tree_queue, p->context, &start_state);
     }
     {
-        // cppcheck-suppress unreadVariable
         Profile rule_profile(rulePerfStats);
         stash->process(p->context);
     }
@@ -1357,7 +1347,7 @@ static inline int fp_do_actions(OtnxMatchData* omd, Packet* p)
             std::sort(omd->matchInfo[i].MatchArray, omd->matchInfo[i].MatchArray + omd->matchInfo[i].iMatchCount,
                 SortOrderByContentLength());
             const OptTreeNode* otn = omd->matchInfo[i].MatchArray[0];
-            RuleTreeNode* rtn = getRtnFromOtn(otn);
+            const RuleTreeNode* rtn = getRtnFromOtn(otn);
             IpsAction* act = get_ips_policy()->get_action(rtn->action, rtn->action_selector);
             if ( !act )
                 continue;
@@ -1372,7 +1362,6 @@ static inline int fp_do_actions(OtnxMatchData* omd, Packet* p)
 
 void fp_eval_service_group(Packet* p, SnortProtocolId snort_protocol_id)
 {
-    // cppcheck-suppress unreadVariable
     Profile mpse_profile(mpsePerfStats);
     RuleGroup* svc = p->context->conf->sopgTable->get_port_group(true, snort_protocol_id);
 
@@ -1395,7 +1384,6 @@ void fp_eval_service_group(Packet* p, SnortProtocolId snort_protocol_id)
     MpseStash* stash = c->stash;
     c->searches.search_sync();
     {
-        // cppcheck-suppress unreadVariable
         Profile rule_profile(rulePerfStats);
         stash->process(c);
 

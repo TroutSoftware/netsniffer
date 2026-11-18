@@ -35,15 +35,15 @@
 
 using namespace snort;
 
-static void reset_packet_data(Packet*, TpktFlowData*, CurPacketContext*);
-static void update_flow_data(Packet*, TpktFlowData*, CurPacketContext*);
-static bool populate_cur_pkt_ctx(Packet*, TpktFlowData*, CurPacketContext*);
-static void update_cur_pkt_ctx_exit_offset(Packet*, TpktFlowData*, CurPacketContext*);
+static void reset_packet_data(const Packet*, TpktFlowData*, CurPacketContext*);
+static void update_flow_data(const Packet*, TpktFlowData*, const CurPacketContext*);
+static bool populate_cur_pkt_ctx(const Packet*, TpktFlowData*, CurPacketContext*);
+static void update_cur_pkt_ctx_exit_offset(const Packet*, TpktFlowData*, CurPacketContext*);
 
-static void process_mms_not_found_result(Packet*, TpktFlowData*, CurPacketContext*,
+static void process_mms_not_found_result(const Packet*, TpktFlowData*, CurPacketContext*,
     TpktAppliSearchStateType, Packet*);
 
-static void reset_packet_data(Packet* p, TpktFlowData* tpktfd, CurPacketContext* cur_pkt_ctx)
+static void reset_packet_data(const Packet* p, TpktFlowData* tpktfd, CurPacketContext* cur_pkt_ctx)
 {
     assert(p->is_from_client() or p->is_from_server());
     if (p->is_from_client())
@@ -58,7 +58,7 @@ static void reset_packet_data(Packet* p, TpktFlowData* tpktfd, CurPacketContext*
     }
 }
 
-static void update_flow_data(Packet* p, TpktFlowData* tpktfd, CurPacketContext* cur_pkt_ctx)
+static void update_flow_data(const Packet* p, TpktFlowData* tpktfd, const CurPacketContext* cur_pkt_ctx)
 {
     assert(p->is_from_client() or p->is_from_server());
     if (p->is_from_client())
@@ -79,7 +79,7 @@ static void update_flow_data(Packet* p, TpktFlowData* tpktfd, CurPacketContext* 
     }
 }
 
-static bool populate_cur_pkt_ctx(Packet* p, TpktFlowData* tpktfd, CurPacketContext* cur_pkt_ctx)
+static bool populate_cur_pkt_ctx(const Packet* p, TpktFlowData* tpktfd, CurPacketContext* cur_pkt_ctx)
 {
     assert(p->is_from_client() or p->is_from_server());
     bool res = false;
@@ -105,7 +105,7 @@ static bool populate_cur_pkt_ctx(Packet* p, TpktFlowData* tpktfd, CurPacketConte
     return res;
 }
 
-static void update_cur_pkt_ctx_exit_offset(Packet* p, TpktFlowData* tpktfd,
+static void update_cur_pkt_ctx_exit_offset(const Packet* p, TpktFlowData* tpktfd,
     CurPacketContext* cur_pkt_ctx)
 {
     assert(p->is_from_client() or p->is_from_server());
@@ -119,7 +119,7 @@ static void update_cur_pkt_ctx_exit_offset(Packet* p, TpktFlowData* tpktfd,
     }
 }
 
-static void process_mms_not_found_result(Packet* p, TpktFlowData* tpktfd,
+static void process_mms_not_found_result(const Packet* p, TpktFlowData* tpktfd,
     CurPacketContext* cur_pkt_ctx, TpktAppliSearchStateType res, Packet* tmp_pkt)
 {
     if (res == TPKT_APPLI_SEARCH_STATE__EXIT)
@@ -153,7 +153,8 @@ StreamSplitter::Status MmsSplitter::scan(Packet* p, const uint8_t* data, uint32_
         return StreamSplitter::ABORT;
 
     // create TPKT flow data and add it to the packet
-    TpktFlowData* tpktfd = (TpktFlowData*)p->flow->get_flow_data(TpktFlowData::inspector_id);
+    TpktFlowData* tpktfd = static_cast<TpktFlowData*>(
+        p->flow->get_flow_data(TpktFlowData::inspector_id));
 
     if (!tpktfd)
     {
@@ -202,6 +203,10 @@ StreamSplitter::Status MmsSplitter::scan(Packet* p, const uint8_t* data, uint32_
 
     // reset the cursor position
     mms_cur.set_pos(cur_pkt_ctx.start_offset);
+
+    // reset the per-scan total work budget so nested decode loops share a
+    // single linear work allowance and cannot multiply their per-call budgets
+    reset_tpkt_work_budget(&mms_cur);
 
     // start the parsing based on the layer determination
     switch (layer)
@@ -280,7 +285,8 @@ StreamSplitter::Status MmsSplitter::scan(Packet* p, const uint8_t* data, uint32_
     }
 
     // save the MMS offset
-    MmsFlowData* mmsfd = (MmsFlowData*)p->flow->get_flow_data(MmsFlowData::inspector_id);
+    MmsFlowData* mmsfd = static_cast<MmsFlowData*>(
+        p->flow->get_flow_data(MmsFlowData::inspector_id));
     if (!mmsfd)
     {
         mmsfd = new MmsFlowData;
@@ -360,4 +366,3 @@ StreamSplitter::Status MmsSplitter::scan(Packet* p, const uint8_t* data, uint32_
     tpktfd->reset();
     return StreamSplitter::ABORT;
 }
-

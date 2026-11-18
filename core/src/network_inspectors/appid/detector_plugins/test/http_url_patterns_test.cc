@@ -536,18 +536,18 @@ TEST(http_url_patterns_tests, identify_user_agent_skypedirect)
 
 TEST(http_url_patterns_tests, empty_server_vendor_version)
 {
-    char* version = nullptr;
+    char* server_version = nullptr;
     char* vendor = nullptr;
-    AppIdServiceSubtype* subtype = nullptr;
-    hm->get_server_vendor_version("test/", 5, &version, &vendor, &subtype);
+    AppIdServiceSubtypeList subtypes;
+    hm->get_server_vendor_version("test/", 5, &server_version, &vendor, subtypes);
 
-    CHECK(version);
-    CHECK(version[0] == '\0');
+    CHECK(server_version);
+    CHECK(server_version[0] == '\0');
 
     CHECK(vendor);
     CHECK_EQUAL(strcmp(vendor, "test"), 0);
 
-    snort_free(version);
+    snort_free(server_version);
     snort_free(vendor);
 }
 

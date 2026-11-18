@@ -1,4 +1,4 @@
-//---------------------------------------------------------------------------
+//--------------------------------------------------------------------------
 // Copyright (C) 2026-2026 Cisco and/or its affiliates. All rights reserved.
 //
 // This program is free software; you can redistribute it and/or modify it
@@ -14,16 +14,31 @@
 // You should have received a copy of the GNU General Public License along
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-//---------------------------------------------------------------------------
-// http_event_reason.h Juan David Martin Castillo <jmartinc@cisco.com>
+//--------------------------------------------------------------------------
+// extractor_rate_filter.h author vhorbato@cisco.com
 
-#ifndef HTTP_EVENT_REASON_H
-#define HTTP_EVENT_REASON_H
+#ifndef EXTRACTOR_RATE_FILTER_H
+#define EXTRACTOR_RATE_FILTER_H
 
+#include <cstdint>
+#include <ctime>
 
-#include "http_enum.h"
+namespace snort
+{
+class Flow;
+}
 
-const char* get_http_event_reason_msg(HttpEnums::GenericEventReasonCode event);
-const char* get_detail_301_reason(HttpEnums::Detail301ReasonCode code);
+struct SamplingConfig
+{
+	uint32_t threshold = 25;
+	uint32_t rate = 1000;
+	uint32_t duration = 600;
+};
+
+namespace builtin
+{
+bool should_log(snort::Flow&, uint64_t binding_id, unsigned gid, unsigned sid, time_t now,
+	const SamplingConfig&);
+}
 
 #endif

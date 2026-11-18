@@ -41,6 +41,7 @@ class DiscoveryFilter;
 class RNAFlow : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(RNAFlow)
     FpFingerprintState state;
 
     RNAFlow() : FlowData(inspector_id) { }
@@ -48,7 +49,7 @@ public:
 
     static void init();
 
-    void clear_ht(snort::HostTracker& ht);
+    void clear_ht(const snort::HostTracker& ht);
 
     static unsigned inspector_id;
     RnaTracker serverht = nullptr;

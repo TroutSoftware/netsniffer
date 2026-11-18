@@ -321,9 +321,11 @@ void PacketTracer::activate(const Packet& p)
 uint64_t PacketTracer::get_time()
 { return TO_NSECS(s_pkt_trace->pt_timer->get()); }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void PacketTracer::start_timer()
 { s_pkt_trace->pt_timer->start(); }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void PacketTracer::reset_timer()
 { s_pkt_trace->pt_timer->reset(); }
 
@@ -364,21 +366,21 @@ PacketTracer::~PacketTracer()
     delete pt_timer;
 }
 
-void PacketTracer::populate_buf(const char* format, va_list ap, char* buffer, uint32_t& buff_len)
+void PacketTracer::populate_buf(const char* format, va_list ap, char* output, uint32_t& output_len)
 {
-    const int buff_space = max_buff_size - buff_len;
-    const int len = vsnprintf(buffer + buff_len, buff_space, format, ap);
+    const int buff_space = max_buff_size - output_len;
+    const int len = vsnprintf(output + output_len, buff_space, format, ap);
 
     if (len >= 0 and len < buff_space)
-        buff_len += len;
+        output_len += len;
     else
-        buff_len = max_buff_size - 1;
+        output_len = max_buff_size - 1;
 }
 
-void PacketTracer::log_va(const char* format, va_list ap, bool daq_log, bool msg_only)
+void PacketTracer::log_va(const char* format, va_list ap, bool log_to_daq, bool msg_only)
 {
     // FIXIT-L Need to find way to add 'PktTracerDbg' string as part of format string.
-    if (shell_enabled and !daq_log) // only add debug string during shell execution
+    if (shell_enabled and !log_to_daq) // only add debug string during shell execution
     {
         dbg_str = "PktTracerDbg ";
         if (!msg_only && (strcmp(format, "\n") != 0))
@@ -387,7 +389,7 @@ void PacketTracer::log_va(const char* format, va_list ap, bool daq_log, bool msg
         format = dbg_str.c_str();
     }
 
-    if (daq_log)
+    if (log_to_daq)
         s_pkt_trace->populate_buf(format, ap, daq_buffer, daq_buff_len);
     else
         s_pkt_trace->populate_buf(format, ap, buffer, buff_len);
@@ -435,9 +437,9 @@ void PacketTracer::dump_to_daq(Packet* p)
     p->daq_instance->set_packet_trace_data(p->daq_msg, (uint8_t *)daq_buffer, daq_buff_len + 1);
 }
 
-void PacketTracer::reset(bool daq_log)
+void PacketTracer::reset(bool reset_daq_log)
 {
-    if ( daq_log )
+    if ( reset_daq_log )
     {
         daq_buff_len = 0;
         daq_buffer[0] = '\0';
@@ -463,44 +465,46 @@ void PacketTracer::reset(bool daq_log)
 class TestPacketTracer : public PacketTracer
 {
 public:
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static void thread_init()
     { PacketTracer::_thread_init<TestPacketTracer>(); }
 
     static char* get_buff()
-    { return ((TestPacketTracer*)s_pkt_trace)->buffer; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->buffer; }
 
     static unsigned int get_buff_len()
-    { return ((TestPacketTracer*)s_pkt_trace)->buff_len; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->buff_len; }
 
     static char* get_daq_buff()
-    { return ((TestPacketTracer*)s_pkt_trace)->daq_buffer; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->daq_buffer; }
 
     static unsigned int get_daq_buff_len()
-    { return ((TestPacketTracer*)s_pkt_trace)->daq_buff_len; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->daq_buff_len; }
 
     static void set_user_enable(bool status)
-    { ((TestPacketTracer*)s_pkt_trace)->user_enabled = status; }
+    { static_cast<TestPacketTracer*>(s_pkt_trace)->user_enabled = status; }
 
     static bool is_user_enabled()
-    { return ((TestPacketTracer*)s_pkt_trace)->user_enabled; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->user_enabled; }
 
     static void set_daq_enable(bool status)
-    { ((TestPacketTracer*)s_pkt_trace)->daq_activated = status; }
+    { static_cast<TestPacketTracer*>(s_pkt_trace)->daq_activated = status; }
 
     static bool is_daq_enabled()
-    { return ((TestPacketTracer*)s_pkt_trace)->daq_activated; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->daq_activated; }
 
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static bool is_paused()
-    { return ((TestPacketTracer*)s_pkt_trace)->pause_count; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->pause_count; }
 
     void dump_to_daq(Packet*) override
     { }
 
     static std::vector<bool> get_mutes()
-    { return ((TestPacketTracer*)s_pkt_trace)->mutes; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->mutes; }
 
     static FILE* get_log_fh()
-    { return ((TestPacketTracer*)s_pkt_trace)->log_fh; }
+    { return static_cast<TestPacketTracer*>(s_pkt_trace)->log_fh; }
 };
 
 TEST_CASE("basic log", "[PacketTracer]")
@@ -585,7 +589,8 @@ TEST_CASE("corner cases", "[PacketTracer]")
 TEST_CASE("dump", "[PacketTracer]")
 {
     char test_string[max_buff_size];
-    char test_str[] = "ABCD", results[] = "ABCD3=400";
+    char test_str[] = "ABCD";
+    const char results[] = "ABCD3=400";
 
     TestPacketTracer::thread_init();
     TestPacketTracer::set_user_enable(true);
@@ -723,7 +728,7 @@ TEST_CASE("open file", "[PacketTracer]")
     TestPacketTracer::thread_init();
     CHECK( log_file == "packet_tracer_tmp" );
 
-    FILE* fh = TestPacketTracer::get_log_fh();
+    const FILE* fh = TestPacketTracer::get_log_fh();
     CHECK( fh != stdout );
 
     TestPacketTracer::thread_term();

@@ -57,6 +57,12 @@ public:
     static unsigned inspector_id;
     static void init() { inspector_id = snort::FlowData::create_flow_data_id(); }
 
+    // infractions[]/events[] are allocated for the whole object lifetime
+    // and so are part of the fixed footprint the store accounts via
+    // size_of(). Transient frame buffers are not currently tracked.
+    FLOW_DATA_SIZE_OF_EXTRA(Http2FlowData,
+        2 * sizeof(Http2Infractions) + 2 * sizeof(Http2EventGen))
+
     // Used by http_inspect to store its stuff
     HttpFlowData* get_hi_flow_data();
     void set_hi_flow_data(HttpFlowData* flow);
@@ -84,6 +90,9 @@ public:
     friend class Http2Stream;
     friend class Http2StreamSplitter;
     friend class Http2WindowUpdateFrame;
+#ifdef UNIT_TEST
+    friend class Http2UnitTestSetup;
+#endif
     friend void finish_msg_body(Http2FlowData* session_data, HttpCommon::SourceId source_id);
 
     Http2Stream* find_current_stream(const HttpCommon::SourceId source_id);
@@ -96,6 +105,7 @@ public:
 
     Http2HpackDecoder* get_hpack_decoder(const HttpCommon::SourceId source_id)
     { return &hpack_decoder[source_id]; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     Http2ConnectionSettings* get_my_connection_settings(const HttpCommon::SourceId source_id)
     { return &connection_settings[source_id]; }
     Http2ConnectionSettings* get_remote_connection_settings(const HttpCommon::SourceId source_id)
@@ -143,7 +153,7 @@ protected:
     bool tcp_close[2] = { false, false };
 
     // Reassemble() data to eval()
-    uint8_t lead_frame_header[2][Http2Enums::FRAME_HEADER_LENGTH];
+    uint8_t lead_frame_header[2][Http2Enums::FRAME_HEADER_LENGTH] = {};
     const uint8_t* frame_data[2] = { nullptr, nullptr };
     uint32_t frame_data_size[2] = { 0, 0 };
 
@@ -164,7 +174,7 @@ protected:
     bool preface[2] = { true, false };
     uint32_t preface_octets_seen = 0;
     bool continuation_expected[2] = { false, false };
-    uint8_t scan_frame_header[2][Http2Enums::FRAME_HEADER_LENGTH];
+    uint8_t scan_frame_header[2][Http2Enums::FRAME_HEADER_LENGTH] = {};
     uint32_t scan_remaining_frame_octets[2] = { 0, 0 };
     uint32_t header_octets_seen[2] = { 0, 0 };
     uint8_t padding_length[2] = { 0, 0 };
@@ -199,14 +209,14 @@ protected:
 
 #ifdef REG_TEST
     static uint64_t instance_count;
-    uint64_t seq_num;
+    uint64_t seq_num = 0;
 #endif
 
 private:
     Http2Stream* get_hi_stream();
     Http2Stream* find_stream(const uint32_t key);
     void delete_processing_stream();
-    class snort::Inspector* handler;
+    class snort::Inspector* handler = nullptr;
 };
 
 class Http2FlowStreamIntf : public snort::StreamFlowIntf
@@ -221,4 +231,3 @@ public:
 };
 
 #endif
-

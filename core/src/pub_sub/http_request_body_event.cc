@@ -69,11 +69,12 @@ bool HttpRequestBodyEvent::is_last_request_body_piece()
     return last_piece;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 bool HttpRequestBodyEvent::is_mime() const
 {
     if (http_msg_body)
     {
-        HttpMsgHeader* header = http_msg_body->get_header(HttpCommon::SRC_CLIENT);
+        const HttpMsgHeader* header = http_msg_body->get_header(HttpCommon::SRC_CLIENT);
 
         if (header)
             return header->has_mime_boundary();

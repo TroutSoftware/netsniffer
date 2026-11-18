@@ -84,6 +84,7 @@ bool SFDAQInstance::init(DAQ_Config_h daqcfg, const std::string& bpf_string)
         return false;
     }
 
+    // cppcheck-suppress knownConditionTrueFalse ; validation result comes from the loaded DAQ module
     if (!DAQ_ValidateInstance(instance))
         FatalError("DAQ configuration incompatible with intended operation, DAQ instance (%s).\n", input_spec.c_str());
 

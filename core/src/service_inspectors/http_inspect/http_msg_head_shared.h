@@ -76,9 +76,22 @@ protected:
     // Do a case insensitive search for "boundary=" in a Field
     static bool boundary_present(const Field& field);
 
+    // A '*' matches one or more token characters, so never a '/', ',', space, CR or LF
+    static bool content_type_matches(const std::string& pattern, const uint8_t* value,
+        int32_t len);
+
+    // These take the raw value; normalizing strips the quotes and token characters they check
+
+    // Length of the media type, with offset set to where it begins
+    static int32_t content_type_media_type(const uint8_t* value, int32_t len, int32_t& offset);
+
+    // True when this is not one media type: a comma outside a quoted string, or open quoting
+    static bool content_type_is_list(const uint8_t* value, int32_t len);
+
     // All of these are indexed by the relative position of the header field in the message
 
     Field* header_line = nullptr;
+    Field* header_value = nullptr;
     HttpEnums::HeaderId* header_name_id = nullptr;
     int32_t num_headers = HttpCommon::STAT_NOT_COMPUTE;
     int32_t max_header_line = HttpCommon::STAT_NOT_COMPUTE;
@@ -92,20 +105,28 @@ protected:
 #endif
 
 private:
+    struct HeaderLineScan;
+
     static const int MAX = HttpEnums::HEAD__MAX_VALUE + HttpEnums::MAX_CUSTOM_HEADERS;
 
     void parse_header_block();
-    int32_t find_next_header(const uint8_t* buffer, int32_t length, int32_t& num_seps);
+    int32_t find_next_header(const uint8_t* buffer, int32_t length, int32_t& num_seps,
+        bool& unsafe_value);
     void parse_header_lines();
     void create_norm_head_list();
     void derive_header_name_id(int index);
     const Field& get_classic_raw_header();
 
+    void raise_malformed_header(const Field& malformed_line);
+
+    void raise_max_header_value_length(int32_t value_length, const Field& long_line);
+
+    void raise_unsafe_header(const Field& raw_header);
+
     Field classic_raw_header;    // raw headers with cookies spliced out
     Field classic_norm_header;   // URI normalization applied
     Field classic_norm_cookie;   // URI normalization applied to concatenated cookie values
     Field* header_name = nullptr;
-    Field* header_value = nullptr;
 
     NormalizedHeader* get_header_node(HttpEnums::HeaderId k) const;
     NormalizedHeader* norm_heads = nullptr;
@@ -114,6 +135,9 @@ private:
 
     void extract_filename_from_content_disposition();
     Field content_disposition_filename;
+#if defined(REG_TEST) || defined(UNIT_TEST)
+    uint64_t cd_scan_visits = 0;
+#endif
     uint64_t file_cache_index = 0;
     bool file_cache_index_computed = false;
 

@@ -102,7 +102,7 @@ int PortObjectSetName(PortObject* po, const char* name)
  */
 int PortObjectAddItem(PortObject* po, PortObjectItem* poi, int* errflag)
 {
-    PortObjectItem* p;
+    const PortObjectItem* p;
     SF_LNODE* pos = nullptr;
 
     if (!po || !poi)
@@ -127,9 +127,9 @@ int PortObjectAddItem(PortObject* po, PortObjectItem* poi, int* errflag)
 /*
  * Add a PortObjectItem to a PortObject
  */
-int PortObjectAddPortObject(PortObject* podst, PortObject* posrc, int* errflag)
+int PortObjectAddPortObject(PortObject* podst, const PortObject* posrc, int* errflag)
 {
-    PortObjectItem* po;
+    const PortObjectItem* po;
     SF_LNODE* pos = nullptr;
     int ret = 0;
 
@@ -141,6 +141,7 @@ int PortObjectAddPortObject(PortObject* podst, PortObject* posrc, int* errflag)
         po = (PortObjectItem*)sflist_next(&pos))
     {
         PortObjectItem* poi = PortObjectItemDup(po);
+        // cppcheck-suppress knownConditionTrueFalse ; result depends on the supplied port item
         if ((ret = PortObjectAddItem(podst, poi, errflag)) != 0)
         {
             PortObjectItemFree(poi);
@@ -196,7 +197,7 @@ int PortObjectAddPortAny(PortObject* po)
 /*
  * Dup the PortObjects Item List, RuleList, and Name
  */
-PortObject* PortObjectDup(PortObject* po)
+PortObject* PortObjectDup(const PortObject* po)
 {
     SF_LNODE* lpos = nullptr;
     PortObject* ponew = PortObjectNew();
@@ -210,7 +211,7 @@ PortObject* PortObjectDup(PortObject* po)
     /* Dup the Item List */
     if ( po->item_list )
     {
-        for (PortObjectItem* poi = (PortObjectItem*)sflist_first(po->item_list, &lpos);
+        for (const PortObjectItem* poi = (PortObjectItem*)sflist_first(po->item_list, &lpos);
             poi != nullptr;
             poi = (PortObjectItem*)sflist_next(&lpos))
         {
@@ -222,7 +223,7 @@ PortObject* PortObjectDup(PortObject* po)
     /* Dup the input rule list */
     if ( po->rule_list )
     {
-        for (int* prid  = (int*)sflist_first(po->rule_list, &lpos);
+        for (const int* prid = (int*)sflist_first(po->rule_list, &lpos);
             prid != nullptr;
             prid  = (int*)sflist_next(&lpos))
         {
@@ -238,7 +239,7 @@ PortObject* PortObjectDup(PortObject* po)
 /*
  * Dup the PortObjects Item List, and Name
  */
-PortObject* PortObjectDupPorts(PortObject* po)
+PortObject* PortObjectDupPorts(const PortObject* po)
 {
     SF_LNODE* lpos = nullptr;
     PortObject* ponew = PortObjectNew();
@@ -252,7 +253,7 @@ PortObject* PortObjectDupPorts(PortObject* po)
     /* Dup the Item List */
     if ( po->item_list )
     {
-        for (PortObjectItem* poi = (PortObjectItem*)sflist_first(po->item_list, &lpos);
+        for (const PortObjectItem* poi = (PortObjectItem*)sflist_first(po->item_list, &lpos);
             poi != nullptr;
             poi = (PortObjectItem*)sflist_next(&lpos))
         {
@@ -287,10 +288,10 @@ int PortObjectNormalize(PortObject* po)
 /*
    PortObjects should be normalized, prior to testing
 */
-bool PortObjectEqual(PortObject* a, PortObject* b)
+bool PortObjectEqual(const PortObject* a, const PortObject* b)
 {
-    PortObjectItem* pa;
-    PortObjectItem* pb;
+    const PortObjectItem* pa;
+    const PortObjectItem* pb;
     SF_LNODE* posa;
     SF_LNODE* posb;
 
@@ -326,7 +327,7 @@ bool PortObjectEqual(PortObject* a, PortObject* b)
  *  0   = none/empty
  *  >0  = number of ports
 */
-int PortObjectPortCount(PortObject* po)
+int PortObjectPortCount(const PortObject* po)
 {
     SF_LNODE* cursor;
     int cnt=0;
@@ -368,7 +369,7 @@ int PortObjectPortCount(PortObject* po)
 /*
  * This does NOT return true if the object is an ANY port
 */
-int PortObjectHasPort(PortObject* po, int port)
+int PortObjectHasPort(const PortObject* po, int port)
 {
     PortObjectItem* poi;
     SF_LNODE* cursor;
@@ -394,6 +395,7 @@ int PortObjectHasPort(PortObject* po, int port)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; logically mutates items through item_list
 void PortObjectToggle(PortObject* po)
 {
     PortObjectItem* poi;
@@ -410,9 +412,9 @@ void PortObjectToggle(PortObject* po)
     }
 }
 
-int PortObjectIsPureNot(PortObject* po)
+int PortObjectIsPureNot(const PortObject* po)
 {
-    PortObjectItem* poi;
+    const PortObjectItem* poi;
     SF_LNODE* cursor;
     int cnt=0;
 
@@ -434,7 +436,7 @@ int PortObjectIsPureNot(PortObject* po)
     return 1;
 }
 
-int PortObjectHasAny(PortObject* po)
+int PortObjectHasAny(const PortObject* po)
 {
     PortObjectItem* poi;
     SF_LNODE* cursor;
@@ -455,7 +457,7 @@ int PortObjectHasAny(PortObject* po)
 /*
  *  Removes Ports in B from A ... A = A - B
  */
-int PortObjectRemovePorts(PortObject* a,  PortObject* b)
+int PortObjectRemovePorts(PortObject* a, const PortObject* b)
 {
     PortBitSet pA, pB;
 
@@ -476,11 +478,11 @@ int PortObjectRemovePorts(PortObject* a,  PortObject* b)
 /*
    Dup and Append PortObjectItems from pob to poa
 */
-PortObject* PortObjectAppend(PortObject* poa, PortObject* pob)
+PortObject* PortObjectAppend(PortObject* poa, const PortObject* pob)
 {
     SF_LNODE* cursor;
 
-    for (PortObjectItem* poib = (PortObjectItem*)sflist_first(pob->item_list, &cursor);
+    for (const PortObjectItem* poib = (PortObjectItem*)sflist_first(pob->item_list, &cursor);
          poib != nullptr;
          poib = (PortObjectItem*)sflist_next(&cursor))
     {
@@ -542,7 +544,6 @@ void PortObjectPrintPortsRaw(PortObject* po)
 */
 void PortObjectPrintEx(PortObject* po, po_print_f print_index_map)
 {
-    PortObjectItem* poi = nullptr;
     SF_LNODE* pos = nullptr;
     int k=0;
     int* rlist = nullptr;
@@ -580,7 +581,7 @@ void PortObjectPrintEx(PortObject* po, po_print_f print_index_map)
     }
     else
     {
-        for (poi = (PortObjectItem*)sflist_first(po->item_list,&pos);
+        for (PortObjectItem* poi = (PortObjectItem*)sflist_first(po->item_list,&pos);
             poi != nullptr;
             poi = (PortObjectItem*)sflist_next(&pos))
         {

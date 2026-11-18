@@ -24,6 +24,7 @@
 
 // Provides attribute table initialization, lookup, swap, and releasing.
 
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -133,7 +134,8 @@ struct HostAttributesCacheKey
 {
     size_t operator()(const snort::SfIp& ip) const
     {
-        const uint64_t* ip64 = (const uint64_t*) ip.get_ip6_ptr();
+        uint64_t ip64[2];
+        memcpy(ip64, ip.get_ip6_ptr(), sizeof(ip64));
         return std::hash<uint64_t>() (ip64[0]) ^
                std::hash<uint64_t>() (ip64[1]);
     }
@@ -149,7 +151,7 @@ public:
     static void load_failure_cleanup();
     static void term();
 
-    static bool add_host(HostAttributesEntry, snort::SnortConfig*);
+    static bool add_host(HostAttributesEntry, const snort::SnortConfig*);
     static bool get_host_attributes(const snort::SfIp&, uint16_t protocol, uint16_t port, HostAttriInfo*);
     static bool get_host_attributes(const snort::SfIp&, PktType pkt_type, uint16_t port, HostAttriInfo*);
     static void update_service(const snort::SfIp&, uint16_t port, uint16_t protocol,

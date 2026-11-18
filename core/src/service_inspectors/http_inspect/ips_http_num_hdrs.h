@@ -41,6 +41,7 @@ public:
 
     snort::ProfileStats* get_profile() const override { return &ps; }
 
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static void mod_dtor(snort::Module* m) { delete m; }
     bool begin(const char*, int, snort::SnortConfig*) override;
     bool set(const char*, snort::Value&, snort::SnortConfig*) override;
@@ -95,7 +96,7 @@ template<HttpEnums::HTTP_RULE_OPT OPT_IDX, snort::PduSection SECTION>
 THREAD_LOCAL snort::ProfileStats HttpNumRuleOptModule<OPT_IDX, SECTION>::ps;
 
 // Template class for range-based rule options
-template<int32_t (HttpInspect::* FNC)(snort::Packet*, const HttpBufferInfo&) const>
+template<int32_t (HttpInspect::* FNC)(const snort::Packet*, const HttpBufferInfo&) const>
 class HttpNumIpsOption : public HttpRangeIpsOption
 {
 public:
@@ -108,4 +109,3 @@ public:
     { return (hi->*FNC)(p, buffer_info); }
 };
 #endif
-

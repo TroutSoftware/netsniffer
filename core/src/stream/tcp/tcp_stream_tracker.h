@@ -99,6 +99,7 @@ public:
     void update_stream_order(const TcpSegmentDescriptor&, bool aligned);
 
     void fallback();
+    void purge_queue_and_fallback(TcpSegmentDescriptor&, const char* limit);
 
     bool is_client_tracker() const
     { return client_tracker; }
@@ -109,82 +110,99 @@ public:
     TcpState get_tcp_state() const
     { return tcp_state; }
 
-    void set_tcp_state(TcpState tcp_state)
-    { this->tcp_state = tcp_state; }
+    void set_tcp_state(TcpState state)
+    { tcp_state = state; }
 
     TcpEvent get_tcp_event() const
     { return tcp_event; }
 
     TcpEvent set_tcp_event(const TcpSegmentDescriptor&);
 
-    void set_tcp_event(TcpEvent tcp_event)
-    { this->tcp_event = tcp_event; }
+    void set_tcp_event(TcpEvent event)
+    { tcp_event = event; }
 
     uint32_t get_rcv_nxt() const
     { return rcv_nxt; }
 
-    void set_rcv_nxt(uint32_t rcv_nxt)
-    { this->rcv_nxt = rcv_nxt; }
+    void set_rcv_nxt(uint32_t value)
+    { rcv_nxt = value; }
 
     uint32_t get_rcv_wnd() const
     { return rcv_wnd; }
 
-    void set_rcv_wnd(uint32_t rcv_wnd)
-    { this->rcv_wnd = rcv_wnd; }
+    void set_rcv_wnd(uint32_t value)
+    {
+        rcv_wnd = value;
+        tf_flags |= TF_RCV_WND_SEEN;
+    }
 
+    bool has_rcv_wnd() const
+    { return tf_flags & TF_RCV_WND_SEEN; }
+
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint16_t get_rcv_up() const
     { return rcv_up; }
 
-    void set_rcv_up(uint16_t rcv_up)
-    { this->rcv_up = rcv_up; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_rcv_up(uint16_t value)
+    { rcv_up = value; }
 
     uint32_t get_irs() const
     { return irs; }
 
-    void set_irs(uint32_t irs)
-    { this->irs = irs; snd_wl1 = irs; snd_wl2 = 0; }
+    void set_irs(uint32_t value)
+    { irs = value; snd_wl1 = value; snd_wl2 = 0; }
 
     uint32_t get_snd_una() const
     { return snd_una; }
 
-    void set_snd_una(uint32_t snd_una)
-    { this->snd_una = snd_una; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_snd_una(uint32_t value)
+    { snd_una = value; }
 
     uint32_t get_snd_nxt() const
     { return snd_nxt; }
 
-    void set_snd_nxt(uint32_t snd_nxt)
-    { this->snd_nxt = snd_nxt; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_snd_nxt(uint32_t value)
+    { snd_nxt = value; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint16_t get_snd_up() const
     { return snd_up; }
 
-    void set_snd_up(uint16_t snd_up)
-    { this->snd_up = snd_up; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_snd_up(uint16_t value)
+    { snd_up = value; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_snd_wl1() const
     { return snd_wl1; }
 
-    void set_snd_wl1(uint32_t snd_wl1)
-    { this->snd_wl1 = snd_wl1; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_snd_wl1(uint32_t value)
+    { snd_wl1 = value; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_snd_wl2() const
     { return snd_wl2; }
 
-    void set_snd_wl2(uint32_t snd_wl2)
-    { this->snd_wl2 = snd_wl2; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_snd_wl2(uint32_t value)
+    { snd_wl2 = value; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_snd_wnd() const
     { return snd_wnd; }
 
-    void set_snd_wnd(uint32_t snd_wnd)
-    { this->snd_wnd = snd_wnd; }
+    void set_snd_wnd(uint32_t value)
+    { snd_wnd = value; }
 
     uint32_t get_iss() const
     { return iss; }
 
-    void set_iss(uint32_t iss)
-    { this->iss = iss; }
+    void set_iss(uint32_t value)
+    { iss = value; }
 
     uint32_t get_fin_final_seq() const
     { return fin_final_seq + fin_seq_adjust; }
@@ -204,8 +222,8 @@ public:
     uint32_t get_ts_last_packet() const
     { return ts_last_packet; }
 
-    void set_ts_last_packet(uint32_t ts_last_packet)
-    { this->ts_last_packet = ts_last_packet; }
+    void set_ts_last_packet(uint32_t timestamp)
+    { ts_last_packet = timestamp; }
 
     bool is_ack_valid(uint32_t cur)
     {
@@ -222,8 +240,8 @@ public:
     uint32_t get_ts_last() const
     { return ts_last; }
 
-    void set_ts_last(uint32_t ts_last)
-    { this->ts_last = ts_last; }
+    void set_ts_last(uint32_t timestamp)
+    { ts_last = timestamp; }
 
     uint16_t get_tf_flags() const
     { return tf_flags; }
@@ -237,20 +255,22 @@ public:
     uint16_t get_wscale() const
     { return wscale; }
 
-    void set_wscale(uint16_t wscale)
-    { this->wscale = wscale; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_wscale(uint16_t value)
+    { wscale = value; }
 
     uint16_t get_mss() const
     { return mss; }
 
-    void set_mss(uint16_t mss)
-    { this->mss = mss; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
+    void set_mss(uint16_t value)
+    { mss = value; }
 
     uint8_t get_tcp_options_len() const
     { return tcp_options_len; }
 
-    void set_tcp_options_len(uint8_t tcp_options_len)
-    { this->tcp_options_len = tcp_options_len; }
+    void set_tcp_options_len(uint8_t length)
+    { tcp_options_len = length; }
 
     void cache_mac_address(const TcpSegmentDescriptor&, uint8_t direction);
     bool compare_mac_addresses(const uint8_t eth_addr[]);
@@ -262,8 +282,8 @@ public:
     FlushPolicy get_flush_policy() const
     { return flush_policy; }
 
-    void set_order(uint8_t order)
-    { this->order = order; }
+    void set_order(uint8_t packet_order)
+    { order = packet_order; }
 
     void init_tcp_state(TcpSession*);
     void set_splitter(snort::StreamSplitter* ss);
@@ -273,6 +293,9 @@ public:
 
     snort::StreamSplitter* get_splitter()
     { return splitter; }
+
+    uint32_t get_service_search_byte_limit() const
+    { return service_search_byte_limit; }
 
     void disable_reassembly(snort::Flow* f);
 
@@ -305,7 +328,8 @@ public:
     void finalize_held_packet(snort::Packet*);
     void finalize_held_packet(snort::Flow*);
     void perform_fin_recv_flush(TcpSegmentDescriptor&);
-    int32_t kickstart_asymmetric_flow(const TcpSegmentDescriptor& tsd, uint32_t max_queued_bytes);
+    void kickstart_asymmetric_flow(
+        const TcpSegmentDescriptor& tsd, uint32_t max_queued_bytes);
     uint32_t perform_partial_flush();
     bool is_holding_packet() const;
 
@@ -337,6 +361,7 @@ public:
 
 private:
     void update_flush_policy(snort::StreamSplitter*);
+    void update_midstream_rcv_wnd(const TcpSegmentDescriptor&);
 
     TcpState tcp_state;
     TcpEvent tcp_event = TCP_MAX_EVENTS;
@@ -373,6 +398,8 @@ private:
     uint32_t irs = 0;              // IRS     - initial receive sequence number
     uint16_t snd_up = 0;           // SND.UP  - send urgent pointer
     uint16_t rcv_up = 0;           // RCV.UP  - receive urgent pointer
+    // Cached byte allowance while Wizard's Magic splitter is active.
+    uint32_t service_search_byte_limit = 0;
 
 };
 
@@ -388,4 +415,3 @@ inline TcpStreamTracker::TcpState& operator++(TcpStreamTracker::TcpState& state,
 }
 
 #endif
-

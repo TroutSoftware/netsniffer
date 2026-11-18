@@ -48,21 +48,14 @@ namespace snort
 struct Packet;
 }
 
-#define SCAN_HTTP_VIA_FLAG          (1<<0)
-#define SCAN_HTTP_USER_AGENT_FLAG   (1<<1)
-#define SCAN_HTTP_HOST_URL_FLAG     (1<<2)
-#define SCAN_SSL_CERTIFICATE_FLAG   (1<<3)
-#define SCAN_SSL_HOST_FLAG          (1<<4)
-#define SCAN_HOST_PORT_FLAG         (1<<5)
-#define SCAN_HTTP_VENDOR_FLAG       (1<<6)
-#define SCAN_HTTP_XWORKINGWITH_FLAG (1<<7)
-#define SCAN_HTTP_CONTENT_TYPE_FLAG (1<<8)
-#define SCAN_HTTP_URI_FLAG          (1<<9)
-#define SCAN_CERTVIZ_ENABLED_FLAG   (1<<10)
-#define SCAN_SPOOFED_SNI_FLAG       (1<<11)
-#define SCAN_SSL_VERSION_FLAG       (1<<12)
-#define SCAN_SSL_ORG_UNIT_FLAG      (1<<13)
-#define SCAN_SSL_ALT_NAME           (1<<14)
+#define SCAN_SSL_CERTIFICATE_FLAG   (1<<1)
+#define SCAN_SSL_HOST_FLAG          (1<<2)
+#define SCAN_HOST_PORT_FLAG         (1<<3)
+#define SCAN_CERTVIZ_ENABLED_FLAG   (1<<4)
+#define SCAN_SPOOFED_SNI_FLAG       (1<<5)
+#define SCAN_SSL_VERSION_FLAG       (1<<6)
+#define SCAN_SSL_ORG_UNIT_FLAG      (1<<7)
+#define SCAN_SSL_ALT_NAME           (1<<8)
 
 enum FirstPktAppIdDiscovered : uint8_t
 {
@@ -79,8 +72,8 @@ enum FirstPktAppIdDiscovered : uint8_t
 class AppIdPatternMatchNode
 {
 public:
-    AppIdPatternMatchNode(AppIdDetector* detector, int start, unsigned len)
-        : service(detector), pattern_start_pos(start), size(len) { }
+    AppIdPatternMatchNode(AppIdDetector* app_detector, int start, unsigned len)
+        : service(app_detector), pattern_start_pos(start), size(len) { }
 
     bool valid_match(int end_position)
     {
@@ -164,9 +157,9 @@ private:
     static void do_port_based_discovery(snort::Packet* p, AppIdSession& asd, IpProtocol protocol,
         AppidSessionDirection direction);
     static bool do_host_port_based_discovery(snort::Packet* p, AppIdSession& asd,
-        IpProtocol protocol, AppidSessionDirection direction, ThirdPartyAppIdContext* tp_appid_ctxt);
+        IpProtocol protocol, AppidSessionDirection direction,
+        const ThirdPartyAppIdContext* tp_appid_ctxt);
     static bool detect_on_first_pkt(snort::Packet* p, AppIdSession& asd, IpProtocol protocol,
         AppidSessionDirection direction, AppId& service_id, AppId& client_id, AppId& payload_id);
 };
 #endif
-

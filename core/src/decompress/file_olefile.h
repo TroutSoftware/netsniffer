@@ -118,6 +118,7 @@ public:
         color = (color_flag)*buf;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     color_flag get_color()
     {
         return color;
@@ -128,6 +129,7 @@ public:
         lef_sib_id = (!endian) ? LETOHL_UNALIGNED(buf) : BETOHL_UNALIGNED(buf);
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     int32_t get_lef_sib_id()
     {
         return lef_sib_id;
@@ -138,6 +140,7 @@ public:
         rig_sib_id = (!endian) ? LETOHL_UNALIGNED(buf) : BETOHL_UNALIGNED(buf);
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     int32_t get_rig_sib_id()
     {
         return rig_sib_id;
@@ -148,6 +151,7 @@ public:
         root_node_id = (!endian) ? LETOHL_UNALIGNED(buf) : BETOHL_UNALIGNED(buf);
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     int32_t get_root_node_id()
     {
         return root_node_id;
@@ -158,6 +162,7 @@ public:
         memcpy_id(cls_id, sizeof(cls_id), buf, 16);
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     char* get_cls_id()
     {
         return cls_id;
@@ -207,9 +212,9 @@ public:
     FileProperty* get_file_node(char* name);
     int32_t get_file_sector(char* name);
     bool is_mini_sector(char* name);
-    void set_mini_stream_sector(int32_t mini_stream_sector)
+    void set_mini_stream_sector(int32_t sector)
     {
-        this->mini_stream_sector = mini_stream_sector;
+        mini_stream_sector = sector;
     }
 
     int32_t get_mini_stream_sector()
@@ -237,14 +242,14 @@ public:
     int32_t get_next_mini_fat_sector(int32_t sec_id);
     int32_t get_fat_offset(int32_t sec_id);
     int32_t get_mini_fat_offset(int32_t sec_id);
-    int32_t get_file_offset(const uint8_t*, uint32_t data_len);
+    static int32_t get_file_offset(const uint8_t*, uint32_t data_len);
 
-    void decompression(const uint8_t* data, uint32_t& data_len, uint8_t*& buffer,
+    static void decompression(const uint8_t* data, uint32_t& data_len, uint8_t*& buffer,
         uint32_t& buffer_ofset);
     uint32_t find_bytes_to_copy(uint32_t byte_offset, uint32_t data_len,
                                    uint32_t stream_size, uint16_t sector_size);
 
-    int search_nocase(const uint8_t* buffer, unsigned buffer_len) const
+    static int search_nocase(const uint8_t* buffer, unsigned buffer_len)
     {
         return searcher->search(search_handle, buffer, buffer_len);
     }
@@ -281,10 +286,10 @@ private:
 public:
     void set_header(OleHeader* h) { header = h; }
     void set_dir_list(DirectoryList* d) { dir_list = d; }
+    DirectoryList* get_dir_list() { return dir_list; }
     void set_fat_list(int32_t* f, int32_t len) { fat_list = f; fat_list_len = len; }
 #endif
 };
 
 void oleprocess(const uint8_t* const, const uint32_t, uint8_t*&, uint32_t&);
 #endif
-

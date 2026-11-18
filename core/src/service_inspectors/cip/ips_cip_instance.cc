@@ -82,7 +82,6 @@ bool CipInstanceOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus CipInstanceOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(cip_instance_perf_stats);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -93,7 +92,7 @@ IpsOption::EvalStatus CipInstanceOption::eval(Cursor&, Packet* p)
     if (!fd)
         return NO_MATCH;
 
-    CipSessionData* session_data = &fd->session;
+    const CipSessionData* session_data = &fd->session;
 
     if (session_data->current_data.cip_message_type != CipMessageTypeExplicit
         || !session_data->current_data.cip_msg.is_cip_request
@@ -173,7 +172,7 @@ static void cip_instance_mod_dtor(Module* m)
 
 static IpsOption* cip_instance_ctor(Module* p, IpsInfo&)
 {
-    CipInstanceModule* m = static_cast<CipInstanceModule*>(p);
+    const CipInstanceModule* m = static_cast<CipInstanceModule*>(p);
     return new CipInstanceOption(m->cip_inst);
 }
 
@@ -208,4 +207,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_cip_instance = &ips_api.base;
-

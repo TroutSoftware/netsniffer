@@ -69,7 +69,7 @@ bool IpTosOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IpTosOption& rhs = (const IpTosOption&)ips;
+    const IpTosOption& rhs = static_cast<const IpTosOption&>(ips);
     return ( config == rhs.config );
 }
 
@@ -79,7 +79,6 @@ bool IpTosOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus IpTosOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(ipTosPerfStats);
 
     if(!p->ptrs.ip_api.is_ip())
@@ -154,7 +153,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* tos_ctor(Module* p, IpsInfo&)
 {
-    TosModule* m = (TosModule*)p;
+    const TosModule* m = static_cast<TosModule*>(p);
     return new IpTosOption(m->data);
 }
 
@@ -197,4 +196,3 @@ const BaseApi* ips_tos[] =
     &tos_api.base,
     nullptr
 };
-

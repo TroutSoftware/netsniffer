@@ -27,6 +27,7 @@
 // at arbitrary points, eg when service is identified, or when a URI is
 // available, or when a flow clears.
 
+#include <atomic>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -86,6 +87,9 @@ public:
     // the sequence among subscribers with the same order is not specified
     unsigned order = 0;
 
+    // retired handlers clear this; every handler pays the acquire-load, an RSS tradeoff
+    std::atomic<bool> live{true};
+
 protected:
     DataHandler(std::nullptr_t) = delete;
     DataHandler(const char* mod_name) : module_name(mod_name) { }
@@ -120,6 +124,8 @@ public:
     static void publish_to_all_network_policies(unsigned pub_id, unsigned evt_id);
 
 private:
+    friend class ReloadSurvivorSubscriptions;
+
     void _subscribe(unsigned pub_id, unsigned evt_id, DataHandler*);
     void _subscribe(const PubKey&, unsigned evt_id, DataHandler*);
     void _publish(unsigned pub_id, unsigned evt_id, DataEvent&, Flow*) const;

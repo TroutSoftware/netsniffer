@@ -24,6 +24,7 @@
 // ip datagram reassembly
 
 #include <cstdint>
+#include <vector>
 
 struct FragEngine;
 struct FragTracker;
@@ -36,14 +37,18 @@ struct SnortConfig;
 
 class Defrag
 {
+#ifdef UNIT_TEST
+    friend class DefragTestPeer;
+#endif
+
 public:
     Defrag(FragEngine&);
 
-    bool configure(snort::SnortConfig*);
+    bool configure(const snort::SnortConfig*);
     void show() const;
 
     void process(snort::Packet*, FragTracker*);
-    void cleanup(FragTracker*);
+    static void cleanup(FragTracker*);
 
     static void init();
 
@@ -53,18 +58,21 @@ private:
 
     int add_frag_node(  // FIXIT-L too many args
         FragTracker* ft, FragEngine*,
-        const uint8_t* fragStart, int16_t fragLength,
-        char lastfrag, int16_t len,
+        const uint8_t* fragStart, uint16_t fragLength,
+        char lastfrag, uint16_t len,
         uint16_t slide, uint16_t trunc, uint16_t frag_offset,
         Fragment* left, Fragment** retFrag);
 
     int dup_frag_node(FragTracker*, Fragment* left, Fragment** retFrag);
-    int expired(snort::Packet*, FragTracker*, FragEngine*);
+    static int expired(snort::Packet*, FragTracker*, const FragEngine*);
+
+    uint32_t& live_nodes();
+    bool frag_node_limit_reached(uint32_t need = 1);
 
 private:
     FragEngine& engine;
     uint8_t layers;
+    std::vector<uint32_t> live;  // nodes held per packet thread; the node pegs can be reset
 };
 
 #endif
-

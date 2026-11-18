@@ -38,12 +38,12 @@ using namespace snort;
 THREAD_LOCAL PsPegStats spstats;
 THREAD_LOCAL ProfileStats psPerfStats;
 
-static void make_port_scan_info(Packet* p, PS_PROTO* proto)
+static void make_port_scan_info(const Packet* p, PS_PROTO* proto)
 {
     DataBuffer& buf = DetectionEngine::acquire_alt_buffer(p);
 
-    SfIp* ip1 = &proto->low_ip;
-    SfIp* ip2 = &proto->high_ip;
+    const SfIp* ip1 = &proto->low_ip;
+    const SfIp* ip2 = &proto->high_ip;
 
     char a1[INET6_ADDRSTRLEN];
     char a2[INET6_ADDRSTRLEN];
@@ -73,11 +73,11 @@ static void make_port_scan_info(Packet* p, PS_PROTO* proto)
         proto->low_p, proto->high_p);
 }
 
-static void make_open_port_info(Packet* p, PS_PROTO* proto)
+static void make_open_port_info(const Packet* p, PS_PROTO* proto)
 {
     DataBuffer& buf = DetectionEngine::acquire_alt_buffer(p);
 
-    SfIp* ip1 = &proto->low_ip;
+    const SfIp* ip1 = &proto->low_ip;
     char a1[INET6_ADDRSTRLEN];
     ip1->ntop(a1, sizeof(a1));
 
@@ -98,7 +98,7 @@ static void make_open_port_info(Packet* p, PS_PROTO* proto)
 
 #if 0
 // FIXIT-L add open port for port sweeps
-static void make_open_port_info(Packet* p, uint16_t port)
+static void make_open_port_info(const Packet* p, uint16_t port)
 {
     DataBuffer& buf = DetectionEngine::acquire_alt_buffer(p);
 
@@ -111,7 +111,7 @@ static void make_open_port_info(Packet* p, uint16_t port)
 }
 #endif
 
-static void PortscanAlertTcp(Packet* p, PS_PROTO* proto)
+static void PortscanAlertTcp(const Packet* p, PS_PROTO* proto)
 {
     assert(proto);
 
@@ -432,7 +432,6 @@ void PortScan::show(const SnortConfig*) const
 
 void PortScan::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(psPerfStats);
     assert(p->ptrs.ip_api.is_ip());
 
@@ -474,7 +473,7 @@ static void mod_dtor(Module* m)
 { delete m; }
 
 static Inspector* sp_ctor(Module* m)
-{ return new PortScan((PortScanModule*)m); }
+{ return new PortScan(static_cast<PortScanModule*>(m)); }
 
 static void sp_dtor(Inspector* p)
 { delete p; }
@@ -519,4 +518,3 @@ const BaseApi* nin_port_scan[] =
     &sp_api.base,
     nullptr
 };
-

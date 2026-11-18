@@ -22,12 +22,17 @@
 #define FILE_CACHE_H
 
 #include <atomic>
+#include <functional>
 #include <mutex>
+#include <string>
 
 #include "sfip/sf_ip.h"
 #include "utils/cpp_macros.h"
 
+#include "file_api.h"
 #include "file_config.h"
+
+class ControlConn;
 
 class ExpectedFileCache;
 
@@ -35,12 +40,12 @@ PADDING_GUARD_BEGIN
     struct FileHashKey
     {
         snort::SfIp sip;
-        int16_t sgroup;
+        int16_t sgroup = 0;
         snort::SfIp dip;
-        int16_t dgroup;
-        uint64_t file_id;
-        uint16_t asid;
-        uint16_t padding[3];
+        int16_t dgroup = 0;
+        uint64_t file_id = 0;
+        uint16_t asid = 0;
+        uint16_t padding[3] = {};
     };
 PADDING_GUARD_END
 
@@ -68,14 +73,36 @@ public:
     bool apply_verdict(snort::Packet*, snort::FileContext*, FileVerdict, bool resume,
         snort::FilePolicyBase*);
 
-private: 
+    snort::FileContext* dup_cache_context(snort::Flow*, uint64_t file_id, bool& is_pending);
+    void take_pending_file_data(snort::Flow*, uint64_t file_id, snort::FileInfo* dst);
+    FileVerdict resume_pending_verdict(snort::Packet*, snort::FileInfo* dup,
+        snort::FilePolicyBase*);
+    bool cached_context_not_cacheable(snort::Flow*, uint64_t file_id);
+    void store_shared_verdict(const FileHashKey&, int64_t timeout, snort::FileInfo& src);
+
+    void dump_cache(ControlConn*, unsigned max_entries);
+    void dump_cache_entry(ControlConn*, const std::string& sha_hex);
+    // Free every cache entry.
+    // PRECONDITION: every packet thread is fully paused and this is a
+    // single-process configuration.
+    snort::FileCacheClearReport clear();
+
+private:
+    void make_key(snort::Flow*, uint64_t file_id, FileHashKey&) const;
+    static bool verdict_publish_blocked(FileVerdict cached, FileVerdict incoming);
+    void publish_flow_verdict_locked(const FileHashKey&, int64_t timeout, snort::FileInfo* src,
+        bool is_cacheable);
     snort::FileContext* find(const FileHashKey&, int64_t, int64_t& cache_expire);
     snort::FileContext* find_add(const FileHashKey&, int64_t);
+    snort::FileContext* find_and_pin(snort::Flow*, uint64_t file_id, int64_t timeout);
     snort::FileContext* get_file(snort::Flow*, uint64_t file_id, bool to_create,
         int64_t timeout, bool using_cache_entry, bool &cache_full, int64_t& cache_expire);
     FileVerdict check_verdict(snort::Packet*, snort::FileInfo*, snort::FilePolicyBase*,const uint8_t* current_data, uint32_t current_data_len);
     int store_verdict(snort::Flow*, snort::FileInfo*, int64_t timeout, bool &cache_full, bool is_cacheable);
     void publish_file_cache_event(snort::Flow* flow, snort::FileInfo* file, int64_t timeout);
+
+    unsigned walk_locked(unsigned max_entries,
+        const std::function<bool(snort::FileContext*)>& visit);
 
     /* The hash table of expected files */
     ExpectedFileCache* fileHash = nullptr;
@@ -86,4 +113,3 @@ private:
 };
 
 #endif
-

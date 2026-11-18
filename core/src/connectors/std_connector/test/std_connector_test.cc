@@ -66,24 +66,26 @@ TextLog* TextLog_Init(const char*, unsigned int = 0, size_t = 0, bool = true)
 {
     output_buffer.accumulated_buffer.clear();
     output_buffer.flushed_buffer.clear();
-    return (TextLog*)&output_buffer;
+    return reinterpret_cast<TextLog*>(&output_buffer);
 }
 
-bool TextLog_Print(TextLog* const txt, const char* fmt, ...)
+bool TextLog_Write(TextLog* const txt, const char* str, int len)
 {
-    MockLog* txt_mock = (MockLog*)txt;
-    va_list ap;
-    va_start(ap, fmt);
-    char data[100];
-    vsnprintf(data, 100, fmt, ap);
-    txt_mock->accumulated_buffer.append(data);
-    va_end(ap);
+    MockLog* txt_mock = reinterpret_cast<MockLog*>(txt);
+    txt_mock->accumulated_buffer.append(str, len);
+    return true;
+}
+
+bool TextLog_Putc(TextLog* const txt, char c)
+{
+    MockLog* txt_mock = reinterpret_cast<MockLog*>(txt);
+    txt_mock->accumulated_buffer.push_back(c);
     return true;
 }
 
 bool TextLog_Flush(TextLog* const txt)
 {
-    MockLog* txt_mock = (MockLog*)txt;
+    MockLog* txt_mock = reinterpret_cast<MockLog*>(txt);
     txt_mock->flushed_buffer.append(txt_mock->accumulated_buffer);
     txt_mock->accumulated_buffer.clear();
     return true;
@@ -91,7 +93,7 @@ bool TextLog_Flush(TextLog* const txt)
 
 void TextLog_Term(TextLog* txt)
 {
-    MockLog* txt_mock = (MockLog*)txt;
+    MockLog* txt_mock = reinterpret_cast<MockLog*>(txt);
     txt_mock->accumulated_buffer.clear();
     txt_mock->flushed_buffer.clear();
 }
@@ -101,8 +103,8 @@ unsigned get_instance_id() { return 0; }
 unsigned ThreadConfig::get_instance_max() { return 1; }
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 //-------------------------------------------------------------------------
 // connector test
@@ -112,7 +114,7 @@ TEST_GROUP(std_connector_construction)
 {
     void setup() override
     {
-        stdc_api = (const ConnectorApi*) std_connector;
+        stdc_api = reinterpret_cast<const ConnectorApi*>(std_connector);
         connector_transmit_config.direction = Connector::CONN_TRANSMIT;
         connector_transmit_config.connector_name = "std_tx";
 
@@ -144,7 +146,7 @@ TEST_GROUP(std_connector_tinit_tterm)
 {
     void setup() override
     {
-        stdc_api = (const ConnectorApi*)std_connector;
+        stdc_api = reinterpret_cast<const ConnectorApi*>(std_connector);
         connector_transmit_config.direction = Connector::CONN_TRANSMIT;
         connector_transmit_config.connector_name = "std_tx";
 
@@ -177,7 +179,7 @@ TEST_GROUP(std_connector)
 {
     void setup() override
     {
-        stdc_api = (const ConnectorApi*)std_connector;
+        stdc_api = reinterpret_cast<const ConnectorApi*>(std_connector);
         connector_transmit_config.direction = Connector::CONN_TRANSMIT;
         connector_transmit_config.connector_name = "std_tx";
         connector_receive_config.direction = Connector::CONN_RECEIVE;
@@ -193,7 +195,7 @@ TEST(std_connector, transmit_flush_empty)
     CHECK(connector_common != nullptr);
     connector_transmit = stdc_api->tinit(connector_transmit_config);
     CHECK(connector_transmit != nullptr);
-    StdConnector* stdc_tt = (StdConnector*)connector_transmit;
+    StdConnector* stdc_tt = static_cast<StdConnector*>(connector_transmit);
 
     ConnectorMsg null_msg(nullptr, 1, false);
     CHECK(stdc_tt->transmit_message(null_msg) == false);
@@ -223,7 +225,7 @@ TEST(std_connector, transmit_flush)
     CHECK(connector_common != nullptr);
     connector_transmit = stdc_api->tinit(connector_transmit_config);
     CHECK(connector_transmit != nullptr);
-    StdConnector* stdc_tt = (StdConnector*)connector_transmit;
+    StdConnector* stdc_tt = static_cast<StdConnector*>(connector_transmit);
 
     uint8_t* data = new uint8_t[len];
     memcpy(data, "foobar", len);
@@ -241,6 +243,42 @@ TEST(std_connector, transmit_flush)
     std_connector->mod_dtor(mod);
 }
 
+TEST(std_connector, transmit_flush_large_message)
+{
+    std::string payload;
+    while ( payload.size() < 6 * 1024 )
+        payload += "0123456789abcdef";
+
+    const uint32_t len = payload.size();
+
+    mod = std_connector->mod_ctor();
+    CHECK(mod != nullptr);
+    connector_common = stdc_api->ctor(mod);
+    CHECK(connector_common != nullptr);
+    connector_transmit = stdc_api->tinit(connector_transmit_config);
+    CHECK(connector_transmit != nullptr);
+    StdConnector* stdc_tt = static_cast<StdConnector*>(connector_transmit);
+
+    uint8_t* data = new uint8_t[len];
+    memcpy(data, payload.c_str(), len);
+    ConnectorMsg t_msg(data, len, true);
+
+    CHECK(stdc_tt->transmit_message(t_msg));
+    CHECK(stdc_tt->flush());
+
+    CHECK(output_buffer.accumulated_buffer.empty());
+    CHECK(output_buffer.flushed_buffer == payload + "\n");
+    CHECK(std::count(output_buffer.flushed_buffer.begin(),
+        output_buffer.flushed_buffer.end(), '\n') == 1);
+
+    stdc_api->tterm(connector_transmit);
+    stdc_api->dtor(connector_common);
+    std_connector->mod_dtor(mod);
+
+    MockLog empty_log;
+    output_buffer.accumulated_buffer.swap(empty_log.accumulated_buffer);
+    output_buffer.flushed_buffer.swap(empty_log.flushed_buffer);
+}
 
 TEST(std_connector, move_transmit_flush)
 {
@@ -252,7 +290,7 @@ TEST(std_connector, move_transmit_flush)
     CHECK(connector_common != nullptr);
     connector_transmit = stdc_api->tinit(connector_transmit_config);
     CHECK(connector_transmit != nullptr);
-    StdConnector* stdc_tt = (StdConnector*)connector_transmit;
+    StdConnector* stdc_tt = static_cast<StdConnector*>(connector_transmit);
 
     uint8_t* data = new uint8_t[len];
     memcpy(data, "foobar", len);
@@ -278,7 +316,7 @@ TEST(std_connector, receive)
     CHECK(connector_common != nullptr);
     connector_receive = stdc_api->tinit(connector_receive_config);
     CHECK(connector_receive != nullptr);
-    StdConnector* stdc_rt = (StdConnector*)connector_receive;
+    StdConnector* stdc_rt = static_cast<StdConnector*>(connector_receive);
 
     std::istringstream ss("foo\nbar\n");
     std::cin.rdbuf(ss.rdbuf());

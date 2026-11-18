@@ -51,9 +51,9 @@ public:
 
     HttpMsgRequest* get_request() const { return request; }
     HttpMsgStatus* get_status() const { return status; }
-    HttpMsgHeader* get_header(HttpCommon::SourceId source_id) const { return header[source_id]; }
-    HttpMsgTrailer* get_trailer(HttpCommon::SourceId source_id) const
-        { return trailer[source_id]; }
+    HttpMsgHeader* get_header(HttpCommon::SourceId source) const { return header[source]; }
+    HttpMsgTrailer* get_trailer(HttpCommon::SourceId source) const
+        { return trailer[source]; }
     virtual HttpMsgBody* get_body() { return nullptr; }
 
     // Minimum necessary processing for every message
@@ -141,7 +141,7 @@ protected:
 #ifdef REG_TEST
     void print_section_title(FILE* output, const char* title) const;
     void print_section_wrapup(FILE* output) const;
-    void print_peg_counts(FILE* output) const;
+    static void print_peg_counts(FILE* output);
 #endif
 
 private:
@@ -149,4 +149,3 @@ private:
 };
 
 #endif
-

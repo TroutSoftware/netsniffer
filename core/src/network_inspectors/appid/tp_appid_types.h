@@ -161,8 +161,6 @@ class ThirdPartyAppIDAttributeData
     bool ftp_command_user_flush = true;
     bool quic_sni_flush = true;
 
-    // FIXIT-L: make these private too. Figure out how these get set in tp.
-
 public:
     ThirdPartyAppIDAttributeData() = default;
 
@@ -245,6 +243,7 @@ public:
     TPAD_SET(tls_version)
     TPAD_SET(http_request_referer)
     TPAD_SET(ftp_command_user)
+    // cppcheck-suppress unusedFunction ; generated API setter consumed by the FTD AppId plugin
     TPAD_SET(quic_sni)
 };
 

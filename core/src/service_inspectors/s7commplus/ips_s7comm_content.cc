@@ -49,6 +49,7 @@ public:
     S7commplusContentOption() : IpsOption(s_name) { }
 
     uint32_t hash() const override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool operator==(const IpsOption&) const override;
 
     EvalStatus eval(Cursor&, Packet*) override;
@@ -74,7 +75,7 @@ bool S7commplusContentOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus S7commplusContentOption::eval(Cursor& c, Packet* p)
 {
-    RuleProfile profile(s7commplus_content_prof);   // cppcheck-suppress unreadVariable
+    RuleProfile profile(s7commplus_content_prof);
 
     InspectionBuffer b;
     if (!get_buf_s7commplus_content(p, b))

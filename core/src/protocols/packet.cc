@@ -281,12 +281,17 @@ uint16_t Packet::get_flow_vlan_id_outer() const
     return 0;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 uint32_t Packet::get_flow_geneve_vni() const
 {
     uint32_t vni = 0;
 
     if (proto_bits & PROTO_BIT__GENEVE)
-        vni = layer::get_geneve_layer(this, true)->hdr.vni();
+    {
+        const geneve::GeneveLyr* lyr = layer::get_geneve_layer(this, true);
+        if (lyr)
+            vni = lyr->hdr.vni();
+    }
 
     return vni;
 }

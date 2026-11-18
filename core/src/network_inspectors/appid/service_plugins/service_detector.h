@@ -25,6 +25,8 @@
 #include "appid_detector.h"
 #include "service_discovery.h"
 
+#include <list>
+
 class ServiceDetector : public AppIdDetector
 {
 public:
@@ -32,27 +34,26 @@ public:
 
     void register_appid(AppId, unsigned extractsInfo, OdpContext& odp_ctxt) override;
 
-    int service_inprocess(AppIdSession&, const snort::Packet*, AppidSessionDirection dir);
+    static int service_inprocess(AppIdSession&, const snort::Packet*, AppidSessionDirection dir);
 
     int add_service(AppidChangeBits&, AppIdSession&, const snort::Packet*,
         AppidSessionDirection, AppId, const char* vendor = nullptr,
-        const char* version = nullptr, AppIdServiceSubtype* = nullptr);
+        const char* version = nullptr);
 
-    int add_service_consume_subtype(AppIdSession&, const snort::Packet*,
-        AppidSessionDirection dir, AppId, const char* vendor, const char* version,
-        AppIdServiceSubtype*, AppidChangeBits&);
+    int add_service_with_subtypes(AppidChangeBits&, AppIdSession&, const snort::Packet*,
+        AppidSessionDirection, AppId, const char* vendor, const char* version,
+        AppIdServiceSubtypeList& subtypes);
 
     int incompatible_data(AppIdSession&, const snort::Packet*, AppidSessionDirection dir);
     int fail_service(AppIdSession&, const snort::Packet*, AppidSessionDirection dir);
 
-    void add_miscellaneous_info(AppIdSession& asd, AppId miscId)
+    static void add_miscellaneous_info(AppIdSession& asd, AppId miscId)
     {
         asd.misc_app_id = miscId;
     }
 
 private:
     int update_service_data(AppIdSession&, const snort::Packet*, AppidSessionDirection, AppId,
-        const char*, const char*, AppidChangeBits&, AppIdServiceSubtype*);
+        const char*, const char*, AppidChangeBits&);
 };
 #endif
-

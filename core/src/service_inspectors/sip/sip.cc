@@ -44,6 +44,7 @@ static void FreeSipData(void*);
 unsigned SipFlowData::inspector_id = 0;
 unsigned SIPData::pub_id = 0;
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 bool get_buf_sip(unsigned id, snort::Packet* p, snort::InspectionBuffer& b)
 {
     if (id != SIP_HEADER_ID and id != SIP_BODY_ID)
@@ -55,7 +56,7 @@ bool get_buf_sip(unsigned id, snort::Packet* p, snort::InspectionBuffer& b)
     if (p->has_tcp_data() and !p->is_full_pdu())
         return false;
 
-    SIPData* sd = get_sip_session_data(p->flow);
+    const SIPData* sd = get_sip_session_data(p->flow);
     if (!sd)
         return false;
 
@@ -95,19 +96,20 @@ static SIPData* SetNewSIPData(Packet* p)
 
 SIPData* get_sip_session_data(const Flow* flow)
 {
-    SipFlowData* fd = (SipFlowData*)flow->get_flow_data(SipFlowData::inspector_id);
+    SipFlowData* fd = static_cast<SipFlowData*>(
+        flow->get_flow_data(SipFlowData::inspector_id));
     return fd ? &fd->session : nullptr;
 }
 
 static void FreeSipData(void* data)
 {
-    SIPData* ssn = (SIPData*)data;
+    SIPData* ssn = static_cast<SIPData*>(data);
 
     /*Free all the dialog data*/
     sip_freeDialogs(&ssn->dialogs);
 }
 
-static std::string GetSIPMethods(SIPMethodNode* method)
+static std::string GetSIPMethods(const SIPMethodNode* method)
 {
     std::string cmds;
 
@@ -176,7 +178,7 @@ static inline int SIP_Process(Packet* p, SIPData* sessp, SIP_PROTO_CONF* config)
 
 static void snort_sip(SIP_PROTO_CONF* config, Packet* p)
 {
-    Profile profile(sipPerfStats);  // cppcheck-suppress unreadVariable
+    Profile profile(sipPerfStats);
 
     /* Attempt to get a previously allocated SIP block. */
     SIPData* sessp = get_sip_session_data(p->flow);
@@ -188,6 +190,7 @@ static void snort_sip(SIP_PROTO_CONF* config, Packet* p)
          */
         sessp = SetNewSIPData(p);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !sessp )
             // Could not get/create the session data for this packet.
             return;
@@ -216,7 +219,7 @@ public:
     void eval(Packet*) override;
 
     class StreamSplitter* get_splitter(bool to_server) override
-    { return new SipSplitter(to_server); }
+    { return new SipSplitter(to_server, config->maxUndersizedMsgs); }
 
     bool is_control_channel() const override
     { return true; }
@@ -266,6 +269,7 @@ void Sip::show(const SnortConfig*) const
     ConfigLogger::log_value("max_media_data", config->maxMediaDataPerSession);
     ConfigLogger::log_value("max_request_name_len", config->maxRequestNameLen);
     ConfigLogger::log_value("max_to_len", config->maxToLen);
+    ConfigLogger::log_value("max_undersized_msgs", config->maxUndersizedMsgs);
     ConfigLogger::log_value("max_uri_len", config->maxUriLen);
     ConfigLogger::log_value("max_via_len", config->maxViaLen);
     ConfigLogger::log_list("methods", methods.c_str());
@@ -302,7 +306,7 @@ static void sip_init()
 
 static Inspector* sip_ctor(Module* m)
 {
-    SipModule* mod = (SipModule*)m;
+    SipModule* mod = static_cast<SipModule*>(m);
     return new Sip(mod->get_data());
 }
 
@@ -364,4 +368,3 @@ const BaseApi* sin_sip[] =
     ips_sip_stat_code,
     nullptr
 };
-

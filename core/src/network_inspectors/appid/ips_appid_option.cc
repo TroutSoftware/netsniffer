@@ -74,7 +74,7 @@ uint32_t AppIdIpsOption::hash() const
 
     mix(a, b, c);
 
-    for ( auto& appid_name : appid_table )
+    for ( const auto& appid_name : appid_table )
         mix_str(a, b, c, appid_name.c_str(), appid_name.length());
 
     finalize(a, b, c);
@@ -86,7 +86,7 @@ bool AppIdIpsOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    return ( appid_table == ((const AppIdIpsOption&)ips).appid_table );
+    return appid_table == static_cast<const AppIdIpsOption&>(ips).appid_table;
 }
 
 bool AppIdIpsOption::match_id_against_rule(OdpContext& odp_ctxt, int32_t id)
@@ -109,13 +109,12 @@ bool AppIdIpsOption::match_id_against_rule(OdpContext& odp_ctxt, int32_t id)
 // first match wins...
 IpsOption::EvalStatus AppIdIpsOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(ips_appid_perf_stats);
 
     if ( !p->flow )
         return NO_MATCH;
 
-    AppIdSession* session = appid_api.get_appid_session(*(p->flow));
+    const AppIdSession* session = appid_api.get_appid_session(*(p->flow));
 
     // Skip detection for sessions using old odp context after odp reload
     if ( !session or !pkt_thread_odp_ctxt or
@@ -128,7 +127,8 @@ IpsOption::EvalStatus AppIdIpsOption::eval(Cursor&, Packet* p)
     if ((service_id != APP_ID_HTTP2 and service_id != APP_ID_HTTP3) or
         (service_id == APP_ID_HTTP3 and session->get_api().get_hsessions_size() == 0))
     {
-        AppId app_ids[APP_PROTOID_MAX];
+        // the stream api call doesn't set the referred id, so it stays APP_ID_NONE
+        AppId app_ids[APP_PROTOID_MAX] = { };
 
         // id order on stream api call is: service, client, payload, misc
         session->get_api().get_first_stream_app_ids(app_ids[APP_PROTOID_SERVICE], app_ids[APP_PROTOID_CLIENT],
@@ -177,6 +177,7 @@ public:
 
     bool begin(const char*, int, SnortConfig*) override;
     bool set(const char*, Value&, SnortConfig*) override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool end(const char*, int, SnortConfig*) override;
 
     ProfileStats* get_profile() const override
@@ -239,7 +240,7 @@ static void appid_option_mod_dtor(Module* m)
 
 static IpsOption* appid_option_ips_ctor(Module* p, IpsInfo&)
 {
-    AppIdOptionModule* m = (AppIdOptionModule*)p;
+    const AppIdOptionModule* m = static_cast<AppIdOptionModule*>(p);
     return new AppIdIpsOption(m->appid_table);
 }
 
@@ -279,4 +280,3 @@ static const IpsApi appid_option_api =
 
 // added to snort_plugins in appid_inspector.cc
 const BaseApi* ips_appid = &appid_option_api.base;
-

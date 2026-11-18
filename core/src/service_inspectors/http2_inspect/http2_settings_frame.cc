@@ -209,7 +209,7 @@ void Http2ConnectionSettingsQueue::pop()
     }
 }
 
-bool Http2ConnectionSettingsQueue::init(Http2ConnectionSettings& item)
+bool Http2ConnectionSettingsQueue::init(const Http2ConnectionSettings& item)
 {
     queue = new std::vector<Http2ConnectionSettings>();
     queue->reserve(SETTINGS_QUEUE_MAX);
@@ -223,7 +223,7 @@ bool Http2ConnectionSettingsQueue::extend()
         // to stay in sync, do an implicit tail drop
         return false;
 
-    auto& item = back();
+    const auto& item = back();
     queue->push_back(item);
     return true;
 }

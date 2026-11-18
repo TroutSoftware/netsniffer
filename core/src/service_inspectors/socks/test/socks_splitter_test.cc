@@ -23,17 +23,17 @@
 #include "config.h"
 #endif
 
-#include <CppUTest/CommandLineTestRunner.h>
-#include <CppUTest/TestHarness.h>
-
 #include "../socks_splitter.h"
 #include "../socks_flow_data.h"
 #include "stream/stream_splitter.h"
 
+#include <CppUTest/CommandLineTestRunner.h>
+#include <CppUTest/TestHarness.h>
+
 namespace snort
 {
     class Flow;
-    class Packet;
+    struct Packet;
 }
 
 class FlushBucket;
@@ -44,7 +44,7 @@ using namespace snort;
 
 namespace snort
 {
-    class Packet
+    struct Packet
     {
     public:
         Flow* flow = nullptr;
@@ -122,6 +122,7 @@ struct SocksStats
     uint64_t udp_expectations_created = 0;
     uint64_t udp_packets = 0;
     uint64_t udp_frags = 0;
+    uint64_t aborted_handshakes = 0;
 };
 
 THREAD_LOCAL SocksStats socks_stats = {};
@@ -149,7 +150,7 @@ TEST_GROUP(SocksSplitterTests)
     Flow* flow;
     SocksFlowData* flow_data;
 
-    void setup()
+    void setup() override
     {
         SocksFlowData::init();
 
@@ -163,7 +164,7 @@ TEST_GROUP(SocksSplitterTests)
         flow->set_flow_data(flow_data);
     }
 
-    void teardown()
+    void teardown() override
     {
         delete client_splitter;
         delete server_splitter;
@@ -434,7 +435,7 @@ TEST(SocksSplitterTests, test_invalid_version_byte)
 TEST(SocksSplitterTests, test_minimum_packet_size)
 {
     // Too small to be any valid SOCKS message
-    uint8_t data[] = {0x05};
+    const uint8_t data[] = {0x05};
     uint32_t fp = 0;
 
     flow_data->set_state(SOCKS_STATE_INIT);
@@ -607,6 +608,34 @@ TEST(SocksSplitterTests, test_socks4_response_version_field)
     CHECK_EQUAL(StreamSplitter::SEARCH, result_invalid);  // Should reject
 }
 
+
+// ===== FLUSH-BUDGET / RESOURCE-EXHAUSTION TESTS =====
+
+TEST(SocksSplitterTests, test_repeated_greeting_flush_budget_aborts)
+{
+    // Regression for SOCKS5 auth-negotiation flush amplification.
+    uint8_t greeting[] = {0x05, 0x01, 0x00};
+    uint32_t fp = 0;
+
+    flow_data->set_state(SOCKS_STATE_V5_AUTH_NEGOTIATION);
+    socks_stats.aborted_handshakes = 0;
+
+    for (int i = 0; i < 32; i++)
+    {
+        fp = 0;
+        StreamSplitter::Status r = client_splitter->scan(
+            packet, greeting, sizeof(greeting), PKT_FROM_CLIENT, &fp);
+        CHECK_EQUAL(StreamSplitter::FLUSH, r);
+        CHECK_EQUAL(3, fp);
+    }
+    CHECK_EQUAL(0, socks_stats.aborted_handshakes);
+
+    fp = 0;
+    StreamSplitter::Status r = client_splitter->scan(
+        packet, greeting, sizeof(greeting), PKT_FROM_CLIENT, &fp);
+    CHECK_EQUAL(StreamSplitter::ABORT, r);
+    CHECK_EQUAL(1, socks_stats.aborted_handshakes);
+}
 
 // ===== RUN ALL TESTS =====
 

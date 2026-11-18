@@ -67,6 +67,7 @@ struct GetProfileFunctor
 
 struct GetProfileFromModule : public GetProfileFunctor
 {
+    // UNIT_TEST retains the mutable module for get_profile().
     GetProfileFromModule(const std::string& pn, Module* m) :
         GetProfileFunctor(pn), mod_name(m->get_name())
     {
@@ -77,7 +78,7 @@ struct GetProfileFromModule : public GetProfileFunctor
 
     ProfileStats* operator()() override
     {
-        Module* mod = PluginManager::get_module(mod_name.c_str());
+        const Module* mod = PluginManager::get_module(mod_name.c_str());
 
 #ifdef UNIT_TEST
         if ( !mod )
@@ -308,9 +309,16 @@ static bool rotate_file(const char* old_file, FILE* old_fd,
         return false;
     }
 
-    // Mostly file mode is "a", so can't use rewind() or fseek(). Had to close and reopen.
+    // Mostly file mode is "a", so can't use rewind() or fseek(). Open a read handle before
+    // closing the active handle so the caller retains a usable stream if reopening fails.
+    FILE* read_fd = fopen(old_file, "r");
+    if (!read_fd)
+    {
+        ErrorMessage("Profiler: Unable to reopen Memtracker stats file \"%s\".\n", old_file);
+        return false;
+    }
     fclose(old_fd);
-    old_fd = fopen(old_file, "r");
+    old_fd = read_fd;
 
     // Fetching the first timestamp from the file and renaming it by appending the time
     int line = 0;
@@ -334,7 +342,7 @@ static bool rotate_file(const char* old_file, FILE* old_fd,
             ts = time(nullptr);
         else
         {
-            char* p = strtok(line_str, ",");
+            const char* p = strtok(line_str, ",");
             ts = atoll(p);
         }
     }
@@ -360,7 +368,6 @@ static bool rotate_file(const char* old_file, FILE* old_fd,
     else  // Otherwise, if it does exist, append data from current stats file to it
     {
         char read_buf[4096];
-        size_t num_read, num_wrote;
         int rotate_index = 0;
         char rotate_file_with_index[PATH_MAX];
 
@@ -433,7 +440,7 @@ static bool rotate_file(const char* old_file, FILE* old_fd,
                     }
                 }
 
-                num_read = strlen(read_buf);
+                const size_t num_read = strlen(read_buf);
 
                 if (num_read > 0)
                 {
@@ -468,8 +475,8 @@ static bool rotate_file(const char* old_file, FILE* old_fd,
                         }
                     }
 
-                    num_wrote = fprintf(rotate_fh, "%s", read_buf);
-                    if ((num_wrote != num_read) && ferror(rotate_fh))
+                    const int num_wrote = fprintf(rotate_fh, "%s", read_buf);
+                    if (num_wrote < 0 or static_cast<size_t>(num_wrote) != num_read)
                     {
                         // A bad write occurred
                         ErrorMessage("Profiler: Error writing to Memtracker "

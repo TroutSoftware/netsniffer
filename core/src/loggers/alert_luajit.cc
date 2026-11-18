@@ -133,6 +133,7 @@ public:
 
     void alert(Packet*, const char*, const Event&) override;
 
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static const struct LogApi* get_api();
 
 private:
@@ -158,7 +159,6 @@ LuaJitLogger::LuaJitLogger(const char* name, std::string& chunk, LuaLogModule* m
 
 void LuaJitLogger::alert(Packet* p, const char*, const Event& e)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(luaLogPerfStats);
 
     packet = p;
@@ -199,7 +199,7 @@ static Logger* log_ctor(Module* m)
     if ( !chunk )
         return nullptr;
 
-    LuaLogModule* mod = (LuaLogModule*)m;
+    LuaLogModule* mod = static_cast<LuaLogModule*>(m);
     return new LuaJitLogger(key, *chunk, mod);
 }
 
@@ -228,4 +228,3 @@ static const LogApi log_lua_api =
 };
 
 const LogApi* log_luajit = &log_lua_api;
-

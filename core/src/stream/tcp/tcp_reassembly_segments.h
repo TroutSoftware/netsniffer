@@ -29,6 +29,7 @@
 #include "tcp_segment_node.h"
 
 namespace snort { struct Packet; }
+namespace snort { class Flow; }
 
 class TcpOverlapResolver;
 class TcpOverlapState;
@@ -46,7 +47,8 @@ public:
     void reset();
 
     void update_next(TcpSegmentNode*);
-    bool segment_within_seglist_window(TcpSegmentDescriptor&);
+    bool segment_within_seglist_window(const TcpSegmentDescriptor&, uint32_t);
+    uint32_t get_segment_length_in_footprint(const TcpSegmentDescriptor&, uint32_t) const;
     void queue_reassembly_segment(TcpSegmentDescriptor&);
     void add_reassembly_segment(TcpSegmentDescriptor&, uint16_t, uint32_t,
         uint32_t, uint32_t, TcpSegmentNode*);
@@ -55,10 +57,10 @@ public:
     void advance_rcv_nxt(TcpSegmentNode *tsn = nullptr);
     void purge_flushed_segments(uint32_t flush_seq);
     bool skip_holes(snort::Packet* p);
-    void skip_midstream_pickup_seglist_hole(TcpSegmentDescriptor&);
+    void skip_midstream_pickup_seglist_hole(const TcpSegmentDescriptor&);
     bool skip_hole_at_beginning(TcpSegmentNode*);
     void purge_segment_list();
-    void print_stream_state(TcpStreamTracker* talker);
+    void print_stream_state(const TcpStreamTracker* talker);
 
     bool is_segment_pending_flush() const;
 
@@ -90,6 +92,7 @@ public:
     { return seg_bytes_logical; }
 
 private:
+    uint32_t get_seglist_footprint_base_seq() const;
     void insert_segment_data(TcpSegmentNode* prev, TcpSegmentNode*);
     void purge_segments_left_of_hole(const TcpSegmentNode*);
     void flush_before_purge(snort::Packet* p);
@@ -139,28 +142,7 @@ private:
         seg_count--;
     }
 
-    uint32_t purge()
-    {
-        int i = 0;
-
-        while ( head )
-        {
-            i++;
-            TcpSegmentNode* dump_me = head;
-            head = head->next;
-            dump_me->term();
-        }
-
-        head = tail = cur_rseg = cur_sseg = nullptr;
-        seg_count = 0;
-        flush_count = 0;
-        seg_bytes_total = 0;
-        seg_bytes_logical = 0;
-        total_bytes_queued = 0;
-        total_segs_queued = 0;
-        overlap_count = 0;
-        return i;
-    }
+    uint32_t purge();
 
 public:
     TcpSegmentNode* head = nullptr;
@@ -180,6 +162,10 @@ public:
     uint32_t overlap_count = 0;         /* overlaps encountered */
 
     TcpSession* session = nullptr;
+    // Cached session->flow, resolved once in init(). The owning flow is
+    // fixed for the session's lifetime, so the per-segment accounting
+    // hot path avoids re-chasing session->flow on every insert/delete.
+    snort::Flow* flow = nullptr;
     TcpStreamTracker* tracker = nullptr;
     TcpOverlapResolver* overlap_resolver = nullptr;
     TcpOverlapState* tos = nullptr;
@@ -188,10 +174,8 @@ private:
     void insert_segment_in_empty_seglist(TcpSegmentDescriptor&);
     void insert_segment_in_seglist(TcpSegmentDescriptor&);
 
-    bool is_segment_fasttrack(TcpSegmentNode*, const TcpSegmentDescriptor&);
+    static bool is_segment_fasttrack(const TcpSegmentNode*, const TcpSegmentDescriptor&);
     uint32_t get_pending_segment_count(const unsigned max) const;
-
 };
 
 #endif
-

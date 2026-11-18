@@ -43,6 +43,12 @@ constexpr uint8_t allowlist_lru_index = max_protocols;
 constexpr uint8_t total_lru_count = max_protocols + 1;
 constexpr uint64_t all_lru_mask = (1ULL << max_protocols) - 1;
 constexpr uint8_t first_proto = to_utype(PktType::NONE) + 1;
+constexpr uint64_t proto_lru_mask = all_lru_mask & ~((1ULL << first_proto) - 1);
+constexpr uint8_t rotated_lru_count = total_lru_count - first_proto;
+
+#ifdef ALLOWLIST_MOVE_ON_EXCESS
+constexpr unsigned allowlist_admission_scan_cap = 8;
+#endif
 
 namespace snort
 {
@@ -80,9 +86,11 @@ public:
     unsigned purge();
     unsigned get_count();
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     unsigned get_max_flows() const
     { return config.max_flows; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     PegCount get_total_prunes() const
     { return prune_stats.get_total(); }
 
@@ -92,9 +100,11 @@ public:
     PegCount get_proto_prune_count(PruneReason reason, PktType type) const
     { return prune_stats.get_proto_prune_count(reason,type); }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     PegCount get_total_deletes() const
     { return delete_stats.get_total(); }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     PegCount get_deletes(FlowDeleteState state) const
     { return delete_stats.get(state); }
 
@@ -102,9 +112,12 @@ public:
     {
         prune_stats = PruneStats();
         delete_stats = FlowDeleteStats();
+        released_max_flow_mem = 0;
+        released_total_flow_mem = 0;
     }
 
     void unlink_uni(snort::Flow*);
+    void relink_uni(snort::Flow*);
 
     void set_flow_cache_config(const FlowCacheConfig& cfg)
     { config = cfg; }
@@ -113,6 +126,8 @@ public:
     { return config; }
 
     bool move_to_allowlist(snort::Flow* f);
+
+    void allowlist_on_excess_check(time_t now);
 
     template<typename StreamType>
     void output_flow(StreamType&, const snort::Flow&, const struct timeval&) const;
@@ -124,8 +139,20 @@ public:
     PegCount get_lru_flow_count(uint8_t lru_idx) const;
     PegCount get_excess_to_allowlist_count() const
     { return excess_to_allowlist_count; }
+
+    PegCount get_released_max_flow_mem() const
+    { return released_max_flow_mem; }
+
+    PegCount get_released_total_flow_mem() const
+    { return released_total_flow_mem; }
 #ifdef UNIT_TEST
     size_t count_flows_in_lru(uint8_t lru_index) const;
+
+    unsigned get_last_excess_examined() const
+    { return last_excess_examined; }
+
+    unsigned get_excess_walk_calls() const
+    { return excess_walk_calls; }
 #endif
 
 private:
@@ -139,23 +166,35 @@ private:
     bool handle_allowlist_pruning(snort::Flow*, PruneReason, uint8_t, bool&);
 
     unsigned delete_active_flows(unsigned mode, unsigned num_to_delete, unsigned &deleted);
- 
-    inline bool is_allowlist_on_excess() const
-    { return config.allowlist_cache and config.move_to_allowlist_on_excess; }
 
-    inline bool is_lru_checked(uint64_t checked_lrus_mask, uint64_t lru_mask)
+    inline bool is_allowlist_on_excess() const
+    {
+#ifdef ALLOWLIST_MOVE_ON_EXCESS
+        return config.allowlist_cache and config.move_to_allowlist_on_excess
+            and config.allowlist_max_excess_flows > 0
+            and config.allowlist_max_excess_flows < config.max_flows;
+#else
+        return false;
+#endif
+    }
+
+    static inline bool is_lru_checked(uint64_t checked_lrus_mask, uint64_t lru_mask)
     { return (checked_lrus_mask & lru_mask) != 0; }
 
-    inline bool all_lrus_checked(uint64_t checked_lrus_mask)
+    static inline bool all_lrus_checked(uint64_t checked_lrus_mask)
     { return checked_lrus_mask == all_lru_mask; }
 
-    inline void mark_lru_checked(uint64_t& checked_lrus_mask, uint64_t lru_mask)
+    static inline bool all_proto_lrus_checked(uint64_t checked_lrus_mask)
+    { return (checked_lrus_mask & proto_lru_mask) == proto_lru_mask; }
+
+    static inline void mark_lru_checked(uint64_t& checked_lrus_mask, uint64_t lru_mask)
     { checked_lrus_mask |= lru_mask; }
 
-    inline uint64_t get_lru_mask(uint8_t lru_idx)
+    static inline uint64_t get_lru_mask(uint8_t lru_idx)
     { return 1ULL << lru_idx; }
 
-    inline void mark_lru_checked(uint64_t& checked_lrus_mask, uint64_t& empty_lru_masks, uint64_t lru_mask)
+    static inline void mark_lru_checked(uint64_t& checked_lrus_mask, uint64_t& empty_lru_masks,
+        uint64_t lru_mask)
     {
         checked_lrus_mask |= lru_mask;
         empty_lru_masks |= lru_mask;
@@ -163,21 +202,36 @@ private:
 
     inline void log_flow_release(const snort::Flow* flow, PruneReason reason) const;
 
-private:
-    uint8_t timeout_idx;
-    static const unsigned cleanup_flows = 1;
-    FlowCacheConfig config;
-    uint32_t flags;
+#ifdef REG_TEST
+    void log_allowlist_timeouts(time_t) const;
+#endif
 
-    ZHash* hash_table;
-    FlowUniList* uni_flows;
-    FlowUniList* uni_ip_flows;
+private:
+    static const unsigned cleanup_flows = 1;
+    // bound the per-call cost of walking past flows that cannot be taken; see dev_notes.txt
+    static const unsigned max_blocked_unlink_per_prune = 256;
+    static const unsigned max_excess_examined_per_prune = 256;
+
+    FlowCacheConfig config;
+    uint32_t flags = 0;
+
+    ZHash* hash_table = nullptr;
+    FlowUniList* uni_flows = nullptr;
+    FlowUniList* uni_ip_flows = nullptr;
 
     PruneStats prune_stats;
     FlowDeleteStats delete_stats;
-    uint64_t empty_lru_mask;
+    uint64_t empty_lru_mask = 0;
     PegCount excess_to_allowlist_count = 0;
+#ifdef UNIT_TEST
+    unsigned last_excess_examined = 0;
+    unsigned excess_walk_calls = 0;
+#endif
+
+    // flow-memory accounting, sampled at release/retire.
+    // read Flow::get_mem_usage() directly rather than these pegs for specific flow memory
+    PegCount released_max_flow_mem = 0;
+    PegCount released_total_flow_mem = 0;
 
 };
 #endif
-

@@ -352,9 +352,9 @@ static inline void SSLPP_process_other(const SSL_PROTO_CONF* config, SSLData* sd
 
 // Analyzes SSL packets for anomalies/exploits.
 
-static void snort_ssl(SSL_PROTO_CONF* config, Packet* p, Ssl* inspector)
+static void snort_ssl(const SSL_PROTO_CONF* config, Packet* p, Ssl* inspector)
 {
-    Profile profile(sslPerfStats);  // cppcheck-suppress unreadVariable
+    Profile profile(sslPerfStats);
 
     /* Attempt to get a previously allocated SSL block. */
     SslBaseFlowData* base_fd = static_cast<SslBaseFlowData*>(p->flow->get_flow_data(SslFlowData::get_ssl_inspector_id()));
@@ -576,9 +576,10 @@ public:
 
     void handle(DataEvent& e, Flow*) override
     {
-        FinalizePacketEvent* fp_event = (FinalizePacketEvent*)&e;
-        const Packet* pkt = fp_event->get_packet();
-        SslBaseFlowData* base_fd = (SslBaseFlowData*)pkt->flow->get_flow_data(SslBaseFlowData::get_ssl_inspector_id());
+        const auto& fp_event = static_cast<const FinalizePacketEvent&>(e);
+        const Packet* pkt = fp_event.get_packet();
+        SslBaseFlowData* base_fd = static_cast<SslBaseFlowData*>(
+            pkt->flow->get_flow_data(SslBaseFlowData::get_ssl_inspector_id()));
         SslFlowData* fd = (base_fd and base_fd->get_handler() == ssl_inspector) ? static_cast<SslFlowData*>(base_fd) : nullptr;
         if (fd and fd->finalize_info.switch_in)
         {
@@ -650,7 +651,7 @@ static void ssl_init()
 
 static Inspector* ssl_ctor(Module* m)
 {
-    SslModule* mod = (SslModule*)m;
+    SslModule* mod = static_cast<SslModule*>(m);
     return new Ssl(mod->get_data());
 }
 
@@ -701,4 +702,3 @@ const BaseApi* sin_ssl[] =
     ips_ssl_version,
     nullptr
 };
-

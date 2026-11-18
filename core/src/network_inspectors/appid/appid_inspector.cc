@@ -49,6 +49,8 @@
 #include "appid_ha.h"
 #include "appid_http_event_handler.h"
 #include "appid_httpx_req_body_event_handler.h"
+#include "appid_mcp_event_handler.h"
+#include "appid_http_end_of_transaction_event_handler.h"
 #include "appid_opportunistic_tls_event_handler.h"
 #include "appid_peg_counts.h"
 #include "appid_service_event_handler.h"
@@ -78,7 +80,7 @@ static THREAD_LOCAL PacketTracer::TracerMute appid_mute;
 
 static void add_appid_to_packet_trace(const Flow& flow, const OdpContext& odp_context)
 {
-    AppIdSession* session = appid_api.get_appid_session(flow);
+    const AppIdSession* session = appid_api.get_appid_session(flow);
     // Skip sessions using old odp context after odp reload
     if (!session or (session->get_odp_ctxt_version() != odp_context.get_version()))
         return;
@@ -126,7 +128,6 @@ bool AppIdInspector::configure(SnortConfig* sc)
     HighAvailabilityManager::register_ha_client(MOD_NAME, APPID_HA_SUFFIX_TLS);
     sc->register_reload_handler(new AppIdHAReloadSwapper());
 
-    // cppcheck-suppress unreadVariable
     Profile profile(appid_perf_stats);
     struct rusage ru;
     long prev_maxrss = -1;
@@ -164,6 +165,7 @@ bool AppIdInspector::configure(SnortConfig* sc)
         new HttpEventHandler(HttpEventHandler::RESPONSE_EVENT, *this), *sc);
 
     DataBus::subscribe_global(http_pub_key, HttpEventIds::REQUEST_BODY, new AppIdHttpXReqBodyEventHandler(), *sc);
+    DataBus::subscribe_global(http_pub_key, HttpEventIds::END_OF_TRANSACTION, new AppIdHttpEndOfTransactionEventHandler(), *sc);
     DataBus::subscribe_global(intrinsic_pub_key, IntrinsicEventIds::DNS_PAYLOAD, new AppIdDnsPayloadEventHandler(*this), *sc);
     DataBus::subscribe_global(sip_pub_key, SipEventIds::DIALOG, new SipEventHandler(*this), *sc);
     DataBus::subscribe_global(dce_tcp_pub_key, DceTcpEventIds::EXP_SESSION, new DceExpSsnEventHandler(), *sc);
@@ -173,6 +175,9 @@ bool AppIdInspector::configure(SnortConfig* sc)
 
     DataBus::subscribe_global(external_pub_key, ExternalEventIds::EVE_PROCESS,
         new AppIdEveProcessEventHandler(*this), *sc);
+
+    DataBus::subscribe_global(external_pub_key, ExternalEventIds::MCP_DETECTED,
+        new AppIdMcpEventHandler(*this), *sc);
 
     DataBus::subscribe_global(intrinsic_pub_key, IntrinsicEventIds::OPPORTUNISTIC_TLS,
         new AppIdOpportunisticTlsEventHandler(), *sc);
@@ -203,6 +208,9 @@ void AppIdInspector::third_party_tinit()
 
 void AppIdInspector::tinit()
 {
+    if (appidDebug and config->log_all_sessions)
+        appidDebug->set_enabled(true);
+
     appid_pub_id = cached_global_pub_id;
     appid_mute = PacketTracer::get_mute();
 
@@ -221,8 +229,6 @@ void AppIdInspector::tinit()
     pkt_thread_tp_appid_ctxt = ctxt.get_tp_appid_ctxt();
     if (pkt_thread_tp_appid_ctxt)
         third_party_tinit();
-    if (appidDebug and config->log_all_sessions)
-        appidDebug->set_enabled(true);
     AppIdHAManager::tinit();
     ServiceDiscovery::set_thread_local_ftp_service();
 }
@@ -258,7 +264,6 @@ void AppIdInspector::tear_down(SnortConfig*, bool shutdown)
 
 void AppIdInspector::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(appid_perf_stats);
     appid_stats.packets++;
 
@@ -326,7 +331,7 @@ static void appid_inspector_tterm()
 static Inspector* appid_inspector_ctor(Module* m)
 {
     assert(m);
-    return new AppIdInspector((AppIdModule&)*m);
+    return new AppIdInspector(static_cast<AppIdModule&>(*m));
 }
 
 static void appid_inspector_dtor(Inspector* p)
@@ -374,4 +379,3 @@ const BaseApi* nin_appid[] =
     ips_appid,
     nullptr
 };
-

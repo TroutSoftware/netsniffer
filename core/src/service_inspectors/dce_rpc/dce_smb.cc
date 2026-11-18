@@ -352,7 +352,7 @@ void Dce2SmbInspector::show(const SnortConfig*) const
 
 void Dce2SmbInspector::eval(Packet* p)
 {
-    Profile profile(dce2_smb_pstat_main); // cppcheck-suppress unreadVariable
+    Profile profile(dce2_smb_pstat_main);
 
     DCE2_SmbSsnData* dce2_smb_sess = nullptr;
     DCE2_Smb2SsnData* dce2_smb2_sess = nullptr;
@@ -361,12 +361,15 @@ void Dce2SmbInspector::eval(Packet* p)
     if (p == nullptr)
         return;
 
-    assert(p->has_tcp_data());
-    assert(p->flow);
+    if (!(p->has_tcp_data() || p->has_udp_quic_data()) || !p->flow)
+    {
+        assert(false);
+        return;
+    }
 
     reset_using_rpkt();
 
-    Dce2SmbFlowData* smb_flowdata = (Dce2SmbFlowData*)p->flow->get_flow_data(Dce2SmbFlowData::inspector_id);
+    Dce2SmbFlowData* smb_flowdata = static_cast<Dce2SmbFlowData*>(p->flow->get_flow_data(Dce2SmbFlowData::inspector_id));
     if (smb_flowdata and smb_flowdata->dce2_smb_session_data)
     {
         smb_version = smb_flowdata->smb_version;
@@ -459,7 +462,10 @@ static void dce2_smb_init()
 
 static void dce2_smb_tinit()
 {
+    // Must exist before the delete below, whose destructor cascade erases nodes from it.
+    DCE2_Smb2FtrackerLruInit();
     delete smb2_session_cache;
+    smb2_session_cache = nullptr;
     DCE2_SmbSessionCacheInit(smb_memcap);
 }
 
@@ -467,11 +473,12 @@ static void dce2_smb_tterm()
 {
     delete smb2_session_cache;
     smb2_session_cache = nullptr;
+    DCE2_Smb2FtrackerLruTerm();
 }
 
 static Inspector* dce2_smb_ctor(Module* m)
 {
-    Dce2SmbModule* mod = (Dce2SmbModule*)m;
+    Dce2SmbModule* mod = static_cast<Dce2SmbModule*>(m);
     dce2SmbProtoConf config;
     mod->get_data(config);
     smb_memcap = DCE2_ScSmbMemcap(&config);
@@ -518,4 +525,3 @@ const InspectApi dce2_smb_api =
     nullptr, // ssn
     nullptr  // reset
 };
-

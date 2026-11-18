@@ -87,8 +87,8 @@ void* ZHash::remove(uint8_t type)
 
 void* ZHash::push(void* p)
 {
-    auto node = (HashNode*)mem_allocator->allocate();
-    node->key = (char*)node + sizeof(HashNode);
+    auto node = static_cast<HashNode*>(mem_allocator->allocate());
+    node->key = reinterpret_cast<char*>(node) + sizeof(HashNode);
     node->data = p;
     save_free_node(node);
     return node->key;
@@ -109,21 +109,21 @@ void* ZHash::pop()
 void* ZHash::lru_first(uint8_t type)
 {
     assert(type < num_lru_caches);
-    HashNode* node = lru_caches[type]->get_lru_node();
+    const HashNode* node = lru_caches[type]->get_lru_node();
     return node ? node->data : nullptr;
 }
 
 void* ZHash::lru_next(uint8_t type)
 {
     assert(type < num_lru_caches);
-    HashNode* node = lru_caches[type]->get_next_lru_node();
+    const HashNode* node = lru_caches[type]->get_next_lru_node();
     return node ? node->data : nullptr;
 }
 
 void* ZHash::lru_current(uint8_t type)
 {
     assert(type < num_lru_caches);
-    HashNode* node = lru_caches[type]->get_current_node();
+    const HashNode* node = lru_caches[type]->get_current_node();
     return node ? node->data : nullptr;
 }
 

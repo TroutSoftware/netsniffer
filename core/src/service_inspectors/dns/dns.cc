@@ -62,8 +62,8 @@ const PegInfo dns_peg_names[] =
     { CountType::NOW, "concurrent_sessions", "total concurrent dns sessions" },
     { CountType::MAX, "max_concurrent_sessions", "maximum concurrent dns sessions" },
     { CountType::SUM, "aborted_sessions", "total dns sessions aborted" },
+    { CountType::SUM, "name_len_exceeded", "total dns names truncated at limit" },
     { CountType::SUM, "malformed_name_dropped", "packets dropped due to domain name exceeding 255-octet limit" },
-
     { CountType::END, nullptr, nullptr }
 };
 
@@ -110,7 +110,7 @@ static DNSData* SetNewDNSData(Packet* p, bool udp)
     return &fd->session;
 }
 
-bool DNSData::valid_dns(const DNSHdr& dns_header) const
+bool DNSData::valid_dns(const DNSHdr& dns_header)
 {
     // Check QR bit (Query/Response)
     bool is_query = ((dns_header.flags & 0x8000) == 0);
@@ -411,12 +411,27 @@ static uint16_t ParseDNSName(
                     }
                 }
 
-                if (parse_dns_name)
+                if (parse_dns_name && !dnsSessionData->curr_txt.name_len_capped)
                 {
-                    if (!dnsSessionData->curr_txt.dns_name.empty())
-                        dnsSessionData->curr_txt.dns_name += ".";
+                    // RFC 1035 §2.3.4: label <= 63 octets, name <= 255 wire octets.
+                    // The maximum dotted-text representation of a wire-valid name is 253 chars.
+                    // txt_len (full label size from wire) is used for the per-label check so that
+                    // labels split across TCP segments are correctly detected when overlong.
+                    // Once the cap fires, all further appends for this name are skipped.
+                    const size_t dot_len = dnsSessionData->curr_txt.dns_name.empty() ? 0 : 1;
+                    if (dnsSessionData->curr_txt.txt_len <= 63 &&
+                        dnsSessionData->curr_txt.dns_name.size() + dot_len + bytes_required <= 253)
+                    {
+                        if (dot_len)
+                            dnsSessionData->curr_txt.dns_name += ".";
 
-                    dnsSessionData->curr_txt.dns_name.append(reinterpret_cast<const char*>(data), bytes_required);
+                        dnsSessionData->curr_txt.dns_name.append(reinterpret_cast<const char*>(data), bytes_required);
+                    }
+                    else
+                    {
+                        dnsstats.name_len_exceeded++;
+                        dnsSessionData->curr_txt.name_len_capped = true;
+                    }
                 }
 
                 data += bytes_required;
@@ -649,7 +664,7 @@ static uint16_t ParseDNSAnswer(
 }
 
 // Get the DNS transaction ID from a UDP packet's data field
-static inline uint16_t get_udp_trans_id(Packet* p)
+static inline uint16_t get_udp_trans_id(const Packet* p)
 {
     // The length of packet's data field should have already been validated
     return (static_cast<uint16_t>(p->data[0]) << 8) | static_cast<uint16_t>(p->data[1]);
@@ -715,7 +730,7 @@ static uint16_t CheckRRTypeTXTVuln(
 
     while (dnsSessionData->curr_txt.name_state != DNS_RESP_STATE_RR_NAME_COMPLETE)
     {
-        if (dnsSessionData->bytes_seen_curr_rec == dnsSessionData->curr_rr.length)
+        if (dnsSessionData->bytes_seen_curr_rec >= dnsSessionData->curr_rr.length)
         {
             /* Done with the name */
             dnsSessionData->curr_txt.name_state = DNS_RESP_STATE_RR_NAME_COMPLETE;
@@ -771,6 +786,14 @@ static uint16_t CheckRRTypeTXTVuln(
             }
         /* Fall through */
         case DNS_RESP_STATE_RR_NAME:
+        {
+            uint16_t rec_remain =
+                (dnsSessionData->bytes_seen_curr_rec < dnsSessionData->curr_rr.length)
+                    ? (uint16_t)(dnsSessionData->curr_rr.length -
+                                 dnsSessionData->bytes_seen_curr_rec)
+                    : 0;
+            if (bytes_required > rec_remain)
+                bytes_required = rec_remain;
             if (bytes_required <= bytes_unused)
             {
                 bytes_unused -= bytes_required;
@@ -789,6 +812,7 @@ static uint16_t CheckRRTypeTXTVuln(
                 return 0;
             }
             break;
+        }
         }
 
         /* Go to the next portion of the name */
@@ -858,8 +882,12 @@ static uint16_t ParseDNSRData(
     case DNS_RR_TYPE_AAAA:
         if (dnsSessionData->publish_response())
         {
-            dnsSessionData->dns_events.add_fqdn(dnsSessionData->cur_fqdn_event, dnsSessionData->curr_rr.ttl);
-            dnsSessionData->dns_events.add_ip(DnsResponseIp(data, dnsSessionData->curr_rr.type));
+            uint16_t need = (dnsSessionData->curr_rr.type == DNS_RR_TYPE_A) ? 4 : 16;
+            if (dnsSessionData->curr_rr.length == need and bytes_unused >= need)
+            {
+                dnsSessionData->dns_events.add_fqdn(dnsSessionData->cur_fqdn_event, dnsSessionData->curr_rr.ttl);
+                dnsSessionData->dns_events.add_ip(DnsResponseIp(data, dnsSessionData->curr_rr.type));
+            }
         }
 
         bytes_unused = SkipDNSRData(data, bytes_unused, dnsSessionData);
@@ -879,7 +907,8 @@ static uint16_t ParseDNSRData(
     return bytes_unused;
 }
 
-static void ParseDNSResponseMessage(Packet* p, DNSData* dnsSessionData, bool& needNextPacket, bool udp)
+static void ParseDNSResponseMessage(
+    const Packet* p, DNSData* dnsSessionData, bool& needNextPacket, bool udp)
 {
     uint16_t bytes_unused = p->dsize;
     int i;
@@ -1133,13 +1162,13 @@ SfIp DnsResponseIp::get_ip()
             break;
     }
 
-    if (family and strlen((const char*)data))
+    if (family and data)
         ip.set(data, family);
 
     return ip;
 }
 
-DnsResponseFqdn::DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, DNSData* dnsSessionData) :
+DnsResponseFqdn::DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, const DNSData* dnsSessionData) :
     data(data), bytes_unused(bytes_unused), dnsSessionData(std::make_shared<DNSData>(*dnsSessionData))
 {
     // Clear cur_fqdn_event in the copied DNSData to prevent nested object chains
@@ -1187,7 +1216,6 @@ void Dns::show(const SnortConfig*) const
 
 void Dns::snort_dns(Packet* p, bool udp, bool is_payload)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(dnsPerfStats);
 
     ++dnsstats.packets;
@@ -1393,4 +1421,3 @@ const BaseApi* sin_dns[] =
     nullptr
 };
 #endif
-

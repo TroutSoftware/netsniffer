@@ -127,7 +127,8 @@ bool HostPortCache::add(const SnortConfig*, const SfIp* ip, uint16_t port, IpPro
     HostPortVal hv;
 
     hk.ip = *ip;
-    AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+    AppIdInspector* inspector =
+        static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     assert(inspector);
 
     const AppIdContext& ctxt = inspector->get_ctxt();
@@ -173,7 +174,7 @@ const HostAppIdsVal* HostPortCache::find_on_first_pkt(const SfIp* ip, uint16_t p
     return nullptr;
 }
 
-bool HostPortCache::add_host(const SnortConfig*, const SfIp* ip, uint32_t* netmask, uint16_t port, IpProtocol proto,
+bool HostPortCache::add_host(const SnortConfig*, const SfIp* ip, const uint32_t* netmask, uint16_t port, IpProtocol proto,
     AppId protocol_appId, AppId client_appId, AppId web_appId, unsigned reinspect)
 {
     if (!netmask)
@@ -182,7 +183,8 @@ bool HostPortCache::add_host(const SnortConfig*, const SfIp* ip, uint32_t* netma
         HostAppIdsVal hv;
 
         hk.ip = *ip;
-        AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+        AppIdInspector* inspector =
+            static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
         assert(inspector);
 
         const AppIdContext& ctxt = inspector->get_ctxt();
@@ -208,7 +210,8 @@ bool HostPortCache::add_host(const SnortConfig*, const SfIp* ip, uint32_t* netma
 
         memcpy(&hk.netmask[0], netmask, 16);
 
-        AppIdInspector* inspector = (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+        AppIdInspector* inspector =
+            static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
         assert(inspector);
 
         const AppIdContext& ctxt = inspector->get_ctxt();
@@ -227,7 +230,7 @@ bool HostPortCache::add_host(const SnortConfig*, const SfIp* ip, uint32_t* netma
 
 void HostPortCache::dump()
 {
-    for ( auto& kv : cache )
+    for ( const auto& kv : cache )
     {
         char inet_buffer[INET6_ADDRSTRLEN];
 
@@ -239,4 +242,3 @@ void HostPortCache::dump()
             inet_buffer, hk.port, (unsigned)hk.proto, hv.type, hv.appId);
     }
 }
-

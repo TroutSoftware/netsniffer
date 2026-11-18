@@ -26,7 +26,6 @@
 
 #include "main/snort_types.h"
 
-
 // process oriented services like signal handling, heap info, etc.
 
 enum PigSignal
@@ -69,11 +68,10 @@ void ClosePidFile();
 bool SetUidGid(int, int);
 void InitGroups(int, int);
 
-bool EnterChroot(std::string& root_dir, std::string& log_dir);
+bool EnterChroot(const std::string& root_dir, std::string& log_dir);
 
 #if defined(NOCOREFILE)
 void SetNoCores();
 #endif
 
 #endif
-

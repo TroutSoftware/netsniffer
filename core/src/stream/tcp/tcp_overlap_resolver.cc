@@ -29,8 +29,10 @@
 
 #include "tcp_module.h"
 #include "tcp_normalizers.h"
+#include "tcp_reassembler.h"
 #include "tcp_segment_node.h"
 #include "tcp_session.h"
+#include "tcp_stream_tracker.h"
 
 using namespace snort;
 
@@ -40,28 +42,28 @@ TcpOverlapState::TcpOverlapState(TcpReassemblySegments& seglist)
     tcp_ips_data = Normalize_GetMode(NORM_TCP_IPS);
 }
 
-void TcpOverlapState::init(TcpSegmentDescriptor& tsd)
+void TcpOverlapState::init(TcpSegmentDescriptor& descriptor)
 {
     int32_t dist_head = 0, dist_tail = 0;
 
     if ( seglist.head && seglist.tail )
     {
-        if ( SEQ_GT(tsd.get_seq(), seglist.head->start_seq()) )
-            dist_head = tsd.get_seq() - seglist.head->start_seq();
+        if ( SEQ_GT(descriptor.get_seq(), seglist.head->start_seq()) )
+            dist_head = descriptor.get_seq() - seglist.head->start_seq();
         else
-            dist_head = seglist.head->start_seq() - tsd.get_seq();
+            dist_head = seglist.head->start_seq() - descriptor.get_seq();
 
-        if ( SEQ_GT(tsd.get_seq(), seglist.tail->start_seq()) )
-            dist_tail = tsd.get_seq() - seglist.tail->start_seq();
+        if ( SEQ_GT(descriptor.get_seq(), seglist.tail->start_seq()) )
+            dist_tail = descriptor.get_seq() - seglist.tail->start_seq();
         else
-            dist_tail = seglist.tail->start_seq() - tsd.get_seq();
+            dist_tail = seglist.tail->start_seq() - descriptor.get_seq();
     }
 
     left = right = nullptr;
     if ( dist_head < dist_tail )
     {
         right = seglist.head;
-        while ( right and SEQ_LT(right->start_seq(), tsd.get_seq()) )
+        while ( right and SEQ_LT(right->start_seq(), descriptor.get_seq()) )
         {
             left = right;
             right = right->next;
@@ -70,25 +72,25 @@ void TcpOverlapState::init(TcpSegmentDescriptor& tsd)
     else
     {
         left = seglist.tail;
-        while ( left and SEQ_GEQ(left->start_seq(), tsd.get_seq()) )
+        while ( left and SEQ_GEQ(left->start_seq(), descriptor.get_seq()) )
         {
             right = left;
             left = left->prev;
         }
     }
 
-    this->tsd = &tsd;
-    seq = tsd.get_seq();
-    seq_end = tsd.get_end_seq();
-    len = tsd.get_len();
+    tsd = &descriptor;
+    seq = descriptor.get_seq();
+    seq_end = descriptor.get_end_seq();
+    len = descriptor.get_len();
 
     overlap = 0;
     slide = 0;
     trunc_len = 0;
 
-    rdata = tsd.get_pkt()->data;
-    rsize = tsd.get_len();
-    rseq = tsd.get_seq();
+    rdata = descriptor.get_pkt()->data;
+    rsize = descriptor.get_len();
+    rseq = descriptor.get_seq();
 
     keep_segment = true;
 }
@@ -277,7 +279,7 @@ void TcpOverlapResolver::left_overlap_trim_first(TcpOverlapState& tos)
         else
         {
             /* Otherwise, trim the old data accordingly */
-            tos.left->length -= ( int16_t )tos.overlap;
+            tos.left->trim_back(( uint16_t )tos.overlap);
             tos.seglist.seg_bytes_logical -= tos.overlap;
         }
     }
@@ -290,6 +292,7 @@ void TcpOverlapResolver::left_overlap_keep_last(TcpOverlapState& tos)
     tos.overlap = tos.left->next_seq() - tos.seq;
     if ( tos.overlap > 0 )
     {
+        tos.seglist.tracker->reassembler->fallback_on_scanned_overlap(tos.seq);
         tcpStats.overlaps++;
         tos.seglist.overlap_count++;
 
@@ -303,37 +306,16 @@ void TcpOverlapResolver::left_overlap_keep_last(TcpOverlapState& tos)
              */
             tos.seglist.dup_reassembly_segment(tos.left, &tos.right);
 
-            tos.left->length -= tos.overlap;
-
-            // The slide invariant (tos.seq >= r_win_base >= start_seq + cursor)
-            // guarantees cursor <= new length, but clamp defensively.
-            if ( tos.left->cursor > tos.left->length )
-                tos.left->cursor = tos.left->length;
+            tos.left->trim_back((uint16_t)tos.overlap);
 
             uint32_t delta = tos.seq_end - tos.left->start_seq();
-            tos.right->length -= (uint16_t)delta;
-            tos.right->offset += (uint16_t)delta;
-
-            // Rebase cursor: it was relative to the pre-split left's offset,
-            // but the right's offset has shifted by delta.  Clamp so it cannot
-            // exceed the right's new length.
-            if ( tos.right->cursor > (uint16_t)delta )
-                tos.right->cursor -= (uint16_t)delta;
-            else
-                tos.right->cursor = 0;
-
-            if ( tos.right->cursor > tos.right->length )
-                tos.right->cursor = tos.right->length;
+            tos.right->trim_front((uint16_t)delta);
 
             tos.seglist.seg_bytes_logical -= tos.len;
         }
         else
         {
-            tos.left->length -= (int16_t)tos.overlap;
-
-            if ( tos.left->cursor > tos.left->length )
-                tos.left->cursor = tos.left->length;
-
+            tos.left->trim_back((uint16_t)tos.overlap);
             tos.seglist.seg_bytes_logical -= tos.overlap;
         }
     }
@@ -348,8 +330,7 @@ void TcpOverlapResolver::right_overlap_truncate_existing(TcpOverlapState& tos)
     else
     {
         /* partial overlap */
-        tos.right->offset += tos.overlap;
-        tos.right->length -= ( int16_t )tos.overlap;
+        tos.right->trim_front(( uint16_t )tos.overlap);
         tos.seglist.seg_bytes_logical -= tos.overlap;
     }
 }
@@ -360,7 +341,9 @@ void TcpOverlapResolver::right_overlap_truncate_new(TcpOverlapState& tos)
     {
         unsigned offset = tos.right->start_seq() - tos.tsd->get_seq();
         unsigned length = tos.tsd->get_seq() + tos.tsd->get_len() - tos.right->start_seq();
-        tos.tsd->rewrite_payload(offset, tos.right->payload(), length);
+
+        if ( offset < tos.tsd->get_len() and length <= tos.tsd->get_len() - offset )
+            tos.tsd->rewrite_payload(offset, tos.right->payload(), length);
     }
 
     norm_stats[PC_TCP_IPS_DATA][tos.tcp_ips_data]++;
@@ -375,7 +358,12 @@ void TcpOverlapResolver::full_right_overlap_truncate_new(TcpOverlapState& tos)
     if ( tos.tcp_ips_data == NORM_MODE_ON )
     {
         unsigned offset = tos.right->start_seq() - tos.tsd->get_seq();
-        tos.tsd->rewrite_payload(offset, tos.right->payload(), tos.right->length);
+
+        if ( offset < tos.tsd->get_len() and
+            tos.right->length <= tos.tsd->get_len() - offset )
+        {
+            tos.tsd->rewrite_payload(offset, tos.right->payload(), tos.right->length);
+        }
     }
 
     norm_stats[PC_TCP_IPS_DATA][tos.tcp_ips_data]++;
@@ -493,11 +481,12 @@ public:
 
 private:
     void right_overlap_truncate_existing(TcpOverlapState& tos) override
-     {
-         tos.right->offset += tos.overlap;
-         tos.right->length -= ( int16_t )tos.overlap;
-         tos.seglist.seg_bytes_logical -= tos.overlap;
-     }
+    {
+        tos.seglist.tracker->reassembler->fallback_on_scanned_overlap(
+            tos.right->start_seq());
+        tos.right->trim_front(( uint16_t )tos.overlap);
+        tos.seglist.seg_bytes_logical -= tos.overlap;
+    }
 
     void insert_left_overlap(TcpOverlapState& tos) override
     { left_overlap_keep_last(tos); }
@@ -506,7 +495,11 @@ private:
     { right_overlap_truncate_existing(tos); }
 
     void insert_full_overlap(TcpOverlapState& tos) override
-    { full_right_overlap_os4(tos); }
+    {
+        tos.seglist.tracker->reassembler->fallback_on_scanned_overlap(
+            tos.right->start_seq());
+        full_right_overlap_os4(tos);
+    }
 };
 
 class TcpOverlapResolverLinux : public TcpOverlapResolver
@@ -717,6 +710,7 @@ void TcpOverlapResolverFactory::initialize()
 
 void TcpOverlapResolverFactory::term()
 {
+    // cppcheck-suppress postfixOperator
     for ( auto sp = Overlap::Policy::FIRST; sp < Overlap::Policy::MAX_OVERLAP_POLICY; sp++ )
         delete overlap_resolvers[sp];
 }

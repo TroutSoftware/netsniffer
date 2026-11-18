@@ -404,8 +404,13 @@ public:
     ProfilerNodeMap* prof_map = nullptr;
     LatencyConfig* latency = nullptr;
 
-    unsigned remote_control_port = 0;
+    int remote_control_port = -1;
     std::string remote_control_socket;
+    uid_t control_socket_uid = static_cast<uid_t>(-1);
+    gid_t control_socket_gid = static_cast<gid_t>(-1);
+    std::string control_secret_file;
+    uint8_t* control_shared_secret = nullptr;
+    size_t control_shared_secret_len = 0;
 
     MemoryConfig* memory = nullptr;
     //------------------------------------------------------
@@ -535,13 +540,14 @@ public:
     { return run_flags & RUN_FLAG__READ; }
 
     bool ips_inline_mode() const
-    {   
-        // cppcheck-suppress nullPointer
+    {
         return get_ips_policy()->policy_mode == POLICY_MODE__INLINE; 
     }
 
     bool ips_inline_test_mode() const
-    { return get_ips_policy()->policy_mode == POLICY_MODE__INLINE_TEST; }
+    {
+        return get_ips_policy()->policy_mode == POLICY_MODE__INLINE_TEST;
+    }
 
     bool nap_inline_mode() const
     { return get_inspection_policy()->policy_mode == POLICY_MODE__INLINE; }
@@ -606,12 +612,14 @@ public:
     { return output_flags & OUTPUT_FLAG__ALERT_REFS; }
 
     // run flags
+    // cppcheck-suppress unusedFunction ; used by process.cc outside this header scan configuration
     bool no_lock_pid_file() const
     { return run_flags & RUN_FLAG__NO_LOCK_PID_FILE; }
 
     bool create_pid_file() const
     { return run_flags & RUN_FLAG__CREATE_PID_FILE; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     bool pcap_show() const
     { return run_flags & RUN_FLAG__PCAP_SHOW; }
 
@@ -624,6 +632,7 @@ public:
     bool conf_error_out() const
     { return run_flags & RUN_FLAG__CONF_ERROR_OUT; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     bool test_features() const
     { return run_flags & RUN_FLAG__TEST_FEATURES; }
 
@@ -652,9 +661,11 @@ public:
     long int get_tagged_packet_limit() const
     { return tagged_packet_limit; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     uint32_t get_max_attribute_hosts() const
     { return max_attribute_hosts; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     uint32_t get_segment_count_host() const
     { return segment_count_host; }
 
@@ -685,6 +696,7 @@ public:
     bool ip_frags_only() const
     { return (run_flags & RUN_FLAG__IP_FRAGS_ONLY) != 0; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     bool drop_stale_packets() const
     { return (run_flags & RUN_FLAG__DROP_STALE_PACKETS) != 0; }
     
@@ -694,6 +706,7 @@ public:
     void set_run_flags(RunFlag flag)
     { run_flags |= flag; }
 
+    // cppcheck-suppress unusedFunction ; installed configuration API accessor
     const std::list<ReloadResourceTuner*>& get_reload_resource_tuners() const
     { return reload_tuners; }
 
@@ -709,7 +722,9 @@ public:
 
     // FIXIT-L snort_conf needed for static hash before initialized
     static bool static_hash()
-    { return get_conf() && get_conf()->run_flags & RUN_FLAG__STATIC_HASH; }
+    {
+        return get_conf() && get_conf()->run_flags & RUN_FLAG__STATIC_HASH;
+    }
 
     static void cleanup_fatal_error();
 

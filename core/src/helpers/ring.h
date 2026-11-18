@@ -95,7 +95,7 @@ bool Ring<T>::pop()
 template <typename T>
 T Ring<T>::get(T v)
 {
-    T* p = read();
+    const T* p = read();
     if ( !p )
         return v;
     v = *p;
@@ -115,6 +115,7 @@ bool Ring<T>::put(const T& v)
 }
 
 template <typename T>
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 T* Ring<T>::grab_store(int& ix)
 {
     int i = logic.read();
@@ -143,4 +144,3 @@ bool Ring<T>::empty()
 }
 
 #endif
-

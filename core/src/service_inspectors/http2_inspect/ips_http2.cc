@@ -36,7 +36,7 @@ THREAD_LOCAL std::array<ProfileStats, PSI_MAX> Http2CursorModule::http2_ps;
 
 bool Http2CursorModule::begin(const char*, int, SnortConfig*)
 {
-    para_list.reset();
+    Http2RuleParaList::reset();
     return true;
 }
 
@@ -54,19 +54,8 @@ void Http2CursorModule::Http2RuleParaList::reset()
 {
 }
 
-uint32_t Http2IpsOption::hash() const
-{
-    return IpsOption::hash();
-}
-
-bool Http2IpsOption::operator==(const IpsOption& ips) const
-{
-    return IpsOption::operator==(ips);
-}
-
 IpsOption::EvalStatus Http2IpsOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(Http2CursorModule::http2_ps[psi]);
 
     if (!p->flow || !p->flow->gadget)
@@ -74,7 +63,8 @@ IpsOption::EvalStatus Http2IpsOption::eval(Cursor& c, Packet* p)
 
     InspectionBuffer hb;
 
-    if (! ((Http2Inspect*)(p->flow->gadget))->get_buf((unsigned)buffer_index, p, hb))
+    if (!static_cast<Http2Inspect*>(p->flow->gadget)->get_buf(
+        static_cast<unsigned>(buffer_index), p, hb))
         return NO_MATCH;
 
     c.set(key, hb.data, hb.len);
@@ -212,4 +202,3 @@ const BaseApi* ips_http2_frame_header = &frame_header_api.base;
 #ifdef REG_TEST
 const BaseApi* ips_http2_decoded_header = &decoded_header_api.base;
 #endif
-

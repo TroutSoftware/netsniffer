@@ -117,7 +117,7 @@ bool ByteExtractOption::operator==(const IpsOption& ips) const
     if (!IpsOption::operator==(ips))
         return false;
 
-    const ByteExtractOption& rhs = (const ByteExtractOption&)ips;
+    const ByteExtractOption& rhs = static_cast<const ByteExtractOption&>(ips);
     const ByteExtractData* left = &config;
     const ByteExtractData* right = &rhs.config;
 
@@ -140,7 +140,6 @@ bool ByteExtractOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus ByteExtractOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(byteExtractPerfStats);
 
     uint32_t value = 0;
@@ -180,7 +179,7 @@ void ByteExtractOption::apply_alignment(uint32_t& value)
 //-------------------------------------------------------------------------
 
 /* Checks a ByteExtractData instance for errors. */
-static bool ByteExtractVerify(ByteExtractData* data)
+static bool ByteExtractVerify(const ByteExtractData* data)
 {
     if (data->bytes_to_extract > MAX_BYTES_TO_GRAB and data->string_convert_flag == 0)
     {
@@ -389,7 +388,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* byte_extract_ctor(Module* p, IpsInfo&)
 {
-    ExtractModule* m = (ExtractModule*)p;
+    ExtractModule* m = static_cast<ExtractModule*>(p);
     ByteExtractData& data = m->data;
 
     data.var_number = AddVarNameToList(data.name);
@@ -628,7 +627,6 @@ TEST_CASE("ByteExtractOption::operator== invalid", "[ips_byte_extract]")
         ByteExtractOption rhs(data_rhs);
         CHECK(lhs != rhs);
     }
-    // cppcheck-suppress memleak
 }
 
 TEST_CASE("ByteExtractOption::hash", "[ips_byte_extract]")
@@ -890,7 +888,7 @@ TEST_CASE("Test of byte_extract_ctor", "[ips_byte_extract]")
         }
         else
         {
-            IpsOption* res_null = byte_extract_ctor(&obj, info);
+            const IpsOption* res_null = byte_extract_ctor(&obj, info);
             CHECK(res_null == nullptr);
             delete[] obj.data.name;
         }

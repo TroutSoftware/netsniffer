@@ -23,6 +23,8 @@
 
 #include "http_module.h"
 
+#include <cctype>
+
 #include "log/messages.h"
 
 #include "http_enum.h"
@@ -83,6 +85,10 @@ const Parameter HttpModule::http_params[] =
 
     { "maximum_headers", Parameter::PT_INT, "0:65535", "200",
       "alert when the number of headers in a message exceeds this value" },
+
+    { "maximum_header_value_length", Parameter::PT_INT, "-1:32768", "0",
+      "alert when the length of a header value other than Cookie and Set-Cookie exceeds "
+      "this value (0 disabled, -1 no limit)" },
 
     { "maximum_pipelined_requests", Parameter::PT_INT, "0:99", "99",
       "alert when the number of pipelined requests exceeds this value" },
@@ -181,6 +187,9 @@ const Parameter HttpModule::http_params[] =
     { "max_request_line_length", Parameter::PT_INT, "-1:49152", "0",
       "maximum length of a http request line (0 disabled, -1 no limit)" },
 
+    { "allowed_content_type", Parameter::PT_STRING, nullptr, nullptr,
+      "list of allowed Content-Type media types, '*' matches one or more token characters" },
+
 #ifdef REG_TEST
     { "test_input", Parameter::PT_BOOL, nullptr, "false",
       "read HTTP messages from text file" },
@@ -229,6 +238,32 @@ static void store_tokens(Value& val, std::set<std::string>& methods)
         methods.insert(tok);
 }
 
+// Split on commas and whitespace alike, or a list using the other becomes one dead pattern
+static void store_media_types(Value& val, std::set<std::string>& types)
+{
+    val.lower();
+    std::string type;
+
+    for (const char* c = val.get_string(); *c != '\0'; c++)
+    {
+        if (!isspace(static_cast<unsigned char>(*c)) and *c != ',')
+            type += *c;
+        else if (!type.empty())
+        {
+            types.insert(type);
+            type.clear();
+        }
+    }
+    if (!type.empty())
+        types.insert(std::move(type));
+
+    for (const auto& entry : types)
+    {
+        if (entry.find('*') != entry.rfind('*'))
+            ParseError("allowed_content_type entry '%s' has more than one '*'", entry.c_str());
+    }
+}
+
 bool HttpModule::set(const char*, Value& val, SnortConfig*)
 {
     if (val.is("request_depth"))
@@ -270,6 +305,10 @@ bool HttpModule::set(const char*, Value& val, SnortConfig*)
     else if (val.is("maximum_headers"))
     {
         params->maximum_headers = val.get_uint16();
+    }
+    else if (val.is("maximum_header_value_length"))
+    {
+        params->maximum_header_value_length = val.get_int32();
     }
     else if (val.is("maximum_pipelined_requests"))
     {
@@ -415,6 +454,8 @@ bool HttpModule::set(const char*, Value& val, SnortConfig*)
         store_tokens(val, params->allowed_methods);
     else if (val.is("disallowed_methods"))
         store_tokens(val, params->disallowed_methods);
+    else if (val.is("allowed_content_type"))
+        store_media_types(val, params->allowed_content_type);
     else if (val.is("max_expansion_ratio"))
     {
         params->decompression_param.max_expansion_ratio = val.get_int32();

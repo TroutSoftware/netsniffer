@@ -24,6 +24,9 @@
 
 #include "file_olefile.h"
 
+#include <cinttypes>
+#include <limits>
+
 DirectoryList :: ~DirectoryList()
 {
     auto it = oleentry.begin();
@@ -55,10 +58,8 @@ void OleFile :: walk_directory_list()
 {
     int32_t current_sector;
     uint16_t sector_size;
-    uint8_t* name_buf;
     int bytes_copied;
     FileProperty* node;
-    char* file_name;
 
     VBA_DEBUG(vba_data_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL, CURRENT_PACKET,
         "Parsing the Directory list.\n");
@@ -78,7 +79,11 @@ void OleFile :: walk_directory_list()
         }
         visited_dir_sectors.insert(current_sector);
         const uint8_t* buf = file_buf;
-        uint32_t start_offset = get_fat_offset(current_sector);
+        int32_t check_offset = get_fat_offset(current_sector);
+        if (check_offset < 0)
+            return;
+
+        uint32_t start_offset = static_cast<uint32_t>(check_offset);
 
         // Integer overflow check
         if (start_offset + sector_size < start_offset || (start_offset + sector_size) > buf_len)
@@ -91,7 +96,7 @@ void OleFile :: walk_directory_list()
         while (count < (sector_size/DIR_ENTRY_SIZE))
         {
             node = new FileProperty;
-            name_buf = new uint8_t[32];
+            uint8_t* name_buf = new uint8_t[32];
 
             // The filename is UTF16 encoded and will be of the size 64 bytes.
             snort::UtfDecodeSession utf_state;
@@ -100,7 +105,8 @@ void OleFile :: walk_directory_list()
             else
                 utf_state.set_decode_utf_state_charset(CHARSET_UTF16BE);
             utf_state.decode_utf(buf, OLE_MAX_FILENAME_LEN_UTF16, name_buf,
-                OLE_MAX_FILENAME_ASCII, &bytes_copied);
+                OLE_MAX_FILENAME_ASCII - 1, &bytes_copied);
+            name_buf[bytes_copied] = '\0';
 
             node->set_name(name_buf);
 
@@ -123,7 +129,7 @@ void OleFile :: walk_directory_list()
             buf += DIR_NEXT_ENTR_OFFSET;
 
             //Insert the oleentry
-            file_name = (char*)name_buf;
+            const char* file_name = (char*)name_buf;
 
             if (strcmp(file_name, ROOT_ENTRY) == 0)
                 dir_list->set_mini_stream_sector(node->get_starting_sector());
@@ -198,9 +204,15 @@ int32_t OleFile :: get_next_mini_fat_sector(int32_t sec_id)
 // The offset of a sector is header_size + (sector_number * size_of_each_sector).
 int32_t OleFile :: get_fat_offset(int32_t sec_id)
 {
-    int32_t byte_offset;
-    byte_offset = OLE_HEADER_LEN + (sec_id * header->get_sector_size());
-    return(byte_offset);
+    if (sec_id <= INVALID_SECTOR)
+        return -1;
+
+    uint64_t byte_offset = OLE_HEADER_LEN +
+        (static_cast<uint64_t>(sec_id) * header->get_sector_size());
+    if (byte_offset > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()))
+        return -1;
+
+    return static_cast<int32_t>(byte_offset);
 }
 
 // Example to get the mini fat sector offset.
@@ -229,7 +241,7 @@ int32_t OleFile :: get_fat_offset(int32_t sec_id)
 int32_t OleFile :: get_mini_fat_offset(int32_t sec_id)
 {
     int32_t sec_position, mini_sec_position, count, current_sector;
-    int32_t byte_offset, mini_fat_persector;
+    int32_t mini_fat_persector;
 
     if (header->get_mini_sector_size() == 0)
         return -1;
@@ -274,10 +286,16 @@ int32_t OleFile :: get_mini_fat_offset(int32_t sec_id)
         count++;
         current_sector = next_sector;
     }
-    byte_offset = OLE_HEADER_LEN + (current_sector * header->get_sector_size()) +
-        (mini_sec_position *
-        header->get_mini_sector_size());
-    return byte_offset;
+    if (current_sector <= INVALID_SECTOR || mini_sec_position < 0)
+        return -1;
+
+    uint64_t check_offset = OLE_HEADER_LEN +
+        (static_cast<uint64_t>(current_sector) * header->get_sector_size()) +
+        (static_cast<uint64_t>(mini_sec_position) * header->get_mini_sector_size());
+    if (check_offset > static_cast<uint64_t>(std::numeric_limits<int32_t>::max()))
+        return -1;
+
+    return static_cast<int32_t>(check_offset);
 }
 
 uint32_t OleFile :: find_bytes_to_copy(uint32_t byte_offset, uint32_t data_len,
@@ -346,9 +364,10 @@ void OleFile :: get_file_data(FileProperty* node, uint8_t*& file_data, uint32_t&
                     return;
                 }
                 visited_sectors.insert(current_sector);
-                byte_offset = get_fat_offset(current_sector);
-                if (byte_offset > buf_len)
+                int32_t check_offset = get_fat_offset(current_sector);
+                if (check_offset < 0 || static_cast<uint32_t>(check_offset) > buf_len)
                     return;
+                byte_offset = static_cast<uint32_t>(check_offset);
 
                 bytes_to_copy = find_bytes_to_copy(byte_offset, data_len,
                                     stream_size, sector_size);
@@ -430,7 +449,11 @@ void OleFile :: populate_fat_list()
     while (current_sector > INVALID_SECTOR)
     {
         uint32_t sector_size = header->get_sector_size();
-        uint32_t byte_offset = OLE_HEADER_LEN + (current_sector * sector_size);
+        int32_t check_offset = get_fat_offset(current_sector);
+        if (check_offset < 0)
+            return;
+
+        uint32_t byte_offset = static_cast<uint32_t>(check_offset);
 
         // Integer overflow check
         if (byte_offset + sector_size < byte_offset || (byte_offset + sector_size) > buf_len)
@@ -508,7 +531,11 @@ void OleFile :: populate_mini_fat_list()
             return;
         }
         visited_mini_fat_sectors.insert(current_sector);
-        uint32_t byte_offset = OLE_HEADER_LEN + (current_sector * sector_size);
+        int32_t check_offset = get_fat_offset(current_sector);
+        if (check_offset < 0)
+            return;
+
+        uint32_t byte_offset = static_cast<uint32_t>(check_offset);
 
         // Integer overflow check
         if (byte_offset + sector_size < byte_offset || (byte_offset + sector_size) > buf_len)
@@ -778,11 +805,11 @@ void OleFile :: find_and_extract_vba(uint8_t*& vba_buf, uint32_t& vba_buf_len)
             get_file_data(node, data, data_len);
             uint8_t* data1 = data;
             int32_t offset = get_file_offset(data, data_len);
-            if (offset <= 0)
+            if (offset < 4)
             {
                 VBA_DEBUG(vba_data_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL,
                     CURRENT_PACKET,
-                    "Stream %s of size %ld does not have VBA code within first detected"
+                    "Stream %s of size %" PRId64 " does not have VBA code within first detected"
                     " %d bytes\n", node->get_name(), node->get_stream_size(), data_len);
                 delete[] data1;
                 continue;
@@ -791,7 +818,7 @@ void OleFile :: find_and_extract_vba(uint8_t*& vba_buf, uint32_t& vba_buf_len)
             data += offset - 4;
             data_len = data_len - offset + 4;
             VBA_DEBUG(vba_data_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL,
-                CURRENT_PACKET, "Stream %s of size %ld has vba code starting at "
+                CURRENT_PACKET, "Stream %s of size %" PRId64 " has vba code starting at "
                 "offset %d bytes. First %d bytes will be processed\n",
                 node->get_name(), node->get_stream_size(), (offset - 4), data_len);
 
@@ -845,4 +872,3 @@ void oleprocess(const uint8_t* const ole_file, const uint32_t ole_length, uint8_
     olefile->walk_directory_list();
     olefile->find_and_extract_vba(vba_buf, vba_buf_len);
 }
-

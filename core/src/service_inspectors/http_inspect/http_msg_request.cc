@@ -36,6 +36,13 @@ using namespace HttpEnums;
 using namespace snort;
 using namespace std;
 
+namespace
+{
+constexpr int32_t VERS_LEN = static_cast<int32_t>(sizeof("HTTP/1.1")) - 1;
+constexpr int32_t VERS_LEAD_WS_LEN = static_cast<int32_t>(sizeof(" HTTP/1.1")) - 1;
+constexpr int32_t MIN_REQ_LINE_LEN = VERS_LEAD_WS_LEN + 1;
+}
+
 HttpMsgRequest::HttpMsgRequest(const uint8_t* buffer, const uint16_t buf_size,
     HttpFlowData* session_data_, SourceId source_id_, bool buf_owner, Flow* flow_,
     const HttpParaList* params_) :
@@ -56,7 +63,38 @@ bool HttpMsgRequest::detection_required() const
 {
     if (params->partial_depth_header != 0)
         return true;
-    return version_id == HttpEnums::VERS_0_9;
+    return version_id == VERS_0_9;
+}
+
+void HttpMsgRequest::raise_deferred_scan_events()
+{
+    const HttpInfractions& scan_infractions = *transaction->get_infractions(source_id);
+    if ((scan_infractions & INF_LF_WITHOUT_CR) or (scan_infractions & INF_CR_WITHOUT_LF))
+        create_event_request_line_not_valid(BAD_REQUEST_TERMINATION);
+    else if (scan_infractions & INF_METHOD_NOT_PRESENT)
+        create_event_request_line_not_valid(METHOD_NOT_PRESENT);
+
+    if (transaction->has_pending_length_299())
+    {
+        session_data->events[source_id]->create_event_if_new(EVENT_REQUEST_LINE_LENGTH_TOO_LONG);
+
+        // 299 is request-line scoped, so unlike 298 no other section competes to count it
+        HttpModule::increment_peg_counts(PEG_MAX_REQUEST_LINE_EXCEEDED);
+    }
+    if (transaction->has_pending_size_298())
+    {
+        session_data->events[source_id]->create_event_if_new(EVENT_REQUEST_SIZE_TOO_LONG);
+        if (transaction->claim_size_298_count())
+            HttpModule::increment_peg_counts(PEG_MAX_REQUEST_SIZE_EXCEEDED);
+    }
+}
+
+int32_t HttpMsgRequest::start_line_end() const
+{
+    int32_t end = start_line.length();
+    while (end > 0 and is_sp_tab[start_line.start()[end - 1]])
+        end--;
+    return end;
 }
 
 void HttpMsgRequest::parse_start_line()
@@ -64,56 +102,46 @@ void HttpMsgRequest::parse_start_line()
     if (session_data->partial_flush[source_id])
         return;
 
-    if (has_raw_control_character(start_line))
-    {
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = NON_RFC_CHAR;
-        create_event(EVENT_REQUEST_LINE_NOT_VALID);
-    }
+    raise_deferred_scan_events();
 
-    if (start_line.length() > 0 and
-        is_sp_tab[start_line.start()[start_line.length() - 1]])
-    {
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = BAD_REQUEST_TERMINATION;
-        create_event(EVENT_REQUEST_LINE_NOT_VALID);
-    }
+    if (has_raw_control_character(start_line))
+        create_event_request_line_not_valid(NON_RFC_CHAR);
+
+    const int32_t effective_end = start_line_end();
+    if (effective_end < start_line.length())
+        create_event_request_line_not_valid(BAD_REQUEST_TERMINATION);
 
     // Version field
-    if ((start_line.length() < 10) || !is_sp_tab[start_line.start()[start_line.length()-9]] ||
-        memcmp(start_line.start() + start_line.length() - 8, "HTTP/", 5))
+    if ((effective_end < MIN_REQ_LINE_LEN) or
+        !is_sp_tab[start_line.start()[effective_end - VERS_LEAD_WS_LEN]] or
+        memcmp(start_line.start() + effective_end - VERS_LEN, "HTTP/", 5))
     {
         // Something is wrong with this message. Check for lower case letters in HTTP-name.
-        if ((start_line.length() >= 10) && is_sp_tab[start_line.start()[start_line.length()-9]] &&
-            http_name_nocase_ok(start_line.start() + start_line.length() - 8))
+        if ((effective_end >= MIN_REQ_LINE_LEN) and
+            is_sp_tab[start_line.start()[effective_end - VERS_LEAD_WS_LEN]] and
+            http_name_nocase_ok(start_line.start() + effective_end - VERS_LEN))
         {
             add_infraction(INF_VERSION_NOT_UPPERCASE);
-            if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-                get_cache_data().request.reason_code_detail_300 = VERSION_NOT_UPPERCASE;
-
-            create_event(EVENT_REQUEST_LINE_NOT_VALID);
+            create_event_request_line_not_valid(VERSION_NOT_UPPERCASE);
             create_event(EVENT_VERSION_NOT_UPPERCASE);
         }
         // Check for version 0.9 request.
         else if (handle_zero_nine())
         {
-            create_event(EVENT_REQUEST_LINE_NOT_VALID);
             return;
         }
         // Just a plain old bad request
         else
         {
-            if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-                get_cache_data().request.reason_code_detail_300 = VERSION_MALFORMED;
             add_infraction(INF_BAD_REQ_LINE);
-            session_data->events[source_id]->create_event(HttpEnums::EVENT_REQUEST_LINE_NOT_VALID);
-            session_data->events[source_id]->create_event(HttpEnums::EVENT_BAD_REQ_LINE);
-            session_data->events[source_id]->create_event(HttpEnums::EVENT_LOSS_OF_SYNC);
+            create_event_request_line_not_valid(VERSION_MALFORMED);
+            create_event(EVENT_BAD_REQ_LINE);
+            create_event(EVENT_LOSS_OF_SYNC);
             return;
         }
     }
 
-    version.set(8, start_line.start() + (start_line.length() - 8));
+    version.set(VERS_LEN, start_line.start() + effective_end - VERS_LEN);
     derive_version_id();
 
     HttpModule::increment_peg_counts(PEG_REQUEST);
@@ -129,7 +157,8 @@ void HttpMsgRequest::parse_start_line()
     first_end--;
 
     int32_t last_begin; // first whitespace in clump of whitespace before version
-    for (last_begin = start_line.length() - 10; is_sp_tab[start_line.start()[last_begin]];
+    for (last_begin = effective_end - MIN_REQ_LINE_LEN;
+        is_sp_tab[start_line.start()[last_begin]];
         last_begin--);
     last_begin++;
 
@@ -137,11 +166,7 @@ void HttpMsgRequest::parse_start_line()
     method.set(first_space, start_line.start());
 
     if (method.length() > 0 and !is_all_uppercase(method.start(), method.length()))
-    {
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = METHOD_NOT_UPPERCASE;
-        session_data->events[source_id]->create_event(HttpEnums::EVENT_REQUEST_LINE_NOT_VALID);
-    }
+        create_event_request_line_not_valid(METHOD_NOT_UPPERCASE);
 
     method_id = (MethodId)str_to_code(method.start(), method.length(), method_list);
 
@@ -167,9 +192,7 @@ void HttpMsgRequest::parse_start_line()
     else
     {
         add_infraction(INF_NO_URI);
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = URI_MISSING;
-        create_event(EVENT_REQUEST_LINE_NOT_VALID);
+        create_event_request_line_not_valid(URI_MISSING);
         create_event(EVENT_URI_MISSING);
     }
 }
@@ -220,6 +243,8 @@ bool HttpMsgRequest::handle_zero_nine()
     {
         add_infraction(INF_ZERO_NINE_REQ);
         create_event(EVENT_SIMPLE_REQUEST);
+        create_event_request_line_not_valid(SIMPLE_REQUEST);
+
         method.set(3, start_line.start());
         method_id = METH_GET;
         version_id = VERS_0_9;
@@ -243,9 +268,6 @@ bool HttpMsgRequest::handle_zero_nine()
             add_infraction(INF_NO_URI);
             create_event(EVENT_URI_MISSING);
         }
-
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = SIMPLE_REQUEST;
 
         return true;
     }
@@ -302,8 +324,12 @@ void HttpMsgRequest::gen_events()
 
     const bool zero_nine = *transaction->get_infractions(source_id) & INF_ZERO_NINE_REQ;
 
+    const int32_t effective_end = zero_nine ? start_line.length() : start_line_end();
+    if (!zero_nine and effective_end < MIN_REQ_LINE_LEN)
+        return;
+
     if ((start_line.start()[method.length()] == '\t') ||
-       (!zero_nine && (start_line.start()[start_line.length() - 9] == '\t')))
+        (!zero_nine && (start_line.start()[effective_end - VERS_LEAD_WS_LEN] == '\t')))
     {
         add_infraction(INF_REQUEST_TAB);
         create_event(EVENT_APACHE_WS);
@@ -311,7 +337,7 @@ void HttpMsgRequest::gen_events()
 
     // Look for white space issues in and around the URI.
     // Supposed to be <method><space><URI><space><version> or 0.9 format GET<space><URI>
-    const int32_t version_start = !zero_nine ? start_line.length() - 9 : start_line.length();
+    const int32_t version_start = !zero_nine ? effective_end - VERS_LEAD_WS_LEN : effective_end;
     for (int32_t k = method.length() + 1; k < version_start; k++)
     {
         if (is_sp_tab[start_line.start()[k]])
@@ -323,9 +349,7 @@ void HttpMsgRequest::gen_events()
                 if (start_line.start()[k] == ' ')
                 {
                     add_infraction(INF_URI_SPACE);
-                    if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-                        get_cache_data().request.reason_code_detail_300 = UNESCAPED_SPACE_URI;
-                    create_event(EVENT_REQUEST_LINE_NOT_VALID);
+                    create_event_request_line_not_valid(UNESCAPED_SPACE_URI);
                     create_event(EVENT_UNESCAPED_SPACE_URI);
                 }
             }
@@ -333,9 +357,7 @@ void HttpMsgRequest::gen_events()
             {
                 // extra white space before or after the URI
                 add_infraction(INF_REQUEST_WS);
-                if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-                    get_cache_data().request.reason_code_detail_300 = IMPROPER_WS;
-                create_event(EVENT_REQUEST_LINE_NOT_VALID);
+                create_event_request_line_not_valid(IMPROPER_WS);
                 create_event(EVENT_IMPROPER_WS);
                 if (start_line.start()[k] == '\t')
                 {
@@ -360,6 +382,7 @@ void HttpMsgRequest::gen_events()
             {
                 add_infraction(INF_METHOD_NOT_ON_ALLOWED_LIST);
                 create_event(EVENT_DISALLOWED_METHOD);
+                HttpModule::increment_peg_counts(PEG_DISALLOWED_METHOD);
             }
             else
                 known_method = true;
@@ -371,6 +394,7 @@ void HttpMsgRequest::gen_events()
             {
                 add_infraction(INF_METHOD_ON_DISALLOWED_LIST);
                 create_event(EVENT_DISALLOWED_METHOD);
+                HttpModule::increment_peg_counts(PEG_DISALLOWED_METHOD);
                 known_method = true;
             }
         }
@@ -378,9 +402,7 @@ void HttpMsgRequest::gen_events()
 
     if (method_id == METH__OTHER && !known_method)
     {
-        if (get_cache_data().request.reason_code_detail_300 == HttpEnums::GenericEventReasonCode::NONE)
-            get_cache_data().request.reason_code_detail_300 = UNKNOWN_METHOD;
-        create_event(EVENT_REQUEST_LINE_NOT_VALID);
+        create_event_request_line_not_valid(UNKNOWN_METHOD);
         create_event(EVENT_UNKNOWN_METHOD);
     }
 
@@ -417,8 +439,10 @@ void HttpMsgRequest::update_flow()
     {
         session_data->half_reset(source_id);
         // There can only be one 0.9 response per connection because it ends the S2C connection. Do
-        // not allow a pipelined request to overwrite a previous 0.9 setup.
-        if (session_data->zero_nine_expected == 0)
+        // not allow a pipelined request to overwrite a previous 0.9 setup or an unpaired request
+        // to establish server-side parsing state.
+        if (session_data->zero_nine_expected == 0 &&
+            !session_data->pipeline_overflow && !session_data->pipeline_underflow)
         {
             // FIXIT-L Add a configuration option to not do this. This would support an HTTP server
             // that responds to a 0.9 GET request with a full-blown 1.0 or 1.1 response with status

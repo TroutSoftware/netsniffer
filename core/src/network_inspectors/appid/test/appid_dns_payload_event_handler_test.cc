@@ -72,7 +72,7 @@ Packet* DetectionEngine::get_current_packet()
 void appid_log(const snort::Packet*, unsigned char, char const*, ...) { }
 
 void AppIdSession::publish_appid_event(AppidChangeBits&, const Packet&, bool, uint32_t) { }
-void AppIdSession::set_payload_appid_data(AppId, char*) { }
+void AppIdSession::set_payload_appid_data(AppId, const char*) { }
 void AppIdSession::set_ss_application_ids_payload(AppId, AppidChangeBits&) { }
 void ApplicationDescriptor::set_id(const Packet&, AppIdSession&, AppidSessionDirection,
     AppId, AppidChangeBits&) { }
@@ -95,10 +95,9 @@ ServiceDetector::ServiceDetector() { }
 void ServiceDetector::register_appid(AppId, unsigned, OdpContext&) { }
 int ServiceDetector::service_inprocess(AppIdSession&, const Packet*, AppidSessionDirection) { return 0; }
 int ServiceDetector::add_service(AppidChangeBits&, AppIdSession&, const Packet*,
-    AppidSessionDirection, AppId, const char*, const char*, AppIdServiceSubtype*) { return 0; }
-int ServiceDetector::add_service_consume_subtype(AppIdSession&, const Packet*,
-    AppidSessionDirection, AppId, const char*, const char*, AppIdServiceSubtype*,
-    AppidChangeBits&) { return 0; }
+    AppidSessionDirection, AppId, const char*, const char*) { return 0; }
+int ServiceDetector::add_service_with_subtypes(AppidChangeBits&, AppIdSession&, const Packet*,
+    AppidSessionDirection, AppId, const char*, const char*, AppIdServiceSubtypeList&) { return 0; }
 int ServiceDetector::incompatible_data(AppIdSession&, const Packet*,
     AppidSessionDirection) { return 0; }
 int ServiceDetector::fail_service(AppIdSession&, const Packet*,

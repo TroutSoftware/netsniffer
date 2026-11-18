@@ -49,7 +49,8 @@ bool get_buf_dnp3_data(snort::Packet* p, snort::InspectionBuffer& b)
     if ((p->has_tcp_data() && !p->is_full_pdu()) || !p->flow || !p->dsize)
         return false;
 
-    Dnp3FlowData* fd = (Dnp3FlowData*)p->flow->get_flow_data(Dnp3FlowData::inspector_id);
+    const Dnp3FlowData* fd = static_cast<Dnp3FlowData*>(
+        p->flow->get_flow_data(Dnp3FlowData::inspector_id));
     if (!fd)
         return false;
 
@@ -81,9 +82,10 @@ Dnp3FlowData::~Dnp3FlowData()
 
 unsigned Dnp3FlowData::inspector_id = 0;
 
-static dnp3_session_data_t* get_session_data(Flow* flow)
+static dnp3_session_data_t* get_session_data(const Flow* flow)
 {
-    Dnp3FlowData* fd = (Dnp3FlowData*)flow->get_flow_data(Dnp3FlowData::inspector_id);
+    Dnp3FlowData* fd = static_cast<Dnp3FlowData*>(
+        flow->get_flow_data(Dnp3FlowData::inspector_id));
     return fd ? &fd->dnp3_session : nullptr;
 }
 
@@ -117,6 +119,7 @@ static bool dnp3_process_udp(const dnp3ProtoConf& config, dnp3_session_data_t* d
        Split up and process individually. */
 
     uint16_t bytes_processed = 0;
+    uint16_t junk_bytes = 0;
     bool truncated_pdu = false;
 
     while (bytes_processed < p->dsize)
@@ -126,19 +129,38 @@ static bool dnp3_process_udp(const dnp3ProtoConf& config, dnp3_session_data_t* d
         const dnp3_link_header_t* link;
 
         pdu_start = (const uint8_t*)(p->data + bytes_processed);
-        link = (const dnp3_link_header_t*)pdu_start;
+        link = reinterpret_cast<const dnp3_link_header_t*>(pdu_start);
 
         /*Stop if the start bytes are not 0x0564 */
         if ((p->dsize < bytes_processed + 2)
             || (link->start != DNP3_START_BYTES))
-            break;
+        {
+            bytes_processed++;
+            if (++junk_bytes > DNP3_MAX_OCTETS)
+            {
+                truncated_pdu = true;
+                break;
+            }
+            continue;
+        }
 
         /* Alert and stop if there's not enough data to read a length */
-        if ((p->dsize - bytes_processed < (int)sizeof(dnp3_link_header_t)) ||
-            (link->len < DNP3_HEADER_REMAINDER_LEN))
+        if (p->dsize - bytes_processed < (int)sizeof(dnp3_link_header_t))
         {
             truncated_pdu = true;
             break;
+        }
+
+        if (link->len < DNP3_HEADER_REMAINDER_LEN)
+        {
+            bytes_processed += 3;
+            junk_bytes += 3;
+            if (junk_bytes > DNP3_MAX_OCTETS)
+            {
+                truncated_pdu = true;
+                break;
+            }
+            continue;
         }
 
         /* Calculate the actual length of data to inspect */
@@ -154,6 +176,7 @@ static bool dnp3_process_udp(const dnp3ProtoConf& config, dnp3_session_data_t* d
 
         dnp3_full_reassembly(config, dnp3_sess, p, pdu_start, pdu_length);
         bytes_processed += pdu_length;
+        junk_bytes = 0;
     }
 
     if (truncated_pdu)
@@ -183,6 +206,7 @@ static void process_dnp3(const dnp3ProtoConf& config, Packet* p)
          */
         dnp3_sess = set_new_dnp3_session(p);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !dnp3_sess )
         {
             return;
@@ -202,6 +226,12 @@ static void process_dnp3(const dnp3ProtoConf& config, Packet* p)
 
     if (p->has_tcp_data())
     {
+        // PAF flushed junk before valid frame
+        if (p->dsize < DNP3_MIN_LEN or
+            p->data[0] != DNP3_START_BYTE_1 or p->data[1] != DNP3_START_BYTE_2 or
+            p->data[DNP3_LEN_OFFSET] < DNP3_HEADER_REMAINDER_LEN)
+            return;
+
         ++dnp3_stats.tcp_pdus;
         /* Single PDU. PAF already split them up into separate pseudo-packets. */
         dnp3_full_reassembly(config, dnp3_sess, p,(const uint8_t*)p->data,p->dsize);
@@ -227,7 +257,7 @@ public:
     void clear(Packet*) override;
 
     StreamSplitter* get_splitter(bool c2s) override
-    { return new Dnp3Splitter(c2s); }
+    { return new Dnp3Splitter(c2s, config.zero_payload_packet_limit); }
 
     bool get_buf(unsigned id, snort::Packet* p, snort::InspectionBuffer& b) override
     { return (id == DNP3_DATA_BUFID) ? get_buf_dnp3_data(p, b) : false; }
@@ -239,17 +269,18 @@ private:
 Dnp3::Dnp3(const dnp3ProtoConf& pc)
 {
     config.check_crc = pc.check_crc;
+    config.zero_payload_packet_limit = pc.zero_payload_packet_limit;
 }
 
 
 void Dnp3::show(const SnortConfig*) const
 {
     ConfigLogger::log_flag("check_crc", config.check_crc);
+    ConfigLogger::log_value("zero_payload_packet_limit", config.zero_payload_packet_limit);
 }
 
 void Dnp3::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(dnp3_perf_stats);
 
     assert (p->has_tcp_data() || p->has_udp_data());
@@ -286,7 +317,7 @@ static void dnp3_init()
 
 static Inspector* dnp3_ctor(Module* m)
 {
-    Dnp3Module* mod = (Dnp3Module*)m;
+    Dnp3Module* mod = static_cast<Dnp3Module*>(m);
     dnp3ProtoConf config;
     mod->get_data(config);
     return new Dnp3(config);
@@ -349,4 +380,3 @@ const BaseApi* sin_dnp3[] =
     ips_dnp3_data,
     nullptr
 };
-

@@ -121,9 +121,13 @@ void TcpFpProcessor::make_tcp_fp_tables(TCP_FP_MODE mode)
             switch (fpe.type)
             {
             case FpElementType::RANGE:
-                for (int i = fpe.d.range.min; i <= fpe.d.range.max; i++)
+            {
+                int lo = fpe.d.range.min < 0 ? 0 : fpe.d.range.min;
+                int hi = fpe.d.range.max > (int)TCP_MAXWIN ? (int)TCP_MAXWIN : fpe.d.range.max;
+                for (int i = lo; i <= hi; i++)
                     fptable[i].emplace_back(&tfp);
                 break;
+            }
             default:
                 break;
             }
@@ -369,7 +373,7 @@ static int get_tcp_option(const Packet* p, tcp::TcpOptCode opt_code, int& pos)
             switch (opt.code)
             {
             case tcp::TcpOptCode::MAXSEG:
-                return ntohs(*((const uint16_t*)(opt.data)));
+                return extract_16bits(opt.data);
 
             case tcp::TcpOptCode::NOP:
                 return 1;
@@ -381,7 +385,8 @@ static int get_tcp_option(const Packet* p, tcp::TcpOptCode opt_code, int& pos)
                 return opt.data[0] & 0xff;
 
             case tcp::TcpOptCode::TIMESTAMP:
-                return ntohs(*((const uint32_t*)(opt.data)));
+                // Fingerprint matching only distinguishes zero from nonzero TSval.
+                return extract_32bits(opt.data) != 0;
 
             default:
                 break;
@@ -484,7 +489,7 @@ bool FpFingerprintState::set(const Packet* p)
 
 TEST_CASE("get_tcp_fp_processor", "[rna_fingerprint_tcp]")
 {
-    TcpFpProcessor* tfp = get_tcp_fp_processor();
+    const TcpFpProcessor* tfp = get_tcp_fp_processor();
     CHECK(tfp == tcp_fp_processor);
 }
 
@@ -721,6 +726,76 @@ TEST_CASE("get_tcp_fp", "[rna_fingerprint_tcp]")
     set_tcp_fp_processor(nullptr);
 }
 
+TEST_CASE("make_tcp_fp_tables_out_of_range", "[rna_fingerprint_tcp]")
+{
+    // A fingerprint tcp_window token is parsed straight into a RANGE with no
+    // magnitude/sign check, but the tables have exactly TCP_MAXWIN+1 entries.
+    // An out-of-range token (oversized or, via signed int truncation of a
+    // >INT_MAX value, negative) must not index past the tables.
+    set_tcp_fp_processor(new TcpFpProcessor);
+    TcpFpProcessor* processor = get_tcp_fp_processor();
+
+    RawFingerprint rawfp;
+    rawfp.fp_type = 1;
+    rawfp.fpuuid = "12345678-1234-1234-1234-123456789012";
+    rawfp.ttl = 64;
+    rawfp.mss = "X";
+    rawfp.id = "X";
+    rawfp.topts = "2 4 8 3";
+    rawfp.ws = "7";
+    rawfp.df = false;
+
+    // oversized single value -> RANGE{min=max=100000000}, ~2.4GB past table
+    rawfp.fpid = 700001;
+    rawfp.tcp_window = "100000000";
+    processor->push(rawfp);
+
+    // >INT_MAX left bound truncates to a negative int -> RANGE{min=-1,max=5},
+    // indexes below the table
+    rawfp.fpid = 700002;
+    rawfp.tcp_window = "4294967295-5";
+    processor->push(rawfp);
+
+    // a valid in-range fingerprint that must still be indexed after clamping
+    rawfp.fpid = 110005;
+    rawfp.fp_type = 10;
+    rawfp.tcp_window = "5712-5760";
+    processor->push(rawfp);
+    TcpFingerprint f110005(rawfp);
+
+    // pre-fix this crashes (OOB vector append); post-fix it clamps and returns
+    processor->make_tcp_fp_tables(TcpFpProcessor::TCP_FP_MODE::SERVER);
+    processor->make_tcp_fp_tables(TcpFpProcessor::TCP_FP_MODE::CLIENT);
+
+    // the in-range fingerprint must still match after clamping
+    uint8_t syn_tcpopts[] = {0, 0, 0, 0};
+    FpTcpKey key;
+    key.synmss = 1;
+    key.num_syn_tcpopts = 4;
+    key.syn_tcpopts = syn_tcpopts;
+    key.syn_timestamp = 1;
+    key.tcp_window = 5750;
+    key.mss = 4;
+    key.ws = 7;
+    key.mss_pos = 0;
+    key.sackok_pos = 1;
+    key.timestamp_pos = 2;
+    key.ws_pos = 3;
+    key.df = false;
+    key.isIpv6 = true;
+    syn_tcpopts[key.mss_pos] = (uint8_t) tcp::TcpOptCode::MAXSEG;
+    syn_tcpopts[key.timestamp_pos] = (uint8_t) tcp::TcpOptCode::TIMESTAMP;
+    syn_tcpopts[key.sackok_pos] = (uint8_t) tcp::TcpOptCode::SACKOK;
+    syn_tcpopts[key.ws_pos] = (uint8_t) tcp::TcpOptCode::WSCALE;
+
+    const TcpFingerprint* tfp = processor->get_tcp_fp(
+        key, 64, TcpFpProcessor::TCP_FP_MODE::SERVER);
+    CHECK( (tfp && *tfp == f110005) );
+
+    delete processor;
+    set_tcp_fp_processor(nullptr);
+}
+
 TEST_CASE("is_mss_good", "[rna_fingerprint_tcp]")
 {
     vector<FpElement> tfp_mss;
@@ -731,21 +806,25 @@ TEST_CASE("is_mss_good", "[rna_fingerprint_tcp]")
     tfp_mss.emplace_back(FpElement("SYN-1"));
     key.synmss = 1;
     key.mss = 4;
-    CHECK( is_mss_good(key, tfp_mss) == false );
+    bool matches = is_mss_good(key, tfp_mss);
+    CHECK_FALSE(matches);
 
     key.synmss = 1;
     key.mss = 1;
-    CHECK( is_mss_good(key, tfp_mss) == true );
+    matches = is_mss_good(key, tfp_mss);
+    CHECK(matches);
 
     // Testing out of range case
     tfp_mss.clear();
     tfp_mss.emplace_back(FpElement("5"));
-    CHECK( is_mss_good(key, tfp_mss) == false );
+    matches = is_mss_good(key, tfp_mss);
+    CHECK_FALSE(matches);
 
     // Testing default case
     tfp_mss.clear();
     tfp_mss.emplace_back(FpElement("R"));
-    CHECK( is_mss_good(key, tfp_mss) == false );
+    matches = is_mss_good(key, tfp_mss);
+    CHECK_FALSE(matches);
 }
 
 TEST_CASE("is_ws_good", "[rna_fingerprint_tcp]")
@@ -757,62 +836,71 @@ TEST_CASE("is_ws_good", "[rna_fingerprint_tcp]")
 
     // Testing outside the range case
     tfp_ws.emplace_back(FpElement("-1"));
-    CHECK( is_ws_good(key, tfp_ws) == false );
+    bool matches = is_ws_good(key, tfp_ws);
+    CHECK_FALSE(matches);
 
     // Testing don't care case
     tfp_ws.clear();
     tfp_ws.emplace_back(FpElement("X"));
-    CHECK( is_ws_good(key, tfp_ws) == true );
+    matches = is_ws_good(key, tfp_ws);
+    CHECK(matches);
 
     // Testing default case
     tfp_ws.clear();
     tfp_ws.emplace_back(FpElement("TS"));
-    CHECK( is_ws_good(key, tfp_ws) == false );
+    matches = is_ws_good(key, tfp_ws);
+    CHECK_FALSE(matches);
 }
 
 TEST_CASE("is_option_good", "[rna_fingerprint_tcp]")
 {
     int optpos = 1, fp_optpos = 1;
-    uint8_t optorder[] = { (uint8_t) tcp::TcpOptCode::WSCALE };
-    uint8_t fp_optorder[] = { (uint8_t) tcp::TcpOptCode::MAXSEG };
+    const uint8_t optorder[] = { (uint8_t) tcp::TcpOptCode::WSCALE };
+    const uint8_t fp_optorder[] = { (uint8_t) tcp::TcpOptCode::MAXSEG };
 
     // Testing the case when option values are different
-    CHECK( is_option_good(optpos, fp_optpos, optorder, fp_optorder) == false );
+    const bool matches = is_option_good(optpos, fp_optpos, optorder, fp_optorder);
+    CHECK_FALSE(matches);
 }
 
 TEST_CASE("is_ts_good", "[rna_fingerprint_tcp]")
 {
     vector<FpElement> topts;
-    uint8_t optorder[4], fp_optorder[4];
+    uint8_t optorder[4]{}, fp_optorder[4]{};
     int optpos = 0;
-    FpTcpKey key;
+    FpTcpKey key{};
 
     // Testing SYN timestamp
     key.syn_timestamp = 123456789;
-    CHECK( is_ts_good(key, topts, optpos, optorder, fp_optorder) == false );
+    bool matches = is_ts_good(key, topts, optpos, optorder, fp_optorder);
+    CHECK_FALSE(matches);
 
     // Testing option code without timestamp
     uint8_t syn_tcpopts[] = {0, 0, 0, 0};
     key.syn_tcpopts = syn_tcpopts;
     key.num_syn_tcpopts = 4;
     key.syn_timestamp = 0;
-    CHECK( is_ts_good(key, topts, optpos, optorder, fp_optorder) == false );
+    matches = is_ts_good(key, topts, optpos, optorder, fp_optorder);
+    CHECK_FALSE(matches);
 
     // Testing option code with timestamp, but mismatched position
     key.syn_tcpopts[0] = (uint8_t) tcp::TcpOptCode::TIMESTAMP;
     FpElement fpe("X");
     fpe.d.value = 0;
     topts.emplace_back(fpe);
-    CHECK( is_ts_good(key, topts, optpos, optorder, fp_optorder) == false );
+    matches = is_ts_good(key, topts, optpos, optorder, fp_optorder);
+    CHECK_FALSE(matches);
 
     // Testing option code with timestamp, matched position, but mismatched order
     optpos = 1;
     optorder[0] = (uint8_t) tcp::TcpOptCode::MAXSEG;
-    CHECK( is_ts_good(key, topts, optpos, optorder, fp_optorder) == false );
+    matches = is_ts_good(key, topts, optpos, optorder, fp_optorder);
+    CHECK_FALSE(matches);
 
     // Testing option code with timestamp, matched position, and matched order
     optorder[0] = (uint8_t) tcp::TcpOptCode::EOL;
-    CHECK( is_ts_good(key, topts, optpos, optorder, fp_optorder) == true );
+    matches = is_ts_good(key, topts, optpos, optorder, fp_optorder);
+    CHECK(matches);
 }
 
 TEST_CASE("get_tcp_option", "[rna_fingerprint_tcp]")
@@ -826,7 +914,7 @@ TEST_CASE("get_tcp_option", "[rna_fingerprint_tcp]")
         "\x34\x00\x50\x00\x00\x23\x5a\x00\x00\x00\x00\x50\x02\x20\x00\x56\xcb\x00\x00\x00";
     Packet p(false);
     p.pkt = cooked_pkt;
-    p.ptrs.tcph = ( const tcp::TCPHdr* )( cooked_pkt + 34 );
+    p.ptrs.tcph = reinterpret_cast<const tcp::TCPHdr*>(cooked_pkt + 34);
     p.num_layers = 1;
     Layer cooked_layer;
     cooked_layer.start = cooked_pkt + 34;
@@ -856,7 +944,7 @@ TEST_CASE("get_tcp_option_NOP", "[rna_fingerprint_tcp]")
                        "\x01\x01\x01\x01"; // TCP Options: NOPs (0x01)
     Packet p(false);
     p.pkt = cooked_pkt;
-    p.ptrs.tcph = ( const tcp::TCPHdr* )( cooked_pkt + 34 );
+    p.ptrs.tcph = reinterpret_cast<const tcp::TCPHdr*>(cooked_pkt + 34);
     p.num_layers = 1;
     Layer cooked_layer;
     cooked_layer.start = cooked_pkt + 34;
@@ -886,7 +974,7 @@ TEST_CASE("get_tcp_option_bad_layers", "[rna_fingerprint_tcp]")
                        "\x05\x00\x0e\x07";
     Packet p(false);
     p.pkt = cooked_pkt;
-    p.ptrs.tcph = (const tcp::TCPHdr*)(cooked_pkt + 34);
+    p.ptrs.tcph = reinterpret_cast<const tcp::TCPHdr*>(cooked_pkt + 34);
     p.num_layers = 1;
     Layer cooked_layer;
     cooked_layer.start = cooked_pkt + 34;
@@ -916,7 +1004,7 @@ TEST_CASE("get_tcp_option_malformed", "[rna_fingerprint_tcp]")
                        "\x04\x00\x0e\x07"; // malformed SACKOK option, length 0
     Packet p(false);
     p.pkt = cooked_pkt;
-    p.ptrs.tcph = (const tcp::TCPHdr*)(cooked_pkt + 34);
+    p.ptrs.tcph = reinterpret_cast<const tcp::TCPHdr*>(cooked_pkt + 34);
     p.num_layers = 1;
     Layer cooked_layer;
     cooked_layer.start = cooked_pkt + 34;

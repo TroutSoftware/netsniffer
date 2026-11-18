@@ -86,13 +86,13 @@ public:
 
 void Iec104::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(iec104_prof);
 
     // preconditions - what we registered for
     assert(p->has_tcp_data());
 
-    Iec104FlowData* iec104fd = (Iec104FlowData*) p->flow->get_flow_data(Iec104FlowData::inspector_id);
+    Iec104FlowData* iec104fd = static_cast<Iec104FlowData*>(
+        p->flow->get_flow_data(Iec104FlowData::inspector_id));
 
     if (!p->is_full_pdu())
     {
@@ -212,4 +212,3 @@ const BaseApi* sin_iec104[] =
     ips_iec104_apci_type,
     nullptr
 };
-

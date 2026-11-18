@@ -84,7 +84,7 @@ AppId HttpPatternMatchers::scan_chp(ChpMatchDescriptor&, char**, char**,
 }
 
 void HttpPatternMatchers::get_server_vendor_version(const char*, int, char**,
-    char**, AppIdServiceSubtype**)
+    char**, AppIdServiceSubtypeList&)
 {
 }
 
@@ -130,15 +130,15 @@ AppIdSession::~AppIdSession()
     delete &api;
 }
 
-void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, char*)
+void AppIdSession::set_client_appid_data(AppId, AppidChangeBits&, const char*)
 {
 }
 
-void AppIdSession::set_service_appid_data(AppId, AppidChangeBits&, char*)
+void AppIdSession::set_service_appid_data(AppId, AppidChangeBits&, const char*)
 {
 }
 
-void AppIdSession::set_payload_appid_data(AppId, char*)
+void AppIdSession::set_payload_appid_data(AppId, const char*)
 {
 }
 
@@ -326,13 +326,36 @@ TEST(appid_http_session, change_bits_for_referred_appid)
     AppIdConfig config;
     OdpContext odp_ctxt(config, nullptr);
     session->set_service_id(APP_ID_HTTP, odp_ctxt);
-    session->scan_flags |= SCAN_HTTP_HOST_URL_FLAG;
+    mock_hsession->scan_flags |= SCAN_HTTP_HOST_URL_FLAG;
     mock_hsession->set_skip_simple_detect(false);
     mock_hsession->set_field( (HttpFieldIds)2, new std::string("referer"), change_bits);
     mock_hsession->process_http_packet(APP_ID_FROM_INITIATOR, change_bits, odp_ctxt.get_http_matchers());
 
     // Detect changes in referred appid
     CHECK_EQUAL(change_bits.test(APPID_REFERRED_BIT), true);
+}
+
+TEST(appid_http_session, scan_flags_isolated_between_streams)
+{
+    AppIdHttpSession* mock_hsession2 = new AppIdHttpSession(*session, 1);
+    AppidChangeBits change_bits;
+
+    mock_hsession->set_field(REQ_URI_FID, new std::string("uri"), change_bits);
+    mock_hsession->set_field(MISC_VIA_FID, new std::string("via"), change_bits);
+    mock_hsession->set_field(REQ_AGENT_FID, new std::string("agent"), change_bits);
+    mock_hsession->set_field(RSP_CONTENT_TYPE_FID, new std::string("content_type"), change_bits);
+    mock_hsession->set_field(MISC_SERVER_FID, new std::string("server"), change_bits);
+    mock_hsession->set_field(MISC_XWW_FID, new std::string("xww"), change_bits);
+    mock_hsession->set_field(REQ_HOST_FID, new std::string("host"), change_bits);
+
+    const uint16_t all_http_scan_flags = SCAN_HTTP_URI_FLAG | SCAN_HTTP_VIA_FLAG |
+        SCAN_HTTP_USER_AGENT_FLAG | SCAN_HTTP_CONTENT_TYPE_FLAG | SCAN_HTTP_VENDOR_FLAG |
+        SCAN_HTTP_XWORKINGWITH_FLAG | SCAN_HTTP_HOST_URL_FLAG;
+
+    CHECK_EQUAL(all_http_scan_flags, mock_hsession->scan_flags);
+    CHECK_EQUAL(0, mock_hsession2->scan_flags);
+
+    delete mock_hsession2;
 }
 
 TEST(appid_http_session, set_req_body_field)
@@ -368,4 +391,3 @@ int main(int argc, char** argv)
     int rc = CommandLineTestRunner::RunAllTests(argc, argv);
     return rc;
 }
-

@@ -49,6 +49,7 @@ public:
     ModbusDataOption() : IpsOption(s_name) { }
 
     uint32_t hash() const override;
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     bool operator==(const IpsOption&) const override;
 
     EvalStatus eval(Cursor&, Packet*) override;
@@ -74,7 +75,7 @@ bool ModbusDataOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus ModbusDataOption::eval(Cursor& c, Packet* p)
 {
-    RuleProfile profile(modbus_data_prof);  // cppcheck-suppress unreadVariable
+    RuleProfile profile(modbus_data_prof);
 
     InspectionBuffer b;
     if (!get_buf_modbus_data(p, b))

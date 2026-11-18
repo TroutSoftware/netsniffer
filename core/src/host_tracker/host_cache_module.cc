@@ -44,20 +44,15 @@ THREAD_LOCAL const Trace* host_cache_trace = nullptr;
 //-------------------------------------------------------------------------
 static int host_cache_dump(lua_State* L)
 {
-    HostCacheModule* mod = (HostCacheModule*) PluginManager::get_module(HOST_CACHE_NAME);
-    assert(mod);
-
-    mod->log_host_cache( luaL_optstring(L, 1, nullptr), true );
+    HostCacheModule::log_host_cache( luaL_optstring(L, 1, nullptr), true );
     return 0;
 }
 
+// cppcheck-suppress constParameterCallback
 static int host_cache_get_stats(lua_State* L)
 {
-    HostCacheModule* mod = (HostCacheModule*) PluginManager::get_module(HOST_CACHE_NAME);
-    assert(mod);
-
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    string outstr = mod->get_host_cache_stats();
+    string outstr = HostCacheModule::get_host_cache_stats();
     ctrlcon->respond("%s", outstr.c_str());
 
     return 0;
@@ -65,12 +60,9 @@ static int host_cache_get_stats(lua_State* L)
 
 static int host_cache_get_segment_stats(lua_State* L)
 {
-    HostCacheModule* mod = (HostCacheModule*) PluginManager::get_module(HOST_CACHE_NAME);
-    assert(mod);
-
     int seg_idx = luaL_optint(L, 1, -1);
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
-    string outstr = mod->get_host_cache_segment_stats(seg_idx);
+    string outstr = HostCacheModule::get_host_cache_segment_stats(seg_idx);
     ctrlcon->respond("%s", outstr.c_str());
 
     return 0;
@@ -411,11 +403,12 @@ void host_cache_module_dump()
 
 void HostCacheModule::dump()
 {
-    HostCacheModule* hcm = (HostCacheModule*)PluginManager::get_module(HOST_CACHE_NAME);
+    const HostCacheModule* hcm =
+        static_cast<const HostCacheModule*>(PluginManager::get_module(HOST_CACHE_NAME));
     const char* df = hcm ? hcm->get_dump_file() : nullptr;
 
     if ( df and *df )
-        hcm->log_host_cache(df);
+        HostCacheModule::log_host_cache(df);
 }
 
 void HostCacheModule::log_host_cache(const char* file_name, bool verbose)
@@ -444,7 +437,6 @@ void HostCacheModule::log_host_cache(const char* file_name, bool verbose)
         return;
     }
 
-    string str;
     SfIpString ip_str;
     const auto&& lru_data = host_cache.get_all_data();
     // The current size may not exactly correspond to the number of trackers seen here
@@ -455,7 +447,7 @@ void HostCacheModule::log_host_cache(const char* file_name, bool verbose)
     {
         if ( elem.second->is_visible() == true )
         {
-            str = "IP: ";
+            string str = "IP: ";
             str += elem.first.ntop(ip_str);
             elem.second->stringify(str);
             out_stream << str << endl << endl;

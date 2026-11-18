@@ -84,7 +84,7 @@ typedef struct _CvsCommand
     int cmd_arg_len;
 } CvsCommand;
 
-static int CvsDecode(const uint8_t*, uint16_t, CvsRuleOption*);
+static int CvsDecode(const uint8_t*, uint16_t, const CvsRuleOption*);
 static void CvsGetCommand(const uint8_t*, const uint8_t*, CvsCommand*);
 static int CvsCmdCompare(const char*, const uint8_t*, int);
 static int CvsValidateEntry(const uint8_t*, const uint8_t*);
@@ -127,7 +127,7 @@ bool CvsOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const CvsOption& rhs = (const CvsOption&)ips;
+    const CvsOption& rhs = static_cast<const CvsOption&>(ips);
     const CvsRuleOption* left = &config;
     const CvsRuleOption* right = &rhs.config;
 
@@ -157,12 +157,11 @@ IpsOption::EvalStatus CvsOption::eval(Cursor&, Packet* p)
 //-------------------------------------------------------------------------
 
 static int CvsDecode(const uint8_t* data, uint16_t data_len,
-    CvsRuleOption* cvs_rule_option)
+    const CvsRuleOption* cvs_rule_option)
 {
     const uint8_t* line, * end;
     const uint8_t* eol = nullptr, * eolm = nullptr;
     CvsCommand command;
-    int ret;
 
     line = data;
     end = data + data_len;
@@ -185,7 +184,7 @@ static int CvsDecode(const uint8_t* data, uint16_t data_len,
         case CVS_INVALID_ENTRY:
             if (CvsCmdCompare(CVS_ENTRY_STR, command.cmd_str, command.cmd_str_len) == 0)
             {
-                ret = CvsValidateEntry(command.cmd_arg,
+                const int ret = CvsValidateEntry(command.cmd_arg,
                     (command.cmd_arg + command.cmd_arg_len));
 
                 if ((ret == CVS_ENTRY_INVALID)&&(eol < end))
@@ -411,7 +410,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* cvs_ctor(Module* p, IpsInfo&)
 {
-    CvsModule* m = (CvsModule*)p;
+    const CvsModule* m = static_cast<CvsModule*>(p);
     return new CvsOption(m->data);
 }
 

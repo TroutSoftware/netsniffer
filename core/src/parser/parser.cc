@@ -85,8 +85,8 @@ public:
     unsigned do_hash(const unsigned char* k, int) override
     {
         uint32_t a,b,c;
-        const RuleTreeNodeKey* rtnk = (const RuleTreeNodeKey*)k;
-        RuleTreeNode* rtn = rtnk->rtn;
+        const RuleTreeNodeKey* rtnk = reinterpret_cast<const RuleTreeNodeKey*>(k);
+        const RuleTreeNode* rtn = rtnk->rtn;
 
         a = rtn->action;
         b = rtn->flags;
@@ -177,7 +177,7 @@ static void FreeOutputLists(ListHead* list)
 }
 
 /* Finish processing/setup Port Tables */
-static void finish_portlist_table(FastPatternConfig* fp, const char* s, PortTable* pt)
+static void finish_portlist_table(const FastPatternConfig* fp, const char* s, PortTable* pt)
 {
     PortTableSortUniqRules(pt);
 
@@ -197,7 +197,7 @@ static void finish_portlist_table(FastPatternConfig* fp, const char* s, PortTabl
     }
 }
 
-static void PortTablesFinish(RulePortTables* port_tables, FastPatternConfig* fp)
+static void PortTablesFinish(RulePortTables* port_tables, const FastPatternConfig* fp)
 {
     if ( fp->get_debug_print_rule_groups_compiled() )
     {
@@ -294,6 +294,7 @@ static bool parse_file(SnortConfig* sc, Shell* sh, bool is_root, std::list<Confi
 {
     const char* fname = sh->get_file();
 
+    // cppcheck-suppress knownConditionTrueFalse ; caller may omit the optional shell filename
     if ( !fname || !*fname )
         return false;
 
@@ -571,7 +572,7 @@ static void ShowPolicyStats(const SnortConfig* sc)
     if ( !sc->otn_map )
         return;
 
-    for (auto node = sc->otn_map->find_first(); node; node = sc->otn_map->find_next())
+    for (const auto* node = sc->otn_map->find_first(); node; node = sc->otn_map->find_next())
     {
         const OptTreeNode* otn = (const OptTreeNode*)node->data;
         if ( !otn )
@@ -579,7 +580,7 @@ static void ShowPolicyStats(const SnortConfig* sc)
 
         for (PolicyId id = 0; id < otn->proto_node_num; id++)
         {
-            const auto rtn = getRtnFromOtn(otn, id);
+            const auto* rtn = getRtnFromOtn(otn, id);
 
             if ( rtn and rtn->enabled() )
                 stats[id]++;
@@ -588,7 +589,7 @@ static void ShowPolicyStats(const SnortConfig* sc)
 
     for (unsigned i = 0; i < sc->policy_map->ips_policy_count(); i++)
     {
-        auto policy = sc->policy_map->get_ips_policy(i);
+        const auto* policy = sc->policy_map->get_ips_policy(i);
         if ( !policy )
             continue;
 
@@ -597,10 +598,10 @@ static void ShowPolicyStats(const SnortConfig* sc)
             continue;
 
         auto file = shell->get_file();
+        // cppcheck-suppress knownConditionTrueFalse ; caller may omit the optional shell filename
         if ( !file or !file[0] )
             continue;
 
-        auto id = policy->user_policy_id;
         auto rules_loaded = policy->rules_loaded;
         auto rules_shared = policy->rules_shared;
 
@@ -608,8 +609,11 @@ static void ShowPolicyStats(const SnortConfig* sc)
         auto rules_enabled = (res == stats.end()) ? 0 : res->second;
 
         if ( rules_loaded or rules_shared or rules_enabled )
+        {
+            auto id = policy->user_policy_id;
             sorted_stats.emplace(id, PolicyRuleStats{file, rules_loaded,
                 rules_shared, rules_enabled});
+        }
     }
 
     if ( !sorted_stats.size() )

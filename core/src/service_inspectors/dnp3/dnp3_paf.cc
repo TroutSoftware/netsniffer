@@ -39,17 +39,28 @@ using namespace snort;
 
 */
 
+#define DNP3_DATA_FUNC_CODE__ACK 0
+#define DNP3_DATA_FUNC_CODE__NACK 1
+#define DNP3_DATA_FUNC_CODE__LINK_STATUS 11
+
+#define DNP3_CTRL_FUNC_CODE__RESET_LINK_STATES 0
+#define DNP3_CTRL_FUNC_CODE__TEST_LINK_STATES 2
+#define DNP3_CTRL_FUNC_CODE__REQUEST_LINK_STATUS 9
+
 static StreamSplitter::Status dnp3_paf(dnp3_paf_data* pafdata, const uint8_t* data,
-    uint32_t len, uint32_t* fp)
+    uint32_t len, uint32_t* fp, const uint8_t& zero_payload_packet_limit)
 {
-    //dnp3_paf_data_t *pafdata = user;
     uint32_t bytes_processed = 0;
+    bool zero_length_packet = false;
 
     /* Process this packet 1 byte at a time */
     while (bytes_processed < len)
     {
         uint16_t user_data = 0;
         uint16_t num_crcs = 0;
+        uint8_t data_byte = 0;
+        bool is_primary = false;
+        uint8_t function_code = 0;
 
         switch (pafdata->paf_state)
         {
@@ -57,16 +68,42 @@ static StreamSplitter::Status dnp3_paf(dnp3_paf_data* pafdata, const uint8_t* da
            Could be out of sync, junk data between frames, mid-stream pickup, etc. */
         case DNP3_PAF_STATE__START_1:
             if (((uint8_t)*(data + bytes_processed)) == DNP3_START_BYTE_1)
+            {
+                if (pafdata->junk_pending)
+                {
+                    // flush the junk prefix, leaving this possible start byte queued
+                    *fp = bytes_processed;
+                    pafdata->junk_pending = false;
+                    pafdata->paf_state = DNP3_PAF_STATE__START_1;
+                    return StreamSplitter::FLUSH;
+                }
                 pafdata->paf_state = (dnp3_paf_state)(((int)pafdata->paf_state) + 1);
+            }
             else
-                return StreamSplitter::ABORT;
+            {
+                pafdata->junk_bytes++;
+                pafdata->junk_pending = true;
+            }
             break;
 
         case DNP3_PAF_STATE__START_2:
             if (((uint8_t)*(data + bytes_processed)) == DNP3_START_BYTE_2)
                 pafdata->paf_state = (dnp3_paf_state)(((int)pafdata->paf_state) + 1);
+            else if (((uint8_t)*(data + bytes_processed)) == DNP3_START_BYTE_1)
+            {
+                if (++pafdata->junk_bytes > DNP3_MAX_OCTETS)
+                    return StreamSplitter::ABORT;
+                *fp = bytes_processed;
+                pafdata->junk_pending = false;
+                pafdata->paf_state = DNP3_PAF_STATE__START_1;
+                return StreamSplitter::FLUSH;
+            }
             else
-                return StreamSplitter::ABORT;
+            {
+                pafdata->paf_state = DNP3_PAF_STATE__START_1;
+                pafdata->junk_bytes += 2;
+                pafdata->junk_pending = true;
+            }
             break;
 
         /* Read the length. */
@@ -80,8 +117,13 @@ static StreamSplitter::Status dnp3_paf(dnp3_paf_data* pafdata, const uint8_t* da
 
             if (pafdata->dnp3_length < DNP3_HEADER_REMAINDER_LEN)
             {
-                return StreamSplitter::ABORT;
+                pafdata->paf_state = DNP3_PAF_STATE__START_1;
+                pafdata->junk_bytes += 3;
+                pafdata->junk_pending = true;
+                break;
             }
+            if (pafdata->dnp3_length == DNP3_HEADER_REMAINDER_LEN)
+                zero_length_packet = true;
 
             user_data = pafdata->dnp3_length - DNP3_HEADER_REMAINDER_LEN;
             num_crcs = 1 + (user_data/DNP3_CHUNK_SIZE) + ((user_data % DNP3_CHUNK_SIZE) ? 1 : 0);
@@ -90,12 +132,71 @@ static StreamSplitter::Status dnp3_paf(dnp3_paf_data* pafdata, const uint8_t* da
             pafdata->paf_state = (dnp3_paf_state)(((int)pafdata->paf_state) + 1);
             break;
 
+        case DNP3_PAF_STATE__CONTROL:
+            data_byte = *(data + bytes_processed);
+            is_primary = (data_byte & 0x40) == 0x40;
+            function_code = data_byte & 0x0F;
+
+            if (!is_primary)
+            {
+                switch (function_code)
+                {
+                    case DNP3_DATA_FUNC_CODE__ACK:
+                    case DNP3_DATA_FUNC_CODE__NACK:
+                    case DNP3_DATA_FUNC_CODE__LINK_STATUS:
+                        pafdata->paf_state = DNP3_PAF_STATE__SET_FLUSH;
+                        pafdata->zero_length_packets = 0;
+                        break;
+                    default:
+                        if (zero_length_packet)
+                            pafdata->zero_length_packets++;
+                        else
+                            pafdata->zero_length_packets = 0;
+
+                        if (pafdata->zero_length_packets > zero_payload_packet_limit)
+                            return StreamSplitter::ABORT;
+                        else
+                            pafdata->paf_state = DNP3_PAF_STATE__SET_FLUSH;
+                        break;
+                }
+            }
+            else
+            {
+                switch (function_code)
+                {
+                    case DNP3_CTRL_FUNC_CODE__RESET_LINK_STATES:
+                    case DNP3_CTRL_FUNC_CODE__TEST_LINK_STATES:
+                    case DNP3_CTRL_FUNC_CODE__REQUEST_LINK_STATUS:
+                        pafdata->paf_state = DNP3_PAF_STATE__SET_FLUSH;
+                        pafdata->zero_length_packets = 0;
+                        break;
+                    default:
+                        if (zero_length_packet)
+                            pafdata->zero_length_packets++;
+                        else
+                            pafdata->zero_length_packets = 0;
+
+                        if (pafdata->zero_length_packets > zero_payload_packet_limit)
+                            return StreamSplitter::ABORT;
+                        else
+                            pafdata->paf_state = DNP3_PAF_STATE__SET_FLUSH;
+                        break;
+                }
+            }
+            
+            break;
+
         /* Set the flush point. */
         case DNP3_PAF_STATE__SET_FLUSH:
-            *fp = pafdata->real_length + bytes_processed;
+            *fp = ( pafdata->real_length -1 ) + bytes_processed;
             pafdata->paf_state = DNP3_PAF_STATE__START_1;
+            pafdata->junk_bytes = 0;
+            pafdata->junk_pending = false;
             return StreamSplitter::FLUSH;
         }
+
+        if (pafdata->junk_bytes > DNP3_MAX_OCTETS)
+            return StreamSplitter::ABORT;
 
         bytes_processed++;
     }
@@ -103,11 +204,15 @@ static StreamSplitter::Status dnp3_paf(dnp3_paf_data* pafdata, const uint8_t* da
     return StreamSplitter::SEARCH;
 }
 
-Dnp3Splitter::Dnp3Splitter(bool c2s) : StreamSplitter(c2s)
+Dnp3Splitter::Dnp3Splitter(bool c2s, uint8_t zero_payload_packet_limit) : StreamSplitter(c2s)
 {
     state.paf_state = DNP3_PAF_STATE__START_1;
     state.dnp3_length = 0;
     state.real_length = 0;
+    state.zero_length_packets = 0;
+    state.junk_bytes = 0;
+    state.junk_pending = false;
+    this->zero_payload_packet_limit = zero_payload_packet_limit;
 }
 
 StreamSplitter::Status Dnp3Splitter::scan(
@@ -115,6 +220,6 @@ StreamSplitter::Status Dnp3Splitter::scan(
     uint32_t, uint32_t* fp)
 {
     dnp3_paf_data* pfdata = &state;
-    return dnp3_paf(pfdata, data, len, fp);
+    return dnp3_paf(pfdata, data, len, fp, zero_payload_packet_limit);
 }
 

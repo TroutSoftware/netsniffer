@@ -30,6 +30,8 @@
 #include "app_info_table.h"
 #include "protocols/packet.h"
 
+#include <cstdint>
+
 using namespace snort;
 
 static const char SIP_REGISTER_BANNER[] = "REGISTER ";
@@ -83,9 +85,9 @@ public:
     std::string from;
 };
 
-SipUdpClientDetector::SipUdpClientDetector(ClientDiscovery* cdm)
+SipUdpClientDetector::SipUdpClientDetector(ClientDiscovery* discovery_manager)
 {
-    handler = cdm;
+    handler = discovery_manager;
     name = "SIP";
     proto = IpProtocol::UDP;
     minimum_matches = 2;
@@ -113,7 +115,7 @@ SipUdpClientDetector::SipUdpClientDetector(ClientDiscovery* cdm)
 
 int SipUdpClientDetector::validate(AppIdDiscoveryArgs& args)
 {
-    ClientSIPData* fd = (ClientSIPData*)data_get(args.asd);
+    ClientSIPData* fd = static_cast<ClientSIPData*>(data_get(args.asd));
     if ( !fd )
     {
         fd = new ClientSIPData(this);
@@ -156,7 +158,7 @@ SipTcpClientDetector::SipTcpClientDetector(ClientDiscovery* cdm)
 
 int SipTcpClientDetector::validate(AppIdDiscoveryArgs& args)
 {
-    ClientSIPData* fd = (ClientSIPData*)data_get(args.asd);
+    ClientSIPData* fd = static_cast<ClientSIPData*>(data_get(args.asd));
     if ( !fd )
     {
         fd = new ClientSIPData(this);
@@ -192,7 +194,14 @@ void SipServiceDetector::createRtpFlow(AppIdSession& asd, const Packet* pkt, con
         asd.initialize_future_session(*fp, APPID_SESSION_IGNORE_ID_FLAGS);
     }
 
-    // create an RTCP flow as well
+    // create an RTCP flow as well,
+    // when overflow won't happen
+    if (cliPort == UINT16_MAX or srvPort == UINT16_MAX)
+    {
+        appid_stats.suppressed_future_flows++;
+        APPID_LOG(pkt, TRACE_DEBUG_LEVEL, "SIP: suppressed creating RTCP expected session for port 0\n");
+        return;
+    }
 
     AppIdSession* fp2 = AppIdSession::create_future_session(pkt, cliIp, cliPort + 1, srvIp, srvPort + 1, protocol,
         asd.config.snort_proto_ids[PROTO_INDEX_SIP], odp_ctxt, false, true);
@@ -220,8 +229,8 @@ void SipServiceDetector::addFutureRtpFlows(SipEvent& event, AppIdSession& asd)
     session_a->begin_media_data();
     session_b->begin_media_data();
 
-    auto media_a = session_a->next_media_data();
-    auto media_b = session_b->next_media_data();
+    const auto* media_a = session_a->next_media_data();
+    const auto* media_b = session_b->next_media_data();
 
     while ( media_a && media_b )
     {
@@ -271,7 +280,7 @@ SipServiceDetector::SipServiceDetector(ServiceDiscovery* sd)
 
 int SipServiceDetector::validate(AppIdDiscoveryArgs& args)
 {
-    ServiceSIPData* ss = (ServiceSIPData*)data_get(args.asd);
+    ServiceSIPData* ss = static_cast<ServiceSIPData*>(data_get(args.asd));
     if (!ss)
     {
         ss = new ServiceSIPData;
@@ -306,14 +315,16 @@ void SipEventHandler::handle(DataEvent& event, Flow* flow)
 
     AppIdSession* asd = appid_api.get_appid_session(*flow);
     // Skip for sessions using old odp context after odp reload
+    // cppcheck-suppress knownConditionTrueFalse ; session context and ODP version vary across reloads
     if (asd and (!pkt_thread_odp_ctxt or
         (asd->get_odp_ctxt_version() != pkt_thread_odp_ctxt->get_version())))
         return;
 
-    SipEvent& sip_event = (SipEvent&)event;
+    SipEvent& sip_event = static_cast<SipEvent&>(event);
     const Packet* p = sip_event.get_packet();
     assert(p);
 
+    // cppcheck-suppress knownConditionTrueFalse ; an event may arrive before AppID session creation
     if ( !asd )
     {
         IpProtocol protocol = p->is_tcp() ? IpProtocol::TCP : IpProtocol::UDP;
@@ -330,17 +341,18 @@ void SipEventHandler::handle(DataEvent& event, Flow* flow)
     asd->publish_appid_event(change_bits, *p);
 }
 
-void SipEventHandler::client_handler(SipEvent& sip_event, AppIdSession& asd,
+void SipEventHandler::client_handler(const SipEvent& sip_event, AppIdSession& asd,
     AppidChangeBits& change_bits)
 {
     AppId client_id = APP_ID_SIP;
     char* client_version = nullptr;
 
     SipUdpClientDetector* client = pkt_thread_odp_ctxt->get_sip_client_detector();
+    // cppcheck-suppress knownConditionTrueFalse ; detector availability depends on loaded AppID configuration
     if (!client)
         return;
 
-    ClientSIPData* fd = (ClientSIPData*)client->data_get(asd);
+    ClientSIPData* fd = static_cast<ClientSIPData*>(client->data_get(asd));
     if ( !fd )
     {
         fd = new ClientSIPData(client);
@@ -351,6 +363,7 @@ void SipEventHandler::client_handler(SipEvent& sip_event, AppIdSession& asd,
     AppidSessionDirection direction = (sip_event.get_packet()->is_from_client()) ?
         APP_ID_FROM_INITIATOR : APP_ID_FROM_RESPONDER;
 
+    // cppcheck-suppress knownConditionTrueFalse ; event type is supplied by the SIP publisher
     if ( sip_event.is_invite() && direction == APP_ID_FROM_INITIATOR )
     {
         size_t len;
@@ -381,6 +394,7 @@ void SipEventHandler::client_handler(SipEvent& sip_event, AppIdSession& asd,
             goto success;
     }
 
+    // cppcheck-suppress knownConditionTrueFalse ; dialog state comes from the published SIP event
     if ( !sip_event.is_dialog_established() )
         return;
 
@@ -400,7 +414,7 @@ void SipEventHandler::service_handler(SipEvent& sip_event, AppIdSession& asd,
     if (!service)
         return;
 
-    ServiceSIPData* ss = (ServiceSIPData*)service->data_get(asd);
+    ServiceSIPData* ss = static_cast<ServiceSIPData*>(service->data_get(asd));
     if (!ss)
     {
         ss = new ServiceSIPData;
@@ -445,4 +459,3 @@ void SipEventHandler::service_handler(SipEvent& sip_event, AppIdSession& asd,
     }
 }
 #endif
-

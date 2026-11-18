@@ -63,7 +63,7 @@ static void print_ip4(const NormalizerConfig* nc)
 
     if ( Norm_IsEnabled(nc, NORM_IP4_TTL) )
     {
-        NetworkPolicy* policy = get_network_policy();
+        const NetworkPolicy* policy = get_network_policy();
         opts += ", min_ttl = " + std::to_string(policy->min_ttl);
         opts += ", new_ttl = " + std::to_string(policy->new_ttl);
     }
@@ -91,7 +91,7 @@ static void print_ip6(const NormalizerConfig* nc)
 
     if ( Norm_IsEnabled(nc, NORM_IP6_TTL) )
     {
-        NetworkPolicy* policy = get_network_policy();
+        const NetworkPolicy* policy = get_network_policy();
         opts += ", min_ttl = " + std::to_string(policy->min_ttl);
         opts += ", new_ttl = " + std::to_string(policy->new_ttl);
     }
@@ -257,7 +257,7 @@ bool Normalize_IsEnabled(NormFlags nf)
     if ( get_inspection_policy()->policy_mode != POLICY_MODE__INLINE )
         return false;
 
-    NetworkPolicy* nap = get_network_policy();
+    const NetworkPolicy* nap = get_network_policy();
     return nap->normal_mask & nf;
 }
 
@@ -284,7 +284,6 @@ void Normalizer::show(const SnortConfig*) const
 
 void Normalizer::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(norm_perf_stats);
 
     if ( !p->is_rebuilt() && !p->active->packet_was_dropped() )
@@ -303,7 +302,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* no_ctor(Module* m)
 {
-    NormalizeModule* mod = (NormalizeModule*)m;
+    NormalizeModule* mod = static_cast<NormalizeModule*>(m);
     return new Normalizer(*mod->get_config());
 }
 
@@ -350,4 +349,3 @@ static const InspectApi no_api =
 };
 
 const BaseApi* nin_normalize = &no_api.base;
-

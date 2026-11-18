@@ -17,6 +17,8 @@
 //--------------------------------------------------------------------------
 // distill_verdict_stubs.h author Ron Dempster <rdempste@cisco.com>
 
+#include <cstring>
+
 #include "detection/context_switcher.h"
 #include "detection/detection_buf.h"
 #include "detection/detection_engine.h"
@@ -116,7 +118,7 @@ void CodecManager::thread_term() { }
 void EventManager::open_outputs() { }
 void EventManager::close_outputs() { }
 void EventManager::reload_outputs() { }
-int SFRF_Alloc(unsigned int) { return -1; }
+void SFRF_Alloc(unsigned int) { }
 void packet_time_update(const struct timeval*) { }
 void main_poke(unsigned) { }
 void set_default_policy(const snort::SnortConfig*) { }
@@ -142,7 +144,7 @@ MemoryContext::MemoryContext(MemoryTracker&) : saved(nullptr) { }
 MemoryContext::~MemoryContext() = default;
 Packet::Packet(bool)
 {
-    memset((char*) this , 0, sizeof(*this));
+    std::memset(this, 0, sizeof(*this));
     ip_proto_next = IpProtocol::PROTO_NOT_SET;
     packet_flags = PKT_FROM_CLIENT;
 }
@@ -221,7 +223,9 @@ void Stream::block_flow(const Packet*) { }
 IpsContext::IpsContext(unsigned) { }
 NetworkPolicy* get_network_policy() { return nullptr; }
 InspectionPolicy* get_inspection_policy() { return nullptr; }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 FlowDataStore::~FlowDataStore() = default;
 bool Flow::handle_allowlist() { return true; }
 void ThreadConfig::implement_thread_affinity(SThreadType, unsigned) { }
@@ -235,4 +239,3 @@ bool FlowControl::move_to_allowlist(snort::Flow*) { return true; }
 void memory::MemoryCap::thread_init() { }
 void memory::MemoryCap::thread_term() { }
 void memory::MemoryCap::free_space() { }
-

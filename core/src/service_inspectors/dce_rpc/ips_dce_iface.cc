@@ -375,7 +375,6 @@ bool Dce2IfaceOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus Dce2IfaceOption::eval(Cursor& c, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(dce2_iface_perf_stats);
 
     if (p->dsize == 0)
@@ -416,7 +415,7 @@ IpsOption::EvalStatus Dce2IfaceOption::eval(Cursor& c, Packet* p)
 
     if (version.is_set())
     {
-        if (p->has_tcp_data())
+        if (p->has_tcp_data() || p->has_udp_quic_data())
         {
             if (!version.eval(ropts->iface_vers_maj))
             {
@@ -513,7 +512,7 @@ static void dce2_iface_mod_dtor(Module* m)
 
 static IpsOption* dce2_iface_ctor(Module* p, IpsInfo&)
 {
-    Dce2IfaceModule* m = (Dce2IfaceModule*)p;
+    const Dce2IfaceModule* m = static_cast<Dce2IfaceModule*>(p);
     return new Dce2IfaceOption(m->version, m->any_frag, m->uuid);
 }
 
@@ -553,4 +552,3 @@ static const IpsApi dce2_iface_api =
 
 // added to snort_plugins in dce2.cc
 const BaseApi* ips_dce_iface = &dce2_iface_api.base;
-

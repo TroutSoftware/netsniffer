@@ -83,6 +83,10 @@
 #define DCE2_SMB_INVALID_FILE_OFFSET 58
 #define DCE2_SMB_BAD_NEXT_COMMAND_OFFSET 59
 #define DCE2_SMB_EXCESSIVE_FILE_CHUNKS 60
+// 61 and 62 are used by dce_udp (connection-less); continue at 63 for SMB
+#define DCE2_SMB_SEG_BUFFER_OVERRUN 63
+#define DCE2_SMB_EXCESSIVE_WRITEX_RAW 64
+#define DCE2_SMB_EXCESSIVE_CHAINED_WRITEX 65
 
 #define DCE2_SMB_BAD_NBSS_TYPE_STR "SMB - bad NetBIOS session service session type"
 #define DCE2_SMB_BAD_TYPE_STR  "SMB - bad SMB message type"
@@ -138,6 +142,12 @@
     "SMB - next command specified in SMB2 header is beyond payload boundary"
 #define DCE2_SMB_EXCESSIVE_FILE_CHUNKS_STR \
     "SMB - excessive out-of-order file chunks causing potential DoS"
+#define DCE2_SMB_SEG_BUFFER_OVERRUN_STR \
+    "SMB - segmentation buffer accounting overrun, possible evasion attempt"
+#define DCE2_SMB_EXCESSIVE_WRITEX_RAW_STR \
+    "SMB - excessive raw WriteAndX reassembly memory causing potential DoS"
+#define DCE2_SMB_EXCESSIVE_CHAINED_WRITEX_STR \
+    "SMB - excessive chained WriteAndX commands causing potential DoS"
 
 struct dce2SmbStats : public LruCacheLocalStats
 {
@@ -217,6 +227,7 @@ struct dce2SmbStats : public LruCacheLocalStats
     PegCount v2_read_ignored;
     PegCount v2_read_inv_str_sz;
     PegCount v2_read_rtrkr_misng;
+    PegCount v2_read_resp_ftrkr_misng;
     PegCount v2_read_resp_hdr_err;
     PegCount v2_read_req_hdr_err;
     PegCount v2_setinfo;
@@ -253,6 +264,9 @@ struct dce2SmbStats : public LruCacheLocalStats
     PegCount v2_total_session_trackers;
     PegCount v2_total_tree_trackers;
     PegCount v2_total_file_trackers;
+    PegCount v2_max_file_trackers;
+    PegCount v2_ftracker_evicted;
+    PegCount v2_ftracker_evict_live;
     PegCount v2_updated_file_flows;
     PegCount v2_ignored_file_processing;
     PegCount v2_mc_file_transfers;
@@ -260,6 +274,9 @@ struct dce2SmbStats : public LruCacheLocalStats
     PegCount v2_ioctl_err_resp;
     PegCount v2_ioctl_inv_str_sz;
     PegCount v2_ioctl_ignored;
+    PegCount smb_empty_nbss_batches;
+    PegCount smb_nbss_hdr_rejected;
+    PegCount v2_empty_nbss_frames_consumed;
     PegCount total_sessions; // not used
 };
 
@@ -307,10 +324,16 @@ enum SmbAndXCom
     SMB_ANDX_COM__MAX
 };
 
+// Per-flow cap on retained WriteAndX-raw reassembly memory (sum of all FIDs'
+// buffers). Exceeding it signals a probable memory-exhaustion DoS; we alert and
+// fail the request but never block the session.
+#define DCE2_SMB_WRITEX_MEMCAP (10u * 1024u * 1024u)
+
 struct DCE2_SmbWriteAndXRaw
 {
     int remaining;  // A signed integer so it can be negative
     DCE2_Buffer* buf;
+    uint32_t* retained_writex_owner;  // -> DCE2_SmbSsnData::retained_writex_bytes
 };
 
 struct DCE2_SmbFileChunk
@@ -340,6 +363,8 @@ struct DCE2_SmbFileTracker
     bool is_smb2;
     char* file_name;
     uint16_t file_name_size;
+    // Encoding selected when DCE2_SmbGetFileName allocated file_name.
+    bool file_name_unicode;
     uint64_t file_name_hash;
 
     // Monotonic recency stamp for deterministic MRU-first fapi selection
@@ -451,6 +476,8 @@ struct DCE2_SmbRequestTracker
     // the file tracker upon response.
     char* file_name;
     uint16_t file_name_size;
+    // Kept with the name until it moves to the file tracker.
+    bool file_name_unicode;
     uint64_t file_size;
     uint64_t file_offset;
     bool sequential_only;
@@ -483,6 +510,10 @@ struct DCE2_SmbSsnData
     // Per-session monotonic counter assigning and refreshing DCE2_SmbFileTracker::seq.
     uint64_t next_ftracker_seq;
 
+    // Sum of all fp_writex_raw->buf sizes across this flow's FIDs; capped by
+    // DCE2_SMB_WRITEX_MEMCAP (WriteAndX-raw memory-exhaustion guard).
+    uint32_t retained_writex_bytes;
+
     // For tracking requests / responses
     DCE2_SmbRequestTracker rtracker;
     std::unordered_multimap<uint16_t, DCE2_SmbRequestTracker*> rtrackers_map;
@@ -508,6 +539,7 @@ struct DCE2_SmbSsnData
 
     DCE2_SmbFileTracker* fb_ftracker;
     bool block_pdus;
+    uint32_t retained_co_seg_bytes = 0;
 
     // Maximum file depth as returned from file API
     int64_t max_file_depth;
@@ -523,6 +555,7 @@ struct DCE2_SmbFsm
 class Dce2SmbFlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(Dce2SmbFlowData)
     Dce2SmbFlowData();
     ~Dce2SmbFlowData() override;
 
@@ -535,9 +568,11 @@ public:
     void* dce2_smb_session_data;
 };
 
-// Used for reassembled packets
-#define DCE2_MOCK_HDR_LEN__SMB_CLI \
-    ((unsigned)(sizeof(NbssHdr) + sizeof(SmbNtHdr) + sizeof(SmbWriteAndXReq)))
+// Used for reassembled packets.  The client region is sized per SMB version:
+// SMB2 lays a larger Smb2WriteRequestHdr where SMB1 lays SmbWriteAndXReq.
+unsigned get_smb_cli_mock_hdr_len();
+
+#define DCE2_MOCK_HDR_LEN__SMB_CLI get_smb_cli_mock_hdr_len()
 #define DCE2_MOCK_HDR_LEN__SMB_SRV \
     ((unsigned)(sizeof(NbssHdr) + sizeof(SmbNtHdr) + sizeof(SmbReadAndXResp)))
 
@@ -545,4 +580,3 @@ DCE2_SsnData* get_dce2_session_data(snort::Flow*);
 
 const char* get_smb_com_string(uint8_t);
 #endif
-

@@ -82,18 +82,18 @@ bool CipStatusOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus CipStatusOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(cip_status_perf_stats);
 
     if ( !p->flow || !p->is_full_pdu() )
         return NO_MATCH;
 
-    CipFlowData* fd = (CipFlowData*)p->flow->get_flow_data(CipFlowData::inspector_id);
+    CipFlowData* fd = static_cast<CipFlowData*>(
+        p->flow->get_flow_data(CipFlowData::inspector_id));
 
     if (!fd)
         return NO_MATCH;
 
-    CipSessionData* session_data = &fd->session;
+    const CipSessionData* session_data = &fd->session;
 
     if (session_data->current_data.cip_message_type != CipMessageTypeExplicit
         || session_data->current_data.cip_msg.is_cip_request)
@@ -172,7 +172,7 @@ static void cip_status_mod_dtor(Module* m)
 
 static IpsOption* cip_status_ctor(Module* p, IpsInfo&)
 {
-    CipStatusModule* m = static_cast<CipStatusModule*>(p);
+    const CipStatusModule* m = static_cast<CipStatusModule*>(p);
     return new CipStatusOption(m->cip_status);
 }
 
@@ -207,4 +207,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_cip_status = &ips_api.base;
-

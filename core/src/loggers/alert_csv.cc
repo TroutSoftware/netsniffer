@@ -355,7 +355,9 @@ static void ff_sgt(const Args& a)
     if (a.pkt->proto_bits & PROTO_BIT__CISCO_META_DATA)
     {
         const cisco_meta_data::CiscoMetaDataHdr* cmdh = layer::get_cisco_meta_data_layer(a.pkt);
-        TextLog_Print(csv_log, "%hu", cmdh->sgt_val());
+
+        if (cmdh)
+            TextLog_Print(csv_log, "%hu", cmdh->sgt_val());
     }
 }
 
@@ -639,6 +641,7 @@ void CsvLogger::alert(Packet* p, const char* msg, const Event& event)
     Args a = { p, msg, event };
     bool first = true;
 
+    // cppcheck-suppress internalAstError ; cppcheck 2.18 misparses this range expression
     for ( CsvFunc f : fields )
     {
         if ( first )
@@ -698,4 +701,3 @@ const BaseApi* alert_csv[] =
     &csv_api.base,
     nullptr
 };
-

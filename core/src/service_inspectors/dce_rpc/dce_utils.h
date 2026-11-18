@@ -85,7 +85,8 @@ enum DCE2_BufType
 enum DCE2_BufferMinAddFlag
 {
     DCE2_BUFFER_MIN_ADD_FLAG__USE,
-    DCE2_BUFFER_MIN_ADD_FLAG__IGNORE
+    DCE2_BUFFER_MIN_ADD_FLAG__IGNORE,
+    DCE2_BUFFER_MIN_ADD_FLAG__GEOMETRIC
 };
 
 /********************************************************************
@@ -109,6 +110,7 @@ struct DCE2_Buffer
     uint32_t size;
     uint32_t min_add_size;
     uint32_t offset;
+    uint32_t max_size;   // 0 = uncapped; else clamp geometric growth to this
 };
 
 /********************************************************************
@@ -178,9 +180,10 @@ inline char* DCE2_PruneWhiteSpace(char* str)
 
 // Checks if string is null, empty or just spaces.
 // String must be 0 terminated.
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool DCE2_IsEmptyStr(char* str)
 {
-    char* end;
+    const char* end;
 
     if (str == nullptr)
         return true;
@@ -306,6 +309,7 @@ inline uint64_t DceRpcNtohl64(const uint64_t* ptr, const DceRpcBoFlag bo_flag)
            ((value & 0x0000000000ff0000) << 24) | ((value & 0x00000000ff000000) << 8);
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline uint64_t DceRpcHtonl64(const uint64_t* ptr, const DceRpcBoFlag bo_flag)
 {
     return DceRpcNtohl64(ptr, bo_flag);
@@ -321,7 +325,7 @@ inline void DCE2_CopyUuid(Uuid* dst_uuid, const Uuid* pkt_uuid, const DceRpcBoFl
     memcpy(dst_uuid->node, pkt_uuid->node, sizeof(dst_uuid->node));
 }
 
-inline int DCE2_BufferIsEmpty(DCE2_Buffer* buf)
+inline int DCE2_BufferIsEmpty(const DCE2_Buffer* buf)
 {
     if (buf == nullptr)
         return 1;
@@ -330,20 +334,21 @@ inline int DCE2_BufferIsEmpty(DCE2_Buffer* buf)
     return 0;
 }
 
-inline uint32_t DCE2_BufferLength(DCE2_Buffer* buf)
+inline uint32_t DCE2_BufferLength(const DCE2_Buffer* buf)
 {
     if (buf == nullptr)
         return 0;
     return buf->len;
 }
 
-inline uint32_t DCE2_BufferSize(DCE2_Buffer* buf)
+inline uint32_t DCE2_BufferSize(const DCE2_Buffer* buf)
 {
     if (buf == nullptr)
         return 0;
     return buf->size;
 }
 
+// cppcheck-suppress constParameterPointer ; mutable data access requires a mutable buffer handle
 inline uint8_t* DCE2_BufferData(DCE2_Buffer* buf)
 {
     if (buf == nullptr)
@@ -377,4 +382,3 @@ inline void dce2_move(const uint8_t*& data_ptr, int64_t& data_len, int amount)
 }
 
 #endif
-

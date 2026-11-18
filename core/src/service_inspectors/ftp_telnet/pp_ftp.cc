@@ -423,7 +423,7 @@ static int validate_date_format(FTP_DATE_FMT* ThisFmt, const char** this_param, 
     curr_ch = *this_param;
     if (!ThisFmt->empty)
     {
-        char* format_char = ThisFmt->format_string;
+        const char* format_char = ThisFmt->format_string;
 
         do
         {
@@ -754,7 +754,7 @@ static int validate_param(Packet* p,
             {
                 int alert = 1;
 
-                FTP_BOUNCE_TO* BounceTo = ftp_bounce_lookup_find(
+                const FTP_BOUNCE_TO* BounceTo = ftp_bounce_lookup_find(
                     session->client_conf->bounce_lookup, &ipAddr, &iRet);
                 if (BounceTo)
                 {
@@ -852,15 +852,19 @@ static int validate_param(Packet* p,
                     session->datassn = nullptr;
                 }
             }
+            // cppcheck-suppress knownConditionTrueFalse ; data-channel policy is runtime configuration
             else if (session->server_conf->data_chan)
             {
                  /* Call into Streams to mark data channel as something
                   * to ignore. */
-                  Stream::ignore_flow(
+                  FtpDataFlowData* fd = new FtpDataFlowData(p);
+                  int result = Stream::ignore_flow(
                       p, PktType::TCP, IpProtocol::TCP,
                       &session->serverIP, session->serverPort,
                       &session->clientIP, session->clientPort,
-                      SSN_DIR_BOTH, (new FtpDataFlowData(p)));
+                      SSN_DIR_BOTH, fd);
+                  if (result < 0)
+                      delete fd;
             }
         }
     }
@@ -1044,7 +1048,7 @@ int initialize_ftp(FTP_SESSION* session, Packet* p, int iMode)
         }
 
 
-        if ( buf.len )
+        if ( iRet == FTPP_NORMALIZED )
         {
             /* Normalized data will always be in decode buffer */
             if ((iMode == FTPP_SI_CLIENT_MODE && session->client_conf->telnet_cmds) ||
@@ -1053,6 +1057,10 @@ int initialize_ftp(FTP_SESSION* session, Packet* p, int iMode)
                 DetectionEngine::queue_event(GID_FTP, FTP_TELNET_CMD);
                 return FTPP_ALERT; /* Nothing else to do since we alerted */
             }
+
+            // Telnet commands consumed the whole PDU; nothing to parse or publish
+            if ( !buf.len )
+                return FTPP_NORMALIZED;
 
             read_ptr = buf.data;
         }
@@ -1063,7 +1071,7 @@ int initialize_ftp(FTP_SESSION* session, Packet* p, int iMode)
     else if (iMode == FTPP_SI_SERVER_MODE)
     {
         FTP_SERVER_RSP* rsp = &session->server.response;
-        req = (FTP_CLIENT_REQ*)rsp;
+        req = reinterpret_cast<FTP_CLIENT_REQ*>(rsp);
     }
     else
         return FTPP_INVALID_ARG;
@@ -1241,6 +1249,7 @@ static int do_stateful_checks(FTP_SESSION* session, Packet* p,
                                     }
                                 }
                             }
+                            // cppcheck-suppress knownConditionTrueFalse ; data-channel policy is runtime configuration
                             else if (session->server_conf->data_chan)
                             {
                                 /* Call into Streams to mark data channel as something
@@ -1415,12 +1424,6 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
     FTP_CLIENT_REQ* req;
     FTP_CMD_CONF* CmdConf = nullptr;
 
-    const unsigned char* end = p->data + p->dsize;
-
-    const DataPointer& buf = DetectionEngine::get_alt_buffer(p);
-    if ( buf.len )
-        end = buf.data + buf.len;
-
     if (iMode == FTPP_SI_CLIENT_MODE)
     {
         req = &ftpssn->client.request;
@@ -1429,10 +1432,16 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
     else if (iMode == FTPP_SI_SERVER_MODE)
     {
         FTP_SERVER_RSP* rsp = &ftpssn->server.response;
-        req = (FTP_CLIENT_REQ*)rsp;
+        req = reinterpret_cast<FTP_CLIENT_REQ*>(rsp);
     }
     else
         return FTPP_INVALID_ARG;
+
+    // Bound the parse by the buffer initialize_ftp() pointed pipeline_req into
+    const DataPointer& buf = DetectionEngine::get_alt_buffer(p);
+    const unsigned char* end =
+        (req->pipeline_req and (const unsigned char*)req->pipeline_req == buf.data) ?
+        buf.data + buf.len : p->data + p->dsize;
 
     while (req->pipeline_req)
     {
@@ -1996,4 +2005,3 @@ int check_ftp(FTP_SESSION* ftpssn, Packet* p, int iMode)
 
     return iRet;
 }
-

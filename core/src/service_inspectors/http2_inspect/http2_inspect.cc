@@ -39,7 +39,7 @@ using namespace HttpCommon;
 using namespace Http2Enums;
 
 #ifdef REG_TEST
-static void print_flow_issues(FILE*, Http2Infractions* const, Http2EventGen* const);
+static void print_flow_issues(FILE*, const Http2Infractions* const, const Http2EventGen* const);
 #endif
 
 Http2Inspect::Http2Inspect(const Http2ParaList* params_) : params(params_)
@@ -68,8 +68,8 @@ bool Http2Inspect::get_buf(InspectionBuffer::Type /*ibt*/, Packet* /*p*/, Inspec
 
 bool Http2Inspect::get_buf(unsigned id, Packet* p, InspectionBuffer& b)
 {
-    Http2FlowData* const session_data =
-        (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
+    Http2FlowData* const session_data = static_cast<Http2FlowData*>(
+        p->flow->get_flow_data(Http2FlowData::inspector_id));
 
     if (session_data == nullptr)
         return false;
@@ -97,8 +97,8 @@ bool Http2Inspect::get_fp_buf(InspectionBuffer::Type ibt, Packet* p, InspectionB
 {
     // All current HTTP/2 fast pattern buffers are inherited from http_inspect. Just pass the
     // request on.
-    Http2FlowData* const session_data =
-        (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
+    Http2FlowData* const session_data = static_cast<Http2FlowData*>(
+        p->flow->get_flow_data(Http2FlowData::inspector_id));
 
     if ((session_data == nullptr) || (session_data->hi == nullptr))
         return false;
@@ -108,13 +108,12 @@ bool Http2Inspect::get_fp_buf(InspectionBuffer::Type ibt, Packet* p, InspectionB
 
 void Http2Inspect::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(Http2Module::get_profile_stats());
 
     const SourceId source_id = p->is_from_client() ? SRC_CLIENT : SRC_SERVER;
 
-    Http2FlowData* const session_data =
-        (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
+    Http2FlowData* const session_data = static_cast<Http2FlowData*>(
+        p->flow->get_flow_data(Http2FlowData::inspector_id));
 
     if (!session_data)
     {
@@ -176,8 +175,8 @@ void Http2Inspect::eval(Packet* p)
 
 void Http2Inspect::clear(Packet* p)
 {
-    Http2FlowData* const session_data =
-        (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
+    Http2FlowData* const session_data = static_cast<Http2FlowData*>(
+        p->flow->get_flow_data(Http2FlowData::inspector_id));
 
     if (session_data == nullptr)
     {
@@ -213,8 +212,8 @@ void Http2Inspect::show(const SnortConfig*) const
 }
 
 #ifdef REG_TEST
-static void print_flow_issues(FILE* output, Http2Infractions* const infractions,
-    Http2EventGen* const events)
+static void print_flow_issues(FILE* output, const Http2Infractions* const infractions,
+    const Http2EventGen* const events)
 {
     fprintf(output, "Infractions: %016" PRIx64 ", Events: %016" PRIx64 "\n\n",
         infractions->get_raw(0), events->get_raw(0));
@@ -223,7 +222,8 @@ static void print_flow_issues(FILE* output, Http2Infractions* const infractions,
 
 static const uint8_t* get_frame_pdu(Packet* p, uint16_t& length)
 {
-    auto* const session_data = (Http2FlowData*)p->flow->get_flow_data(Http2FlowData::inspector_id);
+    auto* const session_data = static_cast<Http2FlowData*>(
+        p->flow->get_flow_data(Http2FlowData::inspector_id));
     if (!session_data)
         return nullptr;
 
@@ -231,7 +231,7 @@ static const uint8_t* get_frame_pdu(Packet* p, uint16_t& length)
     if (!stream)
         return nullptr;
 
-    auto* frame = stream->get_current_frame();
+    const auto* frame = stream->get_current_frame();
     if (!frame)
         return nullptr;
 

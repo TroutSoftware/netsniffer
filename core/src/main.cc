@@ -42,6 +42,7 @@
 #include "main/snort_config.h"
 #include "main/snort_module.h"
 #include "main/swapper.h"
+#include "main/thread.h"
 #include "main/thread_config.h"
 #include "managers/inspector_manager.h"
 #include "managers/module_manager.h"
@@ -321,6 +322,25 @@ void snort::main_unicast_command(AnalyzerCommand* ac, unsigned target,  ControlC
 }
 #endif
 
+bool main_packet_threads_fully_paused()
+{
+    if ( !in_main_thread() or !pigs )
+        return false;
+
+    for ( unsigned i = 0; i < max_pigs; ++i )
+    {
+        Analyzer* analyzer = pigs[i].analyzer;
+
+        if ( !analyzer )
+            continue;
+
+        if ( !analyzer->is_fully_paused() )
+            return false;
+    }
+
+    return true;
+}
+
 int main_dump_stats(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -476,6 +496,23 @@ int main_show_config_generation(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; callback signature must match LuaCFunction
+int main_show_control_port(lua_State* L)
+{
+#ifdef SHELL
+    ControlConn* ctrlcon = ControlConn::query_from_lua(L);
+    int port = ControlMgmt::get_control_port();
+    if (port > 0)
+        LogRespond(ctrlcon, "== control port: %d\n", port);
+    else
+        LogRespond(ctrlcon, "== control port: none\n");
+    return 0;
+#else
+    UNUSED(L);
+    return 0;
+#endif
+}
+
 int main_reload_config(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -484,7 +521,7 @@ int main_reload_config(lua_State* L)
 
     if ( L )
     {
-        Lua::ManageStack(L, 1);
+        Lua::ManageStack manage_stack(L, 1);
         if (lua_gettop(L) >= 1)
             fname = luaL_checkstring(L, 1);
 
@@ -605,7 +642,7 @@ int main_reload_hosts(lua_State* L)
 
     if ( L )
     {
-        Lua::ManageStack(L, 1);
+        Lua::ManageStack manage_stack(L, 1);
         fname = luaL_optstring(L, 1, sc->attribute_hosts_file.c_str());
     }
     else
@@ -651,6 +688,7 @@ int main_reload_hosts(lua_State* L)
     return 0;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 int main_process(lua_State* L)
 {
     ControlConn* ctrlcon = ControlConn::query_from_lua(L);
@@ -900,9 +938,9 @@ static void reap_commands()
 }
 
 // FIXIT-L return true if something was done to avoid sleeping
-static bool house_keeping()
+static bool house_keeping(bool check_signals = true)
 {
-    if (pthreads_started)
+    if (check_signals && pthreads_started)
         signal_check();
 
     reap_commands();
@@ -922,6 +960,7 @@ static void service_check()
         return;
 #endif
 
+    // cppcheck-suppress knownConditionTrueFalse ; result depends on pending housekeeping work
     if ( house_keeping() )
         return;
 
@@ -1234,6 +1273,11 @@ static void snort_main()
     }
 
     main_loop();
+
+    // Packet-thread shutdown may leave work after the main loop's last service pass.
+    house_keeping(false);
+    // Final periodic callbacks may queue orphan commands after housekeeping's initial reap.
+    reap_commands();
 
     delete pig_poke;
     delete[] pigs;

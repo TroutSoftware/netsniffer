@@ -95,7 +95,7 @@ bool TcpFlagOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const TcpFlagOption& rhs = (const TcpFlagOption&)ips;
+    const TcpFlagOption& rhs = static_cast<const TcpFlagOption&>(ips);
     const TcpFlagCheckData* left = &config;
     const TcpFlagCheckData* right = &rhs.config;
 
@@ -121,7 +121,7 @@ IpsOption::EvalStatus TcpFlagOption::eval(Cursor&, Packet* p)
     /* the flags we really want to check are all the ones
      */
 
-    TcpFlagCheckData* flagptr = &config;
+    const TcpFlagCheckData* flagptr = &config;
     uint8_t tcp_flags = p->ptrs.tcph->th_flags & (0xFF ^ flagptr->tcp_mask);
 
     switch ((flagptr->mode))
@@ -389,7 +389,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* flags_ctor(Module* p, IpsInfo&)
 {
-    FlagsModule* m = (FlagsModule*)p;
+    const FlagsModule* m = static_cast<FlagsModule*>(p);
     return new TcpFlagOption(m->data);
 }
 
@@ -432,4 +432,3 @@ const BaseApi* ips_flags[] =
     &flags_api.base,
     nullptr
 };
-

@@ -31,6 +31,7 @@
 #include "utils/util.h"
 
 //#include "appid_module.h"
+#include "appid_app_descriptor.h"
 #include "appid_debug.h"
 #include "appid_types.h"
 #include "appid_utils/sf_mlmp.h"
@@ -231,7 +232,7 @@ public:
         chp_matches[cur_ptype].sort(ChpMatchDescriptor::comp_chp_actions);
     }
 
-    HttpFieldIds cur_ptype;
+    HttpFieldIds cur_ptype = REQ_AGENT_FID;
     const char* buffer[NUM_HTTP_FIELDS] = { };
     uint16_t length[NUM_HTTP_FIELDS] = { };
     std::list<MatchedCHPAction> chp_matches[NUM_HTTP_FIELDS];
@@ -304,14 +305,15 @@ public:
     void scan_key_chp(ChpMatchDescriptor&);
     AppId scan_chp(ChpMatchDescriptor&, char**, char**, int*, AppIdHttpSession*,
            const OdpContext&);
-    AppId scan_header_x_working_with(const char*, uint32_t, char**);
+    static AppId scan_header_x_working_with(const char*, uint32_t, char**);
     int get_appid_by_pattern(const char*, unsigned, char**);
     bool get_appid_from_url(const char*, const char*, char**, const char*, AppId*, AppId*,
         AppId*, AppId*, bool, OdpContext&);
     AppId get_appid_by_content_type(const char*, int);
-    void get_server_vendor_version(const char*, int, char**, char**, AppIdServiceSubtype**);
+    static void get_server_vendor_version(const char*, int, char**, char**,
+        AppIdServiceSubtypeList&);
     void identify_user_agent(const char*, int, AppId&, AppId&, char**);
-    uint32_t parse_multiple_http_patterns(const char* pattern, tMlmpPattern*,
+    static uint32_t parse_multiple_http_patterns(const char* pattern, tMlmpPattern*,
         uint32_t numPartLimit, int level, bool is_literal);
 
 private:

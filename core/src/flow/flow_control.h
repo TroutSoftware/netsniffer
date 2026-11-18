@@ -62,7 +62,10 @@ public:
 
     bool process(PktType, snort::Packet*, bool* new_flow = nullptr);
     snort::Flow* find_flow(const snort::FlowKey*);
+    snort::Flow* find_flow_either_tunnel_state(const snort::FlowKey&);
     snort::Flow* new_flow(const snort::FlowKey*);
+    void unlink_uni(snort::Flow*);
+    void relink_uni(snort::Flow*);
     void release_flow(const snort::FlowKey*);
     void release_flow(snort::Flow*, PruneReason);
     void purge_flows();
@@ -73,6 +76,7 @@ public:
     void check_expected_flow(snort::Flow*, snort::Packet*);
     unsigned prune_multiple(PruneReason, bool do_cleanup);
     bool move_to_allowlist(snort::Flow*);
+    static bool apply_flow_state(snort::Flow*, snort::Packet*, bool new_flow);
 
     int add_expected_ignore(
         const snort::Packet* ctrlPkt, PktType, IpProtocol,
@@ -88,9 +92,11 @@ public:
     FlowCache* get_flow_cache()
     { return cache; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     class ExpectCache* get_exp_cache()
     { return exp_cache; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     PegCount get_flows()
     { return num_flows; }
 
@@ -106,6 +112,9 @@ public:
     PegCount get_uni_flows() const;
     PegCount get_uni_ip_flows() const;
     PegCount get_num_flows() const;
+
+    PegCount get_released_max_flow_mem() const;
+    PegCount get_released_total_flow_mem() const;
 
 private:
     bool set_key(snort::FlowKey*, snort::Packet*);

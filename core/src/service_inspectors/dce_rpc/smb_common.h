@@ -25,6 +25,8 @@
 
 #include <cstdint>
 
+#include "utils/endian.h"
+
 #define SMB_MAX_NUM_COMS   256
 
 #define SMB_FILE_TYPE_DISK               0x0000
@@ -409,6 +411,61 @@ inline uint8_t NbssType(const NbssHdr* nb)
     return nb->type;
 }
 
+// Returns true for NBSS session-service type codes recognised by the SMB
+// splitter.  Centralises the type list so NbssIsEmptyCtrl and the splitter's
+// validation function share exactly one switch statement.
+inline bool NbssIsKnownCtrlType(uint8_t type)
+{
+    switch ( type )
+    {
+    case NBSS_SESSION_TYPE__MESSAGE:
+    case NBSS_SESSION_TYPE__REQUEST:
+    case NBSS_SESSION_TYPE__POS_RESPONSE:
+    case NBSS_SESSION_TYPE__NEG_RESPONSE:
+    case NBSS_SESSION_TYPE__RETARGET_RESPONSE:
+    case NBSS_SESSION_TYPE__KEEP_ALIVE:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// True for NBSS keep-alive frames.  Keep-alives are header-only, so their
+// advertised flags and length do not make trailing bytes part of the frame.
+// The splitter and both SMB versions must use this same interpretation.
+inline bool NbssIsEmptyCtrl(const NbssHdr* nb)
+{
+    return nb->type == NBSS_SESSION_TYPE__KEEP_ALIVE;
+}
+
+// The session-establishment types have fixed trailer sizes and reserved FLAGS
+// bits, so their degenerate forms cannot occur on the wire and must not be
+// given a flush point.
+//
+// SESSION MESSAGE is exempt: SMB2 direct TCP reuses the FLAGS byte as the high
+// byte of a 24-bit length (MS-SMB2 2.1), so non-zero flags are legal there.
+inline bool NbssIsValidCtrlLen(const NbssHdr* nb)
+{
+    if ( nb->type == NBSS_SESSION_TYPE__MESSAGE )
+        return true;
+
+    const uint16_t len = ntohs(nb->length);
+
+    switch ( nb->type )
+    {
+    case NBSS_SESSION_TYPE__POS_RESPONSE:       // 4.3.3: header only
+    case NBSS_SESSION_TYPE__KEEP_ALIVE:         // 4.3.7: header only
+        return len == 0;
+    case NBSS_SESSION_TYPE__NEG_RESPONSE:       // 4.3.4: one ERROR_CODE byte
+        return len == 1;
+    case NBSS_SESSION_TYPE__RETARGET_RESPONSE:  // 4.3.5: IP address and port
+        return len == 6;
+    case NBSS_SESSION_TYPE__REQUEST:            // 4.3.2: CALLED and CALLING NAME
+        return len != 0;
+    }
+    return false;
+}
+
 inline uint32_t SmbTransformId(const Smb2TransformHdr* hdr)
 {
     const uint8_t* id = (const uint8_t*)hdr->protocolid;
@@ -432,7 +489,7 @@ inline uint16_t SmbBcc(const uint8_t* ptr, uint16_t com_size)
     if (com_size < sizeof(SmbEmptyCom))
         return 0;
 
-    return snort::alignedNtohs((const uint16_t*)(ptr + com_size - sizeof(uint16_t)));
+    return LETOHS(ptr + com_size - sizeof(uint16_t));
 }
 
 inline uint16_t SmbEmptyComBcc(const SmbEmptyCom* ec)
@@ -469,6 +526,7 @@ inline uint16_t SmbAndXOff2(const SmbAndXCommon* andx)
 #define SMB_FMT__DIALECT     2
 #define SMB_FMT__ASCII       4
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool SmbFmtDataBlock(const uint8_t fmt)
 {
     return fmt == SMB_FMT__DATA_BLOCK ? true : false;
@@ -487,4 +545,3 @@ inline bool SmbFmtAscii(const uint8_t fmt)
 #pragma pack()
 
 #endif
-

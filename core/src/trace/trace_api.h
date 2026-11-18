@@ -247,4 +247,3 @@ static inline void trace_print(const snort::Trace* trace, const snort::Packet* p
 #endif
 
 #endif
-

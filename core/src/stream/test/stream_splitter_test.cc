@@ -45,7 +45,10 @@ const SnortConfig* SnortConfig::get_conf()
 
 static StreamSplitter* next_splitter = nullptr;
 
+Flow::Flow() { }
 Flow::~Flow() = default;
+// cppcheck-suppress functionStatic ; stub must match the non-static member signature
+void FlowStash::reset() { }
 FlowDataStore::~FlowDataStore() = default;
 Packet::Packet(bool) { }
 Packet::~Packet() = default;
@@ -153,6 +156,7 @@ TEST(other_splitter, stop_and_wait)
     CHECK(cs.scan(&pkt, nullptr, 123, 0, &fp) == StreamSplitter::SEARCH);
     CHECK(fp == 0);
     CHECK(flushed == 2);
+    next_splitter = nullptr;
 }
 
 //-------------------------------------------------------------------------
@@ -163,4 +167,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

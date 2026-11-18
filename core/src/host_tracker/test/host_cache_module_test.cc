@@ -91,8 +91,8 @@ unsigned get_instance_id()
 unsigned ThreadConfig::get_instance_max() { return 1; }
 } // end of namespace snort
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 template <class T>
 HostCacheAllocIp<T>::HostCacheAllocIp()
@@ -111,7 +111,7 @@ static void try_reload_prune(bool is_not_locked)
     if ( is_not_locked )
     {
         CHECK(host_cache.reload_prune(prune_size, 2) == true);
-        for ( auto& seg : host_cache.seg_list )
+        for ( const auto* seg : host_cache.seg_list )
         {
             CHECK(seg->get_max_size() == prune_size/segs);
         }
@@ -269,36 +269,36 @@ TEST(host_cache_module, get_segment_stats)
 {
     host_cache.init();
     std::string str;
-    str = module.get_host_cache_segment_stats(0);
+    str = HostCacheModule::get_host_cache_segment_stats(0);
 
     bool contain = str.find("Segment 0:") != std::string::npos;
     CHECK_TRUE(contain);
 
-    str = module.get_host_cache_segment_stats(1);
+    str = HostCacheModule::get_host_cache_segment_stats(1);
     contain = str.find("Segment 1:") != std::string::npos;
     CHECK_TRUE(contain);
 
-    str = module.get_host_cache_segment_stats(2);
+    str = HostCacheModule::get_host_cache_segment_stats(2);
     contain = str.find("Segment 2:") != std::string::npos;
     CHECK_TRUE(contain);
 
-    str = module.get_host_cache_segment_stats(-1);
+    str = HostCacheModule::get_host_cache_segment_stats(-1);
     contain = str.find("total cache segments: 4") != std::string::npos;
     CHECK_TRUE(contain);
 }
 
 TEST(host_cache_module, log_host_cache_messages)
 {
-    module.log_host_cache(nullptr, true);
+    HostCacheModule::log_host_cache(nullptr, true);
     STRCMP_EQUAL(logged_message, "File name is needed!\n");
 
-    module.log_host_cache("nowhere/host_cache.dump", true);
+    HostCacheModule::log_host_cache("nowhere/host_cache.dump", true);
     STRCMP_EQUAL(logged_message, "Couldn't open nowhere/host_cache.dump to write!\n");
 
-    module.log_host_cache("host_cache.dump", true);
+    HostCacheModule::log_host_cache("host_cache.dump", true);
     STRCMP_EQUAL(logged_message, "Dumped host cache to host_cache.dump\n");
 
-    module.log_host_cache("host_cache.dump", true);
+    HostCacheModule::log_host_cache("host_cache.dump", true);
     STRCMP_EQUAL(logged_message, "File host_cache.dump already exists!\n");
     remove("host_cache.dump");
 }

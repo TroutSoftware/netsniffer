@@ -113,12 +113,12 @@ enum POP3State
 static const unsigned MAX_VERSION_SIZE = 64;
 struct ServicePOP3Data
 {
-    POP3State state;
-    unsigned count;
-    const char* vendor;
-    char version[MAX_VERSION_SIZE];
-    AppIdServiceSubtype* subtype;
-    int error;
+    POP3State state = POP3_STATE_CONNECT;
+    unsigned count = 0;
+    const char* vendor = nullptr;
+    char version[MAX_VERSION_SIZE] = {};
+    AppIdServiceSubtypeList subtypes;
+    int error = 0;
 };
 
 class POP3DetectorData : public AppIdFlowData
@@ -244,6 +244,7 @@ void Pop3ClientDetector::do_custom_reload()
     cmd_matcher->reload();
 }
 
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int pop3_pattern_match(void* id, void*, int match_end_pos, void* data, void*)
 {
     unsigned long idx = (unsigned long)id;
@@ -257,12 +258,6 @@ static int pop3_pattern_match(void* id, void*, int match_end_pos, void* data, vo
 
 POP3DetectorData::~POP3DetectorData()
 {
-    while (server.subtype)
-    {
-        AppIdServiceSubtype* sub = server.subtype;
-        server.subtype = sub->next;
-        delete sub;
-    }
     if (client.username)
         snort_free(client.username);
 }
@@ -296,7 +291,7 @@ int Pop3ServiceDetector::pop3_server_validate(POP3DetectorData* dd, const uint8_
 
     assert(data);
     const uint8_t* end = data + size;
-    char* v_end = pd->version + MAX_VERSION_SIZE - 1;
+    const char* v_end = pd->version + MAX_VERSION_SIZE - 1;
     switch (pd->state)
     {
     case POP3_STATE_CONNECT:
@@ -426,8 +421,6 @@ int Pop3ServiceDetector::pop3_server_validate(POP3DetectorData* dd, const uint8_
                 pd->vendor = ven_im;
             else if ((p=service_strstr(begin, len, (const unsigned char*)ven_po, sizeof(ven_po)-1)))
             {
-                AppIdServiceSubtype* sub;
-
                 pd->vendor = ven_po;
                 p += (sizeof(ven_po) - 1);
                 if (line_end-p < (int)sizeof(ver_po)-1 || memcmp(p, ver_po, sizeof(ver_po)-1) != 0)
@@ -500,10 +493,9 @@ int Pop3ServiceDetector::pop3_server_validate(POP3DetectorData* dd, const uint8_
                 unsigned sub_len;
 
                 sub_len = p - s;
-                sub = new AppIdServiceSubtype();
-                sub->service.assign(reinterpret_cast<const char*>(s), sub_len);
-                sub->next = pd->subtype;
-                pd->subtype = sub;
+                AppIdServiceSubtype* sub = pd->subtypes.emplace_front();
+                if (sub)
+                    sub->service.assign(reinterpret_cast<const char*>(s), sub_len);
                 if (line_end-p > (int)sizeof(subver_po)-1
                     && memcmp(p, subver_po, sizeof(subver_po)-1) == 0)
                 {
@@ -513,7 +505,8 @@ int Pop3ServiceDetector::pop3_server_validate(POP3DetectorData* dd, const uint8_
                     if (p != s && p < line_end && *p)
                     {
                         sub_len = p - s;
-                        sub->version.assign(reinterpret_cast<const char*>(s), sub_len);
+                        if (sub)
+                            sub->version.assign(reinterpret_cast<const char*>(s), sub_len);
                     }
                 }
             }
@@ -547,7 +540,8 @@ ven_ver_done:;
 
 POP3DetectorData* Pop3ClientDetector::get_common_data(AppIdSession& asd)
 {
-    POP3DetectorData* dd = (POP3DetectorData*)data_get(asd);
+    POP3DetectorData* dd = static_cast<POP3DetectorData*>(data_get(asd));
+    // cppcheck-suppress knownConditionTrueFalse ; detector data is created on the first session packet
     if (!dd)
     {
         dd = new POP3DetectorData;
@@ -587,7 +581,7 @@ int Pop3ClientDetector::validate(AppIdDiscoveryArgs& args)
     while ((length = (end - s)))
     {
         unsigned long pattern_index;
-        AppIdFlowContentPattern* cmd = nullptr;
+        const AppIdFlowContentPattern* cmd = nullptr;
 
         pattern_index = num_pop3_client_patterns;
         cmd_matcher->find_all((const char*)s, (length > longest_pattern ? longest_pattern : length),
@@ -630,7 +624,7 @@ int Pop3ClientDetector::validate(AppIdDiscoveryArgs& args)
             {
                 char username[((255 - (sizeof(USER) - 1)) - 2) + 1];
                 char* p = username;
-                char* p_end = p + sizeof(username) - 1;
+                const char* p_end = p + sizeof(username) - 1;
                 int found_tick = 0;
 
                 for (; s < end && p < p_end; s++)
@@ -803,10 +797,9 @@ int Pop3ServiceDetector::validate(AppIdDiscoveryArgs& args)
         if (pd->count >= POP3_COUNT_THRESHOLD
             && !args.asd.is_service_detected())
         {
-            add_service_consume_subtype(args.asd, args.pkt, args.dir,
+            add_service_with_subtypes(args.change_bits, args.asd, args.pkt, args.dir,
                 dd->client.state == POP3_CLIENT_STATE_STLS_CMD ? APP_ID_POP3S : APP_ID_POP3,
-                pd->vendor, pd->version[0] ? pd->version : nullptr, pd->subtype, args.change_bits);
-            pd->subtype = nullptr;
+                pd->vendor, pd->version[0] ? pd->version : nullptr, pd->subtypes);
             return APPID_SUCCESS;
         }
     }
@@ -825,4 +818,3 @@ inprocess:
     service_inprocess(args.asd, args.pkt, args.dir);
     return APPID_INPROCESS;
 }
-

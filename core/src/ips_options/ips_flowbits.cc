@@ -213,7 +213,7 @@ bool FlowBitsOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const FlowBitsOption& rhs = (const FlowBitsOption&)ips;
+    const FlowBitsOption& rhs = static_cast<const FlowBitsOption&>(ips);
 
     if ( (config->ids.size() != rhs.config->ids.size()) or
             (config->or_bits != rhs.config->or_bits) or
@@ -309,7 +309,7 @@ void FlowBitsOption::get_dependencies(bool& set, std::vector<std::string>& bits)
 
 bool flowbits_setter(void* option_data)
 {
-    FlowBitsOption* p = (FlowBitsOption*)option_data;
+    const FlowBitsOption* p = (FlowBitsOption*)option_data;
     return p->is_setter();
 }
 
@@ -347,7 +347,7 @@ void flowbits_counts(unsigned& total, unsigned& unchecked, unsigned& unset)
 //-------------------------------------------------------------------------
 
 static FlowBit* get_bit(
-    const char* bit, FlowBitCheck* check)
+    const char* bit, const FlowBitCheck* check)
 {
     FlowBit& flow_bit = bit_map[bit];
 
@@ -369,7 +369,7 @@ static FlowBit* get_bit(
 static bool parse_flowbits(const char* flowbits_names, FlowBitCheck* check)
 {
     assert(flowbits_names);
-    FlowBit* flow_bit;
+    const FlowBit* flow_bit;
 
     if ( strchr(flowbits_names, '|') )
     {
@@ -457,6 +457,7 @@ public:
 bool FlowbitsModule::begin(const char*, int, SnortConfig*)
 {
     delete fbc;
+    fbc = nullptr;
     bits.clear();
     op = FlowBitCheck::Op::SET;
     return true;
@@ -503,13 +504,13 @@ static Module* mod_ctor()
 
 static void mod_dtor(Module* m)
 {
-    FlowbitsModule* fb = (FlowbitsModule*)m;
+    FlowbitsModule* fb = static_cast<FlowbitsModule*>(m);
     delete fb;
 }
 
 static IpsOption* flowbits_ctor(Module* p, IpsInfo& info)
 {
-    FlowbitsModule* m = (FlowbitsModule*)p;
+    FlowbitsModule* m = static_cast<FlowbitsModule*>(p);
     FlowBitCheck* fbc = m->get_data();
     FlowBitsOption* opt = new FlowBitsOption(fbc);
 
@@ -554,4 +555,3 @@ const BaseApi* ips_flowbits[] =
     &flowbits_api.base,
     nullptr
 };
-

@@ -24,10 +24,12 @@
 #include "http_msg_head_shared.h"
 
 #include "hash/hash_key_operations.h"
-#include "utils/util_cstring.h"
 
+#include "http_cache_data.h"
 #include "http_common.h"
+#include "http_context_data.h"
 #include "http_enum.h"
+#include "http_module.h"
 #include "http_msg_request.h"
 
 using namespace HttpCommon;
@@ -35,7 +37,7 @@ using namespace HttpEnums;
 using namespace snort;
 
 HttpMsgHeadShared::HttpMsgHeadShared(const uint8_t* buffer, const uint16_t buf_size, HttpFlowData* session_data_,
-    HttpCommon::SourceId source_id_, bool buf_owner, snort::Flow* flow_,
+    SourceId source_id_, bool buf_owner, Flow* flow_,
     const HttpParaList* params_): HttpMsgSection(buffer, buf_size, session_data_, source_id_,
     buf_owner, flow_, params_), own_msg_buffer(buf_owner)
 { }
@@ -83,6 +85,14 @@ void HttpMsgHeadShared::analyze()
     parse_header_block();
     parse_header_lines();
     create_norm_head_list();
+
+    // Header/trailer 298 is already transaction-scoped, so raise it from eval and log this section.
+    if (source_id == SRC_CLIENT and transaction->has_pending_size_298())
+    {
+        session_data->events[source_id]->create_event_if_new(EVENT_REQUEST_SIZE_TOO_LONG);
+        if (transaction->claim_size_298_count())
+            HttpModule::increment_peg_counts(PEG_MAX_REQUEST_SIZE_EXCEEDED);
+    }
 }
 
 void HttpMsgHeadShared::create_norm_head_list()
@@ -90,9 +100,29 @@ void HttpMsgHeadShared::create_norm_head_list()
     // This function does not do the actual JIT normalization of header values. It converts the
     // header names into numeric IDs and creates a linked list of all the different headers that
     // are present in the message along with the number of times each one appears.
+    const int32_t max_value_length = params->maximum_header_value_length;
+
     for (int j=0; j < num_headers; j++)
     {
         derive_header_name_id(j);
+
+        if (max_value_length > 0 and get_inspection_section() == PS_HEADER and
+            header_value[j].length() > max_value_length and
+            header_name_id[j] != HEAD_COOKIE and header_name_id[j] != HEAD_SET_COOKIE)
+        {
+            const uint8_t* value = header_value[j].start();
+            int32_t begin = 0;
+            int32_t end = header_value[j].length();
+            while (begin < end and is_sp_tab[value[begin]])
+                begin++;
+            while (end > begin and is_sp_tab[value[end - 1]])
+                end--;
+
+            // cppcheck-suppress knownConditionTrueFalse ; result depends on packet contents
+            if (end - begin > max_value_length)
+                raise_max_header_value_length(end - begin, header_line[j]);
+        }
+
         if (header_name_id[j] > 0)
         {
             if (headers_present[header_name_id[j]])
@@ -119,6 +149,7 @@ void HttpMsgHeadShared::parse_header_block()
     num_headers = 0;
     max_header_line = 0;
     int32_t num_seps;
+    int32_t unsafe_value_index = STAT_NOT_COMPUTE;
 
     // The number of header lines in a message may be zero
     const int32_t nlines = session_data->num_head_lines[source_id];
@@ -130,8 +161,9 @@ void HttpMsgHeadShared::parse_header_block()
     // calculated correctly.
     while (bytes_used < msg_text.length())
     {
+        bool unsafe_value = false;
         const int32_t header_length = find_next_header(msg_text.start() + bytes_used,
-            msg_text.length() - bytes_used, num_seps);
+            msg_text.length() - bytes_used, num_seps, unsafe_value);
         if (header_length == 0)
             break;
 
@@ -147,6 +179,8 @@ void HttpMsgHeadShared::parse_header_block()
             create_event(EVENT_LONG_HDR);
         }
         bytes_used += num_seps + header_line[num_headers].length();
+        if (unsafe_value && unsafe_value_index == STAT_NOT_COMPUTE)
+            unsafe_value_index = num_headers;
         ++num_headers;
     }
     if (num_headers > params->maximum_headers)
@@ -155,7 +189,60 @@ void HttpMsgHeadShared::parse_header_block()
         create_event(EVENT_MAX_HEADERS);
         HttpModule::increment_peg_counts(PEG_HEADER_COUNT_EXCEEDED);
     }
+    if (unsafe_value_index != STAT_NOT_COMPUTE)
+        raise_unsafe_header(header_line[unsafe_value_index]);
 }
+
+struct HttpMsgHeadShared::HeaderLineScan
+{
+    explicit HeaderLineScan(HttpMsgHeadShared& section)
+        : section(section), enabled(section.get_inspection_section() == PS_HEADER)
+    { }
+
+    void update(uint8_t octet)
+    {
+        if (!enabled)
+            return;
+
+        if (has_colon)
+        {
+            has_value = has_value or !is_sp_tab[octet];
+            // Values allow HTAB and RFC 9110 obs-text. CR and LF never reach here.
+            unsafe_value = unsafe_value or (octet < 0x20 and octet != '\t') or octet == 0x7f;
+        }
+        else if (octet == ':')
+            has_colon = true;
+        else
+            has_name = has_name or !is_sp_tab[octet];
+    }
+
+    void finish(const uint8_t* line, int32_t line_length)
+    {
+        if (!enabled)
+            return;
+
+        const bool malformed = (multiline and !section.session_data->for_httpx) or !has_colon or
+            !has_name or !has_value;
+        if (!multiline and !malformed)
+            return;
+
+        const Field raw_line(line_length, line);
+
+        if (multiline)
+            section.raise_unsafe_header(raw_line);
+
+        if (malformed)
+            section.raise_malformed_header(raw_line);
+    }
+
+    HttpMsgHeadShared& section;
+    const bool enabled;
+    bool has_colon = false;
+    bool multiline = false;
+    bool has_name = false;
+    bool has_value = false;
+    bool unsafe_value = false;
+};
 
 // The header section produced by the splitter is of the form:
 //
@@ -183,37 +270,50 @@ void HttpMsgHeadShared::parse_header_block()
 // FIXIT-M Need to generate EVENT_EXCEEDS_SPACES for excessive white space within a header.
 
 int32_t HttpMsgHeadShared::find_next_header(const uint8_t* buffer, int32_t length,
-    int32_t& num_seps)
+    int32_t& num_seps, bool& unsafe_value)
 {
-    int32_t k = 0;
+    int32_t pos = 0;
     // Splitter guarantees buffer will not end on CR or LF.
-    for (; is_cr_lf[buffer[k]]; k++);
-    num_seps = k;
+    for (; is_cr_lf[buffer[pos]]; pos++);
+    num_seps = pos;
 
-    for (k++; k < length; k++)
+    HeaderLineScan scan(*this);
+
+    for (; pos < length; pos++)
     {
-        if (is_cr_lf[buffer[k]])
+        if (is_cr_lf[buffer[pos]])
         {
             // Check for wrapping
-            if ((k + 2 < length && buffer[k] == '\r' && buffer[k + 1] == '\n' &&
-                    !is_sp_tab[buffer[k + 2]]) ||
-                (k + 1 < length && buffer[k] == '\n' &&
-                    !is_sp_tab[buffer[k + 1]]) ||
-                (k + 1 < length && buffer[k] == '\r' &&
-                    !is_sp_tab_lf[buffer[k + 1]]))
+            if ((pos + 2 < length && buffer[pos] == '\r' && buffer[pos + 1] == '\n' &&
+                    !is_sp_tab[buffer[pos + 2]]) ||
+                (pos + 1 < length && buffer[pos] == '\n' &&
+                    !is_sp_tab[buffer[pos + 1]]) ||
+                (pos + 1 < length && buffer[pos] == '\r' &&
+                    !is_sp_tab_lf[buffer[pos + 1]]))
             {
-                return k - num_seps;
+                break;
             }
             else
             {
                 add_infraction(INF_HEADER_WRAPPING);
                 create_event(EVENT_HEADER_WRAPPING);
+
+                scan.multiline = true;
             }
         }
+        else
+            scan.update(buffer[pos]);
     }
-    if (session_data->partial_flush[source_id] && session_data->num_excess[source_id] == 0)
+    if (pos == length && session_data->partial_flush[source_id] &&
+        session_data->num_excess[source_id] == 0)
         return 0;
-    return length - num_seps;
+
+    const int32_t len = pos - num_seps;
+
+    scan.finish(buffer + num_seps, len);
+    unsafe_value = scan.unsafe_value;
+
+    return len;
 }
 
 // Divide header field lines into field name and field value
@@ -262,6 +362,7 @@ void HttpMsgHeadShared::derive_header_name_id(int index)
     // Normalize header field name to lower case and remove LWS for matching purposes
     int32_t lower_length = 0;
     uint8_t* lower_name = new uint8_t[length];
+    bool unsafe_name = false;
     for (int32_t k=0; k < length; k++)
     {
         if (!is_sp_tab_cr_lf[buffer[k]])
@@ -279,9 +380,37 @@ void HttpMsgHeadShared::derive_header_name_id(int index)
             add_infraction(INF_HEAD_NAME_WHITESPACE);
             create_event(EVENT_HEAD_NAME_WHITESPACE);
         }
+
+        if (!token_char[buffer[k]])
+            unsafe_name = true;
     }
     header_name_id[index] = (HeaderId)str_to_code(lower_name, lower_length, params->header_list);
     delete[] lower_name;
+
+    if (unsafe_name)
+        raise_unsafe_header(header_line[index]);
+}
+
+void HttpMsgHeadShared::raise_unsafe_header(const Field& raw_header)
+{
+    if (get_inspection_section() != PS_HEADER)
+        return;
+
+    if (session_data->partial_flush[source_id])
+        return;
+
+    HttpTmpBufferCache& tmp_cache = HttpContextData::get_tmp_buffers();
+
+    if (tmp_cache.unsafe_header.length() != STAT_NOT_COMPUTE)
+        return;
+
+    HttpModule::increment_peg_counts(PEG_UNSAFE_HEADER_CHAR);
+
+    // Every caller passes a parsed header line, so the stash always arms the check above.
+    assert(raw_header.length() > 0);
+    tmp_cache.unsafe_header.set(raw_header.length(), raw_header.start());
+
+    create_event(EVENT_UNSAFE_CHARACTERS_IN_HEADER);
 }
 
 NormalizedHeader* HttpMsgHeadShared::get_header_node(HeaderId header_id) const
@@ -296,7 +425,7 @@ NormalizedHeader* HttpMsgHeadShared::get_header_node(HeaderId header_id) const
 
 int HttpMsgHeadShared::get_header_count(HeaderId header_id) const
 {
-    NormalizedHeader* node = get_header_node(header_id);
+    const NormalizedHeader* node = get_header_node(header_id);
     return (node != nullptr) ? node->count : 0;
 }
 
@@ -438,9 +567,60 @@ const Field& HttpMsgHeadShared::get_content_disposition_filename()
     return content_disposition_filename;
 }
 
+void HttpMsgHeadShared::raise_malformed_header(const Field& malformed_line)
+{
+    HttpTmpBufferCache& tmp_cache = HttpContextData::get_tmp_buffers();
+
+    if (tmp_cache.malformed_header.length() != STAT_NOT_COMPUTE)
+        return;
+
+    HttpModule::increment_peg_counts(PEG_MALFORMED_HEADERS);
+
+    assert(malformed_line.length() > 0);
+    tmp_cache.malformed_header.set(malformed_line);
+
+    create_event(EVENT_MALFORMED_HEADER);
+}
+
+void HttpMsgHeadShared::raise_max_header_value_length(int32_t value_length,
+    const Field& long_line)
+{
+    constexpr auto slot_index = get_tmp_buffer_index<DETAIL_119_302>();
+
+    auto& tmp_cache = HttpContextData::get_tmp_buffers();
+    auto& slot_ptr = tmp_cache.tmp_bufs[slot_index];
+
+    if (!slot_ptr)
+        slot_ptr = std::make_unique<HttpTmpBuffer>();
+
+    auto& slot = *slot_ptr;
+
+    if (slot.num != 0)
+        return;
+
+    slot.num = value_length;
+    slot.text.clear();
+    slot.field.reset();
+    tmp_cache.long_value_header.set(long_line);
+
+    HttpModule::increment_peg_counts(PEG_MAX_HEADER_VALUE_EXCEEDED);
+
+    create_event(EVENT_MAX_HEADER_VALUE_LENGTH);
+}
+
+#if defined(REG_TEST) || defined(UNIT_TEST)
+#define CD_RESET_VISITS() cd_scan_visits = 0
+#define CD_COUNT_VISITS(n) cd_scan_visits += (n)
+#else
+#define CD_RESET_VISITS() do { } while (false)
+#define CD_COUNT_VISITS(n) do { } while (false)
+#endif
+
 // Extract the filename from the content-disposition header
 void HttpMsgHeadShared::extract_filename_from_content_disposition()
 {
+    CD_RESET_VISITS();
+
     const Field& cont_disp = get_header_value_raw(HEAD_CONTENT_DISPOSITION);
 
     const uint8_t* cur = cont_disp.start();
@@ -450,6 +630,7 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
     bool char_set = false;
     enum {
         CD_STATE_START,
+        CD_STATE_SKIP_QUOTED,
         CD_STATE_BEFORE_VAL,
         CD_STATE_VAL,
         CD_STATE_QUOTED_VAL,
@@ -462,7 +643,9 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
     };
     const char *cd_file1 = "filename";
     const char *cd_file2 = "filename*";
-    const char* filename_str_start = nullptr;
+    const uint8_t* regular_fname_begin = nullptr;
+    const uint8_t* regular_fname_end = nullptr;
+    bool extended_filename = false;
 
     if (cont_disp.length() <= 0)
     {
@@ -473,31 +656,66 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
 
     while (cur < end and state != CD_STATE_PROBLEM)
     {
+        CD_COUNT_VISITS(1);
         switch (state)
         {
             case CD_STATE_START:
-                if ((filename_str_start = SnortStrcasestr((const char*)cur, end - cur, cd_file2)))
+                if (*cur == '"')
                 {
-                    state = CD_STATE_BEFORE_EXT_VAL;
-                    cur = (const uint8_t*)filename_str_start + strlen(cd_file2) - 1;
+                    state = CD_STATE_SKIP_QUOTED;
+                    break;
                 }
-                else if ((filename_str_start = SnortStrcasestr((const char*)cur, end - cur,
-                    cd_file1)))
+                if (*cur != 'f' && *cur != 'F')
+                    break;
+                if (cur > cont_disp.start())
                 {
-                    state = CD_STATE_BEFORE_VAL;
-                    cur = (const uint8_t*)filename_str_start + strlen(cd_file1) - 1;
+                    const uint8_t prev = *(cur - 1);
+                    if (prev != ';' && prev != ',' && prev != ' ' && prev != '\t' &&
+                        prev != '\r' && prev != '\n')
+                        break;
                 }
-                else
+
+                CD_COUNT_VISITS(strlen(cd_file2) + strlen(cd_file1) + 2);
+                if (static_cast<size_t>(end - cur) >= strlen(cd_file2) &&
+                    !strncasecmp((const char*)cur, cd_file2, strlen(cd_file2)))
                 {
-                    content_disposition_filename.set(STAT_NOT_PRESENT);
-                    return;
+                    const uint8_t* const after_name = cur + strlen(cd_file2);
+                    if (after_name == end || *after_name == '=' || *after_name == ' ' ||
+                        *after_name == '\t')
+                    {
+                        extended_filename = true;
+                        state = CD_STATE_BEFORE_EXT_VAL;
+                        cur = after_name - 1;
+                        break;
+                    }
                 }
+
+                if (static_cast<size_t>(end - cur) >= strlen(cd_file1) &&
+                    !strncasecmp((const char*)cur, cd_file1, strlen(cd_file1)))
+                {
+                    const uint8_t* const after_name = cur + strlen(cd_file1);
+                    if (after_name == end || *after_name == '=' || *after_name == ' ' ||
+                        *after_name == '\t')
+                    {
+                        extended_filename = false;
+                        state = CD_STATE_BEFORE_VAL;
+                        cur = after_name - 1;
+                        break;
+                    }
+                }
+
+                break;
+            case CD_STATE_SKIP_QUOTED:
+                if (*cur == '\\' && cur + 1 < end)
+                    cur++;
+                else if (*cur == '"')
+                    state = CD_STATE_START;
                 break;
             case CD_STATE_BEFORE_VAL:
                 if (*cur == '=')
                     state = CD_STATE_VAL;
-                else if (*cur != ' ')
-                    state = CD_STATE_START;
+                else if (*cur != ' ' && *cur != '\t')
+                    state = CD_STATE_PROBLEM;
                 break;
             case CD_STATE_VAL:
                 if (!fname_begin && *cur == '"')
@@ -525,8 +743,8 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
             case CD_STATE_BEFORE_EXT_VAL:
                 if (*cur == '=')
                     state = CD_STATE_CHARSET;
-                else if (*cur != ' ')
-                    state = CD_STATE_START;
+                else if (*cur != ' ' && *cur != '\t')
+                    state = CD_STATE_PROBLEM;
                 break;
             case CD_STATE_CHARSET:
                 if (*cur == '\'')
@@ -583,8 +801,23 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
             case CD_STATE_FINAL:
                 if (fname_begin && fname_end)
                 {
-                    content_disposition_filename.set(fname_end-fname_begin, fname_begin);
-                    return;
+                    // filename* has precedence over filename and ends the search
+                    if (extended_filename)
+                    {
+                        content_disposition_filename.set(fname_end-fname_begin, fname_begin);
+                        return;
+                    }
+
+                    // Keep the first regular filename as a fallback while scanning for
+                    // a later filename*, which would take precedence over it
+                    if (!regular_fname_begin)
+                    {
+                        regular_fname_begin = fname_begin;
+                        regular_fname_end = fname_end;
+                    }
+                    fname_begin = fname_end = nullptr;
+                    state = CD_STATE_START;
+                    continue;
                 }
                 // fallthrough
             default:
@@ -595,6 +828,16 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
     }
     switch (state)
     {
+        case CD_STATE_START:
+        case CD_STATE_SKIP_QUOTED:
+            // The header ended without a filename parameter. Parameter names that
+            // merely contain "filename" are valid, so this is not a malformed value.
+            if (regular_fname_begin)
+                content_disposition_filename.set(regular_fname_end-regular_fname_begin,
+                    regular_fname_begin);
+            else
+                content_disposition_filename.set(STAT_NOT_PRESENT);
+            break;
         case CD_STATE_FINAL:
         case CD_STATE_VAL:
         case CD_STATE_EXT_VAL:
@@ -602,7 +845,11 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
             {
                 if (!fname_end)
                     fname_end = end;
-                content_disposition_filename.set(fname_end-fname_begin, fname_begin);
+                if (extended_filename || !regular_fname_begin)
+                    content_disposition_filename.set(fname_end-fname_begin, fname_begin);
+                else
+                    content_disposition_filename.set(regular_fname_end-regular_fname_begin,
+                        regular_fname_begin);
                 break;
             }
             // fallthrough
@@ -613,6 +860,9 @@ void HttpMsgHeadShared::extract_filename_from_content_disposition()
             break;
     }
 }
+
+#undef CD_RESET_VISITS
+#undef CD_COUNT_VISITS
 
 #ifdef REG_TEST
 void HttpMsgHeadShared::print_headers(FILE* output)
@@ -635,4 +885,3 @@ void HttpMsgHeadShared::print_headers(FILE* output)
     }
 }
 #endif
-

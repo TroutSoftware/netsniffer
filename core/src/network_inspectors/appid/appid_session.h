@@ -22,6 +22,10 @@
 #ifndef APPID_SESSION_H
 #define APPID_SESSION_H
 
+#include "appid_debug.h"
+
+#include <cstring>
+
 #include <map>
 #include <mutex>
 #include <string>
@@ -154,6 +158,7 @@ public:
 
     void set_tls_sni(const char* new_tls_sni, uint32_t len)
     {
+        bool host_changed = is_tls_host_changed(tls_sni, new_tls_sni, len);
         if (tls_sni)
             snort_free(tls_sni);
         if (!new_tls_sni or *new_tls_sni == '\0')
@@ -165,10 +170,13 @@ public:
         }
         tls_sni = len ? snort::snort_strndup(new_tls_sni, len) :
             const_cast<char*>(new_tls_sni);
+        if(host_changed)
+            APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "tls host SNI: %s\n", tls_sni);
     }
 
     void set_tls_first_alt_name(const char* new_tls_first_alt_name, uint32_t len)
     {
+        bool host_changed = is_tls_host_changed(tls_first_alt_name, new_tls_first_alt_name, len);
         if (tls_first_alt_name)
             snort_free(tls_first_alt_name);
         if (!new_tls_first_alt_name or *new_tls_first_alt_name == '\0')
@@ -180,10 +188,13 @@ public:
         }
         tls_first_alt_name = len? snort::snort_strndup(new_tls_first_alt_name, len) :
             const_cast<char*>(new_tls_first_alt_name);
+        if(host_changed)
+            APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "tls host SAN: %s\n", tls_first_alt_name);
     }
 
     void set_tls_cname(const char* new_tls_cname, uint32_t len)
     {
+        bool host_changed = is_tls_host_changed(tls_cname, new_tls_cname, len);
         if (tls_cname)
             snort_free(tls_cname);
         if (!new_tls_cname or *new_tls_cname == '\0')
@@ -195,10 +206,13 @@ public:
         }
         tls_cname = len? snort::snort_strndup(new_tls_cname,len) :
             const_cast<char*>(new_tls_cname);
+        if(host_changed)
+            APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "tls host CN: %s\n", tls_cname);
     }
 
     void set_tls_org_unit(const char* new_tls_org_unit, uint32_t len)
     {
+        bool host_changed = is_tls_host_changed(tls_org_unit, new_tls_org_unit, len);
         if (tls_org_unit)
             snort_free(tls_org_unit);
         if (!new_tls_org_unit or *new_tls_org_unit == '\0')
@@ -210,13 +224,29 @@ public:
         }
         tls_org_unit = len? snort::snort_strndup(new_tls_org_unit,len) :
             const_cast<char*>(new_tls_org_unit);
+        if(host_changed)
+            APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL, "tls host ORG UNIT: %s\n", tls_org_unit);
     }
 
     void set_tls_handshake_done() { tls_handshake_done = true; }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     MatchedTlsType get_matched_tls_type() const
     {
         return matched_tls_type;
+    }
+
+    const char* get_matched_tls_type_str() const
+    {
+        switch (matched_tls_type)
+        {
+        case MATCHED_TLS_SNI:       return "SNI";
+        case MATCHED_TLS_FIRST_SAN: return "SAN";
+        case MATCHED_TLS_CNAME:     return "CN";
+        case MATCHED_TLS_ORG_UNIT:  break;
+        case MATCHED_TLS_NONE:      break;
+        }
+        return nullptr;
     }
 
     void set_matched_tls_type(MatchedTlsType type, bool is_tls_data_finished = true)
@@ -252,6 +282,14 @@ public:
         tls_cert_key = snort::snort_strdup(key);
     }
 
+    static bool is_tls_host_changed(const char* current, const char* new_host, uint32_t len)
+    {
+        if(!current or !new_host)
+            return current != new_host;
+        return len ? (strlen(current) != len or strncmp(current, new_host, len) != 0) :
+                strcmp(current, new_host) != 0;
+    }
+
 private:
     char* tls_sni = nullptr;
     char* tls_first_alt_name = nullptr;
@@ -276,6 +314,11 @@ public:
 #endif
         );
     ~AppIdSession() override;
+
+    // Include the AppIdSessionApi built in the ctor so set_flow_data()
+    // charges it and erase()/clear() releases it on every attach path
+    // (allocate_session, HA consume, future-session realization).
+    FLOW_DATA_SIZE_OF_EXTRA(AppIdSession, sizeof(snort::AppIdSessionApi))
 
     static AppIdSession* allocate_session(const snort::Packet*, IpProtocol,
         AppidSessionDirection, AppIdInspector&, OdpContext&);
@@ -409,14 +452,14 @@ public:
     void set_application_ids_service(AppId service_id, AppidChangeBits& change_bits);
 
     void examine_ssl_metadata(AppidChangeBits& change_bits, bool partial_inspect = false);
-    void set_client_appid_data(AppId, AppidChangeBits& change_bits, char* version = nullptr);
-    void set_client_appid_data(AppId, char* version = nullptr, bool published=false);
-    void set_service_appid_data(AppId, AppidChangeBits& change_bits, char* version = nullptr);
-    void set_payload_appid_data(AppId, char* version = nullptr);
+    void set_client_appid_data(AppId, AppidChangeBits& change_bits, const char* version = nullptr);
+    void set_client_appid_data(AppId, const char* version = nullptr, bool published=false);
+    void set_service_appid_data(AppId, AppidChangeBits& change_bits, const char* version = nullptr);
+    void set_payload_appid_data(AppId, const char* version = nullptr);
     void check_app_detection_restart(AppidChangeBits& change_bits,
-        ThirdPartyAppIdContext* tp_appid_ctxt);
+        const ThirdPartyAppIdContext* tp_appid_ctxt);
     void check_ssl_detection_restart(AppidChangeBits& change_bits,
-        ThirdPartyAppIdContext* tp_appid_ctxt);
+        const ThirdPartyAppIdContext* tp_appid_ctxt);
     void check_tunnel_detection_restart();
     void update_encrypted_app_id(AppId);
     void examine_rtmp_metadata(AppidChangeBits& change_bits);
@@ -430,6 +473,8 @@ public:
     AppIdHttpSession* get_http_session(uint32_t stream_index = 0) const;
     AppIdHttpSession* create_http_session(int64_t stream_id = -1);
     AppIdHttpSession* get_matching_http_session(int64_t stream_id) const;
+    AppIdHttpSession* get_matching_http_session(int64_t stream_id, uint32_t& matched_stream_index) const;
+    AppIdHttpSession* get_current_http_session() const;
     void delete_all_http_sessions();
 
     AppIdDnsSession* create_dns_session();
@@ -451,15 +496,16 @@ public:
     void check_domain_fronting_status(const std::string& host);
 
 
-    bool need_to_delete_tp_conn(ThirdPartyAppIdContext*) const;
+    bool need_to_delete_tp_conn(const ThirdPartyAppIdContext*) const;
 
     inline void set_tp_app_id(AppId app_id)
     {
         if (tp_app_id != app_id)
         {
             tp_app_id = app_id;
-            tp_app_id_deferred = odp_ctxt.get_app_info_mgr().get_app_info_flags
-                (tp_app_id, APPINFO_FLAG_DEFER);
+            // cppcheck-suppress knownConditionTrueFalse ; flags come from runtime AppId configuration
+            tp_app_id_deferred = odp_ctxt.get_app_info_mgr().get_app_info_flags(
+                tp_app_id, APPINFO_FLAG_DEFER);
         }
     }
 
@@ -468,8 +514,9 @@ public:
         if (tp_payload_app_id != app_id)
         {
             tp_payload_app_id = app_id;
-            tp_payload_app_id_deferred = odp_ctxt.get_app_info_mgr().get_app_info_flags
-                (tp_payload_app_id, APPINFO_FLAG_DEFER_PAYLOAD);
+            // cppcheck-suppress knownConditionTrueFalse ; flags come from runtime AppId configuration
+            tp_payload_app_id_deferred = odp_ctxt.get_app_info_mgr().get_app_info_flags(
+                tp_payload_app_id, APPINFO_FLAG_DEFER_PAYLOAD);
         }
     }
 
@@ -498,16 +545,6 @@ public:
             inferred_svcs_ver++;
     }
 
-    uint16_t get_prev_httpx_raw_packet() const
-    {
-        return prev_httpx_raw_packet;
-    }
-
-    void set_prev_httpx_raw_packet(uint16_t packet_num)
-    {
-        prev_httpx_raw_packet = packet_num;
-    }
-
     const snort::AppIdSessionApi& get_api() const
     {
         return api;
@@ -518,9 +555,9 @@ public:
         return api.service.get_id();
     }
 
-    void set_service_id(AppId id, OdpContext &ctxt)
+    void set_service_id(AppId id, OdpContext &context)
     {
-        api.service.set_id(id, ctxt);
+        api.service.set_id(id, context);
     }
 
     AppId get_port_service_id() const
@@ -533,11 +570,11 @@ public:
         api.service.set_port_service_id(id);
     }
 
-    void set_service_version(const char* version, AppidChangeBits& change_bits)
+    void set_service_version(const char* app_version, AppidChangeBits& change_bits)
     {
-        if (!version)
+        if (!app_version)
             return;
-        api.service.set_version(version);
+        api.service.set_version(app_version);
         change_bits.set(APPID_SERVICE_INFO_BIT);
     }
 
@@ -546,9 +583,14 @@ public:
         api.service.set_vendor(vendor, change_bits);
     }
 
-    void add_service_subtype(AppIdServiceSubtype& subtype, AppidChangeBits& change_bits)
+    void add_service_subtype(const AppIdServiceSubtype& subtype, AppidChangeBits& change_bits)
     {
         api.service.add_subtype(subtype, change_bits);
+    }
+
+    void add_service_subtype_list(AppIdServiceSubtypeList& subtypes, AppidChangeBits& change_bits)
+    {
+        api.service.add_subtype_list(subtypes, change_bits);
     }
 
     void set_client_inferred_service_id(AppId id)
@@ -576,11 +618,11 @@ public:
         api.client.set_id(p, *this, dir, id, change_bits);
     }
 
-    void set_client_version(const char* version, AppidChangeBits& change_bits)
+    void set_client_version(const char* app_version, AppidChangeBits& change_bits)
     {
-        if (!version)
+        if (!app_version)
             return;
-        api.client.set_version(version);
+        api.client.set_version(app_version);
         change_bits.set(APPID_CLIENT_INFO_BIT);
     }
 
@@ -792,7 +834,8 @@ public:
         return shadow_traffic_appid;
     }
 
-    inline void change_shadow_traffic_bits_to_string (const uint32_t& st_bits,std::string& str) const
+    inline static void change_shadow_traffic_bits_to_string(
+        const uint32_t& st_bits, std::string& str)
     {
         std::string tempStr;
 
@@ -832,6 +875,7 @@ public:
        appid_previous_shadow_traffic_bits = lv_bits;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_previous_shadow_traffic_bits()
     {
         return appid_previous_shadow_traffic_bits;
@@ -842,10 +886,9 @@ public:
         return api.get_session_id();
     }
 
-private:
-    uint16_t prev_httpx_raw_packet = 0;
+    void handle_http2_stream_end_event(const int64_t stream_id);
 
-    void reinit_session_data(AppidChangeBits& change_bits, ThirdPartyAppIdContext* tp_appid_ctxt);
+    void reinit_session_data(AppidChangeBits& change_bits, const ThirdPartyAppIdContext* tp_appid_ctxt);
     void delete_session_data();
 
     bool tp_app_id_deferred = false;
@@ -870,7 +913,7 @@ private:
     AppId shadow_traffic_appid = APP_ID_NONE;
     // AppId matching client side
     AppId client_inferred_service_id = APP_ID_NONE;
-    uint32_t odp_ctxt_version;
+    uint32_t odp_ctxt_version = 0;
 };
 
 #endif

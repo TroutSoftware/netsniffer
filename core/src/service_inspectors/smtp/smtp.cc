@@ -229,9 +229,10 @@ SmtpFlowData::~SmtpFlowData()
 
 unsigned SmtpFlowData::inspector_id = 0;
 
-static SMTPData* get_session_data(Flow* flow)
+static SMTPData* get_session_data(const Flow* flow)
 {
-    SmtpFlowData* fd = (SmtpFlowData*)flow->get_flow_data(SmtpFlowData::inspector_id);
+    SmtpFlowData* fd = static_cast<SmtpFlowData*>(
+        flow->get_flow_data(SmtpFlowData::inspector_id));
     return fd ? &fd->session : nullptr;
 }
 
@@ -561,6 +562,7 @@ void SmtpProtoConf::show() const
     log_mail_show(log_config);
 }
 
+// cppcheck-suppress constParameterPointer
 static void SMTP_ResetState(Flow* ssn)
 {
     SMTPData* smtp_ssn = get_session_data(ssn);
@@ -574,7 +576,7 @@ static void SMTP_ResetState(Flow* ssn)
     }
 }
 
-static inline int InspectPacket(Packet* p)
+static inline int InspectPacket(const Packet* p)
 {
     return p->has_paf_payload();
 }
@@ -634,6 +636,7 @@ static int SMTP_Setup(Packet* p, SMTPData* ssn)
  * @return response
  * @retval 1        commands caller to stop searching
  */
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int SMTP_SearchStrFound(void* id, void*, int index, void*, void*)
 {
     int search_id = (int)(uintptr_t)id;
@@ -1125,7 +1128,7 @@ static void SMTP_ProcessClientPacket(SmtpProtoConf* config, Packet* p, SMTPData*
  * @return  None
  */
 static void SMTP_ProcessServerPacket(
-    SmtpProtoConf* config, Packet* p, SMTPData* smtp_ssn, int* next_state)
+    const SmtpProtoConf* config, Packet* p, SMTPData* smtp_ssn, int* next_state)
 {
     *next_state = 0;
 
@@ -1278,6 +1281,7 @@ static void snort_smtp(SmtpProtoConf* config, Packet* p)
          *                   */
         smtp_ssn = SetNewSMTPData(config, p);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !smtp_ssn )
         {
             /* Could not get/create the session data for this packet. */
@@ -1364,6 +1368,7 @@ static void snort_smtp(SmtpProtoConf* config, Packet* p)
 }
 
 /* Callback to return the MIME attachment filenames accumulated */
+// cppcheck-suppress constParameterCallback
 static int SMTP_GetFilename(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
     SMTPData* ssn = get_session_data(flow);
@@ -1377,6 +1382,7 @@ static int SMTP_GetFilename(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* 
 }
 
 /* Callback to return the email addresses accumulated from the MAIL FROM command */
+// cppcheck-suppress constParameterCallback
 static int SMTP_GetMailFrom(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
     SMTPData* ssn = get_session_data(flow);
@@ -1390,6 +1396,7 @@ static int SMTP_GetMailFrom(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* 
 }
 
 /* Callback to return the email addresses accumulated from the RCP TO command */
+// cppcheck-suppress constParameterCallback
 static int SMTP_GetRcptTo(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
     SMTPData* ssn = get_session_data(flow);
@@ -1403,6 +1410,7 @@ static int SMTP_GetRcptTo(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* ty
 }
 
 /* Callback to return the email headers */
+// cppcheck-suppress constParameterCallback
 static int SMTP_GetEmailHdrs(Flow* flow, uint8_t** buf, uint32_t* len, uint32_t* type)
 {
     SMTPData* ssn = get_session_data(flow);
@@ -1602,7 +1610,7 @@ void Smtp::show(const SnortConfig*) const
 
 void Smtp::eval(Packet* p)
 {
-    Profile profile(smtpPerfStats); // cppcheck-suppress unreadVariable
+    Profile profile(smtpPerfStats);
 
     // precondition - what we registered for
     assert(p->has_tcp_data());
@@ -1732,7 +1740,7 @@ static void smtp_term()
 
 static Inspector* smtp_ctor(Module* m)
 {
-    SmtpModule* mod = (SmtpModule*)m;
+    SmtpModule* mod = static_cast<SmtpModule*>(m);
     SmtpProtoConf* conf = mod->get_data();
     Smtp* smtp = new Smtp(conf);
 
@@ -1816,7 +1824,7 @@ TEST_CASE("handle_header_line", "[smtp]")
     SmtpProtoConf config;
     mime_ssn.config = &config;
     uint8_t ptr[68] = "Date: Tue, 1 Mar 2016 22:37:56 -0500\r\nFrom: acc2 <acc2@localhost>\r\n";
-    uint8_t* eol = ptr + 38;
+    const uint8_t* eol = ptr + 38;
     SMTP_ResetAltBuffer(&p);
     int res = mime_ssn.handle_header_line(ptr, eol, 0, &p);
     REQUIRE((res == 0));
@@ -1845,7 +1853,7 @@ TEST_CASE("normalize_data", "[smtp]")
     SmtpProtoConf config;
     mime_ssn.config = &config;
     uint8_t ptr[23] = "\r\n--wac7ysb48OaltWcw\r\n";
-    uint8_t* data_end = ptr + 22;
+    const uint8_t* data_end = ptr + 22;
     SMTP_ResetAltBuffer(&p);
     int res = mime_ssn.normalize_data(ptr, data_end, &p);
     REQUIRE((res == 0));
@@ -1856,5 +1864,213 @@ TEST_CASE("normalize_data", "[smtp]")
 
     // Cleanup
     delete p.context;
+}
+
+TEST_CASE("smtp_paf_server bare lf flood aborts", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t lf = '\n';
+    uint32_t fp = 0;
+    unsigned flushes = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( unsigned i = 0; i <= SMTP_MAX_OCTETS + 1; i++ )
+    {
+        status = splitter.scan(nullptr, &lf, 1, PKT_FROM_SERVER, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+        flushes++;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+    REQUIRE((flushes == SMTP_MAX_OCTETS));
+}
+
+TEST_CASE("smtp_paf_server valid reply codes never abort", "[smtp]")
+{
+    const char* replies[] =
+    {
+        "220 smtp.example.com ESMTP\r\n",
+        "250-ENHANCEDSTATUSCODES\r\n",
+        "354\r\n",
+        "550 5.1.1 no such user\r\n",
+        "150 non-standard first digit\r\n",
+        "660 non-standard first digit\r\n",
+        "260 non-standard second digit\r\n",
+        "2500 no delimiter after code\r\n",
+        nullptr
+    };
+
+    for ( unsigned r = 0; replies[r]; r++ )
+    {
+        SmtpSplitter splitter(false, 0);
+        const uint8_t* line = (const uint8_t*)replies[r];
+        uint32_t line_len = strlen(replies[r]);
+        uint32_t fp = 0;
+
+        for ( uint32_t sent = 0; sent < (SMTP_MAX_OCTETS * 2); sent += line_len )
+        {
+            StreamSplitter::Status status =
+                splitter.scan(nullptr, line, line_len, PKT_FROM_SERVER, &fp);
+            REQUIRE((status == StreamSplitter::FLUSH));
+            REQUIRE((fp == line_len));
+        }
+    }
+}
+
+TEST_CASE("smtp_paf_server valid reply code split across segments is not misclassified", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* head = (const uint8_t*)"25";
+    const uint8_t* tail = (const uint8_t*)"0 Ok\r\n";
+    uint32_t fp = 0;
+
+    for ( uint32_t sent = 0; sent < (SMTP_MAX_OCTETS * 2); sent += 8 )
+    {
+        StreamSplitter::Status status = splitter.scan(nullptr, head, 2, PKT_FROM_SERVER, &fp);
+        REQUIRE((status == StreamSplitter::SEARCH));
+        status = splitter.scan(nullptr, tail, 6, PKT_FROM_SERVER, &fp);
+        REQUIRE((status == StreamSplitter::FLUSH));
+        REQUIRE((fp == 6));
+    }
+}
+
+TEST_CASE("smtp_paf_server reply CRLF split across segments is not misclassified", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* head = (const uint8_t*)"250 XRDST\r";
+    const uint8_t* tail = (const uint8_t*)"\n";
+    uint32_t fp = 0;
+
+    for ( uint32_t sent = 0; sent < (SMTP_MAX_OCTETS * 2); sent += 11 )
+    {
+        StreamSplitter::Status status = splitter.scan(nullptr, head, 10, PKT_FROM_SERVER, &fp);
+        REQUIRE((status == StreamSplitter::SEARCH));
+        status = splitter.scan(nullptr, tail, 1, PKT_FROM_SERVER, &fp);
+        REQUIRE((status == StreamSplitter::FLUSH));
+        REQUIRE((fp == 1));
+    }
+}
+
+TEST_CASE("smtp_paf_server malformed reply code split across segments still aborts", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* head = (const uint8_t*)"AB";
+    const uint8_t* tail = (const uint8_t*)"\n";
+    uint32_t fp = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( uint32_t sent = 0; sent <= (SMTP_MAX_OCTETS + 3); sent += 3 )
+    {
+        status = splitter.scan(nullptr, head, 2, PKT_FROM_SERVER, &fp);
+        REQUIRE((status == StreamSplitter::SEARCH));
+        status = splitter.scan(nullptr, tail, 1, PKT_FROM_SERVER, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+}
+
+TEST_CASE("smtp_paf_server malformed reply codes abort", "[smtp]")
+{
+    const char* replies[] =
+    {
+        "25x third digit not a digit\r\n",
+        nullptr
+    };
+
+    for ( unsigned r = 0; replies[r]; r++ )
+    {
+        SmtpSplitter splitter(false, 0);
+        const uint8_t* line = (const uint8_t*)replies[r];
+        uint32_t line_len = strlen(replies[r]);
+        uint32_t fp = 0;
+        StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+        for ( uint32_t sent = 0; sent <= (SMTP_MAX_OCTETS + line_len); sent += line_len )
+        {
+            status = splitter.scan(nullptr, line, line_len, PKT_FROM_SERVER, &fp);
+            if ( status != StreamSplitter::FLUSH )
+                break;
+        }
+
+        REQUIRE((status == StreamSplitter::ABORT));
+    }
+}
+
+TEST_CASE("smtp_paf_client bare lf flood aborts", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t lf = '\n';
+    uint32_t fp = 0;
+    unsigned flushes = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( unsigned i = 0; i <= SMTP_MAX_OCTETS + 1; i++ )
+    {
+        status = splitter.scan(nullptr, &lf, 1, PKT_FROM_CLIENT, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+        flushes++;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+    REQUIRE((flushes == SMTP_MAX_OCTETS));
+}
+
+TEST_CASE("smtp_paf_client truncated command prefix flood aborts", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* line = (const uint8_t*)"NOO\n";
+    uint32_t line_len = strlen((const char*)line);
+    uint32_t fp = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( uint32_t sent = 0; sent <= (SMTP_MAX_OCTETS + line_len); sent += line_len )
+    {
+        status = splitter.scan(nullptr, line, line_len, PKT_FROM_CLIENT, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+}
+
+TEST_CASE("smtp_paf_client invalid command split across segments still aborts", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* head = (const uint8_t*)"AB";
+    const uint8_t* tail = (const uint8_t*)"\n";
+    uint32_t fp = 0;
+    StreamSplitter::Status status = StreamSplitter::SEARCH;
+
+    for ( uint32_t sent = 0; sent <= (SMTP_MAX_OCTETS + 3); sent += 3 )
+    {
+        status = splitter.scan(nullptr, head, 2, PKT_FROM_CLIENT, &fp);
+        REQUIRE((status == StreamSplitter::SEARCH));
+        status = splitter.scan(nullptr, tail, 1, PKT_FROM_CLIENT, &fp);
+        if ( status != StreamSplitter::FLUSH )
+            break;
+    }
+
+    REQUIRE((status == StreamSplitter::ABORT));
+}
+
+TEST_CASE("smtp_paf_client x-link2state recognized as valid command", "[smtp]")
+{
+    SmtpSplitter splitter(false, 0);
+    const uint8_t* line =
+        (const uint8_t*)"X-LINK2STATE CHUNK={000003e0} MULTI (5) ({00000003c5} DIGEST_QUERY)\r\n";
+    uint32_t line_len = strlen((const char*)line);
+    uint32_t fp = 0;
+
+    for ( uint32_t sent = 0; sent < (SMTP_MAX_OCTETS * 2); sent += line_len )
+    {
+        StreamSplitter::Status status =
+            splitter.scan(nullptr, line, line_len, PKT_FROM_CLIENT, &fp);
+        REQUIRE((status == StreamSplitter::FLUSH));
+        REQUIRE((fp == line_len));
+    }
 }
 #endif

@@ -85,6 +85,7 @@ public:
     void set_memcap(unsigned long memcap)
     { mem_allocator->set_mem_capacity(memcap); }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     unsigned long get_memcap()
     { return mem_allocator->get_mem_capacity(); }
 

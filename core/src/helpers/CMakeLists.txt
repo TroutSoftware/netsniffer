@@ -13,11 +13,13 @@ endif ()
 set (HELPERS_INCLUDES
     ${HYPER_HEADERS}
     base64_encoder.h
+    backtrace.h
     ber.h
     bitop.h
     boyer_moore.h
     boyer_moore_search.h
     buffer_data.h
+    challenge_response_auth.h
     event_gen.h
     infractions.h
     json_stream.h
@@ -33,11 +35,13 @@ set (HELPERS_INCLUDES
 add_library (helpers OBJECT
     ${HELPERS_INCLUDES}
     ${HYPER_SOURCES}
+    backtrace.cc
     base64_encoder.cc
     ber.cc
     boyer_moore.cc
     boyer_moore_search.cc
     buffer_data.cc
+    challenge_response_auth.cc
     directory.cc
     directory.h
     discovery_filter.cc

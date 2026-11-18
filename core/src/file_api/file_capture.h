@@ -43,6 +43,15 @@ class FileMemPool;
 namespace snort
 {
 class FileInfo;
+#ifdef UNIT_TEST
+struct FileCaptureTestAccess;
+#endif
+
+namespace stats
+{
+class Builder;
+struct Group;
+}
 
 struct FileCaptureBlock
 {
@@ -80,8 +89,10 @@ public:
     // Store file to disk asynchronously
     std::string store_file_async();
 
-    // Log file capture mempool usage
-    static void print_mem_usage();
+    static void collect_mem_usage(stats::Builder&, stats::Group&);
+
+    // Wait until all asynchronously stored files have been released
+    static void flush();
 
     // Exit file capture, release all file capture memory etc,
     // this must be called when snort exits
@@ -97,10 +108,15 @@ public:
 
     int64_t get_max_file_capture_size() { return capture_max_size; }
     int64_t get_file_capture_size() { return capture_size; }
+    // cppcheck-suppress unusedFunction ; installed file-capture state-reset API
     void get_file_reset() { current_block = head; }
     void set_data(const uint8_t* file_data, const uint32_t size) {current_data = file_data; current_data_len = size;}
 
 private:
+
+#ifdef UNIT_TEST
+    friend struct FileCaptureTestAccess;
+#endif
 
     static void init_mempool(int64_t max_file_mem, int64_t block_size);
     static void writer_thread();
@@ -115,6 +131,7 @@ private:
     static std::condition_variable capture_cv;
     static std::thread* file_storer;
     static std::queue<FileCapture*> files_waiting;
+    static bool file_storing;
     static bool running;
 
     uint64_t capture_size;
@@ -131,4 +148,3 @@ private:
 }
 
 #endif
-

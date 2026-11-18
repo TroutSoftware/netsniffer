@@ -119,13 +119,13 @@ bool ModbusFuncOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const ModbusFuncOption& rhs = (const ModbusFuncOption&)ips;
+    const ModbusFuncOption& rhs = static_cast<const ModbusFuncOption&>(ips);
     return ( func == rhs.func );
 }
 
 IpsOption::EvalStatus ModbusFuncOption::eval(Cursor&, Packet* p)
 {
-    RuleProfile profile(modbus_func_prof);  // cppcheck-suppress unreadVariable
+    RuleProfile profile(modbus_func_prof);
 
     if ( !p->flow )
         return NO_MATCH;
@@ -133,8 +133,8 @@ IpsOption::EvalStatus ModbusFuncOption::eval(Cursor&, Packet* p)
     if ( !p->is_full_pdu() )
         return NO_MATCH;
 
-    ModbusFlowData* mfd =
-        (ModbusFlowData*)p->flow->get_flow_data(ModbusFlowData::inspector_id);
+    const ModbusFlowData* mfd = static_cast<ModbusFlowData*>(
+        p->flow->get_flow_data(ModbusFlowData::inspector_id));
 
     if ( mfd and func == mfd->ssn_data.func )
         return MATCH;
@@ -204,7 +204,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    ModbusFuncModule* mod = (ModbusFuncModule*)m;
+    const ModbusFuncModule* mod = static_cast<ModbusFuncModule*>(m);
     return new ModbusFuncOption(mod->func);
 }
 
@@ -239,4 +239,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_modbus_func = &ips_api.base;
-

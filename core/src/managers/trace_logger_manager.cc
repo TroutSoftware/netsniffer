@@ -120,23 +120,25 @@ void TracePlugIntf::thread_term()
 TraceLoggerPlug* TraceLoggerManager::get_logger(const std::string& name)
 {
     unsigned instance = in_main_thread() ? 0 : get_instance_id() + 1;
-    TracePlugIntf* intf = (TracePlugIntf*)PluginManager::get_interface(name.c_str());
+    TracePlugIntf* intf = static_cast<TracePlugIntf*>(
+        PluginManager::get_interface(name.c_str()));
     return (intf and intf->thread_loggers.size() > instance) ? intf->thread_loggers[instance] : nullptr;
 }
 
 TraceLoggerPlug* TraceLoggerManager::set_logger(const std::string& name)
 {
     unsigned instance = in_main_thread() ? 0 : get_instance_id() + 1;
-    TracePlugIntf* intf = (TracePlugIntf*)PluginManager::get_interface(name.c_str());
+    TracePlugIntf* intf = static_cast<TracePlugIntf*>(
+        PluginManager::get_interface(name.c_str()));
     Module* mod = PluginManager::get_module(name.c_str());
     assert(intf and mod);
     intf->init_logger(instance, mod);
     return (intf->thread_loggers.size() > instance) ? intf->thread_loggers[instance] : nullptr;
 }
 
-void TraceLoggerManager::instantiate_default_loggers(TraceConfig* tc)
+void TraceLoggerManager::instantiate_default_loggers(const TraceConfig* tc)
 {
-    for ( auto& s : tc->output_traces )
+    for ( const auto& s : tc->output_traces )
     {
         if ( get_logger(s) )
             continue;
@@ -147,4 +149,3 @@ void TraceLoggerManager::instantiate_default_loggers(TraceConfig* tc)
         PluginManager::instantiate(mod, nullptr, nullptr);
     }
 }
-

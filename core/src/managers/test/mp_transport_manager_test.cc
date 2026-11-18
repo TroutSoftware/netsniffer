@@ -78,19 +78,19 @@ unsigned ThreadConfig::get_instance_max() { return 1; }
 using namespace snort;
 
 // LCOV_EXCL_START
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 // LCOV_EXCL_STOP
 
-static void mock_transport_tinit(MPTransport* t)
+static void mock_transport_tinit(MPTransport*)
 {
     test_transport_tinit_calls++;
 }
-static void mock_transport_tterm(MPTransport* t)
+static void mock_transport_tterm(MPTransport*)
 {
     test_transport_tterm_calls++;
 }
-static MPTransport* mock_transport_ctor(Module* m)
+static MPTransport* mock_transport_ctor(Module*)
 {   
     test_transport_ctor_calls++;
     return new MockTransport();
@@ -182,7 +182,7 @@ TEST(mp_transport_manager_test_group, instantiate_transport_object)
 
 TEST(mp_transport_manager_test_group, get_transport_object)
 {
-    MPTransport* transport = MPTransportManager::get_transport(MODULE_NAME);
+    const MPTransport* transport = MPTransportManager::get_transport(MODULE_NAME);
     CHECK(transport != nullptr);
 
     transport = MPTransportManager::get_transport("non_existent_transport");
@@ -213,4 +213,3 @@ int main(int argc, char** argv)
     int return_value = CommandLineTestRunner::RunAllTests(argc, argv);
     return return_value;
 }
-

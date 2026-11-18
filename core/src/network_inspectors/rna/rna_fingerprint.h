@@ -95,12 +95,13 @@ public:
 
     FpElement() = default;
     FpElement(const std::string&);
+    FpElement(const FpElement&) = default;
 
     FpElement& operator=(const FpElement& fpe) = default;
     FpElement& operator=(const std::string& str);
     bool operator==(const FpElement& y) const;
 
-    FpElementType type;
+    FpElementType type = FpElementType::INVALID;
     union
     {
         int value;
@@ -109,7 +110,7 @@ public:
             int min;
             int max;
         } range;
-    } d;
+    } d = {};
 
 private:
     void parse_value(const std::string&);

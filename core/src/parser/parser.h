@@ -66,7 +66,7 @@ int addRtnToOtn(snort::SnortConfig*, OptTreeNode*, RuleTreeNode*);
 int addRtnToOtn(snort::SnortConfig*, OptTreeNode*, RuleTreeNode*, PolicyId);
 
 void set_strict_rtn_reduction(bool);
-bool same_headers(RuleTreeNode*, RuleTreeNode*);
+bool same_headers(const RuleTreeNode*, const RuleTreeNode*);
 RuleTreeNode* deleteRtnFromOtn(OptTreeNode*, snort::SnortConfig* sc = nullptr);
 RuleTreeNode* deleteRtnFromOtn(OptTreeNode*, PolicyId, snort::SnortConfig* sc = nullptr, bool remove = true);
 
@@ -81,7 +81,7 @@ inline RuleTreeNode* getRtnFromOtn(const OptTreeNode* otn, PolicyId policyId)
 
 inline RuleTreeNode* getRtnFromOtn(const OptTreeNode* otn)
 {
-    // cppcheck-suppress nullPointer
+    // cppcheck-suppress nullPointer ; policy accessors are populated after configuration
     return getRtnFromOtn(otn, snort::get_ips_policy()->policy_id);
 }
 
@@ -101,4 +101,3 @@ struct RuleTreeNodeKey
 };
 
 #endif
-

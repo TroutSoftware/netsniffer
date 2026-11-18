@@ -49,7 +49,7 @@ private:
     {
         std::string name;
         std::string format;
-        int length;
+        int length = -1;
     };
 
     static const int command_default_len = -1;
@@ -60,7 +60,7 @@ private:
     bool parse_cmd_validity_cmd(std::istringstream& data_stream);
     std::vector<Command>::iterator get_command(const std::string& cmd_name,
         std::vector<FtpServer::Command>::iterator it);
-    bool add_cmd_to_set(std::set<std::string>& cmd_set, std::istringstream& stream);
+    static bool add_cmd_to_set(std::set<std::string>& cmd_set, std::istringstream& stream);
 
     std::vector<Command> ftp_default_command_specs =
     {
@@ -299,8 +299,8 @@ std::set<std::string> ftp_format_commands =
 
 struct FtpDefaultCmd
 {
-    std::string default_name;   // cppcheck-suppress unusedStructMember
-    std::set<std::string> cmd_set;  // cppcheck-suppress unusedStructMember
+    std::string default_name;
+    std::set<std::string> cmd_set;
 };
 
 // Use these defaults for the entries that the original config didn't provide.
@@ -856,4 +856,3 @@ static const ConvertMap ftptelnet_protocol_preprocessor =
 
 const ConvertMap* ftptelnet_protocol_map = &ftptelnet_protocol_preprocessor;
 } // namespace preprocessors
-

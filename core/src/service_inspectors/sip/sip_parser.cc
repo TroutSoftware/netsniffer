@@ -369,7 +369,7 @@ static bool sip_startline_parse(SIPMsg* msg, const char* buff, const char* end, 
     else  /* This might be a request*/
     {
         const char* space, * version;
-        SIPMethodNode* method;
+        const SIPMethodNode* method;
 
         /*Process request*/
         msg->status_code = 0;
@@ -540,7 +540,7 @@ static bool sip_body_parse(SIPMsg* msg, const char* buff, const char* end, const
  *  false
  *  true
  ********************************************************************/
-static bool sip_check_headers(SIPMsg* msg, SIP_PROTO_CONF* config)
+static bool sip_check_headers(const SIPMsg* msg, const SIP_PROTO_CONF* config)
 {
     int ret = true;
     if (0 == msg->fromLen)
@@ -850,7 +850,7 @@ static int sip_parse_server(SIPMsg* msg, const char* start, const char* end, SIP
 static int sip_parse_cseq(SIPMsg* msg, const char* start, const char* end, SIP_PROTO_CONF* config)
 {
     char* next = nullptr;
-    SIPMethodNode* method = nullptr;
+    const SIPMethodNode* method = nullptr;
 
     msg->cseqnum = SnortStrtoul(start, &next, 10);
     if ((nullptr != next )&&(next < end))
@@ -959,7 +959,7 @@ static int sip_parse_content_type(SIPMsg* msg, const char* start, const char* en
  ********************************************************************/
 
 static int sip_parse_content_len(SIPMsg* msg, const char* start, const char*,
-    SIP_PROTO_CONF* config)
+    SIP_PROTO_CONF* config) // cppcheck-suppress constParameterCallback
 {
     char* next = nullptr;
 
@@ -1227,8 +1227,10 @@ bool sip_parse(SIPMsg* msg, const char* buff, const char* end, SIP_PROTO_CONF* c
     bool status;
 
     if(msg->content_len <= bodyLen)
+        // cppcheck-suppress knownConditionTrueFalse ; result depends on the parsed SIP body
         status = sip_body_parse(msg, start, start + msg->content_len, &nextIndex);
     else
+        // cppcheck-suppress knownConditionTrueFalse ; result depends on the parsed SIP body
         status = sip_body_parse(msg, start, end, &nextIndex);
 
     // Find out whether multiple SIP messages in this packet
@@ -1324,4 +1326,3 @@ void sip_freeMediaList(SIP_MediaList medias)
         curNode = nextNode;
     }
 }
-

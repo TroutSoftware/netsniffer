@@ -63,12 +63,13 @@ public:
         return timeout;
     }
 
-    FileInfo get_file_ctx()
+    // Returned references are event-owned and must not outlive this FileMPEvent.
+    const FileInfo& get_file_ctx() const
     {
         return file_ctx;
     }
 
-    FileHashKey get_hashkey()
+    const FileHashKey& get_hashkey() const
     {
         return hashkey;
     }
@@ -78,7 +79,7 @@ public:
         return len;
     }
 
-    void deserialize(const char* buffer, uint16_t len)
+    void deserialize(const char* buffer, uint16_t data_len)
     {
         uint16_t offset = 0;
         memcpy(&timeout, buffer, sizeof(timeout));
@@ -97,12 +98,12 @@ public:
         offset += sizeof(hashkey.asid);
         memcpy(&hashkey.padding, buffer + offset, sizeof(hashkey.padding));
         offset += sizeof(hashkey.padding);
-        if (offset < len)
-            file_ctx.deserialize(buffer + offset, len - offset);
-        this->len = len;
+        if (offset < data_len)
+            file_ctx.deserialize(buffer + offset, data_len - offset);
+        len = data_len;
     }
 
-    void serialize(char* buffer, uint16_t len)
+    void serialize(char* buffer, uint16_t data_len)
     {
         uint16_t offset = 0;
         memcpy(buffer, &timeout, sizeof(timeout));
@@ -121,8 +122,8 @@ public:
         offset += sizeof(hashkey.asid);
         memcpy(buffer + offset, &hashkey.padding, sizeof(hashkey.padding));
         offset += sizeof(hashkey.padding);
-        if (offset < len)
-            file_ctx.serialize(buffer + offset, len - offset);
+        if (offset < data_len)
+            file_ctx.serialize(buffer + offset, data_len - offset);
     }
 
 private:
@@ -151,10 +152,14 @@ public:
     bool get_extracted_cutoff() const;
     uint64_t get_extracted_size() const;
 
+    void snapshot() const;
+
 private:
     const FileContext& file_ctx;
     mutable std::optional<std::string> sha256;
     mutable std::optional<std::string> filename;
+    mutable std::optional<std::string> source;
+    mutable std::optional<std::string> extracted_name;
 };
 
 }

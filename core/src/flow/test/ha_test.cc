@@ -57,11 +57,14 @@ static const FlowKey s_test_key =
     /* .pkt_type = */ PktType::TCP,
     /* .version = */ 14,
     /* .flags.group_used = */ 0,
+    /* .flags.tunnel_encapsulated = */ 0,
     /* .flags.padding_bits = */ 0,
 };
 
 static struct __attribute__((__packed__)) TestDeleteMessage {
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     HAMessageHeader mhdr;
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     FlowKey key;
 } s_delete_message =
 {
@@ -79,9 +82,13 @@ static struct __attribute__((__packed__)) TestDeleteMessage {
 };
 
 static struct __attribute__((__packed__)) TestUpdateMessage {
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     HAMessageHeader mhdr;
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     FlowKey key;
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     HAClientHeader schdr;
+    // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
     uint8_t scmsg[10];
 } s_update_stream_message =
 {
@@ -107,16 +114,22 @@ static struct __attribute__((__packed__)) TestUpdateMessage {
 // by literal here so they exercise the same registration path real callers do.
 static constexpr const char* HA_CLIENT_NAME_STREAM = "stream";
 
+// Stands in for a flow the session client creates internally before it goes
+// on to fail later in its own consume() (e.g. malformed trailing content).
+static Flow s_created_flow;
 
 class StreamHAClient : public FlowHAClient
 {
 public:
     StreamHAClient() : FlowHAClient(10, HA_CLIENT_NAME_STREAM) { }
     ~StreamHAClient() override = default;
-    bool consume(Flow*&, const FlowKey*, HAMessage& msg, uint8_t size) override
+    bool consume(Flow*& flow, const FlowKey*, HAMessage& msg, uint8_t size) override
     {
         mock().actualCall("consume");
         mock().setData("stream_consume_size", (int)size);
+
+        if (!flow && mock().getData("stream_consume_creates_flow").getIntValue())
+            flow = &s_created_flow;
 
         for ( uint8_t i = 0; i < 10; i++ )
         {
@@ -154,6 +167,10 @@ public:
     {
         mock().actualCall("other_consume");
         mock().setData("other_consume_size", (int)size);
+
+        // reject a semantically wrong segment size before touching the payload
+        if (size != 5)
+            return false;
 
         for ( uint8_t i = 0; i < 5; i++ )
         {
@@ -205,9 +222,16 @@ void Stream::delete_flow(const FlowKey* flowkey)
         memcpy(s_flowkey, flowkey, sizeof(*s_flowkey));
 }
 
+void Stream::delete_flow(Flow*, PruneReason)
+{
+    mock().actualCall("delete_flow_by_flow");
+}
+
 namespace snort
 {
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 void Flow::set_client_initiate(Packet*) { }
 void Flow::set_direction(Packet*) { }
 FlowDataStore::~FlowDataStore() = default;
@@ -275,6 +299,9 @@ SCMessage* SideChannel::alloc_transmit_message(uint32_t len)
         return nullptr;
 
     SCMessage* message = (SCMessage*)mock().getData("message_content").getObjectPointer();
+    if (!message)
+        return nullptr;
+
     message->content_length = len;
     return message;
 }
@@ -287,6 +314,7 @@ TEST_GROUP(high_availability_manager_test)
 {
     void setup() override
     {
+        mock().setDataObject("s_side_channel", "SideChannel", nullptr);
         mock().setDataObject("s_handler", "SCProcessMsgFunc", nullptr);
     }
 
@@ -420,6 +448,7 @@ TEST_GROUP(high_availability_test)
         mock().setDataObject("packet_tv", "struct timeval", &s_packet_time);
         mock().setData("stream_update_required", false);
         mock().setData("other_update_required", false);
+        mock().setData("stream_consume_creates_flow", 0);
         mock().setDataObject("s_handler", "SCProcessMsgFunc", &handler);
         mock().setDataObject("s_side_channel", "SideChannel", &side_channel);
         mock().setDataObject("flowkey", "FlowKey", &s_flow_key);
@@ -466,7 +495,7 @@ TEST_GROUP(high_availability_test)
 
 TEST(high_availability_test, receive_deletion)
 {
-    s_sc_message.content = (uint8_t*) &s_delete_message;
+    s_sc_message.content = reinterpret_cast<uint8_t*>(&s_delete_message);
     s_sc_message.content_length = sizeof(s_delete_message);
     mock().expectNCalls(1, "delete_flow");
     HighAvailabilityManager::process_receive();
@@ -476,7 +505,7 @@ TEST(high_availability_test, receive_deletion)
 
 TEST(high_availability_test, receive_update_stream_only)
 {
-    s_sc_message.content = (uint8_t*) &s_update_stream_message;
+    s_sc_message.content = reinterpret_cast<uint8_t*>(&s_update_stream_message);
     s_sc_message.content_length = sizeof(s_update_stream_message);
     mock().expectNCalls(1, "get_flow");
     mock().expectNCalls(1, "consume");
@@ -486,10 +515,63 @@ TEST(high_availability_test, receive_update_stream_only)
     MEMCMP_EQUAL_TEXT(&s_test_key, &s_flow_key, sizeof(s_test_key), "flow key should be s_test_key");
 }
 
+// A tunnel-encapsulated key must survive a full HA produce -> consume round
+// trip and reach Stream::delete_flow() with tunnel_encapsulated still set.  If
+// serialization dropped the bit (endian/layout/padding), the standby would
+// reconstruct a bare key and delete/merge the wrong flow after failover.
+TEST(high_availability_test, receive_deletion_tunnel_key_round_trip)
+{
+    flow_key = s_test_key;
+    flow_key.flags.tunnel_encapsulated = true;
+
+    // process_deletion() skips NEW/DELETED/STANDBY flows; clear NEW so this
+    // stands in for a flow already synced to the peer and a deletion is sent.
+    s_flow.ha_state->clear(FlowHAState::NEW);
+
+    mock().expectNCalls(1, "transmit_message");
+    HighAvailabilityManager::process_deletion(s_flow);   // produce into s_sc_message
+
+    mock().expectNCalls(1, "delete_flow");
+    HighAvailabilityManager::process_receive();           // consume the produced bytes
+    mock().checkExpectations();
+
+    CHECK(s_flow_key.flags.tunnel_encapsulated == true);
+    MEMCMP_EQUAL_TEXT(&flow_key, &s_flow_key, sizeof(flow_key),
+        "delete_flow key must round-trip with tunnel_encapsulated set");
+}
+
+// Same round trip on the standby lookup path: the key handed to
+// Stream::get_flow() must retain tunnel_encapsulated after produce -> consume.
+TEST(high_availability_test, receive_update_tunnel_key_round_trip)
+{
+    flow_key = s_test_key;
+    flow_key.flags.tunnel_encapsulated = true;
+
+    mock().setData("stream_update_required", (int)true);
+    mock().expectNCalls(1, "transmit_message");
+    HighAvailabilityManager::process_update(&s_flow, &s_pkt);   // produce into s_sc_message
+
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "consume");
+    HighAvailabilityManager::process_receive();                 // consume the produced bytes
+    mock().checkExpectations();
+
+    CHECK(s_flow_key.flags.tunnel_encapsulated == true);
+    MEMCMP_EQUAL_TEXT(&flow_key, &s_flow_key, sizeof(flow_key),
+        "get_flow key must round-trip with tunnel_encapsulated set");
+}
+
 TEST(high_availability_test, transmit_deletion)
 {
     mock().expectNCalls(1, "transmit_message");
     HighAvailabilityManager::process_deletion(s_flow);
+}
+
+TEST(high_availability_test, transmit_deletion_allocation_failure)
+{
+    mock().setDataObject("message_content", "SCMessage", nullptr);
+    HighAvailabilityManager::process_deletion(s_flow);
+    mock().checkExpectations();
 }
 
 TEST(high_availability_test, transmit_update_no_update)
@@ -508,6 +590,14 @@ TEST(high_availability_test, transmit_update_stream_only)
     HighAvailabilityManager::process_update(&s_flow, &s_pkt);
 }
 
+TEST(high_availability_test, transmit_update_allocation_failure)
+{
+    mock().setData("stream_update_required", (int)true);
+    mock().setDataObject("message_content", "SCMessage", nullptr);
+    HighAvailabilityManager::process_update(&s_flow, &s_pkt);
+    mock().checkExpectations();
+}
+
 TEST(high_availability_test, transmit_update_both_update)
 {
     mock().setData("stream_update_required", (int)true);
@@ -521,7 +611,8 @@ TEST(high_availability_test, transmit_update_both_update)
 TEST(high_availability_test, read_flow_key_error_v4)
 {
     HAMessageHeader hdr = { 0, 0, 0, KEY_TYPE_IP4 };
-    HAMessage msg((uint8_t*) &s_test_key, KEY_SIZE_IP4 / 2);
+    FlowKey test_key = s_test_key;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&test_key), KEY_SIZE_IP4 / 2);
     FlowKey key{};
 
     CHECK(read_flow_key(msg, &hdr, key) == 0);
@@ -531,7 +622,8 @@ TEST(high_availability_test, read_flow_key_error_v4)
 TEST(high_availability_test, read_flow_key_error_v6)
 {
     HAMessageHeader hdr = { 0, 0, 0, KEY_TYPE_IP6 };
-    HAMessage msg((uint8_t*) &s_test_key, KEY_SIZE_IP6 / 2);
+    FlowKey test_key = s_test_key;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&test_key), KEY_SIZE_IP6 / 2);
     FlowKey key{};
 
     CHECK(read_flow_key(msg, &hdr, key) == 0);
@@ -541,7 +633,8 @@ TEST(high_availability_test, read_flow_key_error_v6)
 TEST(high_availability_test, read_flow_key_error_unknown)
 {
     HAMessageHeader hdr = { 0, 0, 0, 0x42 };
-    HAMessage msg((uint8_t*) &s_test_key, sizeof(s_test_key));
+    FlowKey test_key = s_test_key;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&test_key), sizeof(test_key));
     FlowKey key{};
 
     CHECK(read_flow_key(msg, &hdr, key) == 0);
@@ -551,7 +644,7 @@ TEST(high_availability_test, read_flow_key_error_unknown)
 TEST(high_availability_test, consume_error_truncated_client_hdr)
 {
     HAClientHeader chdr = { 0, 0 };
-    HAMessage msg((uint8_t*) &chdr, sizeof(chdr) / 2);
+    HAMessage msg(reinterpret_cast<uint8_t*>(&chdr), sizeof(chdr) / 2);
     FlowKey key{};
 
     mock().expectNCalls(1, "get_flow");
@@ -563,7 +656,7 @@ TEST(high_availability_test, consume_error_truncated_client_hdr)
 TEST(high_availability_test, consume_error_invalid_client_idx)
 {
     HAClientHeader chdr = { 0x42, 0 };
-    HAMessage msg((uint8_t*) &chdr, sizeof(chdr));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&chdr), sizeof(chdr));
     FlowKey key{};
 
     mock().expectNCalls(1, "get_flow");
@@ -577,9 +670,10 @@ TEST(high_availability_test, consume_error_truncated_client_msg)
     struct __attribute__((__packed__))
     {
         HAClientHeader chdr = { 0, 0x42 };
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         uint8_t cmsg[0x42 / 2] = { };
     } input;
-    HAMessage msg((uint8_t*) &input, sizeof(input));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
     FlowKey key{};
 
     mock().expectNCalls(1, "get_flow");
@@ -593,25 +687,276 @@ TEST(high_availability_test, consume_error_client_consume)
     struct __attribute__((__packed__))
     {
         HAClientHeader chdr = { 1, 10 };  // stream client (index 1)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         uint8_t cmsg[0x42 / 2] = { };
     } input;
-    HAMessage msg((uint8_t*) &input, sizeof(input));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "consume");
+    CHECK(consume_ha_update_message(msg, key, &s_pkt) == nullptr);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.client_consume_errors == 1);
+}
+
+// The session client may create a flow internally before failing later in its
+// own consume() (e.g. malformed trailing content); reject_update() must still
+// delete that newly-created flow since no_flow_found was true on entry.
+TEST(high_availability_test, consume_error_client_consume_creates_then_fails)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr = { 1, 10 };  // stream client (index 1)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg[10] = { 0, 0xff, 0, 0, 0, 0, 0, 0, 0, 0 };  // mismatches at i=1
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().setData("stream_consume_creates_flow", 1);
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "consume");
+    mock().expectNCalls(1, "delete_flow_by_flow");
+    CHECK(consume_ha_update_message(msg, key, &s_pkt) == nullptr);
+    mock().checkExpectations();
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.client_consume_errors == 1);
+}
+
+// A non-session client must not be consumed first when no local flow exists.
+TEST(high_availability_test, consume_error_session_client_not_first)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr = { 0, 5 };  // other client (index 0)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg[5] = { };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.client_consume_errors == 0);
+    CHECK(ha_stats.session_client_not_first == 1);
+    // the item #4 parser stats must not fire on the ordering-reject path
+    CHECK(ha_stats.duplicate_client_segment == 0);
+    CHECK(ha_stats.missing_session_client == 0);
+}
+
+// A client index repeated within one message is malformed: only the first
+// segment is dispatched and the duplicate is rejected before its consume()
+// runs.  The fixture's default flow is non-null, so the session client is not
+// required here and the exact-one other_consume expectation proves the second
+// segment never reached the callback.
+TEST(high_availability_test, consume_error_duplicate_client_segment)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr0 = { 0, 5 };  // other client (index 0)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg0[5] = { 0, 1, 2, 3, 4 };
+        HAClientHeader chdr1 = { 0, 5 };  // other client (index 0) repeated
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg1[5] = { 0, 1, 2, 3, 4 };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "other_consume");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.duplicate_client_segment == 1);
+    CHECK(ha_stats.client_consume_errors == 0);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+}
+
+// A clean, empty update for an absent flow is not fully consumed: it reaches
+// content_end without the session-client segment that would have created the
+// flow.  A zero-length buffer is the smallest clean end-of-content input and
+// must not be counted as a truncation or other parser error.
+TEST(high_availability_test, consume_error_missing_session_client)
+{
+    uint8_t buffer[1] = { };
+    HAMessage msg(buffer, 0);
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    CHECK(consume_ha_update_message(msg, key, &s_pkt) == nullptr);
+    mock().checkExpectations();
+    CHECK(ha_stats.missing_session_client == 1);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.session_client_not_first == 0);
+    CHECK(ha_stats.client_consume_errors == 0);
+}
+
+// An existing local flow makes an update valid without a session-client
+// segment: a lone non-session segment is fully consumed and the required-
+// session completeness check does not apply.
+TEST(high_availability_test, consume_update_non_session_existing_flow)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr = { 0, 5 };  // other client (index 0)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg[5] = { 0, 1, 2, 3, 4 };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "other_consume");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.update_msgs_consumed == 1);
+    CHECK(ha_stats.missing_session_client == 0);
+    CHECK(ha_stats.duplicate_client_segment == 0);
+}
+
+// Duplicate detection applies to the session client too: two stream segments
+// dispatch consume() once and reject the repeat before a second callback.
+TEST(high_availability_test, consume_error_duplicate_session_segment)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr0 = { 1, 10 };  // stream client (index 1)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg0[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        HAClientHeader chdr1 = { 1, 10 };  // stream client (index 1) repeated
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg1[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
     FlowKey key{};
 
     mock().expectNCalls(1, "get_flow");
     mock().expectNCalls(1, "consume");
     consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.duplicate_client_segment == 1);
+    CHECK(ha_stats.client_consume_errors == 0);
     CHECK(ha_stats.update_msgs_consumed == 0);
+}
+
+// Including the session client later does not satisfy ordering: a non-session
+// segment first with no local flow still rejects before any dispatch.
+TEST(high_availability_test, consume_error_session_client_not_first_reordered)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr0 = { 0, 5 };   // other client (index 0) first
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg0[5] = { 0, 1, 2, 3, 4 };
+        HAClientHeader chdr1 = { 1, 10 };  // stream client (index 1) second
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg1[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.session_client_not_first == 1);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.duplicate_client_segment == 0);
+    CHECK(ha_stats.missing_session_client == 0);
+    CHECK(ha_stats.client_consume_errors == 0);
+}
+
+// Unknown-client rejection keeps precedence over ordering/completeness even
+// with no local flow, and does not double-count.
+TEST(high_availability_test, consume_error_invalid_client_idx_no_flow)
+{
+    HAClientHeader chdr = { 0x42, 0 };
+    HAMessage msg(reinterpret_cast<uint8_t*>(&chdr), sizeof(chdr));
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.unknown_client_idx == 1);
+    CHECK(ha_stats.session_client_not_first == 0);
+    CHECK(ha_stats.missing_session_client == 0);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+}
+
+// A structurally valid zero-length segment is dispatched to the client; the
+// central parser accepts it and the client owns semantic size rejection.
+TEST(high_availability_test, consume_error_zero_length_client_segment)
+{
+    HAClientHeader chdr = { 0, 0 };  // other client (index 0), zero length
+    HAMessage msg(reinterpret_cast<uint8_t*>(&chdr), sizeof(chdr));
+    FlowKey key{};
+
+    mock().expectNCalls(1, "get_flow");
+    mock().expectNCalls(1, "other_consume");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.truncated_msgs == 0);
     CHECK(ha_stats.client_consume_errors == 1);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.duplicate_client_segment == 0);
+}
+
+// A mid-header truncation with no local flow is centrally rejected without
+// double-counting the completeness/order stats.
+TEST(high_availability_test, consume_error_truncated_client_hdr_no_flow)
+{
+    HAClientHeader chdr = { 0, 0 };
+    HAMessage msg(reinterpret_cast<uint8_t*>(&chdr), sizeof(chdr) / 2);
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.truncated_msgs == 1);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.missing_session_client == 0);
+    CHECK(ha_stats.session_client_not_first == 0);
+}
+
+// A mid-content truncation with no local flow is centrally rejected; the
+// session-client index keeps ordering from firing before the length check.
+TEST(high_availability_test, consume_error_truncated_client_msg_no_flow)
+{
+    struct __attribute__((__packed__))
+    {
+        HAClientHeader chdr = { 1, 0x42 };  // stream client (index 1)
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
+        uint8_t cmsg[0x42 / 2] = { };
+    } input;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&input), sizeof(input));
+    FlowKey key{};
+
+    mock().setDataObject("flow", "Flow", nullptr);
+    mock().expectNCalls(1, "get_flow");
+    consume_ha_update_message(msg, key, &s_pkt);
+    mock().checkExpectations();
+    CHECK(ha_stats.truncated_msgs == 1);
+    CHECK(ha_stats.update_msgs_consumed == 0);
+    CHECK(ha_stats.missing_session_client == 0);
+    CHECK(ha_stats.session_client_not_first == 0);
+    CHECK(ha_stats.client_consume_errors == 0);
 }
 
 TEST(high_availability_test, consume_error_key_mismatch)
 {
     HAMessageHeader hdr[10] = { 0, HA_MESSAGE_VERSION, 0x32, KEY_TYPE_IP4 };
-    HAMessage msg((uint8_t*) &hdr, sizeof(hdr));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&hdr), sizeof(hdr));
 
     FlowKey packet_key{};
-    FlowKey* key = &packet_key;
+    const FlowKey* key = &packet_key;
     CHECK(consume_ha_message(msg, key, &s_pkt) == nullptr);
     CHECK(ha_stats.key_mismatch == 1);
 }
@@ -619,9 +964,9 @@ TEST(high_availability_test, consume_error_key_mismatch)
 TEST(high_availability_test, consume_error_truncated_msg_hdr)
 {
     HAMessageHeader hdr = { };
-    HAMessage msg((uint8_t*) &hdr, sizeof(hdr) / 2);
+    HAMessage msg(reinterpret_cast<uint8_t*>(&hdr), sizeof(hdr) / 2);
 
-    FlowKey* key = nullptr;
+    const FlowKey* key = nullptr;
     CHECK(consume_ha_message(msg, key, &s_pkt) == nullptr);
     CHECK(ha_stats.truncated_msgs == 1);
 }
@@ -629,9 +974,9 @@ TEST(high_availability_test, consume_error_truncated_msg_hdr)
 TEST(high_availability_test, consume_error_version_mismatch)
 {
     HAMessageHeader hdr = { 0, HA_MESSAGE_VERSION + 1, 0, 0 };
-    HAMessage msg((uint8_t*) &hdr, sizeof(hdr));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&hdr), sizeof(hdr));
 
-    FlowKey* key = nullptr;
+    const FlowKey* key = nullptr;
     CHECK(consume_ha_message(msg, key, &s_pkt) == nullptr);
     CHECK(ha_stats.msg_version_mismatch == 1);
 }
@@ -639,9 +984,9 @@ TEST(high_availability_test, consume_error_version_mismatch)
 TEST(high_availability_test, consume_error_length_mismatch)
 {
     HAMessageHeader hdr = { 0, HA_MESSAGE_VERSION, 0x42, 0 };
-    HAMessage msg((uint8_t*) &hdr, sizeof(hdr));
+    HAMessage msg(reinterpret_cast<uint8_t*>(&hdr), sizeof(hdr));
 
-    FlowKey* key = nullptr;
+    const FlowKey* key = nullptr;
     CHECK(consume_ha_message(msg, key, &s_pkt) == nullptr);
     CHECK(ha_stats.msg_length_mismatch == 1);
 }
@@ -687,6 +1032,8 @@ TEST_GROUP(ha_reload_test)
     {
         s_packet_time = {};
         mock().setDataObject("packet_tv", "struct timeval", &s_packet_time);
+        mock().setDataObject("s_side_channel", "SideChannel", nullptr);
+        mock().setDataObject("s_handler", "SCProcessMsgFunc", nullptr);
         memset(&ha_stats, 0, sizeof(ha_stats));
     }
 
@@ -1095,10 +1442,15 @@ TEST(high_availability_test, receive_update_both_clients)
 {
     struct __attribute__((__packed__)) {
         HAMessageHeader mhdr;
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         FlowKey key;
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         HAClientHeader schdr;
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         uint8_t scmsg[10];
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         HAClientHeader ochdr;
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         uint8_t ocmsg[5];
     } msg_data = {
         { HA_UPDATE_EVENT, HA_MESSAGE_VERSION, 0, KEY_TYPE_IP6 },
@@ -1110,7 +1462,7 @@ TEST(high_availability_test, receive_update_both_clients)
     };
     msg_data.mhdr.total_length = sizeof(msg_data);
 
-    s_sc_message.content = (uint8_t*)&msg_data;
+    s_sc_message.content = reinterpret_cast<uint8_t*>(&msg_data);
     s_sc_message.content_length = sizeof(msg_data);
 
     mock().expectNCalls(1, "get_flow");
@@ -1130,12 +1482,12 @@ TEST(high_availability_test, other_ha_client_is_update_required)
     write_update_msg_client(s_other_ha_client, s_flow, msg);
 
     // Verify client header was written correctly
-    HAClientHeader* hdr = reinterpret_cast<HAClientHeader*>(buffer);
+    const HAClientHeader* hdr = reinterpret_cast<HAClientHeader*>(buffer);
     CHECK(hdr->client == 0);   // other client index (alphabetical: "other"=0)
     CHECK(hdr->length == 5);   // 5 bytes of content
 
     // Verify content: OtherHAClient::produce writes bytes 0-4
-    uint8_t* content = buffer + sizeof(HAClientHeader);
+    const uint8_t* content = buffer + sizeof(HAClientHeader);
     for (uint8_t i = 0; i < 5; i++)
         CHECK(content[i] == i);
 }
@@ -1163,6 +1515,7 @@ TEST(high_availability_test, consume_message_bad_key)
 {
     struct __attribute__((__packed__)) {
         HAMessageHeader mhdr;
+        // cppcheck-suppress unusedStructMember ; retained for binary fixture layout
         uint8_t partial_key[2];
     } msg_data = {
         { HA_UPDATE_EVENT, HA_MESSAGE_VERSION, 0, KEY_TYPE_IP6 },
@@ -1170,8 +1523,8 @@ TEST(high_availability_test, consume_message_bad_key)
     };
     msg_data.mhdr.total_length = sizeof(msg_data);
 
-    HAMessage msg((uint8_t*)&msg_data, sizeof(msg_data));
-    FlowKey* key = nullptr;
+    HAMessage msg(reinterpret_cast<uint8_t*>(&msg_data), sizeof(msg_data));
+    const FlowKey* key = nullptr;
     CHECK(consume_ha_message(msg, key, nullptr) == nullptr);
     CHECK(ha_stats.truncated_msgs == 1);
 }
@@ -1311,4 +1664,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

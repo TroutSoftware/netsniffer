@@ -66,10 +66,10 @@ void RuleApi::reset_state()
     curr_data_bad = false;
 }
 
-bool RuleApi::failed_conversions() const
+bool RuleApi::failed_conversions()
 { return error_count > 0; }
 
-std::size_t RuleApi::num_errors() const
+std::size_t RuleApi::num_errors()
 { return error_count; }
 
 bool RuleApi::empty() const
@@ -114,7 +114,7 @@ bool RuleApi::enable_addr_anomaly_detection()
     return false;
 }
 
-void RuleApi::bad_rule(std::istringstream& stream, const std::string& bad_option)
+void RuleApi::bad_rule(const std::istringstream& stream, const std::string& bad_option)
 {
     if (!curr_rule)
         begin_rule();
@@ -240,10 +240,10 @@ void RuleApi::reset_sticky()
         DataApi::developer_error("Add a rule before resetting the sticky buffer!!");
 }
 
-void RuleApi::set_curr_options_buffer(const std::string& buffer, bool add_option)
+void RuleApi::set_curr_options_buffer(const std::string& buffer, bool should_add_option)
 {
     if (curr_rule)
-        curr_rule->set_curr_options_buffer(buffer, add_option);
+        curr_rule->set_curr_options_buffer(buffer, should_add_option);
     else
         DataApi::developer_error("Add some header data before adding content!!");
 }
@@ -321,4 +321,3 @@ void RuleApi::print_rejects(std::ostream& out)
 
 void RuleApi::swap_rules(std::vector<Rule*>& new_rules)
 { rules.swap(new_rules); }
-

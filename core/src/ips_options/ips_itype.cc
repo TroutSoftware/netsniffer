@@ -70,13 +70,12 @@ bool IcmpTypeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IcmpTypeOption& rhs = (const IcmpTypeOption&)ips;
+    const IcmpTypeOption& rhs = static_cast<const IcmpTypeOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus IcmpTypeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(icmpTypePerfStats);
 
     // return 0 if we don't have an icmp header
@@ -152,7 +151,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* itype_ctor(Module* p, IpsInfo&)
 {
-    ItypeModule* m = (ItypeModule*)p;
+    const ItypeModule* m = static_cast<ItypeModule*>(p);
     return new IcmpTypeOption(m->data);
 }
 
@@ -195,4 +194,3 @@ const BaseApi* ips_itype[] =
     &itype_api.base,
     nullptr
 };
-

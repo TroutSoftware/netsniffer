@@ -24,24 +24,78 @@
 #include "config.h"
 #endif
 
+#include <atomic>
+#include <utility>
+
 #include "rate_filter.h"
 
 #include "detection/ips_context.h"
 #include "detection/rules.h"
 #include "detection/treenodes.h"
+#include "flow/flow.h"
+#include "flow/flow_key.h"
 #include "hash/ghash.h"
+#include "main/policy.h"
 #include "main/snort_config.h"
+#include "protocols/ip.h"
+#include "protocols/layer.h"
 #include "protocols/packet.h"
+#include "time/packet_time.h"
 #include "utils/util.h"
 
 #include "sfrf.h"
 
 using namespace snort;
 
+static std::atomic<unsigned> rf_flow_data_id { 0 };
+
+class RateFilterFlowData : public FlowData
+{
+public:
+    RateFilterFlowData(unsigned id, SFRFGaugeKeys&& g) : FlowData(id), gauges(std::move(g)) { }
+    ~RateFilterFlowData() override;
+
+    FLOW_DATA_SIZE_OF_EXTRA(RateFilterFlowData,
+        gauges.capacity() * sizeof(SFRFGaugeKey))
+
+private:
+    const SFRFGaugeKeys gauges;
+};
+
+RateFilterFlowData::~RateFilterFlowData()
+{
+    SFRF_ReleaseGauges(gauges);
+}
+
+static bool has_tunnel_ancestry(const Packet* p)
+{
+    if ( p->is_tunnel_encapsulated() || (p->proto_bits & PROTO_BIT__MPLS) )
+        return true;
+
+    ip::IpApi outer_ip;
+    int8_t layer_index = 0;
+
+    layer::set_outer_ip_api(p, outer_ip, layer_index);
+
+    // Plain IP tunnels such as GRE do not set the decapsulation marker.  A
+    // distinct outer IP layer still proves that this event came from a passenger.
+    return outer_ip.is_valid() && outer_ip != p->ptrs.ip_api;
+}
+
+static bool is_tunnel_carried(const Packet* p)
+{
+    // Derived pseudo-packets do not retain authoritative decoder ancestry.
+    // Use the Flow-key discriminator that survives reassembly when available.
+    if ( p->was_set() && !p->is_defrag() )
+        return p->flow && p->flow->key && p->flow->key->flags.tunnel_encapsulated;
+
+    return has_tunnel_ancestry(p);
+}
+
 RateFilterConfig* RateFilter_ConfigNew()
 {
     RateFilterConfig* rf_config = (RateFilterConfig*)snort_calloc(sizeof(*rf_config));
-    rf_config->memcap = 1024 * 1024;
+    rf_config->memcap = 16 * 1024 * 1024;
     return rf_config;
 }
 
@@ -92,7 +146,12 @@ int RateFilter_Create(
         enable_internal_event(rf_config, thdx->sid);
 
         if ( thdx->sid == SESSION_EVENT_SETUP )
+        {
             enable_internal_event(rf_config, SESSION_EVENT_CLEAR);
+
+            if ( !thdx->seconds && !rf_flow_data_id.load(std::memory_order_relaxed) )
+                rf_flow_data_id.store(FlowData::create_flow_data_id(), std::memory_order_relaxed);
+        }
     }
     return error;
 }
@@ -108,15 +167,21 @@ int RateFilter_Test(const OptTreeNode* otn, Packet* p)
 {
     unsigned gid = otn->sigInfo.gid;
     unsigned sid = otn->sigInfo.sid;
+    RateFilterConfig* rfc = p->context->conf->rate_filter_config;
 
     const SfIp* sip;
     const SfIp* dip;
     SfIp cleared;
+    bool tunnel_carried = false;
 
     if ( p->has_ip_hdr() )
     {
         sip = p->ptrs.ip_api.get_src();
         dip = p->ptrs.ip_api.get_dst();
+
+        // Most events have no rate filter.  Avoid walking their decoder layers.
+        if ( gid < SFRF_MAX_GENID && rfc->genHash[gid] )
+            tunnel_carried = is_tunnel_carried(p);
     }
     else
     {
@@ -125,20 +190,48 @@ int RateFilter_Test(const OptTreeNode* otn, Packet* p)
         dip = &cleared;
     }
 
-    RateFilterConfig* rfc = p->context->conf->rate_filter_config;
-
-    if ( EventIsInternal(gid) )
-    {
-        // at present stream connection events are the only internal
-        // events and these require: src -> client, dst -> server.
-        if ( p->is_from_server() )
-        {
-            return SFRF_TestThreshold(rfc, gid, sid, get_inspection_policy()->policy_id,
-                dip, sip, p->pkth->ts.tv_sec, SFRF_COUNT_INCREMENT);
-        }
-    }
-
     return SFRF_TestThreshold(rfc, gid, sid, get_inspection_policy()->policy_id,
-        sip, dip, p->pkth->ts.tv_sec, SFRF_COUNT_INCREMENT);
+        sip, dip, p->pkth->ts.tv_sec, SFRF_COUNT_INCREMENT, nullptr, tunnel_carried);
 }
 
+int RateFilter_SessionEvent(
+    unsigned sid, Flow& flow, const SnortConfig& sc, const Packet* packet)
+{
+    RateFilterConfig* rfc = sc.rate_filter_config;
+    SFRFGaugeKeys gauges;
+    bool tunnel_carried = false;
+
+    if ( packet && packet->flow == &flow && packet->has_ip_hdr() )
+        tunnel_carried = is_tunnel_carried(packet);
+
+    const unsigned fd_id = rf_flow_data_id.load(std::memory_order_relaxed);
+
+    if ( fd_id )
+    {
+        // a restart can raise setup again while the flow still holds its count
+        if ( sid == SESSION_EVENT_SETUP )
+            flow.free_flow_data(fd_id);
+
+        gauges.reserve(2);
+    }
+
+    // flow's own policy, not the thread-local one -- see dev_notes.txt
+    const int action = SFRF_TestThreshold(rfc, GID_SESSION, sid,
+        flow.inspection_policy_id, &flow.client_ip, &flow.server_ip,
+        packet_time(), SFRF_COUNT_INCREMENT, &gauges, tunnel_carried);
+
+    if ( !gauges.empty() && fd_id )
+        flow.set_flow_data(new RateFilterFlowData(fd_id, std::move(gauges)));
+
+    return action;
+}
+
+void RateFilter_SessionRelease(Flow& flow)
+{
+    const unsigned fd_id = rf_flow_data_id.load(std::memory_order_relaxed);
+
+    if ( !fd_id )
+        return;
+
+    flow.free_flow_data(fd_id);
+}

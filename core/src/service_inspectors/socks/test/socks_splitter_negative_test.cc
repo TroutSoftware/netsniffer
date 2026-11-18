@@ -23,9 +23,6 @@
 #include "config.h"
 #endif
 
-#include <CppUTest/CommandLineTestRunner.h>
-#include <CppUTest/TestHarness.h>
-
 #include "../socks_flow_data.h"
 
 // Access private methods for testing
@@ -35,10 +32,13 @@
 
 #include "stream/stream_splitter.h"
 
+#include <CppUTest/CommandLineTestRunner.h>
+#include <CppUTest/TestHarness.h>
+
 namespace snort
 {
     class Flow;
-    class Packet;
+    struct Packet;
 }
 
 // Forward declare SocksStats
@@ -46,6 +46,7 @@ struct SocksStats
 {
     uint64_t concurrent_sessions = 0;
     uint64_t max_concurrent_sessions = 0;
+    uint64_t aborted_handshakes = 0;
 };
 
 using namespace snort;
@@ -53,7 +54,7 @@ using namespace snort;
 // Mock implementations - copied from socks_splitter_test.cc
 namespace snort
 {
-    class Packet
+    struct Packet
     {
     public:
         Flow* flow = nullptr;
@@ -134,13 +135,13 @@ TEST_GROUP(SocksSplitterErrorCases)
 {
     SocksSplitter* splitter = nullptr;
     
-    void setup()
+    void setup() override
     {
         SocksFlowData::init();
         splitter = new SocksSplitter(true); // client-to-server
     }
     
-    void teardown()
+    void teardown() override
     {
         delete splitter;
     }

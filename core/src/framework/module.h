@@ -54,6 +54,12 @@ struct ProfileStats;
 struct SnortConfig;
 struct TraceOption;
 
+namespace stats
+{
+class Builder;
+struct DynamicStatsPolicy;
+}
+
 using LuaCFunction = int(*)(lua_State*);
 
 struct Command
@@ -148,7 +154,7 @@ public:
     virtual PegCount* get_counts() const
     { return nullptr; }
 
-    virtual PegCount get_global_count(const char* name) const;
+    virtual PegCount get_global_count(const char* peg_name) const;
 
     virtual int get_num_counts() const
     { return num_counts; }
@@ -185,7 +191,7 @@ public:
     virtual void main_accumulate_stats();
     virtual bool has_dynamic_stats() const
     { return false; }
-    virtual void show_dynamic_stats() {}
+    virtual void collect_dynamic_stats(stats::Builder&, const stats::DynamicStatsPolicy&) const { }
     void clear_global_active_counters();
     SO_PUBLIC void collect_dump_stats_counts(std::vector<PegCount>& out);
     SO_PUBLIC const std::vector<PegCount>& get_dump_stats_results() const;

@@ -91,7 +91,6 @@ inline void TraceSegments(const TcpReassemblySegments& seglist, const snort::Pac
 
     const TcpSegmentNode* tsn = seglist.head;
     uint32_t sx = seglist.tracker->r_win_base;
-    unsigned segs = 0;
     std::stringstream ss;
 
     while ( tsn )
@@ -109,7 +108,6 @@ inline void TraceSegments(const TcpReassemblySegments& seglist, const snort::Pac
         if ( tsn->cursor and tsn->unscanned() > 0 )
             ss << "(" << tsn->cursor << "|" << tsn->unscanned() << ")";
 
-        segs++;
         sx = seq + tsn->length;
         tsn = tsn->next;
     }
@@ -159,13 +157,13 @@ inline void TraceState(const TcpStreamTracker& a, const TcpStreamTracker& b, con
 
 void S5TraceTCP(const TcpSegmentDescriptor& tsd, const snort::Packet* p)
 {
-    TcpSession* ssn = (TcpSession*)tsd.get_flow()->session;
+    TcpSession* ssn = static_cast<TcpSession*>(tsd.get_flow()->session);
     assert(ssn);
     const TcpStreamTracker& srv = ssn->server;
     const TcpStreamTracker& cli = ssn->client;
 
-    const char* cdir = "?";
-    const char* sdir = "?";
+    const char* cdir;
+    const char* sdir;
     uint32_t txd = 0;
     uint32_t rxd = 0;
 
@@ -188,5 +186,3 @@ void S5TraceTCP(const TcpSegmentDescriptor& tsd, const snort::Packet* p)
     TraceState(cli, srv, cdir, p);
     TraceState(srv, cli, sdir, p);
 }
-
-

@@ -324,11 +324,11 @@ static void AC_FREE_DFA(void* p, int n, int sizeofstate)
 
 // Get Next State-NFA, using direct index to speed up search
 
-static int List_GetNextStateOpt( ACSM_STRUCT2 * acsm,
+static int List_GetNextStateOpt( const ACSM_STRUCT2 * acsm,
     trans_node_t **acsmTransTableOpt, int state, int input )
 {
     int index = state * acsm->acsmAlphabetSize + input;
-    trans_node_t * t = acsmTransTableOpt[index];
+    const trans_node_t* t = acsmTransTableOpt[index];
 
     if ( t )
         return t->next_state;
@@ -343,7 +343,7 @@ static int List_GetNextStateOpt( ACSM_STRUCT2 * acsm,
 
 static int List_GetNextState(ACSM_STRUCT2* acsm, int state, int input)
 {
-    trans_node_t* t = acsm->acsmTransTable[state];
+    const trans_node_t* t = acsm->acsmTransTable[state];
 
     while ( t )
     {
@@ -364,7 +364,7 @@ static int List_GetNextState(ACSM_STRUCT2* acsm, int state, int input)
 
 static int List_GetNextState2(ACSM_STRUCT2* acsm, int state, int input)
 {
-    trans_node_t* t = acsm->acsmTransTable[state];
+    const trans_node_t* t = acsm->acsmTransTable[state];
 
     while ( t )
     {
@@ -480,7 +480,7 @@ static int List_FreeTransTable(ACSM_STRUCT2* acsm)
 
 // Converts row of states from list to a full vector format
 
-static inline int List_ConvToFull(ACSM_STRUCT2* acsm, acstate_t state, acstate_t* full)
+static inline int List_ConvToFull(ACSM_STRUCT2* acsm, acstate_t state, uint8_t* full)
 {
     int tcnt = 0;
     trans_node_t* t = acsm->acsmTransTable[state];
@@ -493,13 +493,17 @@ static inline int List_ConvToFull(ACSM_STRUCT2* acsm, acstate_t state, acstate_t
         switch (acsm->sizeofstate)
         {
         case 1:
-            *((uint8_t*)full + t->key) = (uint8_t)t->next_state;
+            full[t->key] = static_cast<uint8_t>(t->next_state);
             break;
         case 2:
-            *((uint16_t*)full + t->key) = (uint16_t)t->next_state;
+        {
+            const uint16_t next_state = static_cast<uint16_t>(t->next_state);
+            memcpy(full + (t->key * sizeof(next_state)), &next_state, sizeof(next_state));
             break;
+        }
         default:
-            full[t->key] = t->next_state;
+            memcpy(full + (t->key * sizeof(t->next_state)),
+                &t->next_state, sizeof(t->next_state));
             break;
         }
 
@@ -513,7 +517,7 @@ static inline int List_ConvToFull(ACSM_STRUCT2* acsm, acstate_t state, acstate_t
 
 // Copy a Match List Entry - don't dup the pattern data
 
-static ACSM_PATTERN2* CopyMatchListEntry(ACSM_PATTERN2* px)
+static ACSM_PATTERN2* CopyMatchListEntry(const ACSM_PATTERN2* px)
 {
     ACSM_PATTERN2* p;
 
@@ -527,7 +531,7 @@ static ACSM_PATTERN2* CopyMatchListEntry(ACSM_PATTERN2* px)
 // Add a pattern to the list of patterns terminated at this state.
 // Insert at front of list.
 
-static void AddMatchListEntry(ACSM_STRUCT2* acsm, int state, ACSM_PATTERN2* px)
+static void AddMatchListEntry(ACSM_STRUCT2* acsm, int state, const ACSM_PATTERN2* px)
 {
     ACSM_PATTERN2* p;
 
@@ -576,7 +580,8 @@ static void Build_NFA(ACSM_STRUCT2* acsm)
 {
     acstate_t* FailState = acsm->acsmFailState;
     ACSM_PATTERN2** MatchList = acsm->acsmMatchList;
-    ACSM_PATTERN2* mlist, * px;
+    const ACSM_PATTERN2* mlist;
+    ACSM_PATTERN2* px;
 
     std::list<int> queue;
 
@@ -657,8 +662,7 @@ static void Build_NFA(ACSM_STRUCT2* acsm)
 
 static void Convert_NFA_To_DFA(ACSM_STRUCT2* acsm)
 {
-    int cFailState;
-    acstate_t* FailState = acsm->acsmFailState;
+    const acstate_t* FailState = acsm->acsmFailState;
 
     std::list<int> queue;
     bool* queue_array = (bool*) snort_calloc( acsm->acsmNumStates, sizeof(bool) );
@@ -709,7 +713,8 @@ static void Convert_NFA_To_DFA(ACSM_STRUCT2* acsm)
             }
             else
             {
-                cFailState = List_GetNextStateOpt(acsm, acsmTransTableOpt, FailState[r], i);
+                const int cFailState =
+                    List_GetNextStateOpt(acsm, acsmTransTableOpt, FailState[r], i);
 
                 if ( cFailState != 0 && (acstate_t)cFailState != ACSM_FAIL_STATE2 )
                 {
@@ -733,25 +738,30 @@ static int Conv_List_To_Full(ACSM_STRUCT2* acsm)
 
     for (k = 0; k < (acstate_t)acsm->acsmNumStates; k++)
     {
-        p = (acstate_t*)AC_MALLOC_DFA(acsm->sizeofstate * (acsm->acsmAlphabetSize + 2),
-            acsm->sizeofstate);
+        p = static_cast<acstate_t*>(AC_MALLOC_DFA(
+            acsm->sizeofstate * (acsm->acsmAlphabetSize + 2),
+            acsm->sizeofstate));
         if (p == nullptr)
             return -1;
 
         switch (acsm->sizeofstate)
         {
         case 1:
-            List_ConvToFull(acsm, k, (acstate_t*)((uint8_t*)p + 2));
-            *((uint8_t*)p) = 0;
-            *((uint8_t*)p + 1) = 0;
+        {
+            auto* row = reinterpret_cast<uint8_t*>(p);
+            List_ConvToFull(acsm, k, row + 2);
+            memset(row, 0, 2);
             break;
+        }
         case 2:
-            List_ConvToFull(acsm, k, (acstate_t*)((uint16_t*)p + 2));
-            *((uint16_t*)p) = 0;
-            *((uint16_t*)p + 1) = 0;
+        {
+            auto* row = reinterpret_cast<uint8_t*>(p);
+            List_ConvToFull(acsm, k, row + (2 * sizeof(uint16_t)));
+            memset(row, 0, 2 * sizeof(uint16_t));
             break;
+        }
         default:
-            List_ConvToFull(acsm, k, (p + 2));
+            List_ConvToFull(acsm, k, reinterpret_cast<uint8_t*>(p + 2));
             p[0] = 0;
             p[1] = 0; /* no matches yet */
             break;
@@ -818,17 +828,16 @@ static void acsmUpdateMatchStates(ACSM_STRUCT2* acsm)
 
     for (state = 0; state < (acstate_t)acsm->acsmNumStates; state++)
     {
-        acstate_t* p = NextState[state];
-
         if (MatchList[state])
         {
+            acstate_t* p = NextState[state];
             switch (acsm->sizeofstate)
             {
             case 1:
-                *((uint8_t*)p + 1) = 1;
+                *(reinterpret_cast<uint8_t*>(p) + 1) = 1;
                 break;
             case 2:
-                *((uint16_t*)p + 1) = 1;
+                *(reinterpret_cast<uint16_t*>(p) + 1) = 1;
                 break;
             default:
                 p[1] = 1;
@@ -1029,21 +1038,21 @@ int acsm_search_dfa_full(
     {
     case 1:
     {
-        uint8_t* ps;
-        uint8_t** NextState = (uint8_t**)acsm->acsmNextState;
+        const uint8_t* ps;
+        uint8_t** NextState = reinterpret_cast<uint8_t**>(acsm->acsmNextState);
         AC_SEARCH
     }
     break;
     case 2:
     {
-        uint16_t* ps;
-        uint16_t** NextState = (uint16_t**)acsm->acsmNextState;
+        const uint16_t* ps;
+        uint16_t** NextState = reinterpret_cast<uint16_t**>(acsm->acsmNextState);
         AC_SEARCH
     }
     break;
     default:
     {
-        acstate_t* ps;
+        const acstate_t* ps;
         acstate_t** NextState = acsm->acsmNextState;
         AC_SEARCH
     }
@@ -1129,21 +1138,21 @@ int acsm_search_dfa_full_all(
     {
     case 1:
     {
-        uint8_t* ps;
-        uint8_t** NextState = (uint8_t**)acsm->acsmNextState;
+        const uint8_t* ps;
+        uint8_t** NextState = reinterpret_cast<uint8_t**>(acsm->acsmNextState);
         AC_SEARCH_ALL
     }
     break;
     case 2:
     {
-        uint16_t* ps;
-        uint16_t** NextState = (uint16_t**)acsm->acsmNextState;
+        const uint16_t* ps;
+        uint16_t** NextState = reinterpret_cast<uint16_t**>(acsm->acsmNextState);
         AC_SEARCH_ALL
     }
     break;
     default:
     {
-        acstate_t* ps;
+        const acstate_t* ps;
         acstate_t** NextState = acsm->acsmNextState;
         AC_SEARCH_ALL
     }
@@ -1177,7 +1186,7 @@ int acsm_search_dfa_full_all(
 void acsmFree2(ACSM_STRUCT2* acsm)
 {
     int i;
-    ACSM_PATTERN2* mlist, * ilist, * plist;
+    ACSM_PATTERN2* mlist, * plist;
 
     /* For AC_FREE don't really care at this point about stats */
 
@@ -1187,7 +1196,7 @@ void acsmFree2(ACSM_STRUCT2* acsm)
 
         while (mlist)
         {
-            ilist = mlist;
+            ACSM_PATTERN2* ilist = mlist;
             mlist = mlist->next;
 
             if (ilist->rule_option_tree && acsm->agent)
@@ -1222,12 +1231,13 @@ void acsmFree2(ACSM_STRUCT2* acsm)
     AC_FREE(acsm, 0, ACSM2_MEMORY_TYPE__NONE);
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 int acsmPatternCount2(ACSM_STRUCT2* acsm)
 {
     return acsm->numPatterns;
 }
 
-static void Print_DFA_MatchList(ACSM_STRUCT2* acsm, int state)
+static void Print_DFA_MatchList(const ACSM_STRUCT2* acsm, int state)
 {
     ACSM_PATTERN2* mlist;
 
@@ -1242,7 +1252,8 @@ static void Print_DFA_MatchList(ACSM_STRUCT2* acsm, int state)
 static void Print_DFA(ACSM_STRUCT2* acsm)
 {
     int k,i;
-    acstate_t* p, state, fmt;
+    const acstate_t* p;
+    acstate_t state, fmt;
     acstate_t** NextState = acsm->acsmNextState;
 
     printf("Print DFA - %d active states\n",acsm->acsmNumStates);
@@ -1292,7 +1303,7 @@ int acsmPrintDetailInfo2(ACSM_STRUCT2* acsm)
 
 int acsmPrintSummaryInfo2()
 {
-    ACSM_STRUCT2* p = &summary.acsm;
+    const ACSM_STRUCT2* p = &summary.acsm;
 
     if ( !summary.num_states )
         return 0;
@@ -1350,4 +1361,3 @@ int acsmPrintSummaryInfo2()
 
     return 0;
 }
-

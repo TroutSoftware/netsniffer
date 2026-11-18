@@ -26,6 +26,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <memory>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -72,38 +73,53 @@ struct MPTransportMessage
 
 void MPUnixDomainTransport::side_channel_receive_handler(SCMessage* msg)
 {
+    std::unique_ptr<SCMessage> msg_owner(msg);
+
     if (transport_receive_handler and msg)
     {
-        if (msg->content_length < sizeof(MPTransportMessage))
+        if (not msg->content or msg->content_length < sizeof(MPTransportMessageHeader))
         {
             MPTransportLog("Incomplete message received\n");
             return;
         }
 
-        MPTransportMessageHeader* transport_message_header = (MPTransportMessageHeader*)msg->content;
+        MPTransportMessageHeader transport_message_header;
+        memcpy(&transport_message_header, msg->content, sizeof(transport_message_header));
+
+        if (transport_message_header.data_length >
+            msg->content_length - sizeof(MPTransportMessageHeader))
+        {
+            MPTransportLog("Incomplete message payload received\n");
+            return;
+        }
         
-        if (transport_message_header->type >= MAX_TYPE)
+        if (transport_message_header.type >= MAX_TYPE)
         {
             MPTransportLog("Invalid message type received\n");
             return;
         }
 
-        auto deserialize_func = get_event_deserialization_function(transport_message_header->pub_id, transport_message_header->event_id);
+        auto deserialize_func = get_event_deserialization_function(
+            transport_message_header.pub_id, transport_message_header.event_id);
         if (!deserialize_func)
         {
-            MPTransportLog("No deserialization function found for event: type %d, id %d\n", transport_message_header->type, transport_message_header->event_id);
+            MPTransportLog("No deserialization function found for event: type %d, id %d\n",
+                transport_message_header.type, transport_message_header.event_id);
             return;
         }
 
         DataEvent* internal_event = nullptr;
-        (deserialize_func)((const char*)(msg->content + sizeof(MPTransportMessageHeader)), transport_message_header->data_length, internal_event);
-        MPEventInfo event(std::shared_ptr<DataEvent> (internal_event), transport_message_header->event_id, transport_message_header->pub_id);
+        (deserialize_func)(reinterpret_cast<const char*>(
+            msg->content + sizeof(MPTransportMessageHeader)),
+            transport_message_header.data_length, internal_event);
+        MPEventInfo event(std::shared_ptr<DataEvent>(internal_event),
+            transport_message_header.event_id, transport_message_header.pub_id);
 
         (transport_receive_handler)(event);
         dynamic_transport_stats.received_events++;
-        dynamic_transport_stats.received_bytes += sizeof(MPTransportMessageHeader) + transport_message_header->data_length;
+        dynamic_transport_stats.received_bytes +=
+            sizeof(MPTransportMessageHeader) + transport_message_header.data_length;
     }
-    delete msg;
 }
 
 void MPUnixDomainTransport::handle_new_connection(UnixDomainConnector *connector, UnixDomainConnectorConfig* cfg, const unsigned short& channel_id)
@@ -114,7 +130,21 @@ void MPUnixDomainTransport::handle_new_connection(UnixDomainConnector *connector
     std::lock_guard<std::shared_mutex> guard(_connection_update_mutex);
 
     if(!this->is_running.load())
+    {
+        delete connector;
+        delete cfg;
         return;
+    }
+
+    uint16_t max_incoming_channels = this->config->max_processes - mp_current_process_id;
+
+    if (this->answer_channel_count >= max_incoming_channels)
+    {
+        MPTransportLog("Rejecting connection: already have max incoming channels established\n");
+        delete connector;
+        delete cfg;
+        return;
+    }
 
     dynamic_transport_stats.successful_connections++;
 
@@ -124,6 +154,7 @@ void MPUnixDomainTransport::handle_new_connection(UnixDomainConnector *connector
     side_channel->register_receive_handler(std::bind(&MPUnixDomainTransport::side_channel_receive_handler, this, std::placeholders::_1));
     connector->set_message_received_handler(std::bind(&MPUnixDomainTransport::notify_process_thread, this));
     this->side_channels.push_back(new SideChannelHandle(side_channel, cfg, channel_id+this->side_channels.size()-mp_current_process_id+1));
+    this->answer_channel_count++;
     connector->set_update_handler(std::bind(&MPUnixDomainTransport::connector_update_handler, this, std::placeholders::_1, std::placeholders::_2, side_channel));
     connector->start_receive_thread();
 }
@@ -255,7 +286,10 @@ void MPUnixDomainTransport::notify_process_thread()
 void MPUnixDomainTransport::connector_update_handler(UnixDomainConnector *connector, bool is_reconecting, SideChannel *side_channel)
 {
     if (this->is_running == false)
+    {
+        delete connector;
         return;
+    }
     std::lock_guard<std::shared_mutex> guard(_connection_update_mutex);
     
     if (side_channel->connector_receive)
@@ -280,6 +314,8 @@ void MPUnixDomainTransport::connector_update_handler(UnixDomainConnector *connec
             {
                 if ((*it)->side_channel == side_channel)
                 {
+                    if ((*it)->connector_config && (*it)->connector_config->setup == UnixDomainConnectorConfig::Setup::ANSWER)
+                        this->answer_channel_count--;
                     delete *it;
                     this->side_channels.erase(it);
                     break;
@@ -467,8 +503,11 @@ void MPUnixDomainTransport::init_side_channels()
             std::bind(&MPUnixDomainTransport::connector_update_handler, this, std::placeholders::_1, std::placeholders::_2, side_channel));
 
         reconnect_helper->connect(send_path.c_str(), 0);
-        
-        this->side_channels.push_back( new SideChannelHandle(side_channel, connector_conf, i, reconnect_helper));
+
+        {
+            std::lock_guard<std::shared_mutex> guard(_connection_update_mutex);
+            this->side_channels.push_back( new SideChannelHandle(side_channel, connector_conf, i, reconnect_helper));
+        }
     }
 
     assert(!this->consume_thread);
@@ -486,6 +525,7 @@ void MPUnixDomainTransport::cleanup_side_channels()
     }
 
     this->side_channels.clear();
+    this->answer_channel_count = 0;
 }
 
 SideChannelHandle::~SideChannelHandle()
@@ -552,6 +592,11 @@ MPTransportChannelStatusHandle *MPUnixDomainTransport::get_channel_status(unsign
     for (auto &&sc_handler : this->side_channels)
     {
         unsigned short idx = sc_handler->channel_id > mp_current_process_id ? sc_handler->channel_id-2 : sc_handler->channel_id-1;
+        if (idx >= size)
+        {
+            MPTransportLog("Skipping channel status for out-of-range channel id %hu\n", sc_handler->channel_id);
+            continue;
+        }
         result[idx].id = sc_handler->channel_id;
         result[idx].status = sc_handler->side_channel->connector_receive ? MPTransportChannelStatus::CONNECTED : MPTransportChannelStatus::CONNECTING;
         result[idx].name = "Snort connection to instance " + std::to_string(sc_handler->channel_id);

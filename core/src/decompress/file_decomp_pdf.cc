@@ -134,7 +134,7 @@ static struct filters_s
 
 /* Given a pointer to a /Filter value token, return the
    associated compression type from the Filter_Map. */
-static inline uint8_t Get_Decomp_Type(uint8_t* Token, uint8_t Length)
+static inline uint8_t Get_Decomp_Type(const uint8_t* Token, uint8_t Length)
 {
     int Index;
 
@@ -151,7 +151,7 @@ static inline uint8_t Get_Decomp_Type(uint8_t* Token, uint8_t Length)
     return FILE_COMPRESSION_TYPE_NONE;
 }
 
-static inline void Process_One_Filter(fd_session_t* SessionPtr, uint8_t* Token, uint8_t Length)
+static inline void Process_One_Filter(fd_session_t* SessionPtr, const uint8_t* Token, uint8_t Length)
 {
     uint8_t Comp_Type;
 
@@ -190,7 +190,7 @@ static fd_status_t Process_Filter_Spec(fd_session_t* SessionPtr)
     const uint8_t Delim_Str[] = { "\011\012\014\015\040/[]" };
     bool Found_Array = false;
     bool Found_Token = false;
-    uint8_t* Filter;
+    const uint8_t* Filter;
     uint8_t Length;
     int Index;
 
@@ -305,7 +305,7 @@ static inline fd_status_t Pop_State(fd_PDF_Parse_t* p)
     if ( p->Parse_Stack_Index == 0 )
         return File_Decomp_Error;
 
-    fd_PDF_Parse_Stack_t* StckPtr = &(p->Parse_Stack[--(p->Parse_Stack_Index)]);
+    const fd_PDF_Parse_Stack_t* StckPtr = &(p->Parse_Stack[--(p->Parse_Stack_Index)]);
 
     p->Elem_Index = 0;  // Reset to beginning of token as can't push/pop in mid-token
     p->State = StckPtr->State;
@@ -905,7 +905,7 @@ static fd_status_t Init_Stream(fd_session_t* SessionPtr)
 
         z_stream* z_s = &(StPtr->PDF_Decomp_State.Deflate.StreamDeflate);
 
-        memset( (char*)z_s, 0, sizeof(z_stream));
+        memset(z_s, 0, sizeof(z_stream));
 
         z_s->zalloc = (alloc_func)nullptr;
         z_s->zfree = (free_func)nullptr;
@@ -1192,4 +1192,3 @@ TEST_CASE("File_Decomp_End_PDF-bad_type-error", "[file_decomp_pdf]")
     File_Decomp_Free(p_s);
 }
 #endif
-

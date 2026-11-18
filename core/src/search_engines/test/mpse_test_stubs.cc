@@ -107,8 +107,8 @@ const char* FastPatternConfig::get_search_method() const
 
 using namespace snort;
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 Mpse* mpse = nullptr;
 
@@ -180,6 +180,7 @@ const ExpectedMatch* s_expect = nullptr;
 int s_found = 0;
 
 int check_mpse_match(
+    // cppcheck-suppress constParameterPointer ; signature is fixed by the search callback API
     void* pid, void* /*tree*/, int index, void* /*context*/, void* /*neg_list*/)
 {
     auto id = reinterpret_cast<std::uintptr_t>(pid);
@@ -194,4 +195,3 @@ int check_mpse_match(
 
     return s_found == -1;
 }
-

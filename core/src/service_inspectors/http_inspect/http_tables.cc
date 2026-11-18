@@ -368,6 +368,10 @@ const RuleMap HttpModule::http_events[] =
     { EVENT_REQUEST_LINE_LENGTH_TOO_LONG, "maximum request line length exceeded" },
     { EVENT_REQUEST_LINE_NOT_VALID,     "invalid HTTP request line format" },
     { EVENT_HEADER_INVALID_CL_OR_TE,    "invalid Content-Length or Transfer-Encoding header" },
+    { EVENT_MAX_HEADER_VALUE_LENGTH,    "maximum header value length exceeded" },
+    { EVENT_UNSAFE_CHARACTERS_IN_HEADER, "unsafe character present in HTTP header" },
+    { EVENT_MALFORMED_HEADER,           "malformed HTTP header present" },
+    { EVENT_CONTENT_TYPE_NOT_ALLOWED,   "Content-Type not allowed" },
     { 0, nullptr }
 };
 
@@ -420,6 +424,14 @@ const PegInfo HttpModule::peg_names[PEG_COUNT_MAX+1] =
     { CountType::SUM, "compressed_unknown", "total number of HTTP bodies compressed with unknown methods" },
     { CountType::SUM, "max_publish_depth_hits", "total number of times the maximum publish depth was exceeded" },
     { CountType::SUM, "header_count_exceeded", "total number of HTTP messages with header count exceeding the configured maximum" },
+    { CountType::SUM, "unsafe_header_char", "total number of HTTP request/response header blocks flagged for unsafe characters" },
+    { CountType::SUM, "malformed_headers", "total number of HTTP messages with malformed headers" },
+    { CountType::SUM, "max_request_size_exceeded", "total number of requests exceeding the configured maximum request size" },
+    { CountType::SUM, "max_request_line_exceeded", "total number of requests exceeding the configured maximum request line length" },
+    { CountType::SUM, "disallowed_method", "total number of requests using a disallowed HTTP method" },
+    { CountType::SUM, "request_line_not_valid", "total number of requests with an invalid request line format" },
+    { CountType::SUM, "content_type_not_allowed", "total number of requests with a disallowed Content-Type" },
+    { CountType::SUM, "max_header_value_exceeded", "total number of HTTP messages with a header value exceeding the configured maximum length" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -730,13 +742,4 @@ const std::map <std::string, VersionId> HttpEnums::VersionStrToEnum =
     { "2.0", VERS_2_0 },
     { "3.0", VERS_3_0 },
     { "0.9", VERS_0_9 }
-};
-
-const std::map <VersionId, const char*> HttpEnums::VersionEnumToStr =
-{
-    { VERS_1_0, "1.0" },
-    { VERS_1_1, "1.1" },
-    { VERS_2_0, "2.0" },
-    { VERS_3_0, "3.0" },
-    { VERS_0_9, "0.9" }
 };

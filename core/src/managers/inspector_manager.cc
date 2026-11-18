@@ -25,6 +25,8 @@
 
 #include <cstring>
 #include <list>
+#include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "binder/bind_module.h"
@@ -33,6 +35,8 @@
 #include "flow/expect_flow.h"
 #include "flow/flow.h"
 #include "flow/session.h"
+#include "framework/inspector.h"
+#include "framework/reload_survivor_subscriptions_impl.h"
 #include "log/log_stats.h"
 #include "log/messages.h"
 #include "main/shell.h"
@@ -46,6 +50,8 @@
 #include "pub_sub/intrinsic_event_ids.h"
 #include "search_engines/search_tool.h"
 #include "stream/base/stream_module.h"
+#include "stream/stream.h"
+#include "stream/stream_splitter.h"
 #include "target_based/snort_protocols.h"
 #include "time/clock_defs.h"
 #include "time/stopwatch.h"
@@ -214,6 +220,29 @@ struct PendingTterm
     PendingTtermState state = PendingTtermState::WaitingForTterm;
 };
 
+// un-marks every entry rss_list_survivors() marked reconciling, on any exit
+class ReconciliationGuard
+{
+public:
+    explicit ReconciliationGuard(unsigned reload_id) : survivors(rss_list_survivors(reload_id))
+    { }
+
+    ~ReconciliationGuard()
+    {
+        for ( const auto& survivor : survivors )
+            rss_end_reconcile(*survivor.survivor);
+    }
+
+    ReconciliationGuard(const ReconciliationGuard&) = delete;
+    ReconciliationGuard& operator=(const ReconciliationGuard&) = delete;
+
+    const std::vector<RssSurvivorView>& get() const
+    { return survivors; }
+
+private:
+    std::vector<RssSurvivorView> survivors;
+};
+
 // Pending tterm entries keep removed inspectors alive until deferred thread cleanup runs.
 static THREAD_LOCAL std::list<PendingTterm>* pending_tterm = nullptr;
 
@@ -235,13 +264,27 @@ static PendingTterm* find_pending_tterm(const snort::Inspector* pin)
     return nullptr;
 }
 
-static void call_pending_tterm(PendingTterm& pending)
+// drain in-flight callbacks before tterm(); false means "not yet"
+static bool call_tterm(Inspector& inspector)
+{
+    if ( !rss_await_quiescent(inspector) )
+        return false;
+
+    inspector.tterm();
+    return true;
+}
+
+static bool call_pending_tterm(PendingTterm& pending)
 {
     if ( !pending_tterm_called(pending) )
     {
-        pending.pin->tterm();
+        if ( !call_tterm(*pending.pin) )
+            return false;
+
         pending.state = PendingTtermState::TtermCalled;
     }
+
+    return true;
 }
 
 static PendingTterm* defer_tterm(snort::Inspector* pin)
@@ -262,13 +305,23 @@ static PendingTterm* defer_tterm(snort::Inspector* pin)
 
 static std::list<PendingTterm>::iterator finish_pending_tterm(std::list<PendingTterm>::iterator it)
 {
-    call_pending_tterm(*it);
+    if ( !call_pending_tterm(*it) )
+        return std::next(it);
 
     it->pin->rem_ref();
     return pending_tterm->erase(it);
 }
 
-static bool is_pending_tterm(const snort::Inspector* pin)
+// shutdown-only variant
+static void finish_pending_tterm_blocking(const std::list<PendingTterm>::iterator& it)
+{
+    while ( !call_pending_tterm(*it) )
+        std::this_thread::yield();
+
+    it->pin->rem_ref();
+}
+
+bool InspectorManager::is_pending_tterm(const snort::Inspector* pin)
 {
     if ( !pending_tterm )
         return false;
@@ -350,6 +403,9 @@ struct InspectorVector
             {
                 const unsigned slot = 1 + get_instance_id();
 
+                // set the default policy, the removed map's policies are freed after the swap
+                set_network_policy(SnortConfig::get_conf()->policy_map->get_network_policy(0));
+
                 for ( auto it = pending_tterm->begin(); it != pending_tterm->end(); )
                 {
                     if ( it->pin->get_api() == incoming_api )
@@ -358,7 +414,10 @@ struct InspectorVector
                             it = finish_pending_tterm(it);
                         else
                         {
-                            call_pending_tterm(*it);
+                            // old tterm() must precede the new tinit(); a
+                            // non-survivor quiesces on the first try
+                            while ( !call_pending_tterm(*it) )
+                                std::this_thread::yield();
                             ++it;
                         }
                     }
@@ -393,8 +452,10 @@ struct InspectorVector
                 }
 
                 set_network_policy(insd.np);
-                insd.pin->tterm();
-                mark_pending_tterm_called(insd.pin);
+                if ( call_tterm(*insd.pin) )
+                    mark_pending_tterm_called(insd.pin);
+                else
+                    defer_tterm(insd.pin);
             }
         }
 
@@ -453,7 +514,8 @@ static void thread_term_removed_same_api(const InspectorData& incoming)
         PendingTterm* pending = defer_tterm(insd.pin);
 
         set_network_policy(insd.np);
-        call_pending_tterm(*pending);
+        while ( !call_pending_tterm(*pending) )
+            std::this_thread::yield();
         pending->state = PendingTtermState::TtermCalledWaitingForRemovedMap;
         did_tterm = true;
     }
@@ -536,6 +598,8 @@ void InspectorManager::reconcile_map(SnortConfig* sc)
     assert(curr_iv);
     assert(prev_iv);
 
+    std::unordered_set<Inspector*> registered_this_reload;
+
     for ( const auto& nit : curr_iv->im )
     {
         const auto oit = prev_iv->im.find(nit.first);
@@ -564,7 +628,67 @@ void InspectorManager::reconcile_map(SnortConfig* sc)
             if ( !insd.needs_tinit )
             {
                 insd.needs_tterm = true;
+
+                NetworkPolicy* new_np = nullptr;
+                InspectionPolicy* new_ip = nullptr;
+
+                if ( sc and sc->policy_map and insd.np )
+                    new_np = sc->policy_map->get_user_network(insd.np->user_policy_id);
+
+                if ( new_np and insd.ip )
+                    new_ip = new_np->get_user_inspection_policy(insd.ip->user_policy_id);
+
+                if ( new_np and new_ip )
+                {
+                    ReloadSurvivorSubscriptions rss(*new_np, *new_ip, *insd.pin);
+                    registered_this_reload.insert(insd.pin);
+                    insd.pin->register_reload_survivor_handlers(rss);
+                }
+                // New-policy resolution failed. A null old network or
+                // inspection policy is not an error: RSS takes both by
+                // reference and does not apply to GLOBAL or CONTEXT scope.
+                else if ( insd.np and insd.ip )
+                {
+                    snort::rss_stats.policy_resolution_failures.fetch_add(1, std::memory_order_relaxed);
+                    WarningMessage("RSS: survivor '%s' (network policy " STDu64
+                        ", inspection policy " STDu64 ") could not resolve its %s policy in the "
+                        "new config; handlers not registered\n",
+                        insd.pin->get_api() ? insd.pin->get_name() : insd.name.c_str(),
+                        insd.np->user_policy_id, insd.ip->user_policy_id,
+                        !new_np ? "network" : "inspection");
+                }
+
                 insd.pin->tear_down(sc, false);
+            }
+        }
+    }
+
+    if ( sc and sc->policy_map )
+    {
+        ReconciliationGuard reconciliation(SnortConfig::get_reload_id());
+
+        for ( const auto& sv : reconciliation.get() )
+        {
+            if ( registered_this_reload.find(sv.survivor) != registered_this_reload.end() )
+                continue;
+
+            NetworkPolicy* new_np = sc->policy_map->get_user_network(sv.np_user_id);
+            InspectionPolicy* new_ip = new_np ?
+                new_np->get_user_inspection_policy(sv.ip_user_id) : nullptr;
+
+            if ( !new_np or !new_ip )
+            {
+                snort::rss_stats.policy_resolution_failures.fetch_add(1, std::memory_order_relaxed);
+                WarningMessage("RSS: survivor '%s' (network policy " STDu64
+                    ", inspection policy " STDu64 ") could not resolve its %s policy in the "
+                    "new config; handlers not registered\n",
+                    sv.survivor->get_api() ? sv.survivor->get_name() : "<unknown>",
+                    sv.np_user_id, sv.ip_user_id, !new_np ? "network" : "inspection");
+            }
+            else
+            {
+                ReloadSurvivorSubscriptions rss(*new_np, *new_ip, *sv.survivor);
+                sv.survivor->register_reload_survivor_handlers(rss);
             }
         }
     }
@@ -589,6 +713,7 @@ public:
         return pi;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     static bool comp(const PHInstance* a, const PHInstance* b)
     { return ( a->get_type() < b->get_type() ); }
 
@@ -610,7 +735,8 @@ public:
 
 PHInstance::PHInstance(SnortConfig* sc, Module* mod, const char* alias, NetworkPolicy* np, InspectionPolicy* ip)
 {
-    InspectorContext* icon = (InspectorContext*)PluginManager::get_context(mod->get_name());
+    InspectorContext* icon = static_cast<InspectorContext*>(
+        PluginManager::get_context(mod->get_name()));
     assert(icon);
 
     icon->once = (mod->get_usage() == Module::INSPECT);
@@ -741,7 +867,7 @@ struct PolicyInspectorGroup
         }
     }
 
-    void dump_handler(const PHInstance* p)
+    static void dump_handler(const PHInstance* p)
     {
         Inspector* pin = p->get_handler();
 
@@ -953,7 +1079,7 @@ void ServicePig::vectorize(SnortConfig* sc)
     inspector_cache_by_id.clear();
     inspector_cache_by_service.clear();
 
-    for ( auto* p : ilist )
+    for ( const auto* p : ilist )
         add_inspector_to_cache(p, sc);
 
     if ( !binder and (!get_flow_tracking(sc).vec.empty() or wizard) )
@@ -971,8 +1097,8 @@ std::vector<const InspectApi*> InspectorManager::get_apis()
 
     auto get = [](const BaseApi* pb, void* pv)
     {
-        const InspectApi* api = (const InspectApi*)pb;
-        ((Ivec*)pv)->push_back(api);
+        const InspectApi* api = reinterpret_cast<const InspectApi*>(pb);
+        static_cast<Ivec*>(pv)->push_back(api);
     };
     PluginManager::for_each(PT_INSPECTOR, get, &v);
 
@@ -981,7 +1107,7 @@ std::vector<const InspectApi*> InspectorManager::get_apis()
 
 const char* InspectorManager::get_inspector_type(const char* name)
 {
-    const InspectApi* api = (const InspectApi*)PluginManager::get_api(name);
+    const InspectApi* api = reinterpret_cast<const InspectApi*>(PluginManager::get_api(name));
     return api ? api->get_type(api->type) : "";
 }
 
@@ -996,7 +1122,7 @@ void InspectorManager::load_buffer_map()
 
     auto load = [](const BaseApi* pb, void*)
     {
-        const InspectApi* api = (const InspectApi*)pb;
+        const InspectApi* api = reinterpret_cast<const InspectApi*>(pb);
         update_buffer_map(api->buffers, api->service);
     };
     PluginManager::for_each(PT_INSPECTOR, load);
@@ -1008,12 +1134,12 @@ void InspectorManager::dump_buffers()
 
     auto dump = [](const BaseApi* pb, void* pv)
     {
-        const InspectApi* api = (const InspectApi*)pb;
+        const InspectApi* api = reinterpret_cast<const InspectApi*>(pb);
         const char** b = api->buffers;
 
         while ( b && *b )
         {
-            ((Dumper*)pv)->dump(api->base.name, *b);
+            static_cast<Dumper*>(pv)->dump(api->base.name, *b);
             ++b;
         }
     };
@@ -1088,7 +1214,7 @@ Inspector* InspectorManager::get_service_inspector(const SnortProtocolId protoco
 
 InspectSsnFunc InspectorManager::get_session(const char* name, uint16_t proto)
 {
-    InspectorContext* icon = (InspectorContext*)PluginManager::get_context(name);
+    InspectorContext* icon = static_cast<InspectorContext*>(PluginManager::get_context(name));
 
     if ( icon->in_play and icon->api->type == IT_STREAM and icon->api->proto_bits == proto )
         return icon->api->ssn;
@@ -1113,7 +1239,10 @@ void InspectorManager::thread_term()
     if ( pending_tterm )
     {
         for ( auto it = pending_tterm->begin(); it != pending_tterm->end(); )
-            it = finish_pending_tterm(it);
+        {
+            finish_pending_tterm_blocking(it);
+            it = pending_tterm->erase(it);
+        }
 
         delete pending_tterm;
         pending_tterm = nullptr;
@@ -1172,7 +1301,8 @@ static void instantiate(const InspectApi* api, Module* mod, SnortConfig* sc, con
 {
     assert(mod);
     const char* keyword = api->base.name;
-    InspectorContext* icon = (InspectorContext*)PluginManager::get_context(keyword);
+    InspectorContext* icon = static_cast<InspectorContext*>(
+        PluginManager::get_context(keyword));
 
     if ( !icon )
     {
@@ -1232,14 +1362,14 @@ static void instantiate(const InspectApi* api, Module* mod, SnortConfig* sc, con
 // create default binding for wizard and configured services
 static void instantiate_default_binder(SnortConfig* sc, ServicePig* fp)
 {
-    BinderModule* m = (BinderModule*)PluginManager::get_module(bind_id);
+    BinderModule* m = static_cast<BinderModule*>(PluginManager::get_module(bind_id));
 
     if ( !m )
         return;
 
     bool tcp = false, udp = false, pdu = false;
 
-    for ( const auto& p : fp->service.vec )
+    for ( const auto* p : fp->service.vec )
     {
         const InspectApi& api = *p->get_api();
 
@@ -1260,7 +1390,7 @@ static void instantiate_default_binder(SnortConfig* sc, ServicePig* fp)
     if ( tcp or udp or pdu )
         m->add(PROTO_BIT__USER, wiz_id);
 
-    const InspectApi* api = (const InspectApi*)PluginManager::get_api(bind_id);
+    const InspectApi* api = reinterpret_cast<const InspectApi*>(PluginManager::get_api(bind_id));
     ::instantiate(api, m, sc, bind_id);
 
     PHInstance* instance = get_instance(fp, bind_id);
@@ -1349,7 +1479,7 @@ void InspectorManager::dump_inspector_map()
 
     for ( const auto& it : curr_iv->im )
     {
-        auto& insd = curr_iv->iv[it.second];
+        const auto& insd = curr_iv->iv[it.second];
         uint64_t npid = insd.np ? insd.np->user_policy_id : 0;
         uint64_t ipid = insd.ip ? insd.ip->user_policy_id : 0;
         LogMessage("%*s%s: " STDu64 ", " STDu64 "\n", 8, " ", insd.name.c_str(), npid, ipid);
@@ -1390,7 +1520,7 @@ void InspectorManager::print_config(SnortConfig* sc)
     {
         const auto shell = sc->policy_map->get_shell(shell_id);
         const auto policies = sc->policy_map->get_policies(shell);
-        const auto network = policies->network;
+        const auto* network = policies->network;
 
         if ( network and network->traffic_group )
         {
@@ -1422,7 +1552,7 @@ static inline void execute(
 {
     Stopwatch<SnortClock> timer;
 
-    for ( const auto& prep : phv.vec )
+    for ( const auto* prep : phv.vec )
     {
         if ( p->packet_flags & PKT_PASS_RULE )
             break;
@@ -1495,10 +1625,27 @@ static void clear_stale_service_inspector(Packet* p)
     if ( !flow->gadget or !is_pending_tterm_called(flow->gadget) )
         return;
 
+    Inspector* stale_gadget = flow->gadget;
+    stale_gadget->add_ref();
+
     flow->clear_gadget();
-    InspectorManager::thread_drain_pending_tterm();
+
+    // Service splitters can be embedded in the removed inspector.  Detach both while the
+    // temporary reference still keeps their owner alive, and before FLOW_SERVICE_CHANGE is
+    // published.  Binder may replace these fallbacks for BA_INSPECT; non-inspect actions retain
+    // safe splitters instead of pointers into the stale inspector.
+    if ( flow->is_stream() and flow->session )
+    {
+        Stream::set_splitter(flow, true, new AtomSplitter(true));
+        Stream::set_splitter(flow, false, new AtomSplitter(false));
+    }
 
     flow->set_service(p, nullptr);
+
+    // A service inspector can own the stream splitters still attached to the flow.  Keep the
+    // removed inspector alive until the service-change handlers have replaced those splitters.
+    stale_gadget->rem_ref();
+    InspectorManager::thread_drain_pending_tterm_if_pending(stale_gadget);
 
     if ( !flow->gadget and !flow->flags.svc_event_generated )
     {
@@ -1506,6 +1653,11 @@ static void clear_stale_service_inspector(Packet* p)
         flow->flags.svc_event_generated = true;
     }
 }
+
+#ifdef UNIT_TEST_BUILD
+void InspectorManager::clear_stale_service_inspector_for_test(Packet* p)
+{ clear_stale_service_inspector(p); }
+#endif
 
 template<bool T>
 void inline InspectorManager::full_inspection(Packet* p)
@@ -1561,7 +1713,7 @@ inline void InspectorManager::internal_execute(Packet* p)
     const SnortConfig* sc = p->context->conf;
     if ( !p->has_paf_payload() )
     {
-        PHVector& ft = get_flow_tracking(sc);
+        const PHVector& ft = get_flow_tracking(sc);
         if ( !ft.vec.empty() )
             ::execute<T>(p, ft);
         else
@@ -1623,6 +1775,7 @@ inline void InspectorManager::internal_execute(Packet* p)
     {
         ::execute<T>(p, fp->network);
 
+        // cppcheck-suppress identicalConditionAfterEarlyExit ; network inspectors may disable inspection
         if ( p->disable_inspect )
             return;
 

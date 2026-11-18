@@ -33,11 +33,19 @@
 // Only the main thread is using a static array.
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "application_ids.h"
 #include "framework/counts.h"
 #include "log/messages.h"
 #include "utils/util.h"
+
+namespace snort::stats
+{
+class Builder;
+struct DynamicStatsPolicy;
+}
 
 struct AppIdStats
 {
@@ -55,12 +63,14 @@ struct AppIdStats
     PegCount tp_mem_allocations;
     PegCount tp_mem_frees;
     PegCount tp_mem_bytes_in_use;
+    PegCount suppressed_future_flows;
 };
 
 class AppIdPegCounts
 {
 public:
     static void add_app_peg_info(std::string app_name, AppId);
+    static void add_app_peg_info(const std::vector<std::pair<AppId, const char*>>& apps);
     static void init_pegs();
     static void cleanup_pegs();
     static void init_peg_info();
@@ -75,7 +85,6 @@ public:
     static void inc_referred_count(AppId id);
 
     static void sum_stats();
-    static void print();
+    static void collect_stats(snort::stats::Builder&, const snort::stats::DynamicStatsPolicy&);
 };
 #endif
-

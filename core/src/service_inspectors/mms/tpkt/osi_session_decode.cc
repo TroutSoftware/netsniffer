@@ -30,26 +30,12 @@ using namespace snort;
 
 static TpktAppliSearchStateType resolve_spdu_parameter(Cursor*, const OsiSessionHdr*);
 
-uint32_t get_max_loops(Cursor* tpkt_cur)
-{
-    // set a maximum number of loops to the remaining number of
-    //    bytes in the cursor divided by the smallest TLV (0x03)
-    return (tpkt_cur->size() - tpkt_cur->get_pos()) / TPKT_SMALLEST_TLV_SIZE;
-}
-
-uint32_t get_max_pos(uint32_t idx, uint32_t length)
-{
-    // minus one is to account for the cursor being 0-indexed and
-    //    the length being 1-indexed
-    return idx + length - 1;
-}
-
 // parse the SPDU param at the current cursor position looking for an
 // indication that the desired protocol is in use
 static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const OsiSessionHdr* hdr)
 {
-    const OsiSessionSpduParameterHdr* generic_hdr = (const
-        OsiSessionSpduParameterHdr*)tpkt_cur->start();
+    const OsiSessionSpduParameterHdr* generic_hdr =
+        reinterpret_cast<const OsiSessionSpduParameterHdr*>(tpkt_cur->start());
 
     switch (generic_hdr->type)
     {
@@ -61,8 +47,8 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         };
 
         // overlay the appropriate struct
-        const OsiSessionSpduConnectAcceptItem* param = (const
-            OsiSessionSpduConnectAcceptItem*)tpkt_cur->start();
+        const OsiSessionSpduConnectAcceptItem* param =
+            reinterpret_cast<const OsiSessionSpduConnectAcceptItem*>(tpkt_cur->start());
 
         // param length is expected to be 0x06
 
@@ -80,12 +66,13 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         struct OsiSessionSpduSessionRequirement
         {
             OsiSessionSpduParameterHdr param_hdr;
-            uint16_t flags; // cppcheck-suppress unusedStructMember
+            // Retain the field so this overlay matches the on-wire SPDU layout.
+            uint16_t flags;
         };
 
         // overlay the appropriate struct
-        const OsiSessionSpduSessionRequirement* param = (const
-            OsiSessionSpduSessionRequirement*)tpkt_cur->start();
+        const OsiSessionSpduSessionRequirement* param =
+            reinterpret_cast<const OsiSessionSpduSessionRequirement*>(tpkt_cur->start());
 
         bool checks_pass = false;
 
@@ -118,8 +105,8 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         };
 
         // overlay the appropriate struct
-        const OsiSessionSpduCallingSessionSelector* param = (const
-            OsiSessionSpduCallingSessionSelector*)tpkt_cur->start();
+        const OsiSessionSpduCallingSessionSelector* param =
+            reinterpret_cast<const OsiSessionSpduCallingSessionSelector*>(tpkt_cur->start());
 
         // param length is expected to be 0x02
 
@@ -147,8 +134,8 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         };
 
         // overlay the appropriate struct
-        const OsiSessionSpduCalledSessionSelector* param = (const
-            OsiSessionSpduCalledSessionSelector*)tpkt_cur->start();
+        const OsiSessionSpduCalledSessionSelector* param =
+            reinterpret_cast<const OsiSessionSpduCalledSessionSelector*>(tpkt_cur->start());
 
         // param length is expected to be 0x02
 
@@ -175,8 +162,8 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         };
 
         // overlay the appropriate struct
-        const OsiSessionSpduSessionUserData* param = (const
-            OsiSessionSpduSessionUserData*)tpkt_cur->start();
+        const OsiSessionSpduSessionUserData* param =
+            reinterpret_cast<const OsiSessionSpduSessionUserData*>(tpkt_cur->start());
 
         // param length must be less than the reported session layer length
         if (param->param_hdr.length >= hdr->length)
@@ -193,6 +180,10 @@ static TpktAppliSearchStateType resolve_spdu_parameter(Cursor* tpkt_cur, const O
         }
         return res;
     }
+
+    default:
+        tpkt_cur->set_pos(tpkt_cur->size());
+        return TPKT_APPLI_SEARCH_STATE__EXIT;
     }
 
     return TPKT_APPLI_SEARCH_STATE__SEARCH;
@@ -206,19 +197,22 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
     process_as_data_transfer)
 {
     // overlay the session header
-    const OsiSessionHdr* hdr = (const OsiSessionHdr*)tpkt_cur->start();
+    const OsiSessionHdr* hdr = reinterpret_cast<const OsiSessionHdr*>(tpkt_cur->start());
 
     // get the flow data
     const Packet* p = DetectionEngine::get_current_packet();
+    // cppcheck-suppress knownConditionTrueFalse ; current packet is provided at runtime
     if (!p || !p->flow)
         return TPKT_APPLI_SEARCH_STATE__EXIT;
 
-    TpktFlowData* tpktfd = (TpktFlowData*)p->flow->get_flow_data(TpktFlowData::inspector_id);
+    TpktFlowData* tpktfd = static_cast<TpktFlowData*>(
+        p->flow->get_flow_data(TpktFlowData::inspector_id));
 
     bool checks_pass = false;
 
     // if flow data cannot be found something went wrong and we should just
     // exit. the flow data should not be initialized at this point
+    // cppcheck-suppress knownConditionTrueFalse ; flow data is populated at runtime
     if (tpktfd)
     {
         // track the SPDU type for when we get to the presentation layer
@@ -272,6 +266,7 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
             const TpktAppliSearchStateType res = tpkt_search_from_osi_pres_layer(tpkt_cur);
 
             // return the result when a definitive answer has been found
+            // cppcheck-suppress knownConditionTrueFalse ; search result depends on decoded packet data
             if (res != TPKT_APPLI_SEARCH_STATE__SEARCH)
             {
                 return res;
@@ -288,6 +283,7 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
                 OSI_SESSION_PROCESS_AS_DT__TRUE);
 
             // return the result when a definitive answer has been found
+            // cppcheck-suppress knownConditionTrueFalse ; search result depends on decoded packet data
             if (res != TPKT_APPLI_SEARCH_STATE__SEARCH)
             {
                 return res;
@@ -314,10 +310,13 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
         // set a maximum number of loops to the remaining number of
         //    bytes in the cursor divided by the smallest TLV (0x03)
         uint32_t max_loops      = get_max_loops(tpkt_cur);
-        uint32_t max_pos        = get_max_pos(connect_spdu_data_idx, hdr->length);
+        uint32_t max_pos        = get_max_pos(tpkt_cur, connect_spdu_data_idx, hdr->length);
         uint32_t loop_iteration = 0x00;
-        while (tpkt_cur->get_pos() < max_pos and loop_iteration < max_loops)
+        while (tpkt_cur->get_pos() < max_pos and loop_iteration < max_loops and
+            // cppcheck-suppress knownConditionTrueFalse ; work budget is decremented at runtime and can reach zero
+            get_tpkt_work_budget() != 0)
         {
+            charge_tpkt_work_budget();
             TpktAppliSearchStateType res = resolve_spdu_parameter(tpkt_cur, hdr);
             if (res != TPKT_APPLI_SEARCH_STATE__SEARCH)
             {
@@ -345,10 +344,13 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
         // minus one is to account for the cursor being 0-indexed and
         //    the length being 1-indexed
         uint32_t max_loops      = get_max_loops(tpkt_cur);
-        uint32_t max_pos        = get_max_pos(accept_spdu_data_idx, hdr->length);
+        uint32_t max_pos        = get_max_pos(tpkt_cur, accept_spdu_data_idx, hdr->length);
         uint32_t loop_iteration = 0x00;
-        while (tpkt_cur->get_pos() < max_pos and loop_iteration < max_loops)
+        while (tpkt_cur->get_pos() < max_pos and loop_iteration < max_loops and
+            // cppcheck-suppress knownConditionTrueFalse ; work budget is decremented at runtime and can reach zero
+            get_tpkt_work_budget() != 0)
         {
+            charge_tpkt_work_budget();
             TpktAppliSearchStateType res = resolve_spdu_parameter(tpkt_cur, hdr);
             if (res != TPKT_APPLI_SEARCH_STATE__SEARCH)
             {
@@ -367,4 +369,3 @@ TpktAppliSearchStateType tpkt_internal_search_from_osi_session_layer(Cursor* tpk
 
     return TPKT_APPLI_SEARCH_STATE__SEARCH;
 }
-

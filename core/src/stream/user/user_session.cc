@@ -23,6 +23,7 @@
 
 #include "user_session.h"
 
+#include "flow/flow_control.h"
 #include "detection/detection_engine.h"
 #include "detection/rules.h"
 #include "framework/pig_pen.h"
@@ -164,7 +165,8 @@ void UserTracker::detect(
     up->packet_flags |= (p->packet_flags & (PKT_FROM_CLIENT|PKT_FROM_SERVER));
     up->packet_flags |= (p->packet_flags & (PKT_STREAM_EST|PKT_STREAM_UNEST_UNI));
 
-    debug_logf(stream_user_trace, up, "detect[%d]\n", up->dsize);
+    trace_logf(stream_user_trace, TRACE_USER_SEGMENTS, up,
+        "detect[%d]\n", up->dsize);
     PigPen::inspect_rebuilt(up);
 }
 
@@ -174,26 +176,27 @@ int UserTracker::scan(Packet* p, uint32_t& flags)
         return -1;
 
     std::list<UserSegment*>::iterator it;
+    unsigned scan_total = 0;
 
     for ( it = seg_list.begin(); it != seg_list.end(); ++it)
     {
         UserSegment* us = *it;
+        scan_total += us->get_len();
 
         if ( !us->unused() )
             continue;
 
         flags = p->packet_flags & (PKT_FROM_CLIENT|PKT_FROM_SERVER);
         unsigned len = us->get_unused_len();
-        debug_logf(stream_user_trace, p, "scan[%d]\n", len);
+        trace_logf(stream_user_trace, TRACE_USER_SEGMENTS, p,
+            "scan[%u]\n", len);
 
         int32_t flush_amt = paf_check(
             splitter, &paf_state, p, us->get_unused_data(), len,
-            total, paf_state.seq, &flags);
+            scan_total, paf_state.seq, &flags);
 
         if ( flush_amt >= 0 )
         {
-            us->use(flush_amt);
-
             if ( !splitter->is_paf() && total > (unsigned)flush_amt )
             {
                 paf_jump(&paf_state, total - flush_amt);
@@ -209,7 +212,8 @@ int UserTracker::scan(Packet* p, uint32_t& flags)
 void UserTracker::flush(Packet* p, unsigned flush_amt, uint32_t flags)
 {
     unsigned bytes_flushed = 0;
-    debug_logf(stream_user_trace, p, "flush[%d]\n", flush_amt);
+    trace_logf(stream_user_trace, TRACE_USER_SEGMENTS, p,
+        "flush[%u]\n", flush_amt);
     uint32_t rflags = flags & ~PKT_PDU_TAIL;
     Packet* up = DetectionEngine::set_next_packet(p);
 
@@ -220,16 +224,14 @@ void UserTracker::flush(Packet* p, unsigned flush_amt, uint32_t flags)
         unsigned len = us->get_len();
         unsigned bytes_copied = 0;
 
-        if ( len + bytes_flushed > flush_amt )
-            len = flush_amt - bytes_flushed;
-
-        if ( len + bytes_flushed == flush_amt )
+        if ( len + bytes_flushed >= flush_amt )
         {
+            len = flush_amt - bytes_flushed;
             rflags |= (flags & PKT_PDU_TAIL);
-            len = flush_amt;
         }
 
-        debug_logf(stream_user_trace, p, "reassemble[%d]\n", len);
+        trace_logf(stream_user_trace, TRACE_USER_SEGMENTS, p,
+            "reassemble[%u]\n", len);
         StreamBuffer sb = splitter->reassemble(
             p->flow, flush_amt, bytes_flushed, data, len, rflags, bytes_copied);
 
@@ -249,6 +251,7 @@ void UserTracker::flush(Packet* p, unsigned flush_amt, uint32_t flags)
         else
         {
             us->shift(bytes_copied);
+            us->reset();
         }
     }
 }
@@ -274,7 +277,8 @@ void UserTracker::process(Packet* p)
 
 void UserTracker::add_data(Packet* p)
 {
-    debug_logf(stream_user_trace, p, "add[%d]\n", p->dsize);
+    trace_logf(stream_user_trace, TRACE_USER_SEGMENTS, p,
+        "add[%d]\n", p->dsize);
     unsigned avail = 0;
 
     if ( !seg_list.empty() )
@@ -304,7 +308,7 @@ void UserTracker::add_data(Packet* p)
 // may need additional refactoring
 //-------------------------------------------------------------------------
 
-void UserSession::start(Packet* p, Flow* f)
+void UserSession::start(const Packet* p, Flow* f)
 {
     Inspector* ins = f->gadget;
 
@@ -395,6 +399,10 @@ void UserSession::update(Packet* p, Flow* f)
             f->ssn_state.session_flags |= SSNFLAG_ESTABLISHED;
 
             f->set_ttl(p, false);
+
+            trace_logf(stream_user_trace, TRACE_USER_STATE, p,
+                "established: bidirectional (session_flags=0x%08x)\n",
+                f->ssn_state.session_flags);
         }
     }
 
@@ -423,18 +431,27 @@ void UserSession::restart(Packet* p)
 //-------------------------------------------------------------------------
 
 UserSession::UserSession(Flow* f) : Session(f)
-{ }
+{
+    if (flow)
+        flow->add_mem(sizeof(*this));
+}
 
 UserSession::~UserSession()
-{ }
+{
+    if (flow)
+        flow->sub_mem(sizeof(*this));
+}
 
-bool UserSession::setup(Packet*)
+bool UserSession::setup(Packet* p)
 {
     client.init();
     server.init();
 
-    StreamUserConfig* pc = get_user_cfg(flow->ssn_server);
+    const StreamUserConfig* pc = get_user_cfg(flow->ssn_server);
     flow->set_default_session_timeout(pc->session_timeout, false);
+
+    trace_logf(stream_user_trace, TRACE_USER_STATE, p,
+        "session setup, timeout=%u\n", pc->session_timeout);
 
     if ( flow->ssn_state.ignore_direction != SSN_DIR_NONE )
         return false;
@@ -468,11 +485,14 @@ StreamSplitter* UserSession::get_splitter(bool c2s)
 
 int UserSession::process(Packet* p)
 {
-    Profile profile(user_perf_stats);   // cppcheck-suppress unreadVariable
+    Profile profile(user_perf_stats);
 
     if ( Stream::expired_flow(flow, p) )
     {
-        flow->restart();
+        clear();
+        flow->restart(*p);
+        if ( !FlowControl::apply_flow_state(flow, p, false) )
+            return 0;
         // FIXIT-M count user session timeouts here
 
 #ifdef ENABLE_EXPECTED_USER
@@ -515,4 +535,3 @@ int UserSession::update_alert(
     Packet*, uint32_t /*gid*/, uint32_t /*sid*/,
     uint32_t /*event_id*/, uint32_t /*event_second*/)
 { return 0; }
-

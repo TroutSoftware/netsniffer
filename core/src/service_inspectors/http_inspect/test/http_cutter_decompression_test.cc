@@ -22,6 +22,7 @@
 #endif
 
 #include <cstring>
+#include <vector>
 
 #include "pub_sub/http_form_data_event.h"
 #include "pub_sub/http_transaction_end_event.h"
@@ -72,7 +73,9 @@ fd_status_t File_Decomp_StopFree(fd_session_t*) { return File_Decomp_OK; }
 uint32_t str_to_hash(const uint8_t*, size_t) { return 0; }
 FlowData* FlowDataStore::get(unsigned) const { return nullptr; }
 void FlowDataStore::set(FlowData*) { }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 unsigned DataBus::get_id(PubKey const&) { return 0; }
 void DataBus::publish(unsigned int, unsigned int, DataEvent&, Flow*) { }
 HttpTransactionEndEvent::HttpTransactionEndEvent(const HttpTransaction* const trans)
@@ -118,6 +121,8 @@ void HttpInspect::finish_hx_body(snort::Flow*, HttpCommon::SourceId, HttpCommon:
     bool) const { }
 void HttpInspect::set_hx_body_state(snort::Flow*, HttpCommon::SourceId,
     HttpCommon::HXBodyState) const { }
+void HttpInspect::signal_request_line_invalid(snort::Flow*, HttpCommon::SourceId,
+    HttpEnums::RequestLineInvalidReasonCode) const { }
 bool HttpInspect::get_fp_buf(snort::InspectionBuffer::Type, snort::Packet*,
     snort::InspectionBuffer&) { return false; }
 void HttpInspect::eval(snort::Packet*) { }
@@ -138,7 +143,7 @@ const snort::StreamBuffer HttpStreamSplitter::reassemble(snort::Flow*, unsigned,
 }
 
 bool HttpStreamSplitter::finish(snort::Flow*) { return false; }
-void HttpStreamSplitter::prep_partial_flush(snort::Flow*, uint32_t, uint32_t, uint32_t,
+void HttpStreamSplitter::prep_partial_flush(const snort::Flow*, uint32_t, uint32_t, uint32_t,
     HttpEnums::PartialFlushType) { }
 
 HttpTransaction::~HttpTransaction() = default;
@@ -150,6 +155,27 @@ THREAD_LOCAL PegCount HttpModule::peg_counts[PEG_COUNT_MAX] = { };
 TEST_GROUP_BASE(cl_cutter_decompression_test, HttpDecompressionFixture)
 {
 };
+
+// Verify per-flow memory accounting is symmetric for the zlib path: zlib's
+// internal inflate window is routed through our zalloc/zfree hooks, so it is
+// charged to the flow on init and returned on destruction. Other tests pass a
+// null flow (no-op path); this one passes the fixture's real flow.
+TEST(cl_cutter_decompression_test, mem_accounting_symmetry)
+{
+    auto* infractions = HttpUnitTestSetup::get_infractions(session_data, SRC_SERVER);
+    HttpEventGen events;
+
+    const size_t baseline = flow->get_mem_usage();
+
+    auto* const tracked = HttpCompressStream::create(CMP_DEFLATE,
+        params.decompression_param, infractions, &events, flow);
+
+    // wrapper + z_stream + zlib's inflate window are all charged by now
+    CHECK(flow->get_mem_usage() > baseline + sizeof(*tracked));
+
+    delete tracked;
+    CHECK_EQUAL(baseline, flow->get_mem_usage());
+}
 
 TEST(cl_cutter_decompression_test, long_body_deflate_overrun)
 {
@@ -178,7 +204,6 @@ TEST(cl_cutter_decompression_test, long_body_deflate_overrun)
     CHECK_EQUAL(SCAN_FOUND_PIECE, result);
     CHECK_EQUAL(0, cutter.get_octets_seen());
     CHECK_EQUAL(7, cutter.get_num_flush());
-    // cppcheck-suppress syntaxError
     CHECK_COMPARE(flow_target, >, cutter.get_num_flush());
 }
 
@@ -711,8 +736,39 @@ TEST(hx_cutter_brotli_decompression_test, scan_found_pending_last_seg)
 
 #endif
 
+TEST_GROUP(request_cutter_event_test)
+{
+    HttpInfractions infractions;
+    HttpEventGen events;
+};
+
+TEST(request_cutter_event_test, marks_new_300_and_keeps_first_reason)
+{
+    HttpRequestCutter cutter;
+    const uint8_t request[] = "/missing-method HTTP/1.1\r\n";
+
+    CHECK_EQUAL(SCAN_ABORT, cutter.cut(request, sizeof(request) - 1, &infractions, &events,
+        0, false, HX_BODY_NOT_COMPLETE));
+
+    CHECK(infractions & INF_METHOD_NOT_PRESENT);
+    CHECK(cutter.queued_request_line_not_valid());
+    CHECK_EQUAL(METHOD_NOT_PRESENT, cutter.get_request_line_invalid_reason());
+}
+
+TEST(request_cutter_event_test, non_request_cutters_are_no_ops_for_300)
+{
+    HttpStatusCutter cutter;
+    const uint8_t response[] = "/bad-status-line\r\n";
+
+    CHECK_EQUAL(SCAN_ABORT, cutter.cut(response, sizeof(response) - 1, &infractions, &events,
+        0, false, HX_BODY_NOT_COMPLETE));
+
+    CHECK_FALSE(infractions & INF_METHOD_NOT_PRESENT);
+    CHECK_FALSE(cutter.queued_request_line_not_valid());
+    CHECK_EQUAL(NONE, cutter.get_request_line_invalid_reason());
+}
+
 int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

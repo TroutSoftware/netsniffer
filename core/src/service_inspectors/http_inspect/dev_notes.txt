@@ -22,8 +22,40 @@ HTTP pipeline is present. The current transaction and any pipeline live in the f
 transaction may have only a request because the response is not (yet) received or only a response
 because the corresponding request is unknown or unavailable.
 
+Pipeline overflow and pipeline underflow permanently invalidate request-response association for
+the remainder of the flow. Transactions already queued before an overflow may still be matched with
+their responses while the pipeline is drained. Once that queue is empty, neither side may claim a
+transaction from the other side; subsequent requests and responses must be processed independently.
+This is a fundamental transaction-management invariant, not merely error-reporting behavior.
+
+The resulting transaction model is:
+
+Before overflow::
+  Request and response transactions are paired normally.
+
+After overflow, while the queue is nonempty::
+  Server responses drain and use the valid queued transactions (up to 99).
+  New client requests are processed independently.
+
+After the queue becomes empty::
+  Client requests use client-only transactions.
+  Server responses use server-only transactions.
+  No request-response pairing is attempted again for the flow.
+
+Once the directions are separated, a client request must not establish request-derived server
+parsing state. In particular, a later HTTP/0.9 request must not set zero_nine_expected.
+
 The attach_my_transaction() factory method contains all the logic that makes this work. There are
 many corner cases. Don't mess with it until you fully understand it.
+
+100-Continue interim status archiving: when a response supplies an interim (1xx) status followed by
+a final status, the interim status section is archived so its info code and reason phrase remain
+available to detection on the final response. Only the most recent interim status is retained -
+archive_status_list is a single slot, not the former unbounded history list, and archive_status()
+frees any previously archived section before storing the new one. There is no separate header
+archive; the earlier archive_hdr_list was removed because nothing consumed it. archive_status()
+also tolerates a null section, which occurs when the parser has already released the interim status
+before the replacement arrives.
 
 HI implements flow depth using the request_depth and response_depth parameters. HI seeks to provide
 a consistent experience to detection by making flow depth independent of factors that a sender
@@ -73,3 +105,7 @@ include::dev_notes_block_page_injection.txt[]
 ==== Body decompression
 
 include::dev_notes_decompression.txt[]
+
+==== Splitter-time request-limit buffers
+
+include::dev_notes_splitter_buffers.txt[]

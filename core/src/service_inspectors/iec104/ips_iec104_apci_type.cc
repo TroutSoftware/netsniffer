@@ -116,13 +116,12 @@ bool Iec104ApciTypeOption::operator==(const IpsOption& ips) const
         return false;
     }
 
-    const Iec104ApciTypeOption& rhs = (const Iec104ApciTypeOption&) ips;
+    const Iec104ApciTypeOption& rhs = static_cast<const Iec104ApciTypeOption&>(ips);
     return (apci_type == rhs.apci_type);
 }
 
 IpsOption::EvalStatus Iec104ApciTypeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(iec104_apci_type_prof);
 
     if (!p->flow)
@@ -136,7 +135,8 @@ IpsOption::EvalStatus Iec104ApciTypeOption::eval(Cursor&, Packet* p)
     }
 
     // check if the packet apci_type matches the rule option apci_type
-    Iec104FlowData* iec104fd = (Iec104FlowData*) p->flow->get_flow_data(Iec104FlowData::inspector_id);
+    const Iec104FlowData* iec104fd = static_cast<Iec104FlowData*>(
+        p->flow->get_flow_data(Iec104FlowData::inspector_id));
     if (iec104fd and apci_type == iec104fd->ssn_data.iec104_apci_type)
     {
         return MATCH;
@@ -214,7 +214,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    Iec104ApciTypeModule* mod = (Iec104ApciTypeModule*) m;
+    const Iec104ApciTypeModule* mod = static_cast<Iec104ApciTypeModule*>(m);
     return new Iec104ApciTypeOption(mod->apci_type);
 }
 
@@ -250,4 +250,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_iec104_apci_type = &ips_api.base;
-

@@ -51,18 +51,6 @@ Http2HeadersFrame::Http2HeadersFrame(const uint8_t* header_buffer, const uint32_
     hpack_decoder = &session_data->hpack_decoder[source_id];
 }
 
-bool Http2HeadersFrame::in_error_state() const
-{
-    return stream->get_state(source_id) == STREAM_ERROR;
-}
-
-void Http2HeadersFrame::clear(Packet* p)
-{
-    if (session_data->abort_flow[source_id] || in_error_state())
-        return;
-    session_data->hi->clear(p);
-}
-
 bool Http2HeadersFrame::decode_headers(Http2StartLine* start_line_generator, bool trailers)
 {
     const uint32_t encoded_headers_length = (data.length() > hpack_headers_offset) ?
@@ -84,7 +72,7 @@ bool Http2HeadersFrame::decode_headers(Http2StartLine* start_line_generator, boo
     return true;
 }
 
-void Http2HeadersFrame::process_decoded_headers(HttpFlowData* http_flow, SourceId hi_source_id, Packet* p)
+void Http2HeadersFrame::process_decoded_headers(const HttpFlowData* http_flow, SourceId hi_source_id, Packet* p)
 {
     if (session_data->abort_flow[source_id] or http1_header.length() < 0)
         return;

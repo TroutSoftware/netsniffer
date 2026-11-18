@@ -56,7 +56,7 @@ bool HttpRuleOptModule::set(const char*, Value& v, SnortConfig*)
         std::string field = v.get_string();
         const int32_t name_size = (field.size() <= MAX_FIELD_NAME_LENGTH) ?
             field.size() : MAX_FIELD_NAME_LENGTH;
-        uint8_t lower_name[MAX_FIELD_NAME_LENGTH];
+        uint8_t lower_name[MAX_FIELD_NAME_LENGTH]{};
         for (int32_t k=0; k < name_size; k++)
         {
             lower_name[k] = ((field[k] < 'A') || (field[k] > 'Z')) ?
@@ -100,7 +100,8 @@ HttpInspect const* HttpIpsOption::eval_helper(Packet* p)
     const HttpFlowData* const hi_flow_data = HttpInspect::http_get_flow_data(p->flow);
 
     const HttpInspect* const hi = (hi_flow_data->is_for_httpx()) ?
-        (HttpInspect*)(p->flow->assistant_gadget) : (HttpInspect*)(p->flow->gadget);
+        static_cast<HttpInspect*>(p->flow->assistant_gadget) :
+        static_cast<HttpInspect*>(p->flow->gadget);
 
     return hi;
 }

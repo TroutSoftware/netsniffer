@@ -26,6 +26,8 @@
 
 #include "log_text.h"
 
+#include <cstring>
+
 #include <daq_dlt.h>
 
 #include "detection/detection_engine.h"
@@ -58,7 +60,7 @@ namespace snort
 void LogTimeStamp(TextLog* log, Packet* p)
 {
     char timestamp[TIMEBUF_SIZE];
-    ts_print((const struct timeval*)&p->pkth->ts, timestamp);
+    ts_print(&p->pkth->ts, timestamp);
     TextLog_Puts(log, timestamp);
 }
 
@@ -85,6 +87,7 @@ void LogPriorityData(TextLog* log, const Event& e)
  *
  *--------------------------------------------------------------------
  */
+// cppcheck-suppress constParameterPointer ; preserve the exported declaration and ABI
 bool LogAppID(TextLog* log, Packet* p)
 {
     if ( p->flow )
@@ -132,7 +135,7 @@ static void LogMPLSHeader(TextLog* log, Packet* p)
         p->ptrs.mplsHdr.label, p->ptrs.mplsHdr.tc, p->ptrs.mplsHdr.bos, p->ptrs.mplsHdr.ttl);
 }
 
-static void LogGREHeader(TextLog* log, Packet* p)
+static void LogGREHeader(TextLog* log, const Packet* p)
 {
     const gre::GREHdr* greh = layer::get_gre_layer(p);
 
@@ -440,10 +443,18 @@ static void LogOuterIPHeader(TextLog* log, Packet* p)
  *-------------------------------------------------------------------
  */
 inline uint16_t extract_16_bits(const uint8_t* const buf)
-{ return ntohs(*((const uint16_t*)(buf)) ); }
+{
+    uint16_t value;
+    std::memcpy(&value, buf, sizeof(value));
+    return ntohs(value);
+}
 
 inline uint32_t extract_32_bits(const uint8_t* const buf)
-{ return ntohl(*((const uint32_t*)(buf)) ); }
+{
+    uint32_t value;
+    std::memcpy(&value, buf, sizeof(value));
+    return ntohl(value);
+}
 
 static void LogTcpOptions(TextLog* log, const tcp::TcpOptIterator& opt_iter)
 {
@@ -1356,4 +1367,3 @@ void LogPayload(TextLog* log, Packet* p)
     }
 }
 } // namespace snort
-

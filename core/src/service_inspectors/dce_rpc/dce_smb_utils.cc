@@ -41,6 +41,14 @@ using namespace snort;
 
 static uint8_t dce2_smb_delete_pdu[65535];
 
+// File data detection re-scans the whole rebuilt PDU per write, so a chained
+// WriteAndX message costs O(commands x payload).  Bound the detections per message.
+static THREAD_LOCAL bool dce2_smb_in_writeandx = false;
+static THREAD_LOCAL uint8_t dce2_smb_writeandx_detects = 0;
+
+void DCE2_SmbResetWriteAndXDetect()
+{ dce2_smb_writeandx_detects = 0; }
+
 
 /********************************************************************
  * Private function prototypes
@@ -200,7 +208,7 @@ void DCE2_SmbRemoveUid(DCE2_SmbSsnData* ssd, const uint16_t uid)
 
                 DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
                 DCE2_SmbCleanFileTracker(ftracker);
-                snort_free((void*)ftracker);
+                snort_free(ftracker);
                 it = ssd->ftrackers.erase(it);
             }
             else
@@ -237,7 +245,7 @@ DCE2_SmbRequestTracker* DCE2_SmbNewRequestTracker(DCE2_SmbSsnData* ssd,
 
     if (ssd->outstanding_requests >= ssd->max_outstanding_requests)
     {
-        dce_alert(GID_DCE2, DCE2_SMB_MAX_REQS_EXCEEDED, (dce2CommonStats*)&dce2_smb_stats,
+        dce_alert(GID_DCE2, DCE2_SMB_MAX_REQS_EXCEEDED, reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats),
             ssd->sd);
     }
 
@@ -247,7 +255,7 @@ DCE2_SmbRequestTracker* DCE2_SmbNewRequestTracker(DCE2_SmbSsnData* ssd,
     if (((ssd->rtracker.mid != DCE2_SENTINEL) && (ssd->rtracker.mid == (int)mid))
         || (ssd->rtrackers_map.find(mid) != ssd->rtrackers_map.end()))
     {
-        dce_alert(GID_DCE2, DCE2_SMB_REQS_SAME_MID, (dce2CommonStats*)&dce2_smb_stats,
+        dce_alert(GID_DCE2, DCE2_SMB_REQS_SAME_MID, reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats),
             ssd->sd);
     }
 
@@ -343,6 +351,7 @@ DCE2_Ret DCE2_SmbInitFileTracker(DCE2_SmbSsnData* ssd,
     ftracker->is_smb2 = false;
     ftracker->file_name = nullptr;
     ftracker->file_name_size = 0;
+    ftracker->file_name_unicode = false;
     ftracker->file_name_hash = 0;
     if (is_ipc)
     {
@@ -350,6 +359,8 @@ DCE2_Ret DCE2_SmbInitFileTracker(DCE2_SmbSsnData* ssd,
         if (co_tracker == nullptr)
             return DCE2_RET__ERROR;
         DCE2_CoInitTracker(co_tracker);
+        DCE2_CoConfigureTracker(co_tracker, &ssd->retained_co_seg_bytes,
+            DCE2_CO_SEGMENTATION_RETAIN_LIMIT);
         ftracker->fp_co_tracker = co_tracker;
         ftracker->fp_byte_mode = false;
         ftracker->fp_used = false;
@@ -519,6 +530,7 @@ void DCE2_SmbCleanFileTracker(DCE2_SmbFileTracker* ftracker)
         ftracker->file_name_size = 0;
         ftracker->file_name_hash = 0;
     }
+    ftracker->file_name_unicode = false;
 
     if (ftracker->is_ipc)
     {
@@ -527,6 +539,9 @@ void DCE2_SmbCleanFileTracker(DCE2_SmbFileTracker* ftracker)
 
         if (ftracker->fp_writex_raw != nullptr)
         {
+            if (ftracker->fp_writex_raw->retained_writex_owner != nullptr)
+                *ftracker->fp_writex_raw->retained_writex_owner -=
+                    DCE2_BufferSize(ftracker->fp_writex_raw->buf);
             DCE2_BufferDestroy(ftracker->fp_writex_raw->buf);
             snort_free((void*)ftracker->fp_writex_raw);
             ftracker->fp_writex_raw = nullptr;
@@ -607,6 +622,7 @@ void DCE2_SmbFreeRequestTrackerFileName(DCE2_SmbRequestTracker* rtracker)
     }
 
     rtracker->file_name_size = 0;
+    rtracker->file_name_unicode = false;
 }
 
 void DCE2_SmbCleanRequestTracker(DCE2_SmbRequestTracker* rtracker)
@@ -677,7 +693,7 @@ void DCE2_SmbRemoveFileTrackerFromRequestTrackers(DCE2_SmbSsnData* ssd,
     if ((ssd->cur_rtracker != nullptr) && (ssd->cur_rtracker->ftracker == ftracker))
         ssd->cur_rtracker->ftracker = nullptr;
 
-    for (auto& entry : ssd->rtrackers_map)
+    for (const auto& entry : ssd->rtrackers_map)
     {
         if (entry.second->ftracker == ftracker)
             entry.second->ftracker = nullptr;
@@ -771,7 +787,7 @@ void DCE2_SmbRemoveTid(DCE2_SmbSsnData* ssd, const uint16_t tid)
 
             DCE2_SmbRemoveFileTrackerFromRequestTrackers(ssd, ftracker);
             DCE2_SmbCleanFileTracker(ftracker);
-            snort_free((void*)ftracker);
+            snort_free(ftracker);
             it = ssd->ftrackers.erase(it);
         }
         else
@@ -833,7 +849,7 @@ void DCE2_SmbInvalidShareCheck(DCE2_SmbSsnData* ssd,
     if (share_list == nullptr)
         return;
 
-    dce2SmbShare* smb_share;
+    const dce2SmbShare* smb_share;
     for (smb_share = (dce2SmbShare*)DCE2_ListFirst(share_list);
         smb_share != nullptr;
         smb_share = (dce2SmbShare*)DCE2_ListNext(share_list))
@@ -869,7 +885,7 @@ void DCE2_SmbInvalidShareCheck(DCE2_SmbSsnData* ssd,
         if (i == share_str_len)
         {
             /* Should only match one share since no duplicate shares in list */
-            dce_alert(GID_DCE2, DCE2_SMB_INVALID_SHARE, (dce2CommonStats*)&dce2_smb_stats,
+            dce_alert(GID_DCE2, DCE2_SMB_INVALID_SHARE, reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats),
                 ssd->sd);
             break;
         }
@@ -947,6 +963,18 @@ DCE2_Ret DCE2_SmbProcessRequestData(DCE2_SmbSsnData* ssd,
     return DCE2_RET__SUCCESS;
 }
 
+// Chained WriteAndX only; marks the path so DCE2_SmbProcessFileData bounds the
+// detections.  Other DCE2_SmbProcessRequestData callers are unaffected.
+DCE2_Ret DCE2_SmbProcessRequestDataWriteAndX(DCE2_SmbSsnData* ssd,
+    const uint16_t fid, const uint8_t* data_ptr, uint32_t data_len, uint64_t offset)
+{
+    dce2_smb_in_writeandx = true;
+    DCE2_Ret status = DCE2_SmbProcessRequestData(ssd, fid, data_ptr, data_len, offset);
+    dce2_smb_in_writeandx = false;
+
+    return status;
+}
+
 DCE2_Ret DCE2_SmbProcessResponseData(DCE2_SmbSsnData* ssd,
     const uint8_t* data_ptr, uint32_t data_len)
 {
@@ -998,8 +1026,8 @@ static inline uint16_t SmbHtons(const uint16_t* ptr)
  ********************************************************************/
 void DCE2_SmbInitRdata(uint8_t* nb_ptr, int dir)
 {
-    NbssHdr* nb_hdr = (NbssHdr*)nb_ptr;
-    SmbNtHdr* smb_hdr = (SmbNtHdr*)((uint8_t*)nb_hdr + sizeof(NbssHdr));
+    NbssHdr* nb_hdr = reinterpret_cast<NbssHdr*>(nb_ptr);
+    SmbNtHdr* smb_hdr = reinterpret_cast<SmbNtHdr*>(reinterpret_cast<uint8_t*>(nb_hdr) + sizeof(NbssHdr));
 
     nb_hdr->type = NBSS_SESSION_TYPE__MESSAGE;
     memcpy((void*)smb_hdr->smb_idf, (void*)"\xffSMB", sizeof(smb_hdr->smb_idf));
@@ -1007,7 +1035,7 @@ void DCE2_SmbInitRdata(uint8_t* nb_ptr, int dir)
     if (dir == PKT_FROM_CLIENT)
     {
         SmbWriteAndXReq* writex =
-            (SmbWriteAndXReq*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+            reinterpret_cast<SmbWriteAndXReq*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint16_t offset = sizeof(SmbNtHdr) + sizeof(SmbWriteAndXReq);
 
         smb_hdr->smb_com = SMB_COM_WRITE_ANDX;
@@ -1020,7 +1048,7 @@ void DCE2_SmbInitRdata(uint8_t* nb_ptr, int dir)
     else
     {
         SmbReadAndXResp* readx =
-            (SmbReadAndXResp*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+            reinterpret_cast<SmbReadAndXResp*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint16_t offset = sizeof(SmbNtHdr) + sizeof(SmbReadAndXResp);
 
         smb_hdr->smb_com = SMB_COM_READ_ANDX;
@@ -1051,8 +1079,8 @@ void DCE2_SmbInitRdata(uint8_t* nb_ptr, int dir)
  ********************************************************************/
 void DCE2_SmbSetRdata(DCE2_SmbSsnData* ssd, uint8_t* nb_ptr, uint16_t co_len)
 {
-    NbssHdr* nb_hdr = (NbssHdr*)nb_ptr;
-    SmbNtHdr* smb_hdr = (SmbNtHdr*)((uint8_t*)nb_hdr + sizeof(NbssHdr));
+    NbssHdr* nb_hdr = reinterpret_cast<NbssHdr*>(nb_ptr);
+    SmbNtHdr* smb_hdr = reinterpret_cast<SmbNtHdr*>(reinterpret_cast<uint8_t*>(nb_hdr) + sizeof(NbssHdr));
     uint16_t uid = (ssd->cur_rtracker == nullptr) ? 0 : ssd->cur_rtracker->uid;
     uint16_t tid = (ssd->cur_rtracker == nullptr) ? 0 : ssd->cur_rtracker->tid;
     DCE2_SmbFileTracker* ftracker = (ssd->cur_rtracker == nullptr) ? nullptr :
@@ -1064,7 +1092,7 @@ void DCE2_SmbSetRdata(DCE2_SmbSsnData* ssd, uint8_t* nb_ptr, uint16_t co_len)
     if ( DetectionEngine::get_current_packet()->is_from_client() )
     {
         SmbWriteAndXReq* writex =
-            (SmbWriteAndXReq*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+            reinterpret_cast<SmbWriteAndXReq*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint32_t nb_len = sizeof(SmbNtHdr) + sizeof(SmbWriteAndXReq) + co_len;
 
         /* The data will get truncated anyway since we can only fit
@@ -1091,7 +1119,7 @@ void DCE2_SmbSetRdata(DCE2_SmbSsnData* ssd, uint8_t* nb_ptr, uint16_t co_len)
     else
     {
         SmbReadAndXResp* readx =
-            (SmbReadAndXResp*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+            reinterpret_cast<SmbReadAndXResp*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint32_t nb_len = sizeof(SmbNtHdr) + sizeof(SmbReadAndXResp) + co_len;
 
         /* The data will get truncated anyway since we can only fit
@@ -1177,12 +1205,22 @@ DCE2_Ret DCE2_SmbHandleSegmentation(DCE2_Buffer** buf,
 
     if (*buf == nullptr)
     {
-        /* No initial size or min alloc size */
-        *buf = DCE2_BufferNew(alloc_size, alloc_size);
+        // Size the initial allocation to the data present (add_len). If that is
+        // already >= 3/4 of alloc_size, allocate alloc_size up front; otherwise
+        // start at add_len and let the buffer grow on demand.
+        uint32_t initial_size = (add_len * 4 >= alloc_size * 3)
+            ? alloc_size
+            : add_len;
+        *buf = DCE2_BufferNew(initial_size, 0);
     }
 
+    // alloc_size is the known final size of this PDU and grows as the state
+    // machine advances, so refresh the cap each call. It clamps geometric growth
+    // so capacity never overshoots the PDU size.
+    (*buf)->max_size = alloc_size;
+
     DCE2_Ret status = DCE2_BufferAddData(*buf, data_ptr, add_len,
-        DCE2_BufferLength(*buf), DCE2_BUFFER_MIN_ADD_FLAG__IGNORE);
+        DCE2_BufferLength(*buf), DCE2_BUFFER_MIN_ADD_FLAG__GEOMETRIC);
 
     return status;
 }
@@ -1257,11 +1295,11 @@ void DCE2_SmbSegAlert(DCE2_SmbSsnData* ssd, uint32_t rule_id)
     const uint8_t* data_ptr = DCE2_BufferData(buf);
     uint32_t data_len = DCE2_BufferLength(buf);
 
-    Packet* rpkt = DCE2_SmbGetRpkt(ssd, &data_ptr, &data_len, DCE2_RPKT_TYPE__SMB_SEG);
+    const Packet* rpkt = DCE2_SmbGetRpkt(ssd, &data_ptr, &data_len, DCE2_RPKT_TYPE__SMB_SEG);
     if (rpkt == nullptr)
         return;
 
-    dce_alert(GID_DCE2, rule_id, (dce2CommonStats*)&dce2_smb_stats, ssd->sd);
+    dce_alert(GID_DCE2, rule_id, reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats), ssd->sd);
 }
 
 static void DCE2_SmbResetFileChunks(DCE2_SmbFileTracker* ftracker)
@@ -1291,7 +1329,7 @@ static FileContext* DCE2_get_main_file_context()
 
 FileVerdict DCE2_get_file_verdict()
 {
-    FileContext* file = DCE2_get_main_file_context();
+    const FileContext* file = DCE2_get_main_file_context();
     if ( !file )
         return FILE_VERDICT_UNKNOWN;
     return file->verdict;
@@ -1299,10 +1337,10 @@ FileVerdict DCE2_get_file_verdict()
 
 void DCE2_SmbInitDeletePdu()
 {
-    NbssHdr* nb_hdr = (NbssHdr*)dce2_smb_delete_pdu;
-    SmbNtHdr* smb_hdr = (SmbNtHdr*)((uint8_t*)nb_hdr + sizeof(*nb_hdr));
-    SmbDeleteReq* del_req = (SmbDeleteReq*)((uint8_t*)smb_hdr + sizeof(*smb_hdr));
-    uint8_t* del_req_fmt = (uint8_t*)del_req + sizeof(*del_req);
+    NbssHdr* nb_hdr = reinterpret_cast<NbssHdr*>(dce2_smb_delete_pdu);
+    SmbNtHdr* smb_hdr = reinterpret_cast<SmbNtHdr*>(reinterpret_cast<uint8_t*>(nb_hdr) + sizeof(*nb_hdr));
+    SmbDeleteReq* del_req = reinterpret_cast<SmbDeleteReq*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(*smb_hdr));
+    uint8_t* del_req_fmt = reinterpret_cast<uint8_t*>(del_req) + sizeof(*del_req);
     uint16_t smb_flg2 = 0x4001;
     uint16_t search_attrs = 0x0006;
 
@@ -1327,41 +1365,54 @@ void DCE2_SmbInitDeletePdu()
     *del_req_fmt = SMB_FMT__ASCII;
 }
 
-static void DCE2_SmbInjectDeletePdu(DCE2_SmbFileTracker* ftracker)
+static uint32_t DCE2_SmbBuildDeletePdu(const DCE2_SmbFileTracker* ftracker)
+{
+    if (!ftracker || !ftracker->file_name)
+        return 0;
+
+    NbssHdr* nb_hdr = reinterpret_cast<NbssHdr*>(dce2_smb_delete_pdu);
+    SmbNtHdr* smb_hdr = reinterpret_cast<SmbNtHdr*>(reinterpret_cast<uint8_t*>(nb_hdr) + sizeof(*nb_hdr));
+    SmbDeleteReq* del_req = reinterpret_cast<SmbDeleteReq*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(*smb_hdr));
+    char* del_filename = reinterpret_cast<char*>(reinterpret_cast<uint8_t*>(del_req) + sizeof(*del_req) + 1);
+    const bool unicode = ftracker->file_name_unicode;
+    const size_t stored_len = ftracker->file_name_size;
+    if (unicode && stored_len < UTF_16_LE_BOM_LEN)
+        return 0;
+
+    // Stored Unicode names have a BOM and two-byte terminator; ASCII names
+    // have no prefix and a one-byte terminator. Neither size includes its terminator.
+    const char* source = ftracker->file_name + (unicode ? UTF_16_LE_BOM_LEN : 0);
+    const size_t file_name_len = stored_len + (unicode ? 0 : 1);
+    const size_t smb_len = sizeof(*smb_hdr) + sizeof(*del_req) + 1 + file_name_len;
+    const size_t byte_count = 1 + file_name_len;
+    if (smb_len > UINT16_MAX || byte_count > UINT16_MAX
+        || sizeof(*nb_hdr) + smb_len > sizeof(dce2_smb_delete_pdu))
+        return 0;
+
+    uint16_t smb_flg2 = unicode ? 0xC001 : 0x4001;
+    smb_hdr->smb_flg2 = SmbHtons(&smb_flg2);
+    nb_hdr->length = htons(static_cast<uint16_t>(smb_len));
+    const uint32_t len = sizeof(*nb_hdr) + smb_len;
+    smb_hdr->smb_tid = SmbHtons(&ftracker->tid_v1);
+    smb_hdr->smb_uid = SmbHtons(&ftracker->uid_v1);
+    uint16_t smb_bcc = static_cast<uint16_t>(byte_count);
+    del_req->smb_bcc = SmbHtons(&smb_bcc);
+    memcpy(del_filename, source, file_name_len);
+
+    return len;
+}
+
+static void DCE2_SmbInjectDeletePdu(const DCE2_SmbFileTracker* ftracker)
 {
     Packet* inject_pkt = DetectionEngine::get_current_wire_packet();
     Packet* p = DetectionEngine::get_current_packet();
 
-    if ( !inject_pkt || inject_pkt->flow != p->flow )
+    if (!inject_pkt || inject_pkt->flow != p->flow)
         return;
 
-    NbssHdr* nb_hdr = (NbssHdr*)dce2_smb_delete_pdu;
-    SmbNtHdr* smb_hdr = (SmbNtHdr*)((uint8_t*)nb_hdr + sizeof(*nb_hdr));
-    SmbDeleteReq* del_req = (SmbDeleteReq*)((uint8_t*)smb_hdr + sizeof(*smb_hdr));
-    char* del_filename = (char*)((uint8_t*)del_req + sizeof(*del_req) + 1);
-    FileCharEncoding encoding = get_character_encoding(ftracker->file_name,
-        ftracker->file_name_size);
-    uint16_t file_name_len;
-
-    if (encoding == SNORT_CHAR_ENCODING_UTF_16LE)
-    {
-        file_name_len = ftracker->file_name_size - UTF_16_LE_BOM_LEN + 2;
-        uint16_t smb_flg2 = 0xC001;
-        smb_hdr->smb_flg2 = SmbHtons(&smb_flg2);
-    }
-    else
-    {
-        file_name_len = ftracker->file_name_size + 1;
-    }
-
-    nb_hdr->length = htons(sizeof(*smb_hdr) + sizeof(*del_req) + 1 + file_name_len);
-    uint32_t len = ntohs(nb_hdr->length) + sizeof(*nb_hdr);
-    smb_hdr->smb_tid = SmbHtons(&ftracker->tid_v1);
-    smb_hdr->smb_uid = SmbHtons(&ftracker->uid_v1);
-    del_req->smb_bcc = 1 + file_name_len;
-    memcpy(del_filename, ftracker->file_name + UTF_16_LE_BOM_LEN, file_name_len);
-
-    p->active->inject_data(inject_pkt, 0, (uint8_t*)nb_hdr, len);
+    const uint32_t len = DCE2_SmbBuildDeletePdu(ftracker);
+    if (len)
+        p->active->inject_data(inject_pkt, 0, dce2_smb_delete_pdu, len);
 }
 
 static FileVerdict DCE2_SmbLookupFileVerdict()
@@ -1575,7 +1626,7 @@ static DCE2_Ret DCE2_SmbHandleOutOfOrderFileData(DCE2_SmbSsnData* ssd,
     {
         uint64_t initial_offset = ftracker->ff_file_offset;
         uint64_t next_offset = initial_offset + data_len;
-        DCE2_SmbFileChunk* file_chunk = (DCE2_SmbFileChunk*)DCE2_ListFirst(
+        const DCE2_SmbFileChunk* file_chunk = (DCE2_SmbFileChunk*)DCE2_ListFirst(
             ftracker->ff_file_chunks);
         DCE2_Ret ret = DCE2_SmbFileAPIProcess(ssd, ftracker, data_ptr, data_len, upload);
 
@@ -1727,6 +1778,30 @@ void DCE2_SmbProcessFileData(DCE2_SmbSsnData* ssd,
         ((ftracker->ff_file_offset == ftracker->ff_bytes_processed) &&
         ((file_data_depth == 0) || (ftracker->ff_bytes_processed < (uint64_t)file_data_depth))))
     {
+        const uint8_t max_writex_detects =
+            DCE2_ScSmbMaxWriteXDetects((const dce2SmbProtoConf*)ssd->sd.config);
+
+        if (dce2_smb_in_writeandx && max_writex_detects
+            && (dce2_smb_writeandx_detects >= max_writex_detects))
+        {
+            SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL,
+                DetectionEngine::get_current_packet(),
+                "Chained WriteAndX detections exceeded %hhu on this message - blocking\n",
+                max_writex_detects);
+
+            dce_alert(GID_DCE2, DCE2_SMB_EXCESSIVE_CHAINED_WRITEX,
+                reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats), ssd->sd);
+
+            // Stops the chain walk via the block_pdus check at the top of the loop in
+            // DCE2_SmbProcessCommand; returning also skips the file API below.
+            ssd->block_pdus = true;
+
+            return;
+        }
+
+        if (dce2_smb_in_writeandx)
+            dce2_smb_writeandx_detects++;
+
         set_file_data(data_ptr, (data_len > UINT16_MAX) ? UINT16_MAX : (uint16_t)data_len);
         DCE2_FileDetect();
         set_file_data(nullptr, 0);
@@ -1860,8 +1935,91 @@ void DCE2_Update_Ftracker_from_ReqTracker(DCE2_SmbFileTracker* ftracker,
 {
     ftracker->file_name = cur_rtracker->file_name;
     ftracker->file_name_size = ftracker->file_name ? cur_rtracker->file_name_size : 0;
+    ftracker->file_name_unicode = ftracker->file_name && cur_rtracker->file_name_unicode;
     ftracker->file_name_hash = ftracker->file_name_size ?
         str_to_hash((const uint8_t*)ftracker->file_name, ftracker->file_name_size) : 0;
     cur_rtracker->file_name = nullptr;
     cur_rtracker->file_name_size = 0;
+    cur_rtracker->file_name_unicode = false;
 }
+
+#ifdef UNIT_TEST
+#include "catch/snort_catch.h"
+
+#include <memory>
+#include <vector>
+
+// Check the generated DELETE bytes directly, including names whose first bytes
+// look like a Unicode prefix despite an ASCII request header.
+static void DCE2_SmbCheckDeleteName(const uint8_t* name, uint32_t name_len, bool unicode,
+    const uint8_t* expected, size_t expected_len)
+{
+    DCE2_SmbRequestTracker request{};
+    request.file_name_unicode = unicode;
+    request.file_name = DCE2_SmbGetFileName(name, name_len, unicode, &request.file_name_size);
+    REQUIRE(request.file_name != nullptr);
+    std::unique_ptr<char, decltype(&snort_free)> owned(request.file_name, snort_free);
+
+    DCE2_SmbFileTracker file{};
+    file.tid_v1 = 0x1234;
+    file.uid_v1 = 0x5678;
+    DCE2_Update_Ftracker_from_ReqTracker(&file, &request);
+    CHECK(request.file_name == nullptr);
+    CHECK(request.file_name_unicode == false);
+    CHECK(file.file_name_unicode == unicode);
+
+    const uint32_t len = DCE2_SmbBuildDeletePdu(&file);
+    REQUIRE(len != 0);
+    const auto* nb_hdr = reinterpret_cast<const NbssHdr*>(dce2_smb_delete_pdu);
+    const auto* smb_hdr = reinterpret_cast<const SmbNtHdr*>(dce2_smb_delete_pdu + sizeof(*nb_hdr));
+    const auto* del_req = reinterpret_cast<const SmbDeleteReq*>(
+        reinterpret_cast<const uint8_t*>(smb_hdr) + sizeof(*smb_hdr));
+    const auto* copied_name = reinterpret_cast<const uint8_t*>(del_req) + sizeof(*del_req) + 1;
+
+    CHECK(ntohs(nb_hdr->length) + sizeof(*nb_hdr) == len);
+    const bool injected_unicode = SmbUnicode(smb_hdr);
+    CHECK(injected_unicode == unicode);
+    CHECK(snort::alignedNtohs(&smb_hdr->smb_tid) == file.tid_v1);
+    CHECK(snort::alignedNtohs(&smb_hdr->smb_uid) == file.uid_v1);
+    CHECK(snort::alignedNtohs(&del_req->smb_bcc) == expected_len + 1);
+    CHECK(*(copied_name - 1) == SMB_FMT__ASCII);
+    CHECK(memcmp(copied_name, expected, expected_len) == 0);
+}
+
+TEST_CASE("SMB DELETE retains an ASCII filename that starts with a Unicode BOM", "[dce_smb]")
+{
+    DCE2_SmbInitDeletePdu();
+    const uint8_t name[] = { 0xff, 0xfe, '.', 'E', 'X', 'E', 0 };
+    DCE2_SmbCheckDeleteName(name, sizeof(name), false, name, sizeof(name));
+}
+
+TEST_CASE("SMB DELETE uses the filename's original encoding on successive injections", "[dce_smb]")
+{
+    DCE2_SmbInitDeletePdu();
+    const uint8_t unicode_name[] = { 'A', 0, 0, 0 };
+    DCE2_SmbCheckDeleteName(unicode_name, sizeof(unicode_name), true,
+        unicode_name, sizeof(unicode_name));
+
+    const uint8_t ascii_name[] = { 'B', 0 };
+    DCE2_SmbCheckDeleteName(ascii_name, sizeof(ascii_name), false,
+        ascii_name, sizeof(ascii_name));
+}
+
+TEST_CASE("SMB DELETE skips missing and oversized filenames", "[dce_smb]")
+{
+    DCE2_SmbInitDeletePdu();
+    DCE2_SmbFileTracker file{};
+    CHECK(DCE2_SmbBuildDeletePdu(&file) == 0);
+
+    const size_t fixed_size = sizeof(NbssHdr) + sizeof(SmbNtHdr) + sizeof(SmbDeleteReq) + 1;
+    std::vector<char> oversized(sizeof(dce2_smb_delete_pdu) - fixed_size + 1, 'A');
+    oversized.back() = 0;
+    file.file_name = oversized.data();
+    file.file_name_size = oversized.size() - 1;
+    CHECK(DCE2_SmbBuildDeletePdu(&file) == 0);
+
+    file.file_name_unicode = true;
+    file.file_name_size = 1;
+    CHECK(DCE2_SmbBuildDeletePdu(&file) == 0);
+}
+#endif

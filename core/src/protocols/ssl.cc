@@ -145,7 +145,6 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
     SSLV3ServerCertData* server_cert_data, TLSConnectionParams* tls_connection_params)
 {
     const SSL_handshake_hello_t* hello;
-    const ServiceSSLV3CertsRecord* certs_rec;
     snort::ParseResult result;
     uint32_t retval = 0;
 
@@ -159,7 +158,7 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
 
         /* Note, handhshake version field is optional depending on type
            Will recast to different type as necessary. */
-        const SSL_handshake_t* handshake = (const SSL_handshake_t*)pkt;
+        const SSL_handshake_t* handshake = reinterpret_cast<const SSL_handshake_t*>(pkt);
         pkt += SSL_HS_PAYLOAD_OFFSET;
         size -= SSL_HS_PAYLOAD_OFFSET;
 
@@ -186,9 +185,11 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
                 break;
             }
 
-            hello = (const SSL_handshake_hello_t*)handshake;
+            hello = reinterpret_cast<const SSL_handshake_hello_t*>(handshake);
             retval |= SSL_decode_version_v3(hello->major, hello->minor);
-            result = snort::parse_client_hello_data((const uint8_t*)handshake, size + SSL_HS_PAYLOAD_OFFSET, client_hello_data);
+            result = snort::parse_client_hello_data(
+                reinterpret_cast<const uint8_t*>(handshake),
+                size + SSL_HS_PAYLOAD_OFFSET, client_hello_data);
 
             if (alert_flags)
             {
@@ -213,16 +214,19 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
                 break;
             }
 
-            hello = (const SSL_handshake_hello_t*)handshake;
+            hello = reinterpret_cast<const SSL_handshake_hello_t*>(handshake);
             retval |= SSL_decode_version_v3(hello->major, hello->minor);
             if (tls_connection_params)
-                tls_connection_params->selected_tls_version = ntohs(*((const uint16_t*)((const uint8_t*)hello + offsetof(SSL_handshake_hello_t, major))));
+                tls_connection_params->selected_tls_version = snort::extract_16bits(
+                    reinterpret_cast<const uint8_t*>(hello) +
+                    offsetof(SSL_handshake_hello_t, major));
 
             /* Compare version of record with version of handshake */
             if ((cur_flags & SSL_VERFLAGS) != (retval & SSL_VERFLAGS))
                 retval |= SSL_BAD_VER_FLAG;
 
-            snort::parse_server_hello_data((const uint8_t*)handshake, size + SSL_HS_PAYLOAD_OFFSET, tls_connection_params);
+            snort::parse_server_hello_data(reinterpret_cast<const uint8_t*>(handshake),
+                size + SSL_HS_PAYLOAD_OFFSET, tls_connection_params);
             break;
 
         case SSL_HS_SHELLO_DONE:
@@ -237,7 +241,9 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
             {
                 retval |= SSL_SERVER_KEYX_FLAG | SSL_CUR_SERVER_KEYX_FLAG;
 
-                snort::parse_server_key_exchange((const uint8_t*)handshake+SSL_HS_PAYLOAD_OFFSET, size, tls_connection_params);
+                snort::parse_server_key_exchange(
+                    reinterpret_cast<const uint8_t*>(handshake) + SSL_HS_PAYLOAD_OFFSET,
+                    size, tls_connection_params);
             }
             else
             {
@@ -257,13 +263,15 @@ static uint32_t SSL_decode_handshake_v3(const uint8_t* pkt, int size,
                 if (size < SSL_CERTS_LEN_SIZE)
                     return retval | SSL_TRUNCATED_FLAG;
 
-                certs_rec = (const ServiceSSLV3CertsRecord*)handshake;
+                const ServiceSSLV3CertsRecord* certs_rec =
+                    reinterpret_cast<const ServiceSSLV3CertsRecord*>(handshake);
                 server_cert_data->certs_len = ntoh3(certs_rec->certs_len);
 
                 if (server_cert_data->certs_len + SSL_CERTS_LEN_SIZE > (unsigned int)size)
                     return retval | SSL_TRUNCATED_FLAG;
 
-                server_cert_data->certs_data = (uint8_t*)snort_alloc(server_cert_data->certs_len);
+                server_cert_data->certs_data = static_cast<uint8_t*>(
+                    snort_alloc(server_cert_data->certs_len));
                 memcpy(server_cert_data->certs_data, pkt + SSL_CERTS_LEN_SIZE, server_cert_data->certs_len);
                 result = snort::parse_server_certificates(server_cert_data);
 
@@ -310,7 +318,6 @@ static uint32_t SSL_decode_v3(const uint8_t* pkt, int size, uint32_t pkt_flags,
     SSLV3ClientHelloData* client_hello_data, SSLV3ServerCertData* server_cert_data, uint32_t prev_flags, TLSConnectionParams* tls_connection_params)
 {
     uint32_t retval = 0;
-    uint16_t hblen;
     int ccs = 0;   /* Set if we see a Change Cipher Spec and reset after the next record */
     const SSL_heartbeat* heartbeat;
     uint16_t psize = 0;
@@ -339,7 +346,7 @@ static uint32_t SSL_decode_v3(const uint8_t* pkt, int size, uint32_t pkt_flags,
             break;
         }
 
-        const SSL_record_t* record = (const SSL_record_t*)pkt;
+        const SSL_record_t* record = reinterpret_cast<const SSL_record_t*>(pkt);
         pkt += SSL_REC_PAYLOAD_OFFSET;
         size -= SSL_REC_PAYLOAD_OFFSET;
 
@@ -364,7 +371,7 @@ static uint32_t SSL_decode_v3(const uint8_t* pkt, int size, uint32_t pkt_flags,
         case SSL_ALERT_REC:
             if (reclen == sizeof(SSL_alert_t) && size >= (int)sizeof(SSL_alert_t))
             {
-                const SSL_alert_t* ssl_alert = (const SSL_alert_t*)pkt;
+                const SSL_alert_t* ssl_alert = reinterpret_cast<const SSL_alert_t*>(pkt);
                 if (ssl_alert->level == SSL_ALERT_LEVEL_FATAL && info_flags)
                     *info_flags |= SSL_ALERT_LVL_FATAL_FLAG;
             }
@@ -376,10 +383,10 @@ static uint32_t SSL_decode_v3(const uint8_t* pkt, int size, uint32_t pkt_flags,
             ccs = 0;
             if( size < 0 || (unsigned int)size < sizeof(SSL_heartbeat) || !max_hb_len || !alert_flags )
                 break;
-            heartbeat = (const SSL_heartbeat*)pkt;
+            heartbeat = reinterpret_cast<const SSL_heartbeat*>(pkt);
             if ((heartbeat->type) == SSL_HEARTBEAT_REQUEST)
             {
-                hblen = ntohs(heartbeat->length);
+                const uint16_t hblen = ntohs(heartbeat->length);
                 if (hblen > max_hb_len)
                     *alert_flags = SSL_ALERT_HEARTBLEED_REQUEST;
             }
@@ -462,7 +469,7 @@ static uint32_t SSL_decode_v2(const uint8_t* pkt, int size, uint32_t pkt_flags, 
     const SSLv2_chello_t* chello;
     const SSLv2_shello_t* shello;
     uint32_t retval = 0;
-    const SSLv2_record_t* record = (const SSLv2_record_t*)pkt;
+    const SSLv2_record_t* record = reinterpret_cast<const SSLv2_record_t*>(pkt);
 
     while (size > 0)
     {
@@ -490,7 +497,7 @@ static uint32_t SSL_decode_v2(const uint8_t* pkt, int size, uint32_t pkt_flags, 
                 break;
             }
 
-            chello = (const SSLv2_chello_t*)pkt;
+            chello = reinterpret_cast<const SSLv2_chello_t*>(pkt);
 
             // Check for SSLv3/TLS backward compatibility
             if (SSL_v3_back_compat_v2(chello))
@@ -512,7 +519,7 @@ static uint32_t SSL_decode_v2(const uint8_t* pkt, int size, uint32_t pkt_flags, 
                 break;
             }
 
-            shello = (const SSLv2_shello_t*)pkt;
+            shello = reinterpret_cast<const SSLv2_shello_t*>(pkt);
 
             if (shello->minor != 2)
             {
@@ -521,7 +528,8 @@ static uint32_t SSL_decode_v2(const uint8_t* pkt, int size, uint32_t pkt_flags, 
             }
 
             if (tls_connection_params)
-                tls_connection_params->selected_tls_version = ntohs(*((const uint16_t*)(pkt + offsetof(SSLv2_shello_t, major))));
+                tls_connection_params->selected_tls_version = snort::extract_16bits(
+                    pkt + offsetof(SSLv2_shello_t, major));
 
             break;
 
@@ -532,7 +540,8 @@ static uint32_t SSL_decode_v2(const uint8_t* pkt, int size, uint32_t pkt_flags, 
                 break;
             }
             if (tls_connection_params)
-                tls_connection_params->cipher = ntohs(*((const uint16_t*)(pkt + offsetof(SSLv2_client_master_key_t, cipher_spec))));
+                tls_connection_params->cipher = snort::extract_16bits(
+                    pkt + offsetof(SSLv2_client_master_key_t, cipher_spec));
             retval |= SSL_CLIENT_KEYX_FLAG | SSL_CUR_CLIENT_KEYX_FLAG;
             break;
 
@@ -595,7 +604,7 @@ uint32_t SSL_decode(
                       * with its record length */
                     uint32_t datalen = THREE_BYTE_LEN( (pkt+6) );
 
-                    const SSL_record_t* record = (const SSL_record_t*)pkt;
+                    const SSL_record_t* record = reinterpret_cast<const SSL_record_t*>(pkt);
                     uint16_t reclen = ntohs(record->length);
 
                     /* If these lengths match, it's v3
@@ -614,7 +623,7 @@ uint32_t SSL_decode(
              * record length */
             uint32_t datalen = THREE_BYTE_LEN( (pkt+6) );
 
-            const SSL_record_t* record = (const SSL_record_t*)pkt;
+            const SSL_record_t* record = reinterpret_cast<const SSL_record_t*>(pkt);
             uint16_t reclen = ntohs(record->length);
 
             /* If these lengths match, it's v3
@@ -694,7 +703,7 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     
     if (size < sizeof(ServiceSSLV3Record))
         return ParseResult::FAILURE;
-    const ServiceSSLV3Record* rec = (const ServiceSSLV3Record*)pkt;
+    const ServiceSSLV3Record* rec = reinterpret_cast<const ServiceSSLV3Record*>(pkt);
     uint16_t ver = ntohs(rec->version);
     if (rec->type != SSLV3RecordType::CLIENT_HELLO || (ver != 0x0300 && ver != 0x0301 && ver != 0x0302 &&
         ver != 0x0303) || rec->length_msb)
@@ -710,7 +719,7 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     /* Session ID (1-byte length). */
     if (size < 1)
         return ParseResult::FAILURE;
-    length = *((const uint8_t*)pkt);
+    length = *pkt;
     pkt += length + 1;
     if (size < (length + 1))
         return ParseResult::FAILURE;
@@ -719,7 +728,7 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     /* Cipher Suites (2-byte length). */
     if (size < 2)
         return ParseResult::FAILURE;
-    length = ntohs(*((const uint16_t*)pkt));
+    length = extract_16bits(pkt);
     pkt += length + 2;
     if (size < (length + 2))
         return ParseResult::FAILURE;
@@ -728,7 +737,7 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     /* Compression Methods (1-byte length). */
     if (size < 1)
         return ParseResult::FAILURE;
-    length = *((const uint8_t*)pkt);
+    length = *pkt;
     pkt += length + 1;
     if (size < (length + 1))
         return ParseResult::FAILURE;
@@ -737,7 +746,7 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     /* Extensions (2-byte length) */
     if (size < 2)
         return ParseResult::FAILURE;
-    length = ntohs(*((const uint16_t*)pkt));
+    length = extract_16bits(pkt);
     pkt += 2;
     size -= 2;
     if (size < length)
@@ -746,7 +755,8 @@ ParseResult parse_client_hello_data(const uint8_t* pkt, uint16_t size, SSLV3Clie
     /* We need at least type (2 bytes) and length (2 bytes) in the extension. */
     while (length >= 4)
     {
-        const ServiceSSLV3ExtensionServerName* ext = (const ServiceSSLV3ExtensionServerName*)pkt;
+        const ServiceSSLV3ExtensionServerName* ext =
+            reinterpret_cast<const ServiceSSLV3ExtensionServerName*>(pkt);
         if (ntohs(ext->type) == SSL_EXT_SERVER_NAME)
         {
             /* Found server host name. */
@@ -788,7 +798,7 @@ ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnec
 
     if (size < sizeof(ServiceSSLV3Record))
         return ParseResult::FAILURE;
-    const ServiceSSLV3Record* rec = (const ServiceSSLV3Record*)pkt;
+    const ServiceSSLV3Record* rec = reinterpret_cast<const ServiceSSLV3Record*>(pkt);
     uint16_t ver = ntohs(rec->version);
     if (rec->type != SSLV3RecordType::SERVER_HELLO || (ver != 0x0300 && ver != 0x0301 && ver != 0x0302 &&
         ver != 0x0303) || rec->length_msb)
@@ -804,7 +814,7 @@ ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnec
     /* Session ID (1-byte length). */
     if (size < 1)
         return ParseResult::FAILURE;
-    length = *((const uint8_t*)pkt);
+    length = *pkt;
     pkt += length + 1;
     if (size < (length + 1))
         return ParseResult::FAILURE;
@@ -813,14 +823,14 @@ ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnec
     /* Cipher Suite (2-byte length). */
     if (size < 2)
         return ParseResult::FAILURE;
-    tls_connection_params->cipher = ntohs(*((const uint16_t*)pkt));
+    tls_connection_params->cipher = extract_16bits(pkt);
     pkt += 2;
     size -= 2;
 
     /* Compression Methods (1-byte length). */
     if (size < 1)
         return ParseResult::FAILURE;
-    length = *((const uint8_t*)pkt);
+    length = *pkt;
     pkt += length + 1;
     if (size < (length + 1))
         return ParseResult::FAILURE;
@@ -829,7 +839,7 @@ ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnec
     /* Extensions (2-byte length) */
     if (size < 2)
         return ParseResult::FAILURE;
-    length = ntohs(*((const uint16_t*)pkt));
+    length = extract_16bits(pkt);
     pkt += 2;
     size -= 2;
     if (size < length)
@@ -838,7 +848,8 @@ ParseResult parse_server_hello_data(const uint8_t* pkt, uint16_t size, TLSConnec
     /* We need at least type (2 bytes) and length (2 bytes) in the extension. */
     while (length >= 4)
     {
-        const ServiceSSLV3ExtensionSupportedVersion* ext = (const ServiceSSLV3ExtensionSupportedVersion*)pkt;
+        const ServiceSSLV3ExtensionSupportedVersion* ext =
+            reinterpret_cast<const ServiceSSLV3ExtensionSupportedVersion*>(pkt);
         if (ntohs(ext->type) == SSL_EXT_SUPPORTED_VERSION)
         {
             /* Found supported version extension. */
@@ -898,7 +909,7 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
     {
         X509* cert = nullptr;
         X509_NAME* cert_subject = nullptr;
-        X509_NAME* cert_issuer = nullptr;
+        const X509_NAME* cert_issuer = nullptr;
 
         int cert_len = ntoh3(data);
         data += 3;
@@ -912,7 +923,8 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
         if (!cert)
             break;
 
-        cert_subject = X509_get_subject_name(cert);
+        // Open SSL 4.0 updated API; cert_subject is kept non-const to satisfy OpenSSL 3.0
+        cert_subject = const_cast<X509_NAME*>(X509_get_subject_name(cert));
         cert_issuer = X509_get_issuer_name(cert);
 
         if (!cert_subject and !cert_issuer)
@@ -925,6 +937,7 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
         {
             BIO* issuer_bio = BIO_new(BIO_s_mem());
             int read_issuer_status = X509_NAME_print_ex(issuer_bio, cert_issuer, 0, XN_FLAG_RFC2253);
+            // cppcheck-suppress knownConditionTrueFalse ; availability depends on parsed certificate data
             if (read_issuer_status)
             {
                 BUF_MEM* bptr = nullptr;
@@ -941,6 +954,7 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
         {
             BIO* subject_bio = BIO_new(BIO_s_mem());
             int read_subject_status = X509_NAME_print_ex(subject_bio, cert_subject, 0, XN_FLAG_RFC2253);
+            // cppcheck-suppress knownConditionTrueFalse ; availability depends on parsed certificate data
             if (read_subject_status)
             {
                 BUF_MEM* bptr = nullptr;
@@ -959,8 +973,8 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
             lastpos = X509_NAME_get_index_by_NID(cert_subject, NID_commonName, lastpos);
             if (lastpos != -1)
             {
-                X509_NAME_ENTRY* e = X509_NAME_get_entry(cert_subject, lastpos);
-                ASN1_STRING* asn1_str = X509_NAME_ENTRY_get_data(e);
+                const X509_NAME_ENTRY* e = X509_NAME_get_entry(cert_subject, lastpos);
+                const ASN1_STRING* asn1_str = X509_NAME_ENTRY_get_data(e);
                 const unsigned char* str_data = ASN1_STRING_get0_data(asn1_str);
                 int length = ASN1_STRING_length(asn1_str);
                 
@@ -984,8 +998,8 @@ ParseResult parse_server_certificates(SSLV3ServerCertData* server_cert_data)
             lastpos = X509_NAME_get_index_by_NID(cert_subject, NID_organizationalUnitName, lastpos);
             if (lastpos != -1)
             {
-                X509_NAME_ENTRY* e = X509_NAME_get_entry(cert_subject, lastpos);
-                ASN1_STRING* asn1_str = X509_NAME_ENTRY_get_data(e);
+                const X509_NAME_ENTRY* e = X509_NAME_get_entry(cert_subject, lastpos);
+                const ASN1_STRING* asn1_str = X509_NAME_ENTRY_get_data(e);
                 const unsigned char* str_data = ASN1_STRING_get0_data(asn1_str);
                 org_unit_len = ASN1_STRING_length(asn1_str);
                 
@@ -1054,7 +1068,7 @@ bool parse_server_key_exchange(const uint8_t* pkt, uint16_t size, TLSConnectionP
         return false;
     }
 
-    tls_connection_params->curve = ntohs(*(const uint16_t*)(pkt+1));
+    tls_connection_params->curve = extract_16bits(pkt + 1);
 
     return true;
 }

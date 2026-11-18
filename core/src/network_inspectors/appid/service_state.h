@@ -64,20 +64,20 @@ public:
 
     ServiceDetector* next()
     {
-        ServiceDetector* detector = nullptr;
+        ServiceDetector* current_detector = nullptr;
 
         if ( dit != detectors->end() )
-            detector = (ServiceDetector*)(dit++)->second;
-        return detector;
+            current_detector = (ServiceDetector*)(dit++)->second;
+        return current_detector;
     }
 
     ServiceDetector* current()
     {
-        ServiceDetector* detector = nullptr;
+        ServiceDetector* current_detector = nullptr;
 
         if ( dit != detectors->end() )
-            detector = (ServiceDetector*)(dit)->second;
-        return detector;
+            current_detector = (ServiceDetector*)(dit)->second;
+        return current_detector;
     }
 
     void reset()
@@ -97,7 +97,7 @@ public:
     ~ServiceDiscoveryState();
     ServiceDetector* select_detector_by_brute_force(IpProtocol proto, ServiceDiscovery& sd);
     void set_service_id_valid(ServiceDetector* sd);
-    void set_service_id_failed(AppIdSession& asd, const snort::SfIp* client_ip,
+    void set_service_id_failed(const AppIdSession& asd, const snort::SfIp* client_ip,
         unsigned invalid_delta = 0);
     void update_service_incompatible(const snort::SfIp* ip);
     bool check_and_expire_failed_state();
@@ -107,9 +107,9 @@ public:
         return state;
     }
 
-    void set_state(ServiceState state)
+    void set_state(ServiceState new_state)
     {
-        this->state = state;
+        state = new_state;
     }
 
     ServiceDetector* get_service() const
@@ -117,9 +117,9 @@ public:
         return service;
     }
 
-    void set_service(ServiceDetector* service)
+    void set_service(ServiceDetector* new_detector)
     {
-        this->service = service;
+        service = new_detector;
     }
 
     time_t get_reset_time() const
@@ -139,7 +139,7 @@ public:
         brute_force_inprocess_count = 0;
     }
 
-    Queue_t::iterator qptr; // Our place in service_state_queue
+    Queue_t::iterator qptr {}; // Our place in service_state_queue
 
     void reset();
     
@@ -175,7 +175,7 @@ public:
         int16_t group, uint32_t asid, bool decrypted, bool do_touch = false);
     static void remove(const snort::SfIp*, IpProtocol, uint16_t port,
         int16_t group, uint32_t asid, bool decrypted);
-    static void check_reset(AppIdSession& asd, const snort::SfIp* ip, uint16_t port,
+    static void check_reset(const AppIdSession& asd, const snort::SfIp* ip, uint16_t port,
         int16_t group, uint32_t asid);
     static bool prune(size_t max_memory = 0, size_t num_items = -1u);
 };
@@ -191,7 +191,8 @@ struct AppIdServiceStateKey
 
     bool operator<(const AppIdServiceStateKey& right) const
     {
-        return memcmp((const uint8_t*) this, (const uint8_t*) &right, sizeof(*this)) < 0;
+        return memcmp(reinterpret_cast<const uint8_t*>(this),
+            reinterpret_cast<const uint8_t*>(&right), sizeof(*this)) < 0;
     }
 
     snort::SfIp ip;

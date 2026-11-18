@@ -24,6 +24,12 @@ set ( ENABLE_MEMORY_PROFILER ${ENABLE_MEMORY_PROFILER} )
 set ( ENABLE_RULE_PROFILER ${ENABLE_RULE_PROFILER} )
 set ( DISABLE_TENANT_ID ${DISABLE_TENANT_ID} )
 
+if ( ENABLE_UNIT_TESTS AND NOT ALLOWLIST_MOVE_ON_EXCESS )
+    message ( STATUS "ALLOWLIST_MOVE_ON_EXCESS forced ON because ENABLE_UNIT_TESTS is ON" )
+    set ( ALLOWLIST_MOVE_ON_EXCESS ON )
+endif ()
+set ( ALLOWLIST_MOVE_ON_EXCESS ${ALLOWLIST_MOVE_ON_EXCESS} )
+
 if ( ENABLE_LARGE_PCAP )
     set ( _FILE_OFFSET_BITS 64 )
 endif ( ENABLE_LARGE_PCAP )
@@ -47,6 +53,18 @@ if ( NOT (W3M_FOUND AND ASCIIDOC_FOUND) )
     get_property ( MAKE_TEXT_DOC_HELP_STRING CACHE "MAKE_TEXT_DOC" PROPERTY HELPSTRING )
     set ( MAKE_TEXT_DOC OFF CACHE BOOL ${MAKE_TEXT_DOC_HELP_STRING} FORCE )
 endif()
+
+# crash mitigator
+
+if ( ENABLE_CRASH_MITIGATOR )
+    check_cxx_compiler_flag ( "-fnon-call-exceptions" HAS_NON_CALL_EXCEPTIONS_CXXFLAG )
+    if ( HAS_NON_CALL_EXCEPTIONS_CXXFLAG )
+        set ( CRASH_MITIGATOR 1 )
+        string ( APPEND CRASH_MITIGATOR_CXX_FLAGS " -fnon-call-exceptions" )
+    else ()
+        message ( SEND_ERROR "Attempt to build crash mitigator without compiler option support." )
+    endif ()
+endif ()
 
 # security
 
@@ -224,6 +242,13 @@ if ( ENABLE_JEMALLOC )
     find_package ( JEMalloc REQUIRED )
     set ( JEMALLOC_C_FLAGS "-fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free" )
     set ( HAVE_JEMALLOC "1" )
+    # If the jemalloc install includes the generic shim headers, enable shim support.
+    # The shim headers live alongside jemalloc headers: <jemalloc-install>/include/shim.h
+    if ( EXISTS "${JEMALLOC_INCLUDE_DIR}/shim.h" )
+        set ( HAVE_CISCO_SHIM "1" )
+        set ( SHIM_INCLUDE_DIR "${JEMALLOC_INCLUDE_DIR}" )
+        message ( STATUS "Cisco shim found at ${SHIM_INCLUDE_DIR}" )
+    endif ()
 endif ( ENABLE_JEMALLOC )
 
 if ( ENABLE_CODE_COVERAGE )
@@ -247,7 +272,7 @@ message("
 ")
 ]]
 set ( EXTRA_C_FLAGS "${EXTRA_C_FLAGS} ${HARDENED_CXX_FLAGS} ${DEBUGGING_C_FLAGS} ${SANITIZER_CXX_FLAGS} ${TCMALLOC_C_FLAGS} ${COVERAGE_COMPILER_FLAGS}" )
-set ( EXTRA_CXX_FLAGS "${EXTRA_CXX_FLAGS} ${HARDENED_CXX_FLAGS} ${DEBUGGING_C_FLAGS} ${SANITIZER_CXX_FLAGS} ${TCMALLOC_C_FLAGS} ${COVERAGE_COMPILER_FLAGS}" )
+set ( EXTRA_CXX_FLAGS "${EXTRA_CXX_FLAGS} ${HARDENED_CXX_FLAGS} ${DEBUGGING_C_FLAGS} ${SANITIZER_CXX_FLAGS} ${TCMALLOC_C_FLAGS} ${COVERAGE_COMPILER_FLAGS} ${CRASH_MITIGATOR_CXX_FLAGS}" )
 set ( EXTRA_LINKER_FLAGS "${EXTRA_LINKER_FLAGS} ${HARDENED_LINKER_FLAGS} ${SANITIZER_LINKER_FLAGS} ${COVERAGE_LINKER_FLAGS}" )
 foreach (EXTRA_LIBRARY IN LISTS COVERAGE_LIBRARIES TCMALLOC_LIBRARIES JEMALLOC_LIBRARY )
     list ( APPEND EXTRA_LIBRARIES ${EXTRA_LIBRARY} )

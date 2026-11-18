@@ -32,8 +32,6 @@ class HttpFlowData;
 class Http2HeadersFrame : public Http2Frame
 {
 public:
-    void clear(snort::Packet*) override;
-
     const Field& get_buf(unsigned id) override;
     bool is_detection_required() const override { return false; }
 
@@ -46,9 +44,8 @@ protected:
         const uint8_t* data_buffer, const uint32_t data_len, Http2FlowData* ssn_data,
         HttpCommon::SourceId src_id, Http2Stream* stream);
     bool decode_headers(Http2StartLine* start_line_generator, bool trailers);
-    void process_decoded_headers(HttpFlowData* http_flow, HttpCommon::SourceId hi_source_id, snort::Packet* p);
+    void process_decoded_headers(const HttpFlowData* http_flow, HttpCommon::SourceId hi_source_id, snort::Packet* p);
     uint8_t get_flags_mask() const override;
-    virtual bool in_error_state() const;
 
     Field http1_header;                 // finalized headers to be passed to http_inspect
     Http2HpackDecoder* hpack_decoder;

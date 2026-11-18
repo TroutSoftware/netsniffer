@@ -49,7 +49,14 @@ DecodeResult UUDecode::decode_data(const uint8_t* start, const uint8_t* end, uin
 {
     uint32_t act_encode_size = 0, act_decode_size = 0, bytes_read = 0;
 
-    if (!buffer->check_restore_buffer() || !decode_buf)
+    const DecodeBuffer::RestoreResult restore_result = buffer->check_restore_buffer(end - start);
+    if (restore_result == DecodeBuffer::RestoreResult::NO_INPUT)
+    {
+        reset_decode_state();
+        return DECODE_FAIL;
+    }
+
+    if (restore_result == DecodeBuffer::RestoreResult::EXCEEDED || !decode_buf)
     {
         reset_decode_state();
         return DECODE_EXCEEDED;
@@ -100,7 +107,7 @@ DecodeResult UUDecode::decode_data(const uint8_t* start, const uint8_t* end, uin
 
     if (bytes_read < act_encode_size)
     {
-        buffer->save_buffer(buffer->get_encode_buff() + bytes_read, (act_encode_size - bytes_read));
+        buffer->save_buffer(bytes_read, (act_encode_size - bytes_read));
         act_encode_size = bytes_read;
     }
     else
@@ -129,7 +136,8 @@ int sf_uudecode(uint8_t* src, uint32_t slen, uint8_t* dst, uint32_t dlen, uint32
 {
     int sol = 1, length = 0;
     const uint8_t* ptr;
-    uint8_t* end, * dptr, * dend;
+    uint8_t* dptr;
+    const uint8_t *end, *dend;
 
     if (!src || !slen || !dst || !dlen ||  !bytes_read || !bytes_copied || !begin_found ||
         !end_found )
@@ -206,10 +214,11 @@ int sf_uudecode(uint8_t* src, uint32_t slen, uint8_t* dst, uint32_t dlen, uint32
                 length = dend - dptr;
             }
 
+            const int encoded_needed = (length * 4 + 2) / 3;
             length = (length * 4) / 3;
 
             /*check if src buffer has enough encoded data*/
-            if ( (end - (ptr + 1)) < length)
+            if ( (end - (ptr + 1)) < encoded_needed)
             {
                 /*not enough data to decode. We will wait for the next packet*/
                 break;
@@ -248,4 +257,3 @@ int sf_uudecode(uint8_t* src, uint32_t slen, uint8_t* dst, uint32_t dlen, uint32
     *bytes_copied = dptr - dst;
     return 0;
 }
-

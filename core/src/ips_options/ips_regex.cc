@@ -134,7 +134,7 @@ bool RegexOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const RegexOption& rhs = (const RegexOption&)ips;
+    const RegexOption& rhs = static_cast<const RegexOption&>(ips);
 
     if ( config.re == rhs.config.re and
          config.pmd.flags == rhs.config.pmd.flags and
@@ -148,7 +148,7 @@ namespace
 {
 struct ScanContext
 {
-    unsigned index;
+    unsigned index = 0;
     bool found = false;
 };
 }
@@ -165,7 +165,6 @@ static int hs_match(
 
 IpsOption::EvalStatus RegexOption::eval(Cursor& c, Packet*)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(regex_perf_stats);
 
     unsigned pos = c.get_delta();
@@ -409,7 +408,7 @@ static void mod_dtor(Module* p)
 
 static IpsOption* regex_ctor(Module* m, IpsInfo&)
 {
-    RegexModule* mod = (RegexModule*)m;
+    RegexModule* mod = static_cast<RegexModule*>(m);
     RegexConfig c;
     mod->get_data(c);
     return new RegexOption(c);

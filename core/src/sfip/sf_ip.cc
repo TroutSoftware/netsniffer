@@ -132,11 +132,11 @@ static inline int _count_bits(unsigned int val)
 
 /* Support function for sfip_pton.  Used for converting a netmask string
  * into a number of bits to mask off */
-static inline int _netmask_str_to_bit_count(char* mask, int family)
+static inline int _netmask_str_to_bit_count(const char* mask, int family)
 {
     uint32_t buf[4] = {};
     int bits, i, nBits, nBytes;
-    uint8_t* bytes = (uint8_t*)buf;
+    const uint8_t* bytes = reinterpret_cast<uint8_t*>(buf);
 
     // Mask not validated.
     // Only sfip_pton should be using this function, and using it safely.

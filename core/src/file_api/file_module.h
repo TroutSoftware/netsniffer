@@ -67,7 +67,7 @@ public:
 
     bool has_dynamic_stats() const override
     { return true; }
-    void show_dynamic_stats() override;
+    void collect_dynamic_stats(snort::stats::Builder&, const snort::stats::DynamicStatsPolicy&) const override;
 
     unsigned get_gid() const override
     { return FILE_ID_GID; }
@@ -75,6 +75,7 @@ public:
     void set_trace(const snort::Trace*) const override;
     const snort::TraceOption* get_trace_options() const override;
     const snort::RuleMap* get_rules() const override;
+    const snort::Command* get_commands() const override;
 
 private:
     FileMeta rule;

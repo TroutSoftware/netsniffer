@@ -75,13 +75,12 @@ bool OpcuaNodeIdOption::operator==(const IpsOption& ips) const
         return false;
     }
 
-    const OpcuaNodeIdOption& rhs = (const OpcuaNodeIdOption&) ips;
+    const OpcuaNodeIdOption& rhs = static_cast<const OpcuaNodeIdOption&>(ips);
     return (node_id == rhs.node_id);
 }
 
 IpsOption::EvalStatus OpcuaNodeIdOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(opcua_node_id_prof);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -89,7 +88,8 @@ IpsOption::EvalStatus OpcuaNodeIdOption::eval(Cursor&, Packet* p)
         return NO_MATCH;
     }
 
-    OpcuaFlowData* opcuafd = (OpcuaFlowData*) p->flow->get_flow_data(OpcuaFlowData::inspector_id);
+    OpcuaFlowData* opcuafd = static_cast<OpcuaFlowData*>(
+        p->flow->get_flow_data(OpcuaFlowData::inspector_id));
     if ( !opcuafd )
     {
         return NO_MATCH;
@@ -166,6 +166,7 @@ bool OpcuaNodeIdModule::set(const char*, Value& v, SnortConfig*)
 {
     assert(v.is("~"));
     unsigned long n;
+    // cppcheck-suppress knownConditionTrueFalse ; conversion depends on the rule option text
     if (v.strtoul(n))
     {
         node_id = static_cast<OpcuaMsgServiceType>(n);
@@ -189,9 +190,10 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    const OpcuaNodeIdModule* mod = (const OpcuaNodeIdModule*) m;
+    const OpcuaNodeIdModule* mod = static_cast<const OpcuaNodeIdModule*>(m);
     return new OpcuaNodeIdOption(mod->node_id);
 }
 
@@ -227,4 +229,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_opcua_node_id = &ips_api.base;
-

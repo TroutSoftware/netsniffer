@@ -27,6 +27,7 @@
 // state.  Inspector state is stored in FlowData, and Flow manages a list
 // of FlowData items.
 
+#include <algorithm>
 #include <atomic>
 #include <bitset>
 #include <list>
@@ -163,6 +164,8 @@ struct LwState
     char ignore_direction;
 };
 
+class Inspector;
+
 // this struct is organized by member size for compactness
 class SO_PUBLIC Flow
 {
@@ -175,7 +178,7 @@ public:
         RESET,
         ALLOW
     };
-    Flow() = default;
+    Flow();
     virtual ~Flow();
 
     Flow(const Flow&) = delete;
@@ -186,6 +189,7 @@ public:
     void flush(bool do_cleanup = true);
     void reset(bool do_cleanup = true);
     void restart(bool dump_flow_data = true);
+    void restart(Packet& packet, bool dump_flow_data = true);
     void clear(bool dump_flow_data = true);
 
     void set_flow_data(FlowData* fd)
@@ -197,7 +201,7 @@ public:
     { return flow_data.get(id); }
     void free_flow_data(unsigned id)
     { flow_data.erase(id); }
-    void free_flow_data(FlowData* fd)
+    void free_flow_data(const FlowData* fd)
     {
         if ( fd )
             flow_data.erase(fd->get_id());
@@ -215,25 +219,40 @@ public:
     void set_expire(const Packet*, uint64_t timeout);
     bool expired(const Packet*) const;
     void set_ttl(Packet*, bool client);
-    void set_mpls_layer_per_dir(Packet*);
+    void set_mpls_layer_per_dir(const Packet*);
     Layer* get_mpls_layer_per_dir(bool);
     void swap_roles();
     void set_service(Packet*, const char* new_service);
 
     template<typename T>
-    bool get_attr(const std::string& key, T& val) const
-    { return stash.get(key, val); }
+    bool get_attr(const std::string& attr_key, T& val) const
+    { return stash.get(attr_key, val); }
     template<typename T>
-    void set_attr(const std::string& key, T& val)
-    { stash.store(key, val); }
-    void set_attr(const std::string& key, const std::string& val)
-    { stash.store(key, val); }
-    void set_attr(const std::string& key, StashGenericObject* val)
-    { stash.store(key, val); }
+    void set_attr(const std::string& attr_key, T& val)
+    { stash.store(attr_key, val); }
+    void set_attr(const std::string& attr_key, const std::string& val)
+    { stash.store(attr_key, val); }
+    void set_attr(const std::string& attr_key, StashGenericObject* val)
+    { stash.store(attr_key, val); }
     bool set_attr(const snort::SfIp& ip, const SnortConfig* sc = nullptr)
     { return stash.store(ip, sc); }
     const std::list<SfIp>* get_aux_ip_list() const
     { return stash.get_aux_ip_list(); }
+
+    void add_mem(size_t bytes)
+    {
+        mem_bytes += bytes;
+        if (mem_bytes > peak_mem_bytes)
+            peak_mem_bytes = mem_bytes;
+    }
+    void sub_mem(size_t bytes)
+    {
+        // under-subtraction is two-tier by design; see flow/dev_notes.txt
+        assert(bytes + sizeof(Flow) <= mem_bytes);
+        mem_bytes -= (bytes <= mem_bytes) ? bytes : mem_bytes;
+    }
+    size_t get_mem_usage() const { return mem_bytes; }
+    size_t get_peak_mem_usage() const { return peak_mem_bytes; }
 
     uint32_t update_session_flags(uint32_t ssn_flags)
     { return ssn_state.session_flags = ssn_flags; }
@@ -247,12 +266,15 @@ public:
     uint32_t clear_session_flags(uint32_t ssn_flags)
     { return ssn_state.session_flags &= ~ssn_flags; }
 
-    uint32_t clear_session_state(uint32_t ssn_state)
-    { return session_state &= ~ssn_state; }
+    void update_uni_candidacy(uint32_t prev_session_flags);
+
+    uint32_t clear_session_state(uint32_t state_mask)
+    { return session_state &= ~state_mask; }
 
     void set_to_client_detection(bool enable);
     void set_to_server_detection(bool enable);
 
+    // cppcheck-suppress unusedFunction ; installed Flow API accessor
     int get_ignore_direction() const
     { return ssn_state.ignore_direction; }
 
@@ -279,7 +301,9 @@ public:
     { return pkt_type == PktType::TCP or pkt_type == PktType::USER; }
 
     void block()
-    { ssn_state.session_flags |= SSNFLAG_BLOCK; }
+    { set_block_flags(SSNFLAG_BLOCK); }
+
+    void set_block_flags(uint32_t drop_flags);
 
     bool was_blocked() const
     { return (ssn_state.session_flags & SSNFLAG_BLOCK) != 0; }
@@ -292,7 +316,7 @@ public:
         flow_state = fs;
         if (fs > FlowState::INSPECT)
         {
-            inspected_packet_count = flowstats.client_pkts + flowstats.server_pkts;
+            inspected_packet_count = std::min(flowstats.client_pkts + flowstats.server_pkts, static_cast<uint64_t>(UINT16_MAX));
         }
     }
 
@@ -336,7 +360,10 @@ public:
     void set_gadget(Inspector* ins)
     {
         if (gadget)
+        {
+            pin_survivor_flow_data(*gadget);
             release_gadget();
+        }
         gadget = ins;
         if (gadget)
             gadget->add_ref();
@@ -344,6 +371,8 @@ public:
 
     void clear_gadget()
     {
+        if (gadget)
+            pin_survivor_flow_data(*gadget);
         release_gadget();
         if (assistant_gadget != nullptr)
             clear_assistant_gadget();
@@ -398,8 +427,8 @@ public:
     bool is_hard_expiration() const
     { return (ssn_state.session_flags & SSNFLAG_HARD_EXPIRATION) != 0; }
 
-    void set_deferred_trust(unsigned module_id, bool on)
-    { deferred_trust.set_deferred_trust(module_id, on); }
+    void set_deferred_trust(unsigned mod_id, bool on)
+    { deferred_trust.set_deferred_trust(mod_id, on); }
 
     bool cannot_trust() const
     { return deferred_trust.is_active(); }
@@ -417,6 +446,7 @@ public:
 
     void trust();
 
+    // cppcheck-suppress unusedFunction ; installed Flow API accessor
     bool trust_is_deferred() const
     { return deferred_trust.is_deferred(); }
 
@@ -424,7 +454,10 @@ public:
     { idle_timeout = timeout; }
 
     uint16_t get_inspected_packet_count() const
-    { return inspected_packet_count ? inspected_packet_count : (flowstats.client_pkts + flowstats.server_pkts); }
+    {
+        return inspected_packet_count ? inspected_packet_count
+                                      : (std::min(flowstats.client_pkts + flowstats.server_pkts, static_cast<uint64_t>(UINT16_MAX)));
+    }
 
     void add_inspection_duration(const uint64_t& duration)
     {
@@ -458,8 +491,10 @@ protected:
         }
     }
     DeferredTrust deferred_trust;
-    FlowStash stash;
-    FlowDataStore flow_data;
+    // owner passed at construction so accounting never null-checks; here rather
+    // than in the ctor to keep Flow default-constructible for test stubs
+    FlowStash stash{this};
+    FlowDataStore flow_data{this};
 
 public:  // FIXIT-M privatize if possible
     // fields are organized by initialization and size to minimize
@@ -540,7 +575,6 @@ public:  // FIXIT-M privatize if possible
         bool in_allowlist : 1; // Set if the flow is in the allowlist
         bool allowed_on_excess : 1; // Set if the flow is allowed on excess
         bool do_not_decrypt :1; //set when decided to not to decrypt
-        bool udp_tunneled : 1; // Set if the flow was created from a udp tunnel
     } flags = {};
 
     int32_t client_intf = 0;
@@ -570,9 +604,14 @@ public:  // FIXIT-M privatize if possible
 
 private:
     void clean();
+    void pin_survivor_flow_data(Inspector&);
     void release_gadget();
     std::atomic_ullong inspection_duration{0};
     uint16_t inspected_packet_count{0};
+    // baseline seeded here so it precedes stash/flow_data construction under
+    // any Flow::Flow()
+    size_t mem_bytes = sizeof(Flow);
+    size_t peak_mem_bytes = sizeof(Flow);
 
 public:
     uint64_t connection_id = 0;     // Connection ID value provided from a plugin.

@@ -24,6 +24,7 @@
 
 #include <cstdio>
 #include <list>
+#include <memory>
 
 #include "flow/flow.h"
 #include "helpers/utf.h"
@@ -54,6 +55,15 @@ public:
     ~HttpFlowData() override;
     static unsigned inspector_id;
     static void init() { inspector_id = snort::FlowData::create_flow_data_id(); }
+
+    // infractions[0/1] and events[0/1] are allocated for the whole object
+    // lifetime, so they are part of the fixed footprint the store accounts
+    // on attach/detach. Transient reassembly buffers (section/partial/
+    // partial_detect) are not tracked. The only dynamic HTTP footprint
+    // currently pushed via owner_flow is decompression state (see
+    // http_compress_stream.cc).
+    FLOW_DATA_SIZE_OF_EXTRA(HttpFlowData,
+        2 * sizeof(HttpInfractions) + 2 * sizeof(HttpEventGen))
 
     friend class HttpBodyCutter;
     friend class HttpInspect;
@@ -217,11 +227,10 @@ private:
 
 #ifdef REG_TEST
     static uint64_t instance_count;
-    uint64_t seq_num;
+    uint64_t seq_num = 0;
 
     void show(FILE* out_file) const;
 #endif
 };
 
 #endif
-

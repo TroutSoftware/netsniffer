@@ -41,6 +41,7 @@
 #define DCE2_CO_FRAG_DIFF_CALL_ID           37
 #define DCE2_CO_FRAG_DIFF_OPNUM             38
 #define DCE2_CO_FRAG_DIFF_CTX_ID            39
+#define DCE2_CO_EXCESSIVE_FRAG_REASSEMBLIES 66
 
 /* Map response fields offsets */
 #define DCE2_CO_MAP_HANDLE_OFS              20
@@ -85,8 +86,12 @@ from opnum established for fragmented request"
 #define DCE2_CO_FRAG_DIFF_CTX_ID_STR \
     "connection-oriented DCE/RPC - context id of non first/last fragment different \
 from context id established for fragmented request"
+#define DCE2_CO_EXCESSIVE_FRAG_REASSEMBLIES_STR \
+    "connection-oriented DCE/RPC - excessive fragment reassemblies within one DCE/TCP PAF flush, \
+potential CPU amplification DoS"
 
 #define DCE2_MAX_XMIT_SIZE_FUZZ    500
+
 #define DCE2_MOCK_HDR_LEN__CO_CLI   ((unsigned)(sizeof(DceRpcCoHdr) + sizeof(DceRpcCoRequest)))
 #define DCE2_MOCK_HDR_LEN__CO_SRV   ((unsigned)(sizeof(DceRpcCoHdr) + sizeof(DceRpcCoResponse)))
 #define DCE2_CO__MIN_ALLOC_SIZE     50
@@ -111,6 +116,8 @@ struct DceRpcCoHdr
     uint16_t auth_length;
     uint32_t call_id;
 };
+
+static constexpr uint32_t DCE2_CO_SEGMENTATION_RETAIN_LIMIT = 1024 * 1024;
 
 /* Bind */
 struct DceRpcCoBind
@@ -240,6 +247,26 @@ struct DCE2_CoTracker
     /* For transport segmentation */
     DCE2_CoSeg cli_seg;
     DCE2_CoSeg srv_seg;
+
+    // Aggregate retained segmented-CO buffer accounting. For SMB named pipes
+    // this points at the per-SMB-session total (owned by the SMB session
+    // tracker, whose lifetime covers this co_tracker); for dce_tcp it is per-flow.
+    // Fragment reassembly uses the same owner and limit, but keeps an independent
+    // per-tracker delta so both buffer classes contribute to the aggregate cap.
+    // No in-class initializers: this struct must stay trivially constructible so
+    // it can be zeroed via calloc/memset (e.g. embedded in DCE2_TcpSsnData);
+    // DCE2_CoInitTracker() sets these fields on every creation path.
+    uint32_t* retained_seg_owner;
+    uint32_t retained_seg_limit;
+    uint32_t tracked_seg_bytes;
+    uint32_t* retained_frag_owner;
+    uint32_t retained_frag_limit;
+    uint32_t tracked_frag_bytes;
+
+    // Fragment reassemblies performed within the current DCE/TCP PAF flush.
+    // The inline-enforced trip latch persists; passive trips do not set it.
+    uint16_t frag_reassembled;
+    bool frag_budget_tripped;
 };
 
 /*
@@ -469,7 +496,7 @@ inline int DCE2_GetNdrUint32(const uint8_t* data_ptr, uint32_t& data,
         align_offset = 4 - (offset % 4);
     }
 
-    ptr = (const uint32_t*)(data_ptr + align_offset);
+    ptr = reinterpret_cast<const uint32_t*>(data_ptr + align_offset);
     data = DceRpcNtohl(ptr, bo_flag);
 
     return align_offset + 4;
@@ -487,7 +514,7 @@ inline int DCE2_GetNdrUint64(const uint8_t* data_ptr, uint64_t& data,
         align_offset = 8 - (offset % 8);
     }
 
-    ptr = (const uint64_t*)(data_ptr + align_offset);
+    ptr = reinterpret_cast<const uint64_t*>(data_ptr + align_offset);
     data = DceRpcNtohl64(ptr, bo_flag);
 
     return align_offset + 8;
@@ -506,10 +533,10 @@ inline int DCE2_GetNdrUint3264(const uint8_t* data_ptr, uint64_t& data,
 }
 
 void DCE2_CoInitTracker(DCE2_CoTracker*);
+void DCE2_CoConfigureTracker(DCE2_CoTracker*, uint32_t*, uint32_t);
 void DCE2_CoProcess(DCE2_SsnData*, DCE2_CoTracker*,
     const uint8_t*, uint16_t);
 void DCE2_CoInitRdata(uint8_t*, int);
 void DCE2_CoCleanTracker(DCE2_CoTracker*);
 
 #endif
-

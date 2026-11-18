@@ -59,7 +59,9 @@
 #include <CppUTest/CommandLineTestRunner.h>
 #include <CppUTest/TestHarness.h>
 
+#define FLOW_CONTROL_STATE_TEST
 #include "flow_stubs.h"
+#undef FLOW_CONTROL_STATE_TEST
 
 #include "trace/trace.h"
 
@@ -96,10 +98,14 @@ void Active::resume() { }
 void Active::set_drop_reason(char const*) { }
 FlowCache::FlowCache(const FlowCacheConfig& cfg) : config(cfg) { }
 FlowCache::~FlowCache() = default;
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 FlowDataStore::~FlowDataStore() = default;
 DetectionEngine::DetectionEngine() { context = nullptr; }
 DetectionEngine::~DetectionEngine() = default;
+IpsContext::IpsContext(unsigned) { }
+IpsContext::~IpsContext() = default;
 unsigned FlowCache::purge() { return 1; }
 unsigned FlowCache::get_flows_allocated() const { return 0; }
 Flow* FlowCache::find(const FlowKey*) { return nullptr; }
@@ -114,11 +120,15 @@ size_t FlowCache::uni_ip_flows_size() const { return 0; }
 size_t FlowCache::flows_size() const { return 0; }
 void Flow::init(PktType) { }
 unsigned SnortConfig::get_reload_id() { return 0; }
-void FlowCache::unlink_uni(Flow*) { }
+static Flow* test_unlink_uni_flow = nullptr;
+static Flow* test_relink_uni_flow = nullptr;
+void FlowCache::unlink_uni(Flow* flow) { test_unlink_uni_flow = flow; }
+void FlowCache::relink_uni(Flow* flow) { test_relink_uni_flow = flow; }
 void Flow::set_client_initiate(Packet*) { }
 void Flow::set_direction(Packet*) { }
-void Flow::set_mpls_layer_per_dir(Packet*) { }
-void DetectionEngine::disable_all(Packet*) { }
+void Flow::set_mpls_layer_per_dir(const Packet*) { }
+static unsigned test_disable_all_calls = 0;
+void DetectionEngine::disable_all(Packet*) { ++test_disable_all_calls; }
 ExpectCache::ExpectCache(uint32_t) { }
 ExpectCache::~ExpectCache() = default;
 bool ExpectCache::check(Packet*, Flow*) { return true; }
@@ -274,6 +284,179 @@ TEST(policy_persistence, reload_refreshes_selected_policy_ids)
     UNSIGNED_LONGS_EQUAL(1, snort::test_get_ips_policy_calls);
 }
 
+TEST_GROUP(flow_state_disposition)
+{
+    class TestInspector : public Inspector { };
+
+    TestInspector inspector;
+    Flow flow;
+    Packet packet { false };
+    Active active;
+
+    void setup() override
+    {
+        packet.flow = &flow;
+        packet.active = &active;
+        flow.set_client(&inspector);
+        flow.set_server(&inspector);
+        snort::reset_test_flow_state_calls();
+        test_disable_all_calls = 0;
+    }
+};
+
+TEST(flow_state_disposition, existing_inspect_flow_continues)
+{
+    flow.flow_state = Flow::FlowState::INSPECT;
+
+    CHECK_TRUE(FlowControl::apply_flow_state(&flow, &packet, false));
+    UNSIGNED_LONGS_EQUAL(0, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_drop_traffic_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_blocked_flow_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_stop_inspection_calls);
+}
+
+TEST(flow_state_disposition, existing_allow_flow_disables_current_packet_inspection)
+{
+    flow.flow_state = Flow::FlowState::ALLOW;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, false));
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_stop_inspection_calls);
+}
+
+TEST(flow_state_disposition, existing_block_flow_blocks_current_packet)
+{
+    flow.flow_state = Flow::FlowState::BLOCK;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, false));
+    CHECK_EQUAL(Active::ACT_BLOCK, active.get_action());
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_drop_traffic_calls);
+}
+
+TEST(flow_state_disposition, existing_reset_flow_resets_current_packet)
+{
+    flow.flow_state = Flow::FlowState::RESET;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, false));
+    CHECK_EQUAL(Active::ACT_RESET, active.get_action());
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_blocked_flow_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_drop_traffic_calls);
+}
+
+TEST(flow_state_disposition, existing_reset_flow_stops_without_block_flags)
+{
+    snort::test_blocked_flow_result = false;
+    flow.flow_state = Flow::FlowState::RESET;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, false));
+    CHECK_EQUAL(Active::ACT_RESET, active.get_action());
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_blocked_flow_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_drop_traffic_calls);
+}
+
+TEST(flow_state_disposition, new_allow_flow_stops_session_inspection)
+{
+    flow.flow_state = Flow::FlowState::ALLOW;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, true));
+    UNSIGNED_LONGS_EQUAL(0, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_stop_inspection_calls);
+}
+
+TEST(flow_state_disposition, new_block_flow_drops_current_packet)
+{
+    flow.flow_state = Flow::FlowState::BLOCK;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, true));
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_drop_traffic_calls);
+}
+
+TEST(flow_state_disposition, new_reset_flow_drops_current_packet)
+{
+    flow.flow_state = Flow::FlowState::RESET;
+
+    CHECK_FALSE(FlowControl::apply_flow_state(&flow, &packet, true));
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_blocked_flow_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_drop_traffic_calls);
+}
+
+class RestartPrecheckSession : public Session
+{
+public:
+    RestartPrecheckSession(Flow* flow, Flow::FlowState restart_state)
+        : Session(flow), restart_state(restart_state)
+    { }
+
+    bool precheck(Packet*) override
+    {
+        flow->set_state(restart_state);
+        return false;
+    }
+
+    void clear() override
+    { }
+
+private:
+    Flow::FlowState restart_state;
+};
+
+TEST_GROUP(restart_precheck_disposition)
+{
+    FlowCacheConfig config;
+    FlowControl flow_control { config };
+    Flow flow;
+    Packet packet { false };
+    DAQ_PktHdr_t pkth = { };
+    tcp::TCPHdr tcph = { };
+    Active active;
+
+    void setup() override
+    {
+        packet.pkth = &pkth;
+        packet.active = &active;
+        packet.ptrs.set_pkt_type(PktType::TCP);
+        packet.ptrs.tcph = &tcph;
+        tcph.th_flags = TH_RST;
+
+        flow.pkt_type = PktType::TCP;
+        flow.set_state(Flow::FlowState::INSPECT);
+
+        snort::reset_test_flow_state_calls();
+        test_disable_all_calls = 0;
+    }
+};
+
+TEST(restart_precheck_disposition, applies_reset_before_ineligible_packet_return)
+{
+    RestartPrecheckSession session(&flow, Flow::FlowState::RESET);
+    flow.session = &session;
+
+    UNSIGNED_LONGS_EQUAL(0, flow_control.process(&flow, &packet, false));
+
+    CHECK_EQUAL(Active::ACT_RESET, active.get_action());
+    CHECK_TRUE(flow.session_state & STREAM_STATE_CLOSED);
+    UNSIGNED_LONGS_EQUAL(1, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(1, snort::test_blocked_flow_calls);
+}
+
+TEST(restart_precheck_disposition, leaves_setup_restart_for_normal_ineligible_cleanup)
+{
+    RestartPrecheckSession session(&flow, Flow::FlowState::SETUP);
+    flow.session = &session;
+
+    UNSIGNED_LONGS_EQUAL(0, flow_control.process(&flow, &packet, false));
+
+    CHECK_TRUE(flow.flow_state == Flow::FlowState::SETUP);
+    CHECK_TRUE(flow.session_state & STREAM_STATE_CLOSED);
+    UNSIGNED_LONGS_EQUAL(0, test_disable_all_calls);
+    UNSIGNED_LONGS_EQUAL(0, snort::test_blocked_flow_calls);
+}
+
 TEST_GROUP(stale_flow) { };
 
 TEST(stale_flow, stale_flow)
@@ -299,11 +482,8 @@ TEST(stale_flow, stale_flow)
     delete cache;
 }
 
-// A UDP tunnel packet must not attach to a Flow
-// created by bare traffic on the same inner tuple, and vice versa
-//
-// The mismatch causes it to be treated as stale and the flow is released.
-TEST(stale_flow, tunnel_bare_mismatch)
+// tunnel traffic is not stale on that basis alone
+TEST(stale_flow, tunnel_traffic_is_not_stale)
 {
     Packet* p = new Packet(false);
     Flow* flow = new Flow;
@@ -315,25 +495,19 @@ TEST(stale_flow, tunnel_bare_mismatch)
     dh.flags = 0;
     p->pkth = &dh;
 
-    // Bare flow, tunneled packet -> stale
+    // a tunnel-dispatched packet on an established Flow -> not stale
     snort::udp::UDPHdr udph = { };
     p->ptrs.udph = &udph;
     p->proto_bits = PROTO_BIT__UDP_TUNNELED;
-    flow->flags.udp_tunneled = false;
-    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == nullptr);
-
-    // Tunneled flow, bare packet -> stale
-    p->flow = nullptr;
-    p->proto_bits = 0;
-    p->ptrs.udph = nullptr;
-    flow->flags.udp_tunneled = true;
-    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == nullptr);
-
-    // Tunneled flow, tunneled packet -> attach
-    p->proto_bits = PROTO_BIT__UDP_TUNNELED;
-    p->ptrs.udph = &udph;
-    flow->flags.udp_tunneled = true;
     CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == flow);
+
+    // a fully decapsulated packet -> also not stale
+    p->proto_bits = PROTO_BIT__UDP_TUNNELED | PROTO_BIT__GTP | PROTO_BIT__TUNNEL_DECAP;
+    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == flow);
+
+    // ...but a new flow on the same tuple is still stale
+    dh.flags = DAQ_PKT_FLAG_NEW_FLOW;
+    CHECK(flow_control->stale_flow_cleanup(cache, flow, p) == nullptr);
 
     p->pkth = nullptr;
     p->ptrs.udph = nullptr;
@@ -343,32 +517,100 @@ TEST(stale_flow, tunnel_bare_mismatch)
     delete cache;
 }
 
-TEST_GROUP(move_to_allowlist) { };
+TEST_GROUP(tunnel_attach) { };
 
-static bool try_move_to_allowlist(FlowControl* flow_control, PktType type)
+// a decapsulated inner tuple keys apart from the same tuple seen bare
+TEST(tunnel_attach, decapsulated_packet_keys_apart_from_bare)
 {
-    Flow* flow = new Flow;
-    FlowKey key = { };
-    key.pkt_type = type;
-    flow->key = &key;
+    Packet packet(false);
+    Packet* p = &packet;
+    FlowCacheConfig fcg;
+    FlowControl flow_control_instance(fcg);
+    FlowControl* flow_control = &flow_control_instance;
+    DAQ_PktHdr_t dh = { };
+    IpsContext ctx(1);
+    FlowKey key;
 
-    bool moved = flow_control->move_to_allowlist(flow);
+    // the FlowKey::init() stubs above ignore the config, so a null one is fine
+    ctx.conf = nullptr;
+    p->context = &ctx;
+    p->pkth = &dh;
 
-    flow->key = nullptr;
-    delete flow;
-    return moved;
+    // a bare packet, and one whose inner tuple came out of a tunnel codec,
+    // must not agree on the discriminator for an otherwise identical tuple
+    p->proto_bits = 0;
+    key.flags.tunnel_encapsulated = true;    // must be overwritten
+    flow_control->set_key(&key, p);
+    CHECK(key.flags.tunnel_encapsulated == false);
+
+    // The committed discriminator is carrier-neutral.  GRE-TEB and MPLS-TEB
+    // have no UDP dispatch bit once their inner IP tuple has been decoded.
+    p->proto_bits = PROTO_BIT__IP | PROTO_BIT__TUNNEL_DECAP;
+    key.flags.tunnel_encapsulated = false;
+    flow_control->set_key(&key, p);
+    CHECK(key.flags.tunnel_encapsulated == true);
+
+    // PROTO_BIT__UDP_TUNNELED alone is only a dispatch marker, not a
+    // completed decapsulation, so it must not move the key
+    snort::udp::UDPHdr udph = { };
+    p->ptrs.udph = &udph;
+    p->proto_bits = PROTO_BIT__UDP_TUNNELED;
+    key.flags.tunnel_encapsulated = true;
+    flow_control->set_key(&key, p);
+    CHECK(key.flags.tunnel_encapsulated == false);
+    p->ptrs.udph = nullptr;
+
+    // A validated tunnel header alone is not enough: the key moves only after
+    // an inner IP codec has successfully completed decapsulation.
+    const uint32_t tunnels[] =
+        { PROTO_BIT__GTP, PROTO_BIT__TEREDO, PROTO_BIT__VXLAN, PROTO_BIT__GENEVE };
+    uint32_t all_tunnels = 0;
+
+    for ( uint32_t bit : tunnels )
+    {
+        all_tunnels |= bit;
+        p->proto_bits = PROTO_BIT__UDP_TUNNELED | bit;
+        key.flags.tunnel_encapsulated = true;    // must be overwritten
+        flow_control->set_key(&key, p);
+        CHECK(key.flags.tunnel_encapsulated == false);
+
+        p->proto_bits |= PROTO_BIT__TUNNEL_DECAP;
+        flow_control->set_key(&key, p);
+        CHECK(key.flags.tunnel_encapsulated == true);
+    }
+
+    CHECK(all_tunnels == PROTO_BIT__ANY_UDP_TUNNEL);
+    CHECK((PROTO_BIT__ANY_UDP_TUNNEL & PROTO_BIT__UDP_TUNNELED) == 0);
+
+    p->pkth = nullptr;
+    p->context = nullptr;
 }
 
-// Only TCP flows are admitted to the allowlist LRU. UDP (and other protocols)
-// are rejected so they keep honoring the idle timeout
-TEST(move_to_allowlist, tcp_admitted_udp_rejected)
+TEST_GROUP(uni_candidacy) { };
+
+// Flow::set_block_flags() and Flow::restart() reach the cache through these
+TEST(uni_candidacy, unlink_uni_forwards_to_the_cache)
 {
     FlowCacheConfig fcg;
     FlowControl* flow_control = new FlowControl(fcg);
+    Flow flow;
 
-    CHECK(try_move_to_allowlist(flow_control, PktType::TCP) == true);
-    CHECK(try_move_to_allowlist(flow_control, PktType::UDP) == false);
-    CHECK(try_move_to_allowlist(flow_control, PktType::ICMP) == false);
+    test_unlink_uni_flow = nullptr;
+    flow_control->unlink_uni(&flow);
+    POINTERS_EQUAL(&flow, test_unlink_uni_flow);
+
+    delete flow_control;
+}
+
+TEST(uni_candidacy, relink_uni_forwards_to_the_cache)
+{
+    FlowCacheConfig fcg;
+    FlowControl* flow_control = new FlowControl(fcg);
+    Flow flow;
+
+    test_relink_uni_flow = nullptr;
+    flow_control->relink_uni(&flow);
+    POINTERS_EQUAL(&flow, test_relink_uni_flow);
 
     delete flow_control;
 }

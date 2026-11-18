@@ -25,6 +25,9 @@
 
 #include <cassert>
 
+#include "main/snort_module.h"
+#include "trace/trace_api.h"
+
 using namespace snort;
 
 BaseConfigNode::BaseConfigNode(BaseConfigNode* p) :
@@ -62,10 +65,10 @@ TreeConfigNode::TreeConfigNode(BaseConfigNode* parent_node,
         BaseConfigNode(parent_node), name(node_name), type(node_type)
 {}
 
-BaseConfigNode* TreeConfigNode::get_node(const std::string& name)
+BaseConfigNode* TreeConfigNode::get_node(const std::string& node_name)
 {
     auto it = std::find_if(children.cbegin(), children.cend(),
-        [name](BaseConfigNode* node){ return node->get_name() == name; });
+        [node_name](const BaseConfigNode* node){ return node->get_name() == node_name; });
     return it != children.cend() ? *it : nullptr;
 }
 
@@ -101,8 +104,19 @@ BaseConfigNode* ValueConfigNode::get_node(const std::string& name)
 
 ConfigData::ConfigData(const char* file)
 {
+    debug_logf(4, snort_trace, TRACE_CONF, nullptr,
+        "ConfigData collection started for %s\n", file ? file : "(none)");
+
     if ( file )
         file_name = file;
+}
+
+ConfigData::~ConfigData()
+{
+    clear();
+
+    debug_logf(4, snort_trace, TRACE_CONF, nullptr,
+        "ConfigData collection closed for %s\n", file_name.empty() ? "(none)" : file_name.c_str());
 }
 
 void ConfigData::sort()
@@ -343,4 +357,3 @@ TEST_CASE("value_config_node", "[ValueConfigNode]")
 }
 
 #endif
-

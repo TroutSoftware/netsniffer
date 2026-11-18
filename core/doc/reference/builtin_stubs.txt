@@ -38,6 +38,10 @@ Incomplete RPC segment. Packet data size is less than required RPC fragment leng
 
 Zero-length RPC fragment.
 
+106:6
+
+RPC record exceeds inspection depth.
+
 112:1
 
 ARP request is unicast, not broadcast.
@@ -1298,6 +1302,51 @@ HTTP reserved GZIP flags are set
 
 Too many partial flushes. Partial depth is enabled and 20 or more partial flushes are
 made before a regular flush.
+
+119:298
+
+The size of a client request, counting the request line and headers but not the body,
+exceeds the configured max_request_size.
+
+119:299
+
+The length of the request line alone, not counting the terminating CR/LF sequence,
+exceeds the configured max_request_line_length.
+
+119:300
+
+The request line does not conform to the expected grammar: bad method, missing or
+malformed URI, malformed or unsupported HTTP-version, improper whitespace, or incorrect
+line termination.
+
+119:301
+
+A message header contains a negative Content-Length value, or both a Content-Length and
+a Transfer-Encoding header where that combination is not allowed.
+
+119:302
+
+The length of a single header field value exceeds the configured
+maximum_header_value_length. Cookie and Set-Cookie header values are not
+checked.
+
+119:304
+
+An HTTP request or response header contains a name byte outside the HTTP token character
+set, a bare control character in a value (TAB is allowed), or obsolete line folding.
+Trailers are not included.
+
+119:305
+
+A message header line is malformed: it has no colon separator, no field name, no field
+value, or is a multi-line header.
+
+119:306
+
+The media type in the request Content-Type header is not in allowed_content_type. Any
+parameters after the first semicolon are ignored for this comparison. A comma-separated
+list and quoting that never closes are violations, and each line of a repeated header is
+checked on its own. A request that carries content must name a media type.
 
 121:1
 
@@ -2719,9 +2768,10 @@ encountered, this alert is raised. This alert is raised by the enhanced JavaScri
 
 154:5
 
-This alert is raised when </script> end-tag is encountered inside a JavaScript comment
-or literal, which is a syntax error, as the last comment or literal is not closed before
-script end. This alert is raised by the enhanced JavaScript normalizer.
+This alert is raised when a script end-tag (</script followed by a tab, line break, form
+feed, space, / or >) is encountered inside a JavaScript comment or literal, which is a syntax
+error, as the last comment or literal is not closed before script end. This alert is raised by
+the enhanced JavaScript normalizer.
 
 154:6
 

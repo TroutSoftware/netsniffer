@@ -51,7 +51,7 @@ typedef std::unordered_map<std::string, bool> MethodMap; //Method Name => Negate
 
 static THREAD_LOCAL ProfileStats sipMethodRuleOptionPerfStats;
 
-static inline bool IsRequest(SIP_Roptions* ropts)
+static inline bool IsRequest(const SIP_Roptions* ropts)
 {
     if (ropts->status_code)
         return false;
@@ -93,14 +93,14 @@ bool SipMethodOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const SipMethodOption& rhs = (const SipMethodOption&)ips;
+    const SipMethodOption& rhs = static_cast<const SipMethodOption&>(ips);
 
     return methods == rhs.methods;
 }
 
 IpsOption::EvalStatus SipMethodOption::eval(Cursor&, Packet* p)
 {
-    RuleProfile profile(sipMethodRuleOptionPerfStats);  // cppcheck-suppress unreadVariable
+    RuleProfile profile(sipMethodRuleOptionPerfStats);
 
     if ((!p->has_tcp_data() && !p->is_udp()) || !p->flow || !p->dsize)
         return NO_MATCH;
@@ -110,7 +110,7 @@ IpsOption::EvalStatus SipMethodOption::eval(Cursor&, Packet* p)
     if ( !sd )
         return NO_MATCH;
 
-    SIP_Roptions* ropts = &sd->ropts;
+    const SIP_Roptions* ropts = &sd->ropts;
 
     // Not response
     if ( IsRequest(ropts) && !methods.empty() )
@@ -212,7 +212,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* sip_method_ctor(Module* p, IpsInfo&)
 {
-    SipMethodModule* m = (SipMethodModule*)p;
+    const SipMethodModule* m = static_cast<SipMethodModule*>(p);
     return new SipMethodOption(m->methods);
 }
 
@@ -252,4 +252,3 @@ static const IpsApi sip_method_api =
 
 // added to snort_plugins in sip.cc
 const BaseApi* ips_sip_method = &sip_method_api.base;
-

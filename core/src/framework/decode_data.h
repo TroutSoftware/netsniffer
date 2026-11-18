@@ -61,6 +61,26 @@ enum class LRUType : std::uint8_t
     MAX
 };
 
+enum class IpProtocol : uint8_t;
+
+static inline PktType get_pkt_type_from_ip_proto(IpProtocol proto)
+{
+    switch (proto)
+    {
+    case IpProtocol::TCP:
+        return PktType::TCP;
+    case IpProtocol::UDP:
+        return PktType::UDP;
+    case IpProtocol::ICMPV4:
+        return PktType::ICMP;
+    case IpProtocol::IP:
+        return PktType::IP;
+    default:
+        break;
+    }
+    return PktType::NONE;
+}
+
 // the first several of these bits must map to PktType
 // eg PROTO_BIT__IP == BIT(PktType::IP), etc.
 #define PROTO_BIT__NONE             0x000000
@@ -89,9 +109,17 @@ enum class LRUType : std::uint8_t
 #define PROTO_BIT__ARP              0x400000
 #define PROTO_BIT__ALL              0x7FFFFF
 
+// Derived state, deliberately outside PROTO_BIT__ALL: an inner IP tuple was
+// successfully decoded after a UDP-tunnel or TEB dispatch.
+#define PROTO_BIT__TUNNEL_DECAP     0x800000
+
 #define PROTO_BIT__ICMP_EMBED \
     (PROTO_BIT__TCP_EMBED_ICMP | PROTO_BIT__UDP_EMBED_ICMP | \
     PROTO_BIT__ICMP_EMBED_ICMP | PROTO_BIT__ICMP_EMBED_OTHER)
+
+// Every UDP tunnel codec that validates its own header; add new ones here.
+#define PROTO_BIT__ANY_UDP_TUNNEL \
+    (PROTO_BIT__GTP | PROTO_BIT__TEREDO | PROTO_BIT__VXLAN | PROTO_BIT__GENEVE)
 
 #define PROTO_BIT__ANY_IP   (PROTO_BIT__IP | PROTO_BIT__TCP | PROTO_BIT__UDP | PROTO_BIT__ICMP)
 #define PROTO_BIT__ANY_PDU  (PROTO_BIT__TCP | PROTO_BIT__UDP | PROTO_BIT__PDU)
@@ -169,4 +197,3 @@ struct DecodeData
 };
 
 #endif
-

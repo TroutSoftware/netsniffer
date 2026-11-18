@@ -65,7 +65,7 @@ bool TcpStateClosed::ack_recv(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 
 bool TcpStateClosed::data_seg_sent(TcpSegmentDescriptor& tsd, TcpStreamTracker& trk)
 {
-    Flow* flow = tsd.get_flow();
+    const Flow* flow = tsd.get_flow();
 
     trk.update_tracker_ack_sent(tsd);
     // data on a segment when we're not accepting data any more alert!

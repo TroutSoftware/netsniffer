@@ -25,15 +25,20 @@
 
 #include "detection_module.h"
 
+#include <cinttypes>
 #include <sys/resource.h>
 
 #include "log/messages.h"
 #include "main/snort_config.h"
+#ifdef ENABLE_DETECTION_OFFLOAD
 #include "main/thread_config.h"
+#endif
 #include "trace/trace.h"
 
 #include "detect_trace.h"
+#ifdef ENABLE_DETECTION_OFFLOAD
 #include "detection_engine.h"
+#endif
 
 using namespace snort;
 
@@ -93,10 +98,18 @@ static const Parameter detection_params[] =
 #endif
 
     { "offload_limit", Parameter::PT_INT, "0:max32", "99999",
+#ifdef ENABLE_DETECTION_OFFLOAD
       "minimum sizeof PDU to offload fast pattern search (defaults to disabled)" },
+#else
+      "detection offload is disabled (no-op): formerly the minimum PDU size for fast-pattern offload" },
+#endif
 
     { "offload_threads", Parameter::PT_INT, "0:max32", "0",
+#ifdef ENABLE_DETECTION_OFFLOAD
       "maximum number of simultaneous offloads (defaults to disabled)" },
+#else
+      "detection offload is disabled (no-op): formerly the maximum number of simultaneous offloads" },
+#endif
 
     { "pcre_enable", Parameter::PT_BOOL, nullptr, "true",
       "enable pcre pattern matching" },
@@ -191,11 +204,13 @@ bool DetectionModule::end(const char* fqn, int idx, SnortConfig* sc)
         return add_service_extension(sc);
     }
 
+#ifdef ENABLE_DETECTION_OFFLOAD
     if ( sc->offload_threads and ThreadConfig::get_instance_max() != 1 )
         ParseError("You can not enable experimental offload with more than one packet thread.");
 
     if ( sc->offload_limit < 99999 )
         DetectionEngine::enable_offload();
+#endif
 
     return true;
 }
@@ -217,10 +232,24 @@ bool DetectionModule::set(const char*, Value& v, SnortConfig* sc)
 #endif
 
     else if ( v.is("offload_limit") )
+    {
+#ifdef ENABLE_DETECTION_OFFLOAD
         sc->offload_limit = v.get_uint32();
+#else
+        if ( v.get_uint32() != 99999 )
+            ParseWarning(WARN_CONF, "detection.offload_limit is deprecated and has no effect");
+#endif
+    }
 
     else if ( v.is("offload_threads") )
+    {
+#ifdef ENABLE_DETECTION_OFFLOAD
         sc->offload_threads = v.get_uint32();
+#else
+        if ( v.get_uint32() != 0 )
+            ParseWarning(WARN_CONF, "detection.offload_threads is deprecated and has no effect");
+#endif
+    }
 
     else if ( v.is("pcre_enable") )
         v.update_mask(sc->run_flags, RUN_FLAG__NO_PCRE, true);
@@ -257,8 +286,8 @@ bool DetectionModule::set(const char*, Value& v, SnortConfig* sc)
         if (sc->pcre_match_limit_recursion > max_rec)
         {
             sc->pcre_match_limit_recursion = max_rec;
-            LogMessage("Capping pcre_match_limit_recursion to %ld, thread stack_size %ld.\n",
-                sc->pcre_match_limit_recursion, thread_stack_size);
+            LogMessage("Capping pcre_match_limit_recursion to %" PRIu64 ", thread stack_size %" PRIu64 ".\n",
+                static_cast<uint64_t>(sc->pcre_match_limit_recursion), static_cast<uint64_t>(thread_stack_size));
         }
     }
 

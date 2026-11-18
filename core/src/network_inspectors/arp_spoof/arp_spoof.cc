@@ -118,7 +118,7 @@ static void arp_config_show(const ArpSpoofConfig* config)
 
     ConfigLogger::log_option("hosts");
 
-    for (auto& ip : config->ipmel)
+    for (const auto& ip : config->ipmel)
     {
         std::string ip_mac;
         SfIpString ip_str;
@@ -209,6 +209,8 @@ void ArpSpoof::eval(Packet* p)
 
     const arp::EtherARP* ah = layer::get_arp_layer(p);
 
+    if(!ah) return;
+
     /* is the ARP protocol type IP and the ARP hardware type Ethernet? */
     if ((ntohs(ah->ea_hdr.ar_hrd) != 0x0001) ||
         (ntohs(ah->ea_hdr.ar_pro) != ETHERNET_TYPE_IP))
@@ -274,7 +276,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* as_ctor(Module* m)
 {
-    return new ArpSpoof((ArpSpoofModule*)m);
+    return new ArpSpoof(static_cast<ArpSpoofModule*>(m));
 }
 
 static void as_dtor(Inspector* p)

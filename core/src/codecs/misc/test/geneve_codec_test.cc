@@ -27,8 +27,8 @@
 #include <CppUTestExt/MockSupport.h>
 
 // LCOV_EXCL_START
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 // LCOV_EXCL_STOP
 
 namespace snort
@@ -72,7 +72,8 @@ uint8_t geneve_pkt_data_no_options[] = {
 
 
 // A sample function to convert the option data to uint64_t.
-bool get_geneve_opt_data(std::vector<snort::geneve::GeneveOptData> options, uint16_t g_class, uint8_t g_type, uint64_t& value)
+bool get_geneve_opt_data(const std::vector<snort::geneve::GeneveOptData>& options,
+    uint16_t g_class, uint8_t g_type, uint64_t& value)
 {
     value = 0;
 
@@ -119,7 +120,7 @@ TEST(geneve_codec_tests, decode)
 
 TEST(geneve_codec_tests, geneve_lyr)
 {
-    geneve::GeneveLyr* glyr = (geneve::GeneveLyr*)geneve_pkt_data;
+    const geneve::GeneveLyr* glyr = reinterpret_cast<geneve::GeneveLyr*>(geneve_pkt_data);
 
     std::vector<geneve::GeneveOptData> opt_data = glyr->get_opt_data();
 
@@ -130,7 +131,7 @@ TEST(geneve_codec_tests, geneve_lyr)
     CHECK( opt_data[0].opt.optclass() == 0x0106 );
     CHECK( opt_data[0].opt.type() == 0x56 );
 
-    uint8_t opt0_data[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x40};
+    const uint8_t opt0_data[] = {0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x40};
     CHECK( memcmp(opt_data[0].data, opt0_data, opt_data[0].opt.data_len()) == 0);
 
     CHECK( opt_data[1].opt.olen() == 8 );
@@ -138,7 +139,7 @@ TEST(geneve_codec_tests, geneve_lyr)
     CHECK( opt_data[1].opt.optclass() == 0x0106 );
     CHECK( opt_data[1].opt.type() == 0x02 );
 
-    uint8_t opt1_data[] = {0xac,0x10,0xa0,0x02};
+    const uint8_t opt1_data[] = {0xac,0x10,0xa0,0x02};
     CHECK( memcmp(opt_data[1].data, opt1_data, opt_data[1].opt.data_len()) == 0);
 
     uint64_t value = 0;
@@ -148,7 +149,7 @@ TEST(geneve_codec_tests, geneve_lyr)
 
 TEST(geneve_codec_tests, geneve_lyr_no_options)
 {
-    geneve::GeneveLyr* glyr = (geneve::GeneveLyr*)geneve_pkt_data_no_options;
+    const geneve::GeneveLyr* glyr = reinterpret_cast<geneve::GeneveLyr*>(geneve_pkt_data_no_options);
     std::vector<geneve::GeneveOptData> opt_data = glyr->get_opt_data();
     CHECK( opt_data.empty() );
 }
@@ -160,4 +161,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

@@ -222,7 +222,7 @@ static void AlertSyslog(int priority, Packet* p, const char* msg, const Event& e
     }
 
     auto& ptrs = p->ptrs;
-    auto& ip = ptrs.ip_api;
+    const auto& ip = ptrs.ip_api;
     auto& conf = p->context->conf;
 
     if (conf->alert_interface())
@@ -278,7 +278,7 @@ static void AlertSyslog(int priority, Packet* p, const char* msg, const Event& e
 class SyslogLogger : public Logger
 {
 public:
-    SyslogLogger(SyslogModule*);
+    SyslogLogger(const SyslogModule*);
     ~SyslogLogger() override;
 
     void alert(Packet*, const char* msg, const Event&) override;
@@ -287,7 +287,7 @@ private:
     int priority;
 };
 
-SyslogLogger::SyslogLogger(SyslogModule* m)
+SyslogLogger::SyslogLogger(const SyslogModule* m)
 {
     priority = m->facility | m->level;
     PigPen::open_syslog();
@@ -314,7 +314,7 @@ static void mod_dtor(Module* m)
 { delete m; }
 
 static Logger* syslog_ctor(Module* mod)
-{ return new SyslogLogger((SyslogModule*)mod); }
+{ return new SyslogLogger(static_cast<SyslogModule*>(mod)); }
 
 static void syslog_dtor(Logger* p)
 { delete p; }

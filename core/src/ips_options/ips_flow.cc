@@ -93,7 +93,7 @@ bool FlowCheckOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const FlowCheckOption& rhs = (const FlowCheckOption&)ips;
+    const FlowCheckOption& rhs = static_cast<const FlowCheckOption&>(ips);
     const FlowCheckData* left = &config;
     const FlowCheckData* right = &rhs.config;
 
@@ -113,10 +113,9 @@ bool FlowCheckOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus FlowCheckOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(flowCheckPerfStats);
 
-    FlowCheckData* fcd = &config;
+    const FlowCheckData* fcd = &config;
 
     // Check established/unestablished first
     {
@@ -199,7 +198,7 @@ IpsOption::EvalStatus FlowCheckOption::eval(Cursor&, Packet* p)
 // support methods
 //-------------------------------------------------------------------------
 
-static bool flow_verify(FlowCheckData* fcd)
+static bool flow_verify(const FlowCheckData* fcd)
 {
     if (fcd->from_client && fcd->from_server)
     {
@@ -377,7 +376,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* flow_ctor(Module* p, IpsInfo& info)
 {
-    FlowModule* m = (FlowModule*)p;
+    const FlowModule* m = static_cast<FlowModule*>(p);
 
     if ( m->data.stateless )
         IpsOption::set_stateless(info);
@@ -439,4 +438,3 @@ const BaseApi* ips_flow[] =
     &flow_api.base,
     nullptr
 };
-

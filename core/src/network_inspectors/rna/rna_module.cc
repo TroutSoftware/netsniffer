@@ -67,8 +67,9 @@ THREAD_LOCAL const Trace* rna_trace = nullptr;
 //-------------------------------------------------------------------------
 static int dump_mac_cache(lua_State* L)
 {
-    RnaModule* mod = (RnaModule*)PigPen::get_module(RNA_NAME);
-    Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    RnaModule* mod = static_cast<RnaModule*>(PigPen::get_module(RNA_NAME));
+    const Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    // cppcheck-suppress knownConditionTrueFalse ; module availability depends on loaded runtime plugins
     if ( rna && mod )
         mod->log_mac_cache( luaL_optstring(L, 1, nullptr) );
     return 0;
@@ -89,9 +90,11 @@ static inline string format_dump_mac(const uint8_t mac[MAC_SIZE])
     return ss.str();
 }
 
+// cppcheck-suppress constParameterCallback
 static int purge_data(lua_State* L)
 {
-    Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    const Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    // cppcheck-suppress knownConditionTrueFalse ; inspector availability depends on loaded runtime plugins
     if ( rna )
     {
         HostCacheMac* mac_cache = new HostCacheMac(MAC_CACHE_INITIAL_SIZE);
@@ -167,7 +170,8 @@ static bool get_mac_from_args(lua_State* L, uint8_t* mac_addr)
 
 static int delete_mac_host(lua_State* L)
 {
-    Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    const Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    // cppcheck-suppress knownConditionTrueFalse ; inspector availability depends on loaded runtime plugins
     if ( rna )
     {
         uint8_t mac[MAC_SIZE] = {0};
@@ -188,7 +192,7 @@ static int delete_mac_host(lua_State* L)
         HostCacheMac* mac_cache = get_host_cache_mac();
         assert(mac_cache);
 
-        bool success = mac_cache->remove((const uint8_t*) &search_mk);
+        bool success = mac_cache->remove(reinterpret_cast<const uint8_t*>(&search_mk));
 
         if (!success)
         {
@@ -203,7 +207,8 @@ static int delete_mac_host(lua_State* L)
 
 static int delete_mac_host_proto(lua_State* L)
 {
-    Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    const Inspector* rna = PigPen::get_inspector(RNA_NAME, RNA_USE);
+    // cppcheck-suppress knownConditionTrueFalse ; inspector availability depends on loaded runtime plugins
     if ( rna )
     {
         uint8_t mac[MAC_SIZE] = {0};
@@ -224,7 +229,7 @@ static int delete_mac_host_proto(lua_State* L)
         HostCacheMac* mac_cache = get_host_cache_mac();
         assert(mac_cache);
 
-        auto htm = mac_cache->find((const uint8_t*) &search_mk);
+        auto htm = mac_cache->find(reinterpret_cast<const uint8_t*>(&search_mk));
 
         if (!htm)
         {
@@ -362,20 +367,20 @@ static const Parameter rna_fp_params[] =
     { "devicename", Parameter::PT_STRING, nullptr, nullptr,
       "deviceinfo devicename value" },
 
-    { "os_pattern", Parameter::PT_STRING, nullptr, nullptr,
-      "deviceinfo os pattern" },
+    { "version_pattern", Parameter::PT_STRING, nullptr, nullptr,
+      "deviceinfo version pattern" },
 
-    { "os_value", Parameter::PT_STRING, nullptr, nullptr,
-      "deviceinfo os value" },
+    { "version_value", Parameter::PT_STRING, nullptr, nullptr,
+      "deviceinfo version value" },
 
     { "mac_addr", Parameter::PT_STRING, nullptr, nullptr,
       "deviceinfo mac address" },
 
-    { "os_prefix", Parameter::PT_STRING, nullptr, nullptr,
-      "deviceinfo os prefix" },
+    { "cpe_prefix", Parameter::PT_STRING, nullptr, nullptr,
+      "deviceinfo cpe prefix" },
 
-    { "os_postfix", Parameter::PT_STRING, nullptr, nullptr,
-      "deviceinfo os postfix" },
+    { "cpe_postfix", Parameter::PT_STRING, nullptr, nullptr,
+      "deviceinfo cpe postfix" },
 
     { nullptr, Parameter::PT_MAX, nullptr, nullptr, nullptr }
 };
@@ -447,8 +452,9 @@ RnaModule::RnaModule() : Module(RNA_NAME, RNA_HELP, rna_params)
 
 void RnaModule::shutdown()
 {
-    RnaModule* rna = (RnaModule*)PluginManager::get_module("rna");
+    RnaModule* rna = static_cast<RnaModule*>(PluginManager::get_module("rna"));
 
+    // cppcheck-suppress knownConditionTrueFalse ; module availability depends on loaded runtime plugins
     if ( rna )
         rna->dump();
 }
@@ -511,11 +517,11 @@ bool RnaModule::begin(const char* fqn, int, SnortConfig*)
         deviceinfo_fingerprint.model.clear();
         deviceinfo_fingerprint.devicename_pattern.clear();
         deviceinfo_fingerprint.devicename.clear();
-        deviceinfo_fingerprint.os_pattern.clear();
-        deviceinfo_fingerprint.os_value.clear();
+        deviceinfo_fingerprint.version_pattern.clear();
+        deviceinfo_fingerprint.version_value.clear();
         deviceinfo_fingerprint.mac_addr.clear();
-        deviceinfo_fingerprint.os_prefix.clear();
-        deviceinfo_fingerprint.os_postfix.clear();
+        deviceinfo_fingerprint.cpe_prefix.clear();
+        deviceinfo_fingerprint.cpe_postfix.clear();
         if (!mod_conf->deviceinfo_processor)
             mod_conf->deviceinfo_processor = new DeviceInfoFpProcessor;
     }
@@ -591,6 +597,7 @@ bool RnaModule::set(const char* fqn, Value& v, SnortConfig*)
         else if (v.is("substring"))
         {
             const char* ua_part = v.get_string();
+            // cppcheck-suppress knownConditionTrueFalse ; value depends on the supplied RNA configuration
             if ( !ua_part )
                 return false;
             fingerprint.user_agent.emplace_back(ua_part);
@@ -619,16 +626,16 @@ bool RnaModule::set(const char* fqn, Value& v, SnortConfig*)
             deviceinfo_fingerprint.devicename_pattern = v.get_string();
         else if (v.is("devicename"))
             deviceinfo_fingerprint.devicename = v.get_string();
-        else if (v.is("os_pattern"))
-            deviceinfo_fingerprint.os_pattern = v.get_string();
-        else if (v.is("os_value"))
-            deviceinfo_fingerprint.os_value = v.get_string();
+        else if (v.is("version_pattern"))
+            deviceinfo_fingerprint.version_pattern = v.get_string();
+        else if (v.is("version_value"))
+            deviceinfo_fingerprint.version_value = v.get_string();
         else if (v.is("mac_addr"))
             deviceinfo_fingerprint.mac_addr = v.get_string();
-        else if (v.is("os_prefix"))
-            deviceinfo_fingerprint.os_prefix = v.get_string();
-        else if (v.is("os_postfix"))
-            deviceinfo_fingerprint.os_postfix = v.get_string();
+        else if (v.is("cpe_prefix"))
+            deviceinfo_fingerprint.cpe_prefix = v.get_string();
+        else if (v.is("cpe_postfix"))
+            deviceinfo_fingerprint.cpe_postfix = v.get_string();
         else
             return false;
     }
@@ -642,6 +649,9 @@ bool RnaModule::end(const char* fqn, int index, SnortConfig* sc)
 
     if ( !strcmp(fqn, RNA_NAME) )
     {
+        if ( sc == nullptr )
+            return false;
+
         sc->set_run_flags(RUN_FLAG__TRACK_ON_SYN); // Internal flag to track TCP on SYN
 
         if ( sc->ip_frags_only() )
@@ -700,7 +710,7 @@ RnaModuleConfig* RnaModule::get_config()
 }
 
 PegCount* RnaModule::get_counts() const
-{ return (PegCount*)&rna_stats; }
+{ return reinterpret_cast<PegCount*>(&rna_stats); }
 
 const PegInfo* RnaModule::get_pegs() const
 { return rna_pegs; }
@@ -763,7 +773,7 @@ bool RnaModule::log_mac_cache(const char* outfile)
     return false;
 }
 
-bool RnaModule::is_valid_fqn(const char* fqn) const
+bool RnaModule::is_valid_fqn(const char* fqn)
 {
     return !strcmp(fqn, RNA_NAME) or !strcmp(fqn, "rna.tcp_fingerprints") or
         !strcmp(fqn, "rna.ua_fingerprints") or !strcmp(fqn, "rna.ua_fingerprints.user_agent") or
@@ -837,4 +847,3 @@ TEST_CASE("Fingerprint processors tuner name", "[rna_module]")
 }
 
 #endif
-

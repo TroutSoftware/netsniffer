@@ -69,13 +69,12 @@ bool FragOffsetOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const FragOffsetOption& rhs = (const FragOffsetOption&)ips;
+    const FragOffsetOption& rhs = static_cast<const FragOffsetOption&>(ips);
     return config == rhs.config;
 }
 
 IpsOption::EvalStatus FragOffsetOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(fragOffsetPerfStats);
 
     if (!p->has_ip())
@@ -151,7 +150,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* fragoffset_ctor(Module* p, IpsInfo&)
 {
-    FragOffsetModule* m = (FragOffsetModule*)p;
+    const FragOffsetModule* m = static_cast<FragOffsetModule*>(p);
     return new FragOffsetOption(m->data);
 }
 
@@ -194,4 +193,3 @@ const BaseApi* ips_fragoffset[] =
     &fragoffset_api.base,
     nullptr
 };
-

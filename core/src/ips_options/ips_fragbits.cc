@@ -300,7 +300,7 @@ bool FragBitsOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const FragBitsOption& rhs = (const FragBitsOption&)ips;
+    const FragBitsOption& rhs = static_cast<const FragBitsOption&>(ips);
     const FragBitsData* left = &fragBitsData;
     const FragBitsData* right = &rhs.fragBitsData;
 
@@ -315,7 +315,6 @@ bool FragBitsOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus FragBitsOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(fragBitsPerfStats);
 
     if ( !p->has_ip() )
@@ -402,7 +401,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* fragbits_ctor(Module* p, IpsInfo&)
 {
-    FragBitsModule* fragBitsModule = (FragBitsModule*)p;
+    FragBitsModule* fragBitsModule = static_cast<FragBitsModule*>(p);
     return new FragBitsOption( fragBitsModule->get_fragBits_data() );
 }
 

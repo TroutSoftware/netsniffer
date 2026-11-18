@@ -117,7 +117,7 @@ static SoRule* s_so_rule = nullptr;
 static bool rule_is_stateless()
 { return action_file_id; }
 
-static int ValidateIPList(sfip_var_t* addrset, const char* token)
+static int ValidateIPList(const sfip_var_t* addrset, const char* token)
 {
     if (!addrset || !(addrset->head||addrset->neg_head))
     {
@@ -128,7 +128,7 @@ static int ValidateIPList(sfip_var_t* addrset, const char* token)
     return 0;
 }
 
-static int ProcessIP(SnortConfig* sc, const char* addr, RuleTreeNode* rtn, int mode, int)
+static int ProcessIP(const SnortConfig* sc, const char* addr, RuleTreeNode* rtn, int mode, int)
 {
     vartable_t* ip_vartable = get_ips_policy()->ip_vartable;
 
@@ -143,7 +143,7 @@ static int ProcessIP(SnortConfig* sc, const char* addr, RuleTreeNode* rtn, int m
 
         if ( !rtn->sip )
         {
-            sfip_var_t* tmp = sfvt_lookup_var(ip_vartable, addr);
+            const sfip_var_t* tmp = sfvt_lookup_var(ip_vartable, addr);
             if ( tmp )
             {
                 rtn->sip = sfvar_create_alias(tmp, tmp->name);
@@ -202,7 +202,7 @@ static int ProcessIP(SnortConfig* sc, const char* addr, RuleTreeNode* rtn, int m
 
         if ( !rtn->dip )
         {
-            sfip_var_t* tmp = sfvt_lookup_var(ip_vartable, addr);
+            const sfip_var_t* tmp = sfvt_lookup_var(ip_vartable, addr);
             if ( tmp )
             {
                 rtn->dip = sfvar_create_alias(tmp, tmp->name);
@@ -411,7 +411,7 @@ static int ParsePortList(
 void set_strict_rtn_reduction(bool new_strict_rtn_reduction)
 { strict_rtn_reduction = new_strict_rtn_reduction; }
 
-bool same_headers(RuleTreeNode* rule, RuleTreeNode* rtn)
+bool same_headers(const RuleTreeNode* rule, const RuleTreeNode* rtn)
 {
     if ( !rule or !rtn )
         return false;
@@ -890,6 +890,7 @@ void parse_rule_proto(SnortConfig* sc, const char* s, RuleTreeNode& rtn, bool el
 }
 
 void parse_rule_nets(
+    // cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
     SnortConfig* sc, const char* s, bool src, RuleTreeNode& rtn, bool elided)
 {
     if ( s_so_rule )
@@ -1052,7 +1053,7 @@ void parse_rule_opt_end(SnortConfig* sc, const char* key, OptTreeNode* otn)
         s_body += ";";
     }
     RuleOptType type = OPT_TYPE_MAX;
-    IpsOption* ips = IpsManager::option_end(sc, otn, otn->snort_protocol_id, key, type);
+    const IpsOption* ips = IpsManager::option_end(sc, otn, otn->snort_protocol_id, key, type);
     CursorActionType cat = ips ? ips->get_cursor_type() : CAT_NONE;
 
     if ( cat > CAT_ADJUST )
@@ -1392,7 +1393,7 @@ void parse_rule_process_rtn(RuleTreeNode* rtn)
 int parse_rule_finish_ports(SnortConfig* sc, RuleTreeNode* rtn, OptTreeNode* otn)
 {
     RulePortTables* port_tables = sc->port_tables;
-    FastPatternConfig* fp = sc->fast_pattern_config;
+    const FastPatternConfig* fp = sc->fast_pattern_config;
 
     int large_port_group = 0;
     PortTable* dstTable;

@@ -45,10 +45,6 @@ static MemoryStats s_fallthrough_stats;
 // memory manager interface
 // -----------------------------------------------------------------------------
 
-// get thread local default stats
-const MemoryStats& MemoryProfiler::get_fallthrough_stats()
-{ return s_fallthrough_stats; }
-
 // thread local call
 void MemoryProfiler::consolidate_fallthrough_stats()
 {

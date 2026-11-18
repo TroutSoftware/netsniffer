@@ -72,19 +72,19 @@ bool GtpVersionOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const GtpVersionOption& rhs = (const GtpVersionOption&)ips;
+    const GtpVersionOption& rhs = static_cast<const GtpVersionOption&>(ips);
     return ( version == rhs.version );
 }
 
 IpsOption::EvalStatus GtpVersionOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(gtp_ver_prof);
 
     if ( !p->flow )
         return NO_MATCH;
 
-    GtpFlowData* gfd = (GtpFlowData*)p->flow->get_flow_data(GtpFlowData::inspector_id);
+    const GtpFlowData* gfd = static_cast<GtpFlowData*>(
+        p->flow->get_flow_data(GtpFlowData::inspector_id));
 
     if ( gfd and version == gfd->ropts.gtp_version )
         return MATCH;
@@ -147,7 +147,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    GtpVersionModule* mod = (GtpVersionModule*)m;
+    const GtpVersionModule* mod = static_cast<GtpVersionModule*>(m);
     return new GtpVersionOption(mod->version);
 }
 
@@ -182,4 +182,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_gtp_version = &ips_api.base;
-

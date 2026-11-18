@@ -77,6 +77,10 @@
 #define DEFAULT_MAX_PKTS_BEFORE_SERVER_ONLY 10
 #define MIN_MAX_PKTS_BEFORE_SERVER_ONLY 2
 
+#define DEFAULT_MAX_HTTP_STREAMS_PER_FLOW 100
+#define MIN_MAX_HTTP_STREAMS_PER_FLOW 1
+#define MAX_MAX_HTTP_STREAMS_PER_FLOW 1000
+
 enum SnortProtoIdIndex
 {
     PROTO_INDEX_UNSYNCHRONIZED = 0,
@@ -163,6 +167,7 @@ public:
     uint16_t max_packet_before_server_only = DEFAULT_MAX_PKTS_BEFORE_SERVER_ONLY;
     uint16_t max_packet_service_fail_ignore_bytes = DEFAULT_MAX_PKT_BEFORE_SERVICE_FAIL_IGNORE_BYTES;
     uint16_t max_midstream_packet_before_service_fail = DEFAULT_MIDSTREAM_PKTS_BEFORE_SERVICE_FAIL;
+    uint16_t max_http_streams_per_flow = DEFAULT_MAX_HTTP_STREAMS_PER_FLOW;
     uint32_t chp_body_collection_max = 0;
     uint32_t rtmp_max_packets = 15;
     uint32_t max_tp_flow_depth = 5;
@@ -206,12 +211,14 @@ public:
     bool host_port_cache_add(const snort::SnortConfig* sc, const snort::SfIp* ip, uint16_t port,
         IpProtocol proto, unsigned type, AppId appid)
     {
+        // cppcheck-suppress knownConditionTrueFalse ; insertion depends on runtime host-cache data
         return host_port_cache.add(sc, ip, port, proto, type, appid);
     }
 
-    bool host_first_pkt_add(const snort::SnortConfig* sc, const snort::SfIp* ip, uint32_t* netmask, uint16_t port,
+    bool host_first_pkt_add(const snort::SnortConfig* sc, const snort::SfIp* ip, const uint32_t* netmask, uint16_t port,
         IpProtocol proto, AppId protocol_appid, AppId client_appid, AppId web_appid, unsigned reinspect)
     {
+        // cppcheck-suppress knownConditionTrueFalse ; insertion depends on runtime host-cache data
         return first_pkt_cache.add_host(sc, ip, netmask, port, proto, protocol_appid, client_appid, web_appid, reinspect);
     }
 
@@ -324,8 +331,8 @@ private:
     SipPatternMatchers sip_matchers;
     HostPatternMatchers host_matchers;
     SshPatternMatchers ssh_matchers;
-    PatternClientDetector* client_pattern_detector;
-    PatternServiceDetector* service_pattern_detector;
+    PatternClientDetector* client_pattern_detector = nullptr;
+    PatternServiceDetector* service_pattern_detector = nullptr;
     AlpnPatternMatchers alpn_matchers;
     UserDataMap user_data_map;    
 
@@ -333,7 +340,7 @@ private:
     std::array<AppId, APP_ID_PORT_ARRAY_SIZE> udp_port_only = {}; // port-only UDP services
     std::array<AppId, 256> ip_protocol = {}; // non-TCP / UDP protocol services
 
-    uint32_t version;
+    uint32_t version = 0;
     static uint32_t next_version;
     std::atomic<bool> appid_shadow_traffic_status = false;
 };
@@ -414,10 +421,10 @@ public:
             delete discovery_filter;
     }
 
-    bool odp_ctxt_ready() const
+    static bool odp_ctxt_ready()
     { return odp_ctxt != nullptr; }
 
-    OdpContext& get_odp_ctxt() const
+    static OdpContext& get_odp_ctxt()
     {
         assert(odp_ctxt);
         return *odp_ctxt;
@@ -427,7 +434,7 @@ public:
         return discovery_filter;
     }
 
-    ThirdPartyAppIdContext* get_tp_appid_ctxt() const
+    static ThirdPartyAppIdContext* get_tp_appid_ctxt()
     { return tp_appid_ctxt; }
 
     static void delete_tp_appid_ctxt()

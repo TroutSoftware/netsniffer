@@ -2,6 +2,10 @@
 
 include::active.txt[]
 
+=== Advanced Logging
+
+include::extractor.txt[]
+
 === AppId
 
 include::appid.txt[]
@@ -97,10 +101,6 @@ include::pop_imap.txt[]
 
 include::port_scan.txt[]
 
-=== Advanced Logging
-
-include::extractor.txt[]
-
 === Sensitive Data Filtering
 
 include::sensitive_data.txt[]
@@ -108,6 +108,10 @@ include::sensitive_data.txt[]
 === SMTP
 
 include::smtp.txt[]
+
+=== Stream Allowlist Cache
+
+include::stream_allowlist.txt[]
 
 === Telnet
 

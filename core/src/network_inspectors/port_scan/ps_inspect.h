@@ -60,15 +60,16 @@ private:
 
     bool ps_tracker_lookup(PS_PKT*, PS_TRACKER** scanner, PS_TRACKER** scanned);
     bool ps_tracker_update(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
-    bool ps_tracker_alert(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
+    bool ps_tracker_alert(const PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
 
-    void ps_proto_update_window(unsigned window, PS_PROTO*, time_t pkt_time);
+    static void ps_proto_update_window(unsigned window, PS_PROTO*, time_t pkt_time);
 
-    int ps_proto_update( PS_PROTO*, int ps_cnt, int pri_cnt, unsigned window, const snort::SfIp* ip,
+    static int ps_proto_update( PS_PROTO*, int ps_cnt, int pri_cnt, unsigned window,
+        const snort::SfIp* ip,
         unsigned short port, time_t pkt_time);
 
     void ps_tracker_update_ip(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
-    void ps_tracker_update_tcp(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
+    void ps_tracker_update_tcp(const PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
     void ps_tracker_update_udp(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
     void ps_tracker_update_icmp(PS_PKT*, PS_TRACKER* scanner, PS_TRACKER* scanned);
 
@@ -82,4 +83,3 @@ private:
 };
 
 #endif
-

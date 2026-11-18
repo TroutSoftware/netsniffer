@@ -79,13 +79,13 @@ public:
     virtual ~ExtractorEvent() {}
 
     void tinit(ExtractorLogger*, const snort::Connector::ID*);
-    void tterm();
+    static void tterm();
 
     Extractor& get_inspector() const { return inspector; }
 
     virtual std::vector<const char*> get_field_names() const;
 
-    void handle(DataEvent&, Flow*) {}
+    static void handle(DataEvent&, Flow*) {}
 
 protected:
     template<typename T>
@@ -142,17 +142,18 @@ protected:
     static uint64_t get_uid(const DataEvent*, const Flow* flow)
     {
         return flow->connection_id ? flow->connection_id
-            : ExtractorEvent::get_hash().do_hash((const unsigned char*)flow->key, 0);
+            : ExtractorEvent::get_hash().do_hash(
+                reinterpret_cast<const unsigned char*>(flow->key), 0);
     }
 
     template<typename T, class... Context>
-    void log(const T& fields, Context... context)
+    static void log(const T& fields, Context... context)
     {
         for (const auto& f : fields)
             logger->add_field(f.name, f.get(context...));
     }
 
-    void log(const std::vector<StrField>& fields, DataEvent* event, Flow* flow, bool strict)
+    static void log(const std::vector<StrField>& fields, DataEvent* event, Flow* flow, bool strict)
     {
         for (const auto& f : fields)
         {
@@ -165,7 +166,7 @@ protected:
     }
 
     template<class T, class U, class V>
-    bool append(T& cont, const U& map, const V& key)
+    static bool append(T& cont, const U& map, const V& key)
     {
         auto it = map.find(key);
         if (it != map.end())

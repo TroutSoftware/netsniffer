@@ -144,10 +144,10 @@ struct fd_session_t
     uint32_t ole_data_len;
     bool vba_analysis;
 
-    void get_ole_data(uint8_t*& ole_data_ptr, uint32_t& ole_data_len)
+    void get_ole_data(uint8_t*& data_ptr, uint32_t& data_len)
     {
-        ole_data_ptr = this->ole_data_ptr;
-        ole_data_len = this->ole_data_len;
+        data_ptr = ole_data_ptr;
+        data_len = ole_data_len;
     }
 
     void ole_data_reset()
@@ -184,6 +184,7 @@ struct fd_session_t
 /* Inline Functions */
 
 /* If available, look at the next available byte in the input queue */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool Peek_1(fd_session_t* SessionPtr, uint8_t* c)
 {
     if ( (SessionPtr->Next_In != nullptr) && (SessionPtr->Avail_In > 0) )
@@ -196,6 +197,7 @@ inline bool Peek_1(fd_session_t* SessionPtr, uint8_t* c)
 }
 
 /* If available, get a byte from the input queue */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool Get_1(fd_session_t* SessionPtr, uint8_t* c)
 {
     if ( (SessionPtr->Next_In != nullptr) && (SessionPtr->Avail_In > 0) )
@@ -211,6 +213,7 @@ inline bool Get_1(fd_session_t* SessionPtr, uint8_t* c)
 
 /* If available, get N bytes from the input queue.  All N must be
    available for this call to succeed. */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool Get_N(fd_session_t* SessionPtr, const uint8_t** c, uint32_t N)
 {
     if ( (SessionPtr->Next_In != nullptr) && (SessionPtr->Avail_In >= N) )
@@ -226,6 +229,7 @@ inline bool Get_N(fd_session_t* SessionPtr, const uint8_t** c, uint32_t N)
 }
 
 /* If there's room in the output queue, put one byte. */
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 inline bool Put_1(fd_session_t* SessionPtr, uint8_t c)
 {
     if ( (SessionPtr->Next_Out != nullptr) && (SessionPtr->Avail_Out > 0) )
@@ -323,4 +327,3 @@ SO_PUBLIC void File_Decomp_Free(fd_session_t*);
 SO_PUBLIC void File_Decomp_Alert(fd_session_t*, int Event);
 }
 #endif
-

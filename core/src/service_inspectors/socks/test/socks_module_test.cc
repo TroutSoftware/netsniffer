@@ -43,8 +43,8 @@ unsigned get_instance_id()
 unsigned ThreadConfig::get_instance_max() { return 1; }
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 // THREAD_LOCAL variables that socks_module.cc references
 THREAD_LOCAL ProfileStats socksPerfStats;
@@ -137,7 +137,7 @@ TEST(socks5_module_test, peg_counters_available)
 
 TEST(socks5_module_test, all_stats_peg_mapping)
 {
-    PegCount* counts = mod->get_counts();
+    const PegCount* counts = mod->get_counts();
     CHECK(counts != nullptr);
     
     // Set all stats to unique values and verify peg index mapping
@@ -156,7 +156,8 @@ TEST(socks5_module_test, all_stats_peg_mapping)
     socks_stats.udp_expectations_created = 13;
     socks_stats.udp_packets = 14;
     socks_stats.udp_frags = 15;
-    
+    socks_stats.aborted_handshakes = 16;
+
     // Verify all peg indices map correctly
     CHECK_EQUAL(1, counts[SOCKS_PEG_SESSIONS]);
     CHECK_EQUAL(2, counts[SOCKS_PEG_CONCURRENT_SESSIONS]);
@@ -173,6 +174,7 @@ TEST(socks5_module_test, all_stats_peg_mapping)
     CHECK_EQUAL(13, counts[SOCKS_PEG_UDP_EXPECTATIONS_CREATED]);
     CHECK_EQUAL(14, counts[SOCKS_PEG_UDP_PACKETS]);
     CHECK_EQUAL(15, counts[SOCKS_PEG_UDP_FRAGS]);
+    CHECK_EQUAL(16, counts[SOCKS_PEG_ABORTED_HANDSHAKES]);
 }
 
 TEST(socks5_module_test, basic_functionality)

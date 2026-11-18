@@ -1,3 +1,7 @@
+## 2026-11-18
+
+- Merged with version 3.13.2.0 from https://github.com/snort3/snort3
+
 ## 2026-10-26
 
 Added #include <cerrno> to src/main/alt_signal_stack.h

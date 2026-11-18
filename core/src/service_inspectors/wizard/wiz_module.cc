@@ -281,9 +281,9 @@ bool WizardModule::end(const char* fqn, int idx, SnortConfig*)
     return true;
 }
 
-MagicBook* WizardModule::get_book(bool c2s, bool hex)
+MagicBook* WizardModule::get_book(bool client_to_server, bool hex)
 {
-    int k = c2s ? 1 : 0;
+    int k = client_to_server ? 1 : 0;
     k |= (hex ? 2 : 0);
 
     MagicBook* b = nullptr;
@@ -326,5 +326,4 @@ const PegInfo* WizardModule::get_pegs() const
 { return wiz_pegs; }
 
 PegCount* WizardModule::get_counts() const
-{ return (PegCount*)&tstats; }
-
+{ return reinterpret_cast<PegCount*>(&tstats); }

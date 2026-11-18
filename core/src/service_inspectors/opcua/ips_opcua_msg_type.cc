@@ -125,13 +125,12 @@ bool OpcuaMsgTypeOption::operator==(const IpsOption& ips) const
         return false;
     }
 
-    const OpcuaMsgTypeOption& rhs = (const OpcuaMsgTypeOption&) ips;
+    const OpcuaMsgTypeOption& rhs = static_cast<const OpcuaMsgTypeOption&>(ips);
     return (msg_type == rhs.msg_type);
 }
 
 IpsOption::EvalStatus OpcuaMsgTypeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(opcua_msg_type_prof);
 
     if ( !p->flow || !p->is_full_pdu() )
@@ -139,7 +138,8 @@ IpsOption::EvalStatus OpcuaMsgTypeOption::eval(Cursor&, Packet* p)
         return NO_MATCH;
     }
 
-    OpcuaFlowData* opcuafd = (OpcuaFlowData*) p->flow->get_flow_data(OpcuaFlowData::inspector_id);
+    OpcuaFlowData* opcuafd = static_cast<OpcuaFlowData*>(
+        p->flow->get_flow_data(OpcuaFlowData::inspector_id));
     if ( !opcuafd )
     {
         return NO_MATCH;
@@ -240,9 +240,10 @@ static void mod_dtor(Module* m)
     delete m;
 }
 
+// cppcheck-suppress constParameterCallback
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    const OpcuaMsgTypeModule* mod = (const OpcuaMsgTypeModule*) m;
+    const OpcuaMsgTypeModule* mod = static_cast<const OpcuaMsgTypeModule*>(m);
     return new OpcuaMsgTypeOption(mod->msg_type);
 }
 
@@ -278,4 +279,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_opcua_msg_type = &ips_api.base;
-

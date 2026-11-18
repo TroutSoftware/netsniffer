@@ -55,9 +55,11 @@ THREAD_LOCAL ProfileStats dce2_tcp_pstat_main;
 unsigned Dce2TcpFlowData::inspector_id = 0;
 unsigned Dce2Tcp::pub_id = 0;
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 DCE2_TcpSsnData* get_dce2_tcp_session_data(Flow* flow)
 {
-    Dce2TcpFlowData* fd = (Dce2TcpFlowData*)flow->get_flow_data(Dce2TcpFlowData::inspector_id);
+    Dce2TcpFlowData* fd = static_cast<Dce2TcpFlowData*>(
+        flow->get_flow_data(Dce2TcpFlowData::inspector_id));
 
     // check whether this session was expected and mark it as realized
     if (fd && fd->state == DCE2_TCP_FLOW__EXPECTED)
@@ -82,9 +84,12 @@ static DCE2_TcpSsnData* dce2_create_new_tcp_session(Packet* p, dce2TcpProtoConf*
 {
     DCE2_TcpSsnData* dce2_tcp_sess = set_new_dce2_tcp_session(p);
 
+    // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
     if ( dce2_tcp_sess )
     {
         DCE2_CoInitTracker(&dce2_tcp_sess->co_tracker);
+        DCE2_CoConfigureTracker(&dce2_tcp_sess->co_tracker, &dce2_tcp_sess->retained_co_seg_bytes,
+            DCE2_CO_SEGMENTATION_RETAIN_LIMIT);
         DCE2_ResetRopts(&dce2_tcp_sess->sd, p);
 
         dce2_tcp_stats.tcp_sessions++;
@@ -134,7 +139,6 @@ void Dce2Tcp::show(const SnortConfig*) const
 void Dce2Tcp::eval(Packet* p)
 {
     DCE2_TcpSsnData* dce2_tcp_sess;
-    // cppcheck-suppress unreadVariable
     Profile profile(dce2_tcp_pstat_main);
 
     assert(p->has_tcp_data());
@@ -190,7 +194,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* dce2_tcp_ctor(Module* m)
 {
-    Dce2TcpModule* mod = (Dce2TcpModule*)m;
+    Dce2TcpModule* mod = static_cast<Dce2TcpModule*>(m);
     dce2TcpProtoConf config;
     mod->get_data(config);
     return new Dce2Tcp(config);
@@ -242,4 +246,3 @@ const InspectApi dce2_tcp_api =
     nullptr, // ssn
     nullptr  // reset
 };
-

@@ -44,29 +44,37 @@ static int g_test_asn1_len = 0;
 static char g_mock_mem[64];
 
 typedef struct X509_name_entry_st X509_NAME_ENTRY;
-X509_NAME *X509_get_subject_name(const X509 *a) 
-{ return g_test_asn1_data ? (X509_NAME*)g_mock_mem : nullptr; }
-X509_NAME *X509_get_issuer_name(const X509 *a) { return nullptr; }
+using X509_name_ret_t = decltype(X509_get_subject_name(std::declval<const X509*>()));
+X509_name_ret_t X509_get_subject_name(const X509 *a)
+{ return g_test_asn1_data ? reinterpret_cast<X509_name_ret_t>(g_mock_mem) : nullptr; }
+X509_name_ret_t X509_get_issuer_name(const X509 *a) { return nullptr; }
+// cppcheck-suppress constParameterPointer ; must match the OpenSSL API
 void X509_free(X509* a) { }
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
+// cppcheck-suppress constParameterPointer ; must match the OpenSSL API
 int X509_NAME_get_index_by_NID(X509_NAME *name, int nid, int lastpos)
 #else
 int X509_NAME_get_index_by_NID(const X509_NAME *name, int nid, int lastpos)
 #endif
 { return g_test_asn1_data ? 0 : -1; }
-X509_NAME_ENTRY *X509_NAME_get_entry(const X509_NAME *name, int loc) 
-{ return g_test_asn1_data ? (X509_NAME_ENTRY*)(g_mock_mem + 16) : nullptr; }
-ASN1_STRING *X509_NAME_ENTRY_get_data(const X509_NAME_ENTRY *ne) 
-{ return g_test_asn1_data ? (ASN1_STRING*)(g_mock_mem + 32) : nullptr; }
+using X509_name_entry_ret_t = decltype(X509_NAME_get_entry(std::declval<const X509_NAME*>(), 0));
+X509_name_entry_ret_t X509_NAME_get_entry(const X509_NAME *name, int loc)
+{ return g_test_asn1_data ? reinterpret_cast<X509_name_entry_ret_t>(g_mock_mem + 16) : nullptr; }
+using X509_name_entry_data_ret_t = decltype(X509_NAME_ENTRY_get_data(std::declval<const X509_NAME_ENTRY*>()));
+X509_name_entry_data_ret_t X509_NAME_ENTRY_get_data(const X509_NAME_ENTRY *ne)
+{ return g_test_asn1_data ? reinterpret_cast<X509_name_entry_data_ret_t>(g_mock_mem + 32) : nullptr; }
 const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *x) 
 { return g_test_asn1_data; }
 X509* d2i_X509(X509 **a, const unsigned char **in, long len) 
-{ return g_test_asn1_data ? (X509*)(g_mock_mem + 48) : nullptr; }
+{ return g_test_asn1_data ? reinterpret_cast<X509*>(g_mock_mem + 48) : nullptr; }
 
+// cppcheck-suppress constParameterPointer ; must match the OpenSSL API
 int X509_NAME_print_ex(BIO *out, const X509_NAME *nm, int indent, unsigned long flags) { return 0; }
 BIO *BIO_new(const BIO_METHOD *type) { return nullptr; }
+// cppcheck-suppress constParameterPointer ; must match the OpenSSL API
 int BIO_free(BIO *a) { return 0; }
+// cppcheck-suppress constParameterPointer ; must match the OpenSSL API
 long BIO_ctrl(BIO *bp, int cmd, long larg, void *parg) { return 0; }
 const BIO_METHOD *BIO_s_mem(void) { return nullptr; }
 int ASN1_STRING_length(const ASN1_STRING *x) { return g_test_asn1_len; }
@@ -242,7 +250,7 @@ TEST(ssl_protocol_tests, ssl_alert_rec_zero_size)
 
 TEST(ssl_protocol_tests, ssl_cert_common_name_parsing)
 {
-    uint8_t cn_data[4] = { 'T', 'E', 'S', 'T' };
+    const uint8_t cn_data[4] = { 'T', 'E', 'S', 'T' };
     
     g_test_asn1_data = cn_data;
     g_test_asn1_len = 4;
@@ -284,4 +292,3 @@ int main(int argc, char** argv)
 {
     return CommandLineTestRunner::RunAllTests(argc, argv);
 }
-

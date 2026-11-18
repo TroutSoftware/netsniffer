@@ -25,7 +25,6 @@
 
 #include "service_inspectors/http2_inspect/http2_flow_data.h"
 
-#include "http_cache_data.h"
 #include "http_context_data.h"
 #include "http_field_buffer.h"
 #include "http_common.h"
@@ -50,7 +49,7 @@ using namespace snort;
 
 const Field& HttpMsgSection::get_tmp_buffer(const HttpBufferInfo& buf)
 {
-    return get_http_tmp_buffer(get_cache_data(), buf, this);
+    return get_http_tmp_buffer(buf, this);
 }
 
 HttpMsgSection::HttpMsgSection(const uint8_t* buffer, const uint16_t buf_size,
@@ -69,6 +68,7 @@ HttpMsgSection::HttpMsgSection(const uint8_t* buffer, const uint16_t buf_size,
     tcp_close(session_data->tcp_close[source_id])
 {
     assert((source_id == SRC_CLIENT) || (source_id == SRC_SERVER));
+    assert(transaction != nullptr);
 
     if (flow->stream_intf)
     {
@@ -252,7 +252,11 @@ const Field& HttpMsgSection::get_classic_buffer(const HttpBufferInfo& buf)
             if (buf.sub_id == 0)
                 return decoded_uri;
 
-            const Field& dp = get_cache_data().decoded_path;
+            const HttpTmpBufferCache* const tmp_cache = HttpContextData::find_tmp_buffers();
+            if (!tmp_cache)
+                return Field::FIELD_NULL;
+
+            const Field& dp = tmp_cache->decoded_path;
             return (dp.length() >= 0) ? dp : Field::FIELD_NULL;
         }
         const bool raw = (buf.type == HTTP_BUFFER_RAW_URI);
@@ -283,7 +287,7 @@ const Field& HttpMsgSection::get_classic_buffer(const HttpBufferInfo& buf)
     }
     case HTTP_BUFFER_VERSION:
     {
-        HttpMsgStart* start = (buffer_side == SRC_CLIENT) ?
+        const HttpMsgStart* start = (buffer_side == SRC_CLIENT) ?
             (HttpMsgStart*)request : (HttpMsgStart*)status;
         return (start != nullptr) ? start->get_version() : Field::FIELD_NULL;
     }
@@ -377,7 +381,7 @@ const Field& HttpMsgSection::get_param_buffer(Cursor& c, const HttpParam& param)
         return Field::FIELD_NULL;
 
     // get data stored on the cursor
-    HttpCursorData* cd = (HttpCursorData*)c.get_data(HttpCursorData::id);
+    HttpCursorData* cd = static_cast<HttpCursorData*>(c.get_data(HttpCursorData::id));
 
     if (!cd)
     {
@@ -394,7 +398,7 @@ const Field& HttpMsgSection::get_param_buffer(Cursor& c, const HttpParam& param)
 
     while (query_index < num_query_params)
     {
-        KeyValue* fields = query_kv[query_index];
+        const KeyValue* fields = query_kv[query_index];
 
         const Field& key = fields->key;
         const Field& value = fields->value;
@@ -410,7 +414,7 @@ const Field& HttpMsgSection::get_param_buffer(Cursor& c, const HttpParam& param)
 
     while (body_index < num_body_params)
     {
-        KeyValue* fields = body_kv[body_index];
+        const KeyValue* fields = body_kv[body_index];
 
         const Field& key = fields->key;
         const Field& value = fields->value;
@@ -471,7 +475,7 @@ VersionId HttpMsgSection::get_version_id(const HttpBufferInfo& buf) const
 {
     // buffer_side replaces source_id for rule options that support the request option
     const SourceId buffer_side = (buf.form & FORM_REQUEST) ? SRC_CLIENT : source_id;
-    HttpMsgStart* start = (buffer_side == SRC_CLIENT) ?
+    const HttpMsgStart* start = (buffer_side == SRC_CLIENT) ?
         (HttpMsgStart*)request : (HttpMsgStart*)status;
 
     return (start != nullptr) ? start->get_version_id() : VERS__NOT_PRESENT;
@@ -491,7 +495,7 @@ void HttpMsgSection::get_related_sections()
 
 void HttpMsgSection::clear()
 {
-    clear_tmp_fields();
+    HttpContextData::clear_tmp_buffers();
     transaction->clear_section();
     cleared = true;
 }
@@ -524,7 +528,7 @@ void HttpMsgSection::print_section_wrapup(FILE* output) const
     fprintf(output, "\n");
 }
 
-void HttpMsgSection::print_peg_counts(FILE* output) const
+void HttpMsgSection::print_peg_counts(FILE* output)
 {
     const PegInfo* const peg_names = HttpModule::get_peg_names();
     const PegCount* const peg_counts = HttpModule::get_peg_counts();

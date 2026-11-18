@@ -112,6 +112,7 @@ static size_t TextLog_Size(FILE* file)
 
 namespace snort
 {
+// cppcheck-suppress constParameterPointer ; preserve the exported declaration and ABI
 int TextLog_Avail(TextLog* const txt)
 {
     return txt->maxBuf - txt->pos - 1;
@@ -137,6 +138,7 @@ TextLog* TextLog_Init(
         maxBuf = MIN_BUF;
 
     txt = (TextLog*)snort_alloc(sizeof(TextLog)+maxBuf);
+    // cppcheck-suppress variableScope ; name points into this storage until it is duplicated
     std::string fname;
 
     if ( strcasecmp(name, "stdout") )
@@ -370,4 +372,3 @@ static int roll_log_file(const char* oldname)
 
     return errno;
 }
-

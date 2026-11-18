@@ -17,11 +17,14 @@
 //--------------------------------------------------------------------------
 // distill_verdict_stubs.h author Ron Dempster <rdempste@cisco.com>
 
+#include <cstring>
+
 #include "detection/context_switcher.h"
 #include "detection/detection_buf.h"
 #include "detection/detection_engine.h"
 #include "detection/ips_context.h"
 #include "detection/tag.h"
+#include "file_api/file_capture.h"
 #include "file_api/file_service.h"
 #include "filters/detection_filter.h"
 #include "filters/rate_filter.h"
@@ -81,7 +84,6 @@ void Swapper::apply(Analyzer&) { }
 Swapper::~Swapper() = default;
 void OopsHandler::tinit() { }
 void OopsHandler::tterm() { }
-void OopsHandler::set_current_message(DAQ_Msg_h, snort::SFDAQInstance*) { }
 uint16_t get_run_num() { return 0; }
 void set_run_num(uint16_t) { }
 void set_instance_id(unsigned) { }
@@ -94,6 +96,7 @@ void ContextSwitcher::start() { }
 void InitTag() { }
 void CleanupTag() { }
 void RateFilter_Cleanup() { }
+void RateFilter_SessionRelease(snort::Flow&) { }
 int sfthreshold_alloc(unsigned int, unsigned int) { return -1; }
 void sfthreshold_reset() { }
 void sfthreshold_free() { }
@@ -117,7 +120,7 @@ void EventManager::reload_outputs() { }
 void PluginManager::thread_init() { }
 void PluginManager::thread_reinit(const snort::SnortConfig*) { }
 void PluginManager::thread_term(bool) { }
-int SFRF_Alloc(unsigned int) { return -1; }
+void SFRF_Alloc(unsigned int) { }
 void packet_time_update(const struct timeval*) { }
 void main_poke(unsigned) { }
 void set_default_policy(const snort::SnortConfig*) { }
@@ -142,7 +145,7 @@ MemoryContext::MemoryContext(MemoryTracker&) : saved(nullptr) { }
 MemoryContext::~MemoryContext() = default;
 Packet::Packet(bool)
 {
-    memset((char*) this , 0, sizeof(*this));
+    std::memset(this, 0, sizeof(*this));
     ip_proto_next = IpProtocol::PROTO_NOT_SET;
     packet_flags = PKT_FROM_CLIENT;
 }
@@ -210,6 +213,7 @@ const uint8_t* PacketManager::encode_response(TcpResponse, EncodeFlags, const Pa
 uint16_t PacketManager::encode_get_max_payload(const Packet*) { return 0; }
 const uint8_t* PacketManager::encode_reject(UnreachResponse, EncodeFlags, const Packet*, uint32_t&)
 { return nullptr; }
+void FileCapture::flush() { }
 void FileService::thread_init() { }
 void FileService::thread_term() { }
 void ErrorMessage(const char*,...) { }
@@ -232,14 +236,18 @@ bool Stream::set_packet_action_to_hold(Packet*) { return false; }
 void Stream::init_active_response(const Packet*, Flow*) { }
 void Stream::drop_flow(const Packet* ) { }
 void Stream::block_flow(const Packet*) { }
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void Stream::daq_log_start() { }
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void Stream::daq_log_end(Packet*) { }
 IpsContext::IpsContext(unsigned) { }
 NetworkPolicy* get_default_network_policy(const snort::SnortConfig*) { return nullptr; }
 NetworkPolicy* get_network_policy() { return nullptr; }
 InspectionPolicy* get_inspection_policy() { return nullptr; }
 IpsPolicy* get_ips_policy() { return nullptr; }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 bool Flow::handle_allowlist() { return true; }
 FlowDataStore::~FlowDataStore() = default;
 void ThreadConfig::implement_thread_affinity(SThreadType, unsigned) { }
@@ -255,3 +263,15 @@ void memory::MemoryCap::thread_init() { }
 void memory::MemoryCap::thread_term() { }
 void memory::MemoryCap::free_space() { }
 
+#ifdef CRASH_MITIGATOR
+#include "mitigator/mitigator_module.h"
+#include "mitigator/mitigator_action_exception.h"
+namespace snort
+{
+THREAD_LOCAL MitigatorStats mitigator_stats;
+bool mitigator_disable() { return false; }
+void handle_block_action(Packet*, const MitigationActionException&) { }
+void handle_drop_action(Packet*, const MitigationActionException&) { }
+void finalize_mitigated_packet(Packet*, const MitigationActionException&) { }
+}
+#endif

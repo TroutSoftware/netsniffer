@@ -75,7 +75,7 @@ struct RtTable
     void sfrt_flat_new(char table_flat_type, char ip_type, long data_size, uint32_t mem_cap);
     GENERIC sfrt_flat_lookup(const snort::SfIp*);
 
-    return_codes sfrt_flat_insert(snort::SfCidr* cidr, unsigned char len, INFO ptr, int behavior,
+    return_codes sfrt_flat_insert(const snort::SfCidr* cidr, unsigned char len, INFO ptr, int behavior,
         updateEntryInfoFunc, void* update_entry_info_data);
     unsigned sfrt_flat_usage() const;
     unsigned sfrt_flat_num_entries() const;
@@ -107,6 +107,7 @@ protected:
     MEM_OFFSET segment_snort_alloc(size_t size);
     void segment_free(MEM_OFFSET)
     { }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     size_t segment_unusedmem() const
     { return unused_mem; }
     void* segment_basePtr() const
@@ -119,4 +120,3 @@ protected:
 };
 
 #endif
-

@@ -96,10 +96,11 @@ public:
     Status scan(Packet*, const uint8_t* data, uint32_t len,
         uint32_t flags, uint32_t* fp) override;
 
+    unsigned max(Flow*) override;
     bool is_paf() override { return true; }
 
 private:
-    void count_scan(const Flow* f)
+    static void count_scan(const Flow* f)
     {
         if ( f->pkt_type == PktType::TCP )
             ++tstats.tcp_scans;
@@ -107,7 +108,7 @@ private:
             ++tstats.user_scans;
     }
 
-    void count_hit(const Flow* f)
+    static void count_hit(const Flow* f)
     {
         if ( f->pkt_type == PktType::TCP )
             ++tstats.tcp_hits;
@@ -115,7 +116,7 @@ private:
             ++tstats.user_hits;
     }
 
-    void count_miss(const Flow* f)
+    static void count_miss(const Flow* f)
     {
         if ( f->pkt_type == PktType::TCP )
             ++tstats.tcp_misses;
@@ -139,14 +140,14 @@ public:
 
     StreamSplitter* get_splitter(bool) override;
 
-    inline bool finished(Wand& w)
+    inline static bool finished(const Wand& w)
     { return !w.hex and !w.spell and w.curse_tracker.empty(); }
 
     void reset(Wand&, bool, MagicBook::MagicBook::ArcaneType);
 
     bool cast_spell(Wand&, Flow*, const uint8_t*, unsigned, uint16_t&);
-    bool spellbind(const MagicPage*&, Flow*, const uint8_t*, unsigned, const MagicPage*&);
-    bool cursebind(const vector<CurseServiceTracker>&, Flow*, const uint8_t*, unsigned);
+    static bool spellbind(const MagicPage*&, Flow*, const uint8_t*, unsigned, const MagicPage*&);
+    static bool cursebind(const vector<CurseServiceTracker>&, Flow*, const uint8_t*, unsigned);
 
 public:
     MagicBook* c2s_hexes;
@@ -185,11 +186,23 @@ MagicSplitter::~MagicSplitter()
         delete wand.curse_tracker[i].tracker;
 }
 
+unsigned MagicSplitter::max(Flow* flow)
+{
+    const unsigned max_pdu = StreamSplitter::max(flow);
+
+    // Preserve the normal PAF limit once Wizard selects a service so the queued startup
+    // bytes remain available for the assigned service splitter to rescan.
+    if ( !flow or flow->service )
+        return max_pdu;
+
+    return std::min<unsigned>(wizard->max_search_depth, max_pdu);
+}
+
 StreamSplitter::Status MagicSplitter::scan(
     Packet* pkt, const uint8_t* data, uint32_t len,
     uint32_t, uint32_t*)
 {
-    Profile profile(wizPerfStats);  // cppcheck-suppress unreadVariable
+    Profile profile(wizPerfStats);
     count_scan(pkt->flow);
 
     bytes_scanned += len;
@@ -293,7 +306,7 @@ void Wizard::reset(Wand& w, bool c2s, MagicBook::ArcaneType proto)
 
 void Wizard::eval(Packet* p)
 {
-    Profile profile(wizPerfStats);  // cppcheck-suppress unreadVariable
+    Profile profile(wizPerfStats);
 
     if ( !p->is_udp() )
         return;
@@ -396,7 +409,7 @@ static void mod_dtor(Module* m)
 
 static Inspector* wiz_ctor(Module* m)
 {
-    WizardModule* mod = (WizardModule*)m;
+    WizardModule* mod = static_cast<WizardModule*>(m);
     assert(mod);
     return new Wizard(mod);
 }
@@ -443,4 +456,3 @@ SO_PUBLIC const BaseApi* snort_plugins[] =
 #else
 const BaseApi* sin_wizard = &wiz_api.base;
 #endif
-

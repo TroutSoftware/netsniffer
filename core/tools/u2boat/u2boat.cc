@@ -27,6 +27,7 @@
 
 #include <cctype>
 #include <cerrno>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 
@@ -41,14 +42,14 @@
 #define MAX_U2RECORD_DATA_LENGTH 65536
 
 static int GetRecord(FILE* input, u2record* rec);
-static int PcapConversion(u2record* rec, pcap_dumper_t* dumper);
+static int PcapConversion(const u2record* rec, pcap_dumper_t* dumper);
 
 static int ConvertLog(FILE* input, pcap_dumper_t* dumper, const char* format)
 {
     u2record tmp_record;
 
     /* Determine conversion function */
-    int (* ConvertRecord)(u2record*, pcap_dumper_t*) = nullptr;
+    int (* ConvertRecord)(const u2record*, pcap_dumper_t*) = nullptr;
 
     /* This will become an if/else series once more formats are supported.
      * Callbacks are used so that this comparison only needs to happen once. */
@@ -98,27 +99,42 @@ static int ConvertLog(FILE* input, pcap_dumper_t* dumper, const char* format)
 }
 
 /* Convert a unified2 packet record to pcap format, then dump */
-static int PcapConversion(u2record* rec, pcap_dumper_t* dumper)
+static int PcapConversion(const u2record* rec, pcap_dumper_t* dumper)
 {
-    Serial_Unified2Packet packet;
+    Serial_Unified2Packet packet = {};
     struct pcap_pkthdr pcap_hdr;
-    uint32_t* field;
     uint8_t* pcap_data;
 
     /* Ignore IDS Events. We are only interested in Packets. */
     if (rec->type != UNIFIED2_PACKET)
         return SUCCESS;
 
+    constexpr size_t packet_data_offset = offsetof(Serial_Unified2Packet, packet_data);
+    if (rec->length < packet_data_offset)
+    {
+        fprintf(stderr, "Error: truncated unified2 packet header.\n");
+        return FAILURE;
+    }
+
     /* Fill out the Serial_Unified2Packet */
-    memcpy(&packet, rec->data, sizeof(Serial_Unified2Packet));
+    memcpy(&packet, rec->data, packet_data_offset);
 
     /* Unified 2 records are always stored in network order.
      * Convert all fields except packet data to host order */
-    field = (uint32_t*)&packet;
-    while (field < (uint32_t*)packet.packet_data)
+    static_assert(packet_data_offset % sizeof(uint32_t) == 0);
+    auto* packet_bytes = reinterpret_cast<uint8_t*>(&packet);
+    for (size_t offset = 0; offset < packet_data_offset; offset += sizeof(uint32_t))
     {
-        *field = ntohl(*field);
-        field++;
+        uint32_t value;
+        std::memcpy(&value, packet_bytes + offset, sizeof(value));
+        value = ntohl(value);
+        std::memcpy(packet_bytes + offset, &value, sizeof(value));
+    }
+
+    if (packet.packet_length > rec->length - packet_data_offset)
+    {
+        fprintf(stderr, "Error: truncated unified2 packet payload.\n");
+        return FAILURE;
     }
 
     /* Create a pcap packet header */
@@ -128,8 +144,8 @@ static int PcapConversion(u2record* rec, pcap_dumper_t* dumper)
     pcap_hdr.len = packet.packet_length;
 
     /* Write to the pcap file */
-    pcap_data = rec->data + sizeof(Serial_Unified2Packet) - 4;
-    pcap_dump((u_char*)dumper, &pcap_hdr, pcap_data);
+    pcap_data = rec->data + packet_data_offset;
+    pcap_dump(reinterpret_cast<u_char*>(dumper), &pcap_hdr, pcap_data);
 
     return SUCCESS;
 }
@@ -192,7 +208,7 @@ static int GetRecord(FILE* input, u2record* rec)
 
 int main(int argc, char* argv[])
 {
-    char* input_filename = nullptr;
+    const char* input_filename = nullptr;
     char* output_filename = nullptr;
     const char* output_type = nullptr;
 
@@ -200,7 +216,7 @@ int main(int argc, char* argv[])
     pcap_t* pcap = nullptr;
     pcap_dumper_t* dumper = nullptr;
 
-    int c, errnum;
+    int c;
     opterr = 0;
 
     /* Use Getopt to parse options */
@@ -283,7 +299,7 @@ int main(int argc, char* argv[])
 
     if (fclose(input_file) != 0)
     {
-        errnum = errno;
+        const int errnum = errno;
         fprintf(stderr, "Error closing input: %s\n", strerror(errnum));
     }
     pcap_dump_close(dumper);
@@ -291,4 +307,3 @@ int main(int argc, char* argv[])
 
     return 0;
 }
-

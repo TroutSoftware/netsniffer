@@ -134,7 +134,7 @@ static void LogTcpdumpSingle(
     pcaphdr.ts = p->pkth->ts;
     pcaphdr.caplen = p->pktlen;
     pcaphdr.len = p->pkth->pktlen;
-    pcap_dump((uint8_t*)context.dumpd, &pcaphdr, p->pkt);
+    pcap_dump(reinterpret_cast<uint8_t*>(context.dumpd), &pcaphdr, p->pkt);
     context.size += dumpSize;
 
     if (!p->context->conf->line_buffered_logging())  // FIXIT-L misnomer
@@ -180,7 +180,7 @@ static void TcpdumpInitLogFile(LtdConfig*, bool no_timestamp)
     if ( !pcap )
         FatalError("%s: can't get pcap context\n", S_NAME);
 
-    context.dumpd = pcap ? pcap_dump_open(pcap, file.c_str()) : nullptr;
+    context.dumpd = pcap_dump_open(pcap, file.c_str());
 
     if (context.dumpd == nullptr)
     {
@@ -243,7 +243,7 @@ static void SpoLogTcpdumpCleanup(LtdConfig*)
 class PcapLogger : public Logger
 {
 public:
-    PcapLogger(TcpdumpModule*);
+    PcapLogger(const TcpdumpModule*);
     ~PcapLogger() override;
 
     void open() override;
@@ -256,7 +256,7 @@ private:
     LtdConfig* config;
 };
 
-PcapLogger::PcapLogger(TcpdumpModule* m)
+PcapLogger::PcapLogger(const TcpdumpModule* m)
 {
     config = new LtdConfig;
     config->limit = m->limit;
@@ -316,7 +316,7 @@ static void mod_dtor(Module* m)
 { delete m; }
 
 static Logger* tcpdump_ctor(Module* mod)
-{ return new PcapLogger((TcpdumpModule*)mod); }
+{ return new PcapLogger(static_cast<TcpdumpModule*>(mod)); }
 
 static void tcpdump_dtor(Logger* p)
 { delete p; }
@@ -349,4 +349,3 @@ const BaseApi* log_pcap[] =
     &tcpdump_api.base,
     nullptr
 };
-

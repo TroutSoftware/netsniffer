@@ -43,6 +43,7 @@ public:
     { snort::LiteralSearch::cleanup(search_handle); }
 
     snort::ProfileStats* get_profile() const override { return &http_param_ps; }
+    // cppcheck-suppress duplInheritedMember ; derived member intentionally specializes the inherited interface
     static void mod_dtor(snort::Module* m) { delete m; }
     bool begin(const char*, int, snort::SnortConfig*) override;
     bool set(const char*, snort::Value&, snort::SnortConfig*) override;
@@ -68,7 +69,7 @@ public:
     bool operator==(const snort::IpsOption& ips) const override;
 
     static IpsOption* opt_ctor(snort::Module* m, IpsInfo&)
-    { return new HttpParamIpsOption((HttpParamRuleOptModule*)m); }
+    { return new HttpParamIpsOption(static_cast<HttpParamRuleOptModule*>(m)); }
 
     static void opt_dtor(snort::IpsOption* p) { delete p; }
     bool retry(Cursor&) override;

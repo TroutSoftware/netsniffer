@@ -70,13 +70,12 @@ bool TcpSeqOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const TcpSeqOption& rhs = (const TcpSeqOption&)ips;
+    const TcpSeqOption& rhs = static_cast<const TcpSeqOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus TcpSeqOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(tcpSeqPerfStats);
 
     if (!p->ptrs.tcph)
@@ -151,7 +150,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* seq_ctor(Module* p, IpsInfo&)
 {
-    SeqModule* m = (SeqModule*)p;
+    const SeqModule* m = static_cast<SeqModule*>(p);
     return new TcpSeqOption(m->data);
 }
 
@@ -194,4 +193,3 @@ const BaseApi* ips_seq[] =
     &seq_api.base,
     nullptr
 };
-

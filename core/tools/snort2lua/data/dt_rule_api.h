@@ -43,8 +43,8 @@ public:
 
     // miscellaneous
     static void set_remark(const char* s);
-    bool failed_conversions() const;
-    std::size_t num_errors() const;
+    static bool failed_conversions();
+    static std::size_t num_errors();
     bool empty() const;
     void reset_state();
     void clear();
@@ -72,14 +72,14 @@ public:
     void add_suboption(const std::string& keyword);
     void add_suboption(const std::string& keyword, const std::string& val);
     void reset_sticky();
-    void set_curr_options_buffer(const std::string& buffer, bool add_option=false);
+    void set_curr_options_buffer(const std::string& buffer, bool should_add_option=false);
     void set_rule_old_action(const std::string&);
     std::string& get_rule_old_action();
 
     void add_comment(const std::string& comment);
     void make_rule_a_comment();
     bool enable_addr_anomaly_detection();
-    void bad_rule(std::istringstream& stream, const std::string& bad_option);
+    void bad_rule(const std::istringstream& stream, const std::string& bad_option);
     void old_http_rule();
     bool is_old_http_rule();
     void resolve_pcre_buffer_options();
@@ -99,4 +99,3 @@ private:
 };
 
 #endif
-

@@ -39,7 +39,7 @@ void EveCaPatternMatchers::add_eve_ca_pattern(AppId app_id, const string& patter
     uint8_t confidence, const string& detector, bool literal)
 {
     auto match = find_if(eve_ca_load_list.begin(), eve_ca_load_list.end(),
-        [pattern_str, literal] (EveCaPattern* eve_ca)
+        [pattern_str, literal] (const EveCaPattern* eve_ca)
         { return (eve_ca->pattern == pattern_str) and (eve_ca->literal == literal); });
 
     if (match != eve_ca_load_list.end())
@@ -116,7 +116,8 @@ void EveCaPatternMatchers::finalize_patterns()
 
         #ifdef REG_TEST
         AppIdInspector* inspector =
-            (AppIdInspector*)InspectorManager::get_inspector(MOD_NAME, MOD_USAGE);
+            static_cast<AppIdInspector*>(InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
+        // cppcheck-suppress knownConditionTrueFalse ; inspector and logging flag vary in regression builds
         if (inspector and inspector->get_ctxt().config.log_eve_process_client_mappings)
             APPID_LOG(nullptr, TRACE_INFO_LEVEL, "Adding EVE Client App pattern %d %s %d\n",
                 p->app_id, p->pattern.c_str(), p->confidence);

@@ -20,7 +20,10 @@
 #ifndef TRANSACTION_H
 #define TRANSACTION_H
 
+#include <memory>
+
 #include "http_common.h"
+#include "http_context_data.h"
 #include "http_enum.h"
 #include "http_event.h"
 #include "http_flow_data.h"
@@ -57,6 +60,32 @@ public:
     void set_body(HttpMsgBody* latest_body);
 
     HttpInfractions* get_infractions(HttpCommon::SourceId);
+
+    void set_pending_size_298(uint32_t size)
+    {
+        if (!pending_size_report)
+            pending_size_report = std::make_unique<HttpPendingSizeReport>();
+        pending_size_report->has_298 = true;
+        pending_size_report->size_298 = size;
+    }
+    bool has_pending_size_298() const
+    { return pending_size_report and pending_size_report->has_298; }
+    uint32_t get_pending_size_298() const { return pending_size_report->size_298; }
+
+    // 298 spans sections, so this returns true to exactly one caller per transaction
+    bool claim_size_298_count()
+    { const bool first = !counted_298; counted_298 = true; return first; }
+
+    void set_pending_length_299(uint32_t length)
+    {
+        if (!pending_size_report)
+            pending_size_report = std::make_unique<HttpPendingSizeReport>();
+        pending_size_report->has_299 = true;
+        pending_size_report->length_299 = length;
+    }
+    bool has_pending_length_299() const
+    { return pending_size_report and pending_size_report->has_299; }
+    uint32_t get_pending_length_299() const { return pending_size_report->length_299; }
 
     void set_one_hundred_response();
     bool final_response() const
@@ -99,16 +128,18 @@ public:
     void clear_section();
     bool is_clear() const { return active_sections == 0; }
     void garbage_collect();
+    int64_t get_hx_stream_id() const;
 
     HttpTransaction* next = nullptr;
 
 private:
+#ifdef UNIT_TEST
+    friend class HttpUnitTestSetup;
+#endif
+
     HttpTransaction(HttpFlowData*, snort::Flow* const);
-    void archive_section(HttpMsgSection*, HttpMsgSection**);
     void archive_status(HttpMsgStatus*);
-    void archive_header(HttpMsgHeader*);
     void publish_end_of_transaction();
-    void append_separator_if_needed(HttpCommon::SourceId);
 
     HttpFlowData* const session_data;
 
@@ -120,8 +151,10 @@ private:
     HttpMsgTrailer* trailer[2] = { nullptr, nullptr };
     HttpMsgBody* body_list = nullptr;
     HttpMsgSection* archive_status_list = nullptr;
-    HttpMsgSection* archive_hdr_list = nullptr;
     HttpInfractions* infractions[2];
+
+    std::unique_ptr<HttpPendingSizeReport> pending_size_report;
+    bool counted_298 = false;
 
     enum class TransactionFlag : uint16_t
     {
@@ -166,6 +199,9 @@ private:
     uint64_t body_len[2] = { 0, 0 };
     std::string filename[2];
     std::string content_type[2];
+
+    static constexpr uint16_t MAX_ATTACHMENT_SIZE = 4096;
+    bool capped_attachment[2] = { false, false };
 
     // Estimates of how much memory http_inspect uses to process a transaction
     static const uint16_t small_things = 400; // minor memory costs not otherwise accounted for

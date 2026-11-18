@@ -36,7 +36,7 @@ void DceExpSsnManager::create_expected_session(const SfIp* ept_ip,
     uint16_t ept_port, const char* mod_name)
 {
     Packet* pkt = DetectionEngine::get_current_packet();
-    Dce2Tcp* inspector = (Dce2Tcp*)PigPen::get_inspector(mod_name, Module::INSPECT);
+    Dce2Tcp* inspector = static_cast<Dce2Tcp*>(PigPen::get_inspector(mod_name, Module::INSPECT));
     DceExpSsnManager& esm = inspector->get_esm();
 
     const SfIp* src_ip = pkt->ptrs.ip_api.get_dst();
@@ -68,6 +68,8 @@ int DceTcpExpSsnManager::create_expected_session_impl(Packet* pkt,
     fd->state = DCE2_TCP_FLOW__EXPECTED;
     memset(&fd->dce2_tcp_session, 0, sizeof(DCE2_TcpSsnData));
     DCE2_CoInitTracker(&fd->dce2_tcp_session.co_tracker);
+    DCE2_CoConfigureTracker(&fd->dce2_tcp_session.co_tracker,
+        &fd->dce2_tcp_session.retained_co_seg_bytes, DCE2_CO_SEGMENTATION_RETAIN_LIMIT);
     DCE2_ResetRopts(&fd->dce2_tcp_session.sd, pkt);
 
     fd->dce2_tcp_session.sd.trans = DCE2_TRANS_TYPE__TCP;
@@ -84,4 +86,3 @@ int DceTcpExpSsnManager::create_expected_session_impl(Packet* pkt,
 
     return 0;
 }
-

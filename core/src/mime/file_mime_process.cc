@@ -26,6 +26,8 @@
 
 #include "file_mime_process.h"
 
+#include <algorithm>
+
 #include "detection/detection_engine.h"
 #include "file_api/file_flows.h"
 #include "hash/hash_key_operations.h"
@@ -33,7 +35,6 @@
 #include "mime/file_mime_form_data.h"
 #include "search_engines/search_tool.h"
 #include "utils/util_cstring.h"
-#include <algorithm>
 
 using namespace snort;
 
@@ -142,6 +143,7 @@ static bool get_mime_eol(const uint8_t* ptr, const uint8_t* end,
  * @return response
  * @retval 1        commands caller to stop searching
  */
+// cppcheck-suppress constParameterCallback ; signature is fixed by the search callback API
 static int search_str_found(void* id, void*, int index, void*, void*)
 {
     int search_id = (int)(uintptr_t)id;
@@ -513,16 +515,22 @@ const uint8_t* MimeSession::process_mime_body(const uint8_t* ptr,
         partial_data_len = 0;
     }
 
-    assert(isFileEnd(position) or mime_boundary.boundary_search_len <= data_size);
+    constexpr decltype(data_size) max_tail = 4 + MAX_MIME_BOUNDARY_LEN + 4; // complete delimiter by RFC 2046
+    decltype(data_size) tail_len = mime_boundary.boundary_search_len;
+
+    if (tail_len > max_tail)
+        tail_len = max_tail;
+    if (tail_len > data_size)
+        tail_len = data_size;
 
     const uint8_t* attach_end = isFileEnd(position)
-        ? GetDataEnd(ptr, ptr + data_size) : ptr + data_size - mime_boundary.boundary_search_len;
+        ? GetDataEnd(ptr, ptr + data_size) : ptr + data_size - tail_len;
 
     if (!isFileEnd(position)
-        && mime_boundary.boundary_search_len && mime_boundary.boundary_state != MIME_PAF_BOUNDARY_UNKNOWN)
+        && tail_len && mime_boundary.boundary_state != MIME_PAF_BOUNDARY_UNKNOWN)
     {
         delete[] partial_data;
-        partial_data_len = mime_boundary.boundary_search_len;
+        partial_data_len = tail_len;
         partial_data = new uint8_t[partial_data_len];
         memcpy(partial_data, attach_end, partial_data_len);
 
@@ -762,8 +770,6 @@ const uint8_t* MimeSession::process_mime_data(Packet* p, const uint8_t* start,
     int data_size, bool upload, FilePosition position, AttachmentBuffer* attachment)
 {
     const uint8_t* attach_start = start;
-    const uint8_t* attach_end;
-
     const uint8_t* data_end_marker = start + data_size;
 
     if (attachment)
@@ -783,7 +789,7 @@ const uint8_t* MimeSession::process_mime_data(Packet* p, const uint8_t* start,
         // Found the boundary, start processing data
         if (process_mime_paf_data(&(mime_boundary),  *start))
         {
-            attach_end = start;
+            const uint8_t* attach_end = start;
             finalFilePosition(&position);
             process_mime_data_paf(p, attach_start, attach_end,
                 upload, position, attachment);

@@ -183,13 +183,12 @@ bool Iec104AsduFuncOption::operator==(const IpsOption& ips) const
         return false;
     }
 
-    const Iec104AsduFuncOption& rhs = (const Iec104AsduFuncOption&) ips;
+    const Iec104AsduFuncOption& rhs = static_cast<const Iec104AsduFuncOption&>(ips);
     return (func == rhs.func);
 }
 
 IpsOption::EvalStatus Iec104AsduFuncOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(iec104_asdu_func_prof);
 
     if (!p->flow)
@@ -203,7 +202,8 @@ IpsOption::EvalStatus Iec104AsduFuncOption::eval(Cursor&, Packet* p)
     }
 
     // check if the packet function matches the rule option function
-    Iec104FlowData* iec104fd = (Iec104FlowData*) p->flow->get_flow_data(Iec104FlowData::inspector_id);
+    const Iec104FlowData* iec104fd = static_cast<Iec104FlowData*>(
+        p->flow->get_flow_data(Iec104FlowData::inspector_id));
 
     // ASDU only occurs in APCI type I
     if (iec104fd and iec104fd->ssn_data.iec104_apci_type == IEC104_APCI_TYPE_I)
@@ -287,7 +287,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* opt_ctor(Module* m, IpsInfo&)
 {
-    Iec104AsduFuncModule* mod = (Iec104AsduFuncModule*) m;
+    const Iec104AsduFuncModule* mod = static_cast<Iec104AsduFuncModule*>(m);
     return new Iec104AsduFuncOption(mod->func);
 }
 
@@ -323,4 +323,3 @@ static const IpsApi ips_api =
 };
 
 const BaseApi* ips_iec104_asdu_func = &ips_api.base;
-

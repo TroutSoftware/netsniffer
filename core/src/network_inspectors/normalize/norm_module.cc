@@ -207,6 +207,7 @@ NormalizeModule::~NormalizeModule()
     for ( auto s : test_text )
         delete s;
 
+    test_text.clear();
     test_pegs.clear();
 }
 
@@ -344,7 +345,7 @@ bool NormalizeModule::begin(const char* fqn, int, SnortConfig*)
     return true;
 }
 
-void NormalizeModule::add_test_peg(const PegInfo& norm) const
+void NormalizeModule::add_test_peg(const PegInfo& norm)
 {
     PegInfo test;
 
@@ -360,6 +361,7 @@ void NormalizeModule::add_test_peg(const PegInfo& norm) const
 
     test.type = norm.type;
     test_pegs.emplace_back(test);
+    // cppcheck-suppress memleak ; test_text owns both strings until module teardown
 }
 
 const PegInfo* NormalizeModule::get_pegs() const

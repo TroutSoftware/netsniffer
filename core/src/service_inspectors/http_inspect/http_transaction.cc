@@ -21,11 +21,14 @@
 #include "config.h"
 #endif
 
+#include <string_view>
+
 #include "http_transaction.h"
 
 #include "pub_sub/http_transaction_end_event.h"
 
 #include "http_common.h"
+#include "http_context_data.h"
 #include "http_enum.h"
 #include "http_event.h"
 #include "http_inspect.h"
@@ -59,7 +62,8 @@ HttpTransaction::HttpTransaction(HttpFlowData* session_data_, snort::Flow* const
     infractions[0] = nullptr;
     infractions[1] = nullptr;
     HttpInspect* const hi = (session_data->is_for_httpx()) ?
-        (HttpInspect*)(flow->assistant_gadget) : (HttpInspect*)(flow->gadget);
+        static_cast<HttpInspect*>(flow->assistant_gadget) :
+        static_cast<HttpInspect*>(flow->gadget);
     pub_id = hi->get_pub_id();
 }
 
@@ -67,6 +71,32 @@ void HttpTransaction::publish_end_of_transaction()
 {
     HttpTransactionEndEvent http_event(this);
     DataBus::publish(pub_id, HttpEventIds::END_OF_TRANSACTION, http_event, flow);
+
+#ifdef REG_TEST
+    if (HttpTestManager::use_test_output(HttpTestManager::IN_HTTP))
+    {
+        const auto& client_fname = http_event.get_filename(SRC_CLIENT);
+        const auto& client_ftype = http_event.get_content_type(SRC_CLIENT);
+
+        const auto& server_fname = http_event.get_filename(SRC_SERVER);
+        const auto& server_ftype = http_event.get_content_type(SRC_SERVER);
+
+        if (client_fname.empty() and client_ftype.empty() and
+            server_fname.empty() and server_ftype.empty())
+            return;
+
+        fprintf(HttpTestManager::get_output_file(),
+            "HttpTransactionEndEvent published (Client/Server).\n");
+        fprintf(HttpTestManager::get_output_file(),
+            "Filename length: %zu/%zu\n",
+            client_fname.size(),
+            server_fname.size());
+        fprintf(HttpTestManager::get_output_file(),
+            "Content-type length: %zu/%zu\n",
+            client_ftype.size(),
+            server_ftype.size());
+    }
+#endif
 }
 
 bool HttpTransaction::is_for_httpx() const
@@ -84,7 +114,6 @@ HttpTransaction::~HttpTransaction()
         delete infractions[k];
     }
     delete_section_list(body_list);
-    delete_section_list(archive_hdr_list);
     delete_section_list(archive_status_list);
 }
 
@@ -132,7 +161,14 @@ HttpTransaction* HttpTransaction::attach_my_transaction(HttpFlowData* session_da
                 {
                     // The pipeline is full and just overflowed.
                     *session_data->infractions[source_id] += INF_PIPELINE_OVERFLOW;
-                    delete_transaction(session_data->transaction[SRC_CLIENT], session_data);
+                    HttpTransaction* rejected = session_data->transaction[SRC_CLIENT];
+                    HttpMsgRequest* request = rejected->get_request();
+                    if (request != nullptr &&
+                        session_data->zero_nine_expected == request->get_transaction_id())
+                    {
+                        session_data->zero_nine_expected = 0;
+                    }
+                    delete_transaction(rejected, session_data);
                     // When overflow occurs the length of the pipeline is unchanged
                     // next code ensures that the alert is still raised
                     *session_data->infractions[source_id] += INF_PIPELINE_MAX;
@@ -163,14 +199,13 @@ HttpTransaction* HttpTransaction::attach_my_transaction(HttpFlowData* session_da
         session_data->transaction[SRC_SERVER]->archive_status(
             session_data->transaction[SRC_SERVER]->status);
         session_data->transaction[SRC_SERVER]->status = nullptr;
-        session_data->transaction[SRC_SERVER]->archive_header(
-            session_data->transaction[SRC_SERVER]->header[SRC_SERVER]);
+        delete session_data->transaction[SRC_SERVER]->header[SRC_SERVER];
         session_data->transaction[SRC_SERVER]->header[SRC_SERVER] = nullptr;
     }
     // Status section: delete the current transaction and get a new one from the pipeline. If the
-    // pipeline is empty check for a request transaction and take it. If there is no transaction
-    // available then declare an underflow and create a new transaction specifically for the
-    // response side.
+    // pipeline is empty after an overflow, create a response-only transaction. Otherwise check
+    // for a request transaction and take it. If there is no transaction available then declare an
+    // underflow and create a new transaction specifically for the response side.
     else if (session_data->section_type[source_id] == SEC_STATUS ||
 	     (session_data->section_type[source_id] == SEC_HEADER &&
 	     session_data->version_id[source_id] == VERS_0_9))
@@ -184,7 +219,12 @@ HttpTransaction* HttpTransaction::attach_my_transaction(HttpFlowData* session_da
         else if ((session_data->transaction[SRC_SERVER] = session_data->take_from_pipeline()) ==
             nullptr)
         {
-            if ((session_data->transaction[SRC_CLIENT] == nullptr) ||
+            if (session_data->pipeline_overflow)
+            {
+                // The valid pipeline has drained. Overflow permanently separated the two sides.
+                session_data->transaction[SRC_SERVER] = new HttpTransaction(session_data, f);
+            }
+            else if ((session_data->transaction[SRC_CLIENT] == nullptr) ||
                 (session_data->transaction[SRC_CLIENT]->has_flag(TransactionFlag::TF_RESPONSE_SEEN)))
             {
                 // Either there is no request at all or there is a request but a previous response
@@ -219,33 +259,46 @@ HttpTransaction* HttpTransaction::attach_my_transaction(HttpFlowData* session_da
         session_data->transaction[SRC_SERVER]->set_flag(TransactionFlag::TF_RESPONSE_SEEN);
 
         // Move in server infractions now that the response is attached here
-        session_data->transaction[SRC_SERVER]->infractions[SRC_SERVER] =
-            session_data->infractions[SRC_SERVER];
-        session_data->infractions[SRC_SERVER] = nullptr;
+        HttpInfractions*& transaction_infractions =
+            session_data->transaction[SRC_SERVER]->infractions[SRC_SERVER];
+        HttpInfractions*& section_infractions = session_data->infractions[SRC_SERVER];
+        if (transaction_infractions == nullptr)
+            transaction_infractions = section_infractions;
+        else if (section_infractions != nullptr)
+        {
+            *transaction_infractions += *section_infractions;
+            delete section_infractions;
+        }
+        section_infractions = nullptr;
+        if (transaction_infractions == nullptr)
+            transaction_infractions = new HttpInfractions;
     }
 
-    assert(session_data->transaction[source_id] != nullptr);
-    session_data->transaction[source_id]->active_sections++;
-    return session_data->transaction[source_id];
-}
+    HttpTransaction* const transaction = session_data->transaction[source_id];
+    if (transaction == nullptr)
+        return nullptr;
 
-void HttpTransaction::archive_section(HttpMsgSection* section, HttpMsgSection** archive_list)
-{
-    if (section != nullptr)
+    // see dev_notes_splitter_buffers.txt
+    if (source_id == SRC_CLIENT)
     {
-        section->next = *archive_list;
-        *archive_list = section;
+        const HttpPendingSizeReport pending = HttpContextData::claim_pending_size_report();
+        if (pending.has_298)
+            transaction->set_pending_size_298(pending.size_298);
+        if (pending.has_299)
+            transaction->set_pending_length_299(pending.length_299);
     }
+
+    transaction->active_sections++;
+    return transaction;
 }
 
-void HttpTransaction::archive_status(HttpMsgStatus* status)
+void HttpTransaction::archive_status(HttpMsgStatus* status_section)
 {
-    archive_section(status, &archive_status_list); 
-}
-
-void HttpTransaction::archive_header(HttpMsgHeader* hdr)
-{
-    archive_section(hdr, &archive_hdr_list); 
+    if (status_section == nullptr)
+        return;
+    delete_section_list(archive_status_list);
+    status_section->next = nullptr;
+    archive_status_list = status_section;
 }
 
 void HttpTransaction::clear_section()
@@ -268,6 +321,11 @@ void HttpTransaction::garbage_collect()
         else
             current = &(*current)->next;
     }
+}
+
+int64_t HttpTransaction::get_hx_stream_id() const
+{
+    return session_data->get_hx_stream_id();
 }
 
 void HttpTransaction::delete_transaction(HttpTransaction* transaction, HttpFlowData* session_data)
@@ -297,7 +355,7 @@ void HttpTransaction::set_request(HttpMsgRequest* request_)
     request = request_;
 }
 
-void HttpTransaction::set_header(HttpMsgHeader* header_, HttpCommon::SourceId source_id)
+void HttpTransaction::set_header(HttpMsgHeader* header_, SourceId source_id)
 {
     delete (header[source_id]);
     header[source_id] = header_;
@@ -340,13 +398,13 @@ uint8_t HttpTransaction::get_info_code() const
              return code;
      }
 
-     const HttpMsgStatus* arch_status = (HttpMsgStatus*) archive_status_list;
+     const HttpMsgStatus* arch_status = static_cast<HttpMsgStatus*>(archive_status_list);
      while (arch_status)
      {
          const int32_t code = arch_status->get_status_code_num();
          if (is_info_code(code))
              return code;
-         arch_status = (HttpMsgStatus*)(arch_status->next);
+         arch_status = static_cast<HttpMsgStatus*>(arch_status->next);
      }
 
      return 0;
@@ -361,48 +419,62 @@ const Field& HttpTransaction::get_info_msg() const
              return status->get_reason_phrase();
      }
 
-     const HttpMsgStatus* arch_status = (HttpMsgStatus*) archive_status_list;
+     const HttpMsgStatus* arch_status = static_cast<HttpMsgStatus*>(archive_status_list);
      while (arch_status)
      {
          const int32_t code = arch_status->get_status_code_num();
          if (is_info_code(code))
              return arch_status->get_reason_phrase();
-         arch_status = (HttpMsgStatus*)(arch_status->next);
+         arch_status = static_cast<HttpMsgStatus*>(arch_status->next);
      }
 
      return Field::FIELD_NULL;
 }
 
-void HttpTransaction::append_separator_if_needed(HttpCommon::SourceId source_id)
-{
-    static const std::string separator = " ";
-
-    if (!filename[source_id].empty())
-    {
-        filename[source_id].append(separator);
-        content_type[source_id].append(separator);
-    }
-}
-
-void HttpTransaction::add_filename(HttpCommon::SourceId source_id, const char* fname, uint32_t len,
+void HttpTransaction::add_filename(SourceId source_id, const char* fname, uint32_t flen,
     const char* ftype, uint32_t tlen)
 {
-    append_separator_if_needed(source_id);
-    if (len)
-        filename[source_id].append(fname, len);
+    if (capped_attachment[source_id])
+        return;
+
+    static constexpr std::string_view separator = " ";
+
+    size_t fname_total_size = filename[source_id].size() + flen;
+
+    const bool fname_needs_separator = !filename[source_id].empty();
+    if (fname_needs_separator)
+        fname_total_size += separator.size();
+
+    size_t ftype_total_size = content_type[source_id].size() + tlen;
+
+    const bool ftype_needs_separator = !content_type[source_id].empty();
+    if (ftype_needs_separator)
+        ftype_total_size += separator.size();
+
+    if (std::max(fname_total_size, ftype_total_size) > MAX_ATTACHMENT_SIZE)
+    {
+        capped_attachment[source_id] = true;
+        return;
+    }
+
+    if (fname_needs_separator)
+        filename[source_id].append(separator);
+
+    if (flen)
+        filename[source_id].append(fname, flen);
+
+    if (ftype_needs_separator)
+        content_type[source_id].append(separator);
+
     if (tlen)
         content_type[source_id].append(ftype, tlen);
 }
 
-void HttpTransaction::add_filename(HttpCommon::SourceId source_id, const std::string& fname,
+void HttpTransaction::add_filename(SourceId source_id, const std::string& fname,
     const std::string& ftype)
-{
-    append_separator_if_needed(source_id);
-    filename[source_id].append(fname);
-    content_type[source_id].append(ftype);
-}
+{ add_filename(source_id, fname.data(), fname.size(), ftype.data(), ftype.size()); }
 
-uint64_t HttpTransaction::get_message_length(const HttpMsgSection* start, HttpCommon::SourceId source_id, bool include_body) const
+uint64_t HttpTransaction::get_message_length(const HttpMsgSection* start, SourceId source_id, bool include_body) const
 {
     uint64_t length = HttpMsgSection::get_section_len(start)
         + HttpMsgSection::get_section_len(header[source_id])

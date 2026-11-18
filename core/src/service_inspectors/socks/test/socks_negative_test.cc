@@ -89,7 +89,6 @@ namespace snort
     bool Inspector::likes(Packet*) { return true; }
     bool Inspector::get_buf(const char*, Packet*, InspectionBuffer&) { return false; }
     
-    // cppcheck-suppress uninitMemberVar ; mock class - only data/dsize used in tests
     Packet::Packet(bool) {}
     Packet::~Packet() = default;
     
@@ -167,8 +166,12 @@ namespace snort
         old_gadget->rem_ref();
     }
 
-    // Mock Flow destructor
+    void Flow::pin_survivor_flow_data(Inspector&) { }
+
+    // Mock Flow constructor/destructor
+    Flow::Flow() { }
     Flow::~Flow() = default;
+    void FlowStash::reset() { }
     
     // Mock Profiler
     THREAD_LOCAL bool TimeProfilerStats::enabled = false;
@@ -178,8 +181,8 @@ namespace snort
 Analyzer* Analyzer::get_local_analyzer() { return nullptr; }
 bool Analyzer::process_rebuilt_packet(Packet*, const DAQ_PktHdr_t*, const uint8_t*, uint32_t) { return true; }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) {}
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) {}
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) {}
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) {}
 
 // Mock IPS option symbols
 const BaseApi* ips_socks_version = nullptr;
@@ -193,7 +196,7 @@ const BaseApi* ips_socks_remote_port = nullptr;
 
 TEST_GROUP(ProcessUdpAssociateDataTests)
 {
-    void setup()
+    void setup() override
     {
         SocksFlowData::init();
     }
@@ -225,7 +228,7 @@ TEST(ProcessUdpAssociateDataTests, high_bit_frag_is_not_standalone)
 //=============================================================================
 TEST_GROUP(SocksFlowDataBoundaryTests)
 {
-    void setup()
+    void setup() override
     {
         SocksFlowData::init();
     }
@@ -722,24 +725,16 @@ TEST(SocksFlowDataBoundaryTests, test_udp_associate_flow)
 
 TEST_GROUP(GetXtraTargetIpTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - modified in tests
     Flow* flow = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - modified in tests
     SocksFlowData* flow_data = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - assigned in tests
-    // cppcheck-suppress unreadVariable ; false positive - used in tests
     uint8_t* buf = nullptr;
-    // cppcheck-suppress unreadVariable ; false positive - used in tests
     uint32_t len = 0;
-    // cppcheck-suppress unreadVariable ; false positive - used in tests
     uint32_t type = 0;
 
     void setup() override
     {
         SocksFlowData::init();
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow = new Flow();
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
     }
 
@@ -891,9 +886,7 @@ TEST(GetXtraTargetIpTests, ipv6_loopback)
 
 TEST_GROUP(DetectProtocolInitiatorTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     Packet* packet = nullptr;
     uint8_t packet_data[256];
@@ -902,9 +895,7 @@ TEST_GROUP(DetectProtocolInitiatorTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         packet = new Packet();
         packet->data = packet_data;
@@ -1042,9 +1033,7 @@ TEST(DetectProtocolInitiatorTests, already_detected_not_changed)
 
 TEST_GROUP(ProcessReverseServerDataTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     Packet* packet = nullptr;
     uint8_t packet_data[256];
@@ -1053,9 +1042,7 @@ TEST_GROUP(ProcessReverseServerDataTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         packet = new Packet();
         packet->data = packet_data;
@@ -1286,9 +1273,7 @@ TEST(ProcessReverseServerDataTests, unknown_version)
 
 TEST_GROUP(ProcessReverseClientDataTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     Packet* packet = nullptr;
     uint8_t packet_data[256];
@@ -1297,9 +1282,7 @@ TEST_GROUP(ProcessReverseClientDataTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         packet = new Packet();
         packet->data = packet_data;
@@ -1534,9 +1517,7 @@ TEST(ProcessReverseClientDataTests, connect_response_with_domain)
 
 TEST_GROUP(ProcessDataStateTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     Packet* packet = nullptr;
     uint8_t packet_data[256];
@@ -1545,9 +1526,7 @@ TEST_GROUP(ProcessDataStateTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         packet = new Packet();
         packet->data = packet_data;
@@ -1606,9 +1585,7 @@ TEST(ProcessDataStateTests, server_error_state)
 
 TEST_GROUP(ValidateSocks5RequestHeaderTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     uint8_t data[256];
 
@@ -1616,9 +1593,7 @@ TEST_GROUP(ValidateSocks5RequestHeaderTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         memset(data, 0, sizeof(data));
     }
@@ -1745,9 +1720,7 @@ TEST(ValidateSocks5RequestHeaderTests, valid_ipv6_address_type)
 
 TEST_GROUP(ParseSocks5AuthResponseTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     uint8_t data[256];
 
@@ -1755,9 +1728,7 @@ TEST_GROUP(ParseSocks5AuthResponseTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         memset(data, 0, sizeof(data));
     }
@@ -1834,9 +1805,7 @@ TEST(ParseSocks5AuthResponseTests, private_auth_method_skips_to_connect_request)
 
 TEST_GROUP(ParseSocks4ResponseTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     uint8_t data[256];
 
@@ -1844,9 +1813,7 @@ TEST_GROUP(ParseSocks4ResponseTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         memset(data, 0, sizeof(data));
     }
@@ -1942,9 +1909,7 @@ TEST(ParseSocks4ResponseTests, rejected_with_different_status_codes)
 
 TEST_GROUP(ParseSocks4RequestTests)
 {
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksInspectorTestHelper* inspector = nullptr;
-    // cppcheck-suppress constVariablePointer ; false positive - reassigned in setup()
     SocksFlowData* flow_data = nullptr;
     uint8_t data[512];  // Increased size to accommodate userid_too_long test (needs 265 bytes)
 
@@ -1952,9 +1917,7 @@ TEST_GROUP(ParseSocks4RequestTests)
     {
         SocksFlowData::init();
         SocksModule module;
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         inspector = new SocksInspectorTestHelper(&module);
-        // cppcheck-suppress unreadVariable ; false positive - used in tests
         flow_data = new SocksFlowData();
         memset(data, 0, sizeof(data));
     }

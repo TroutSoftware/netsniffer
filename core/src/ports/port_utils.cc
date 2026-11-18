@@ -39,7 +39,7 @@ using namespace snort;
  *  returns:  0 if an  ANY port.
  *            n number of unique ports.
  */
-int PortObjectBits(PortBitSet& parray, PortObject* po)
+int PortObjectBits(PortBitSet& parray, const PortObject* po)
 {
     if ( !po || PortObjectHasAny (po) )
         return 0;  /* ANY =64K */
@@ -171,10 +171,11 @@ int integer_compare(const void* arg1, const void* arg2)
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 int* RuleListToSortedArray(SF_LIST* rl)
 {
     SF_LNODE* pos = nullptr;
-    int* prid;
+    const int* prid;
     int* ra;
     int k=0;
 
@@ -204,4 +205,3 @@ int* RuleListToSortedArray(SF_LIST* rl)
 //-------------------------------------------------------------------------
 
 char po_print_buf[MAX_PORTS];
-

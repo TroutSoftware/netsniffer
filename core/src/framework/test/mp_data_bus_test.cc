@@ -79,11 +79,11 @@ Module* PluginManager::get_module(const char*)
     return nullptr;
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) 
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*)
 {
     mock().actualCall("show_stats");
 }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 bool ControlConn::respond(const char*, ...) { return true; }
 
@@ -258,7 +258,7 @@ const PubKey pub_key2 { "mp_ut2", DbUtIds::num_ids };
 
 TEST_GROUP(mp_data_bus_pub)
 {
-    unsigned pub_id1 = 0;  // cppcheck-suppress variableScope
+    unsigned pub_id1 = 0;
     MPDataBus* mp_dbus = nullptr;
     void setup() override
     {
@@ -272,7 +272,10 @@ TEST_GROUP(mp_data_bus_pub)
     }
 
     void teardown() override
-    { 
+    {
+        delete mp_dbus;
+        mp_dbus = nullptr;
+        snort_conf->mp_dbus = nullptr;
     }
 };
 
@@ -300,7 +303,8 @@ TEST(mp_data_bus_pub, publish)
     mock().checkExpectations();
 
     delete mp_dbus;
-
+    mp_dbus = nullptr;
+    snort_conf->mp_dbus = nullptr;
     CHECK_EQUAL(1, MockMPTransport::get_count());
 }
 
@@ -323,13 +327,14 @@ TEST(mp_data_bus_pub, publish_fail_to_send)
     CHECK_EQUAL(1, MPDataBus::mp_global_stats.total_messages_dropped);
 
     delete mp_dbus;
-
+    mp_dbus = nullptr;
+    snort_conf->mp_dbus = nullptr;
     test_transport_send_result = true;
 }
 
 TEST_GROUP(mp_data_bus)
 {
-    unsigned pub_id1 = 0, pub_id2 = 0;  // cppcheck-suppress variableScope
+    unsigned pub_id1 = 0, pub_id2 = 0;
 
     void setup() override
     {
@@ -488,7 +493,7 @@ TEST(mp_data_bus, unsubscribe_nonexistent_handler)
 
 TEST_GROUP(mp_data_bus_clone)
 {
-    unsigned pub_id1 = 0, pub_id2 = 0;  // cppcheck-suppress variableScope
+    unsigned pub_id1 = 0, pub_id2 = 0;
     void setup() override
     {
         unsigned max_procs_val = 2;

@@ -55,6 +55,7 @@
 #include "lua_detector_flow_api.h"
 #include "lua_detector_module.h"
 #include "lua_detector_util.h"
+#include "service_inspectors/cip/cip.h"
 #include "service_plugins/service_discovery.h"
 #include "service_plugins/service_ssl.h"
 
@@ -132,7 +133,7 @@ static void free_chp_glossary(CHPGlossary*& glossary)
 
     if (glossary)
     {
-        for (auto& entry : *glossary)
+        for (const auto& entry : *glossary)
             delete entry.second;
         delete glossary;
         glossary = nullptr;
@@ -287,6 +288,12 @@ static int service_register_pattern(lua_State* L)
     }
 
     const char* pattern = lua_tostring(L, ++index);
+    if (!pattern)
+    {
+        lua_pushnumber(L, -1);
+        return 1;
+    }
+
     size_t size;
     ++index;
     LUA_GET_UINTEGER_OR_RETURN(size, L, index, 1);
@@ -361,7 +368,7 @@ static int detector_log_message(lua_State* L)
     const auto& name = (*UserData<LuaObject>::check(L, DETECTOR, 1))->get_detector()->get_name();
 
     unsigned int level = lua_tonumber(L, 2);
-    const char* message = lua_tostring(L, 3);
+    const char* message = lua_message_log(lua_tostring(L, 3));
 
     switch (level)
     {
@@ -398,7 +405,7 @@ static int detector_log_snort_message(lua_State* L)
     const auto& name = (*UserData<LuaObject>::check(L, DETECTOR, 1))->get_detector()->get_name();
 
     unsigned int level = lua_tonumber(L, 2);
-    const char* message = lua_tostring(L, 3);
+    const char* message = lua_message_log(lua_tostring(L, 3));
 
     switch (level)
     {
@@ -440,6 +447,9 @@ static int service_add_netbios_domain(lua_State* L)
     // Verify detector user data and that we are in packet context
     LuaStateDescriptor* lsd = ud->validate_lua_state(true);
     const char* netbios_domain = lua_tostring(L, 2);
+    if (!netbios_domain)
+        return 0;
+
     lsd->ldp.asd->set_netbios_domain(*lsd->ldp.change_bits, netbios_domain);
     return 0;
 }
@@ -596,6 +606,12 @@ static int service_set_validator(lua_State* L)
     if (!init(L, 1)) return 1;
 
     const char* pValidator = lua_tostring(L, 2);
+    if (!pValidator)
+    {
+        lua_pushnumber(L, -1);
+        return 1;
+    }
+
     lua_getfield(L, LUA_REGISTRYINDEX, ud->lsd.package_info.name.c_str());
     lua_getfield(L, -1, pValidator);
     if (!lua_isfunction(L, -1))
@@ -658,7 +674,7 @@ static int service_add_service(lua_State* L)
       parameter on the following call is nullptr. Subtype is not displayed on DC at present. */
     unsigned int retValue = ud->sd->add_service(*lsd->ldp.change_bits, *lsd->ldp.asd, lsd->ldp.pkt,
         lsd->ldp.dir, lsd->ldp.asd->get_odp_ctxt().get_app_info_mgr().get_appid_by_service_id(service_id),
-        vendor, version, nullptr);
+        vendor, version);
 
     lua_pushnumber(L, retValue);
     return 1;
@@ -775,7 +791,6 @@ static int detector_get_pcre_groups(lua_State* L)
     LuaStateDescriptor* lsd = ud->validate_lua_state(true);
 
     pcre2_match_data* match_data;
-    PCRE2_UCHAR error[128];
     PCRE2_SIZE erroffset;
     int errorcode;
 
@@ -783,15 +798,16 @@ static int detector_get_pcre_groups(lua_State* L)
     unsigned int offset = lua_tonumber(L, 3);     /*offset can be zero, no check necessary. */
 
     /*compile the regular expression pattern, and handle errors */
-    pcre2_code* re = pcre2_compile((PCRE2_SPTR)pattern,  // the pattern
-        PCRE2_ZERO_TERMINATED,         // assume zero terminated strings
-        PCRE2_DOTALL,                  // default options - dot matches all inc \n
-        &errorcode,                    // for error message
-        &erroffset,                    // for error offset
-        nullptr);                      // default character tables
+    pcre2_code* re = pcre2_compile((PCRE2_SPTR)pattern, // the pattern (handles nullptr case)
+        PCRE2_ZERO_TERMINATED, // assume zero terminated strings
+        PCRE2_DOTALL, // default options - dot matches all inc \n
+        &errorcode, // for error message
+        &erroffset, // for error offset
+        nullptr); // default character tables
 
     if (re == nullptr)
     {
+        PCRE2_UCHAR error[128];
         pcre2_get_error_message(errorcode, error, 128);
         APPID_LOG(lsd->ldp.pkt, TRACE_ERROR_LEVEL, "PCRE compilation failed at offset %zu: %s\n", erroffset, error);
         return 0;
@@ -882,10 +898,12 @@ static int detector_find_substr(lua_State* L)
 {
     auto& ud = *UserData<LuaObject>::check(L, DETECTOR, 1);
     // Verify detector user data and that we are in packet context
-    LuaStateDescriptor* lsd = ud->validate_lua_state(true);
+    const LuaStateDescriptor* lsd = ud->validate_lua_state(true);
     unsigned int offset = lua_tonumber(L, 2);
     size_t substr_len = 0;
     const char* substr = lua_tolstring(L, 3, &substr_len);
+    if(!substr or !substr_len)
+        return 0;
 
     for (unsigned int i = 0; i + offset <= lsd->ldp.size - substr_len; i++)
     {
@@ -928,9 +946,12 @@ static int detector_memcmp(lua_State* L)
 {
     auto& ud = *UserData<LuaObject>::check(L, DETECTOR, 1);
     // Verify detector user data and that we are in packet context
-    LuaStateDescriptor* lsd = ud->validate_lua_state(true);
+    const LuaStateDescriptor* lsd = ud->validate_lua_state(true);
 
     const char* pattern = lua_tostring(L, 2);
+    if (!pattern)
+        return 0;
+
     unsigned int patternLen = lua_tonumber(L, 3);
     unsigned int offset = lua_tonumber(L, 4);     /*offset can be zero, no check necessary. */
     int rc = memcmp(lsd->ldp.data + offset, pattern, patternLen);
@@ -1064,6 +1085,12 @@ static int client_register_pattern(lua_State* L)
     }
 
     const char* pattern = lua_tostring(L, ++index);
+    if (!pattern)
+    {
+        lua_pushnumber(L, -1);
+        return 1;
+    }
+
     size_t size;
     ++index;
     LUA_GET_UINTEGER_OR_RETURN(size, L, index, 1);
@@ -1158,6 +1185,9 @@ static int client_add_user(lua_State* L)
     LuaStateDescriptor* lsd = ud->validate_lua_state(true);
 
     const char* userName = lua_tostring(L, 2);
+    if (!userName)
+        return 0;
+
     unsigned int service_id = lua_tonumber(L, 3);
     ud->cd->add_user(*lsd->ldp.asd, userName,
         lsd->ldp.asd->get_odp_ctxt().get_app_info_mgr().get_appid_by_service_id(service_id), true,
@@ -1587,9 +1617,16 @@ static int detector_add_host_first_pkt_application(lua_State* L)
             tokens.push_back(temp_str);
         }
 
+        if (tokens.size() != 2 or tokens[0].empty() or tokens[1].empty())
+        {
+            APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "First packet API: Invalid CIDR address: %s\n",
+                cidr_str);
+            return 0;
+        }
+
         const char* netip_str = tokens[0].c_str();
 
-        if (!netip_str or !convert_string_to_address(netip_str, &ip_address))
+        if (!convert_string_to_address(netip_str, &ip_address))
         {
             APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "First packet API: Invalid IP address: %s\n", netip_str);
             return 0;
@@ -1674,7 +1711,7 @@ static int detector_add_host_port_application(lua_State* L)
     const char* ip_str= lua_tolstring(L, ++index, &ipaddr_size);
     if (!ip_str or !ipaddr_size or !convert_string_to_address(ip_str, &ip_address))
     {
-        APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "%s: Invalid IP address: %s\n", __func__, ip_str);
+        APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "%s: Invalid IP address: %s\n", __func__, lua_message_log(ip_str));
         return 0;
     }
 
@@ -1752,12 +1789,12 @@ static int detector_add_content_type_pattern(lua_State* L)
         APPID_LOG(nullptr, TRACE_ERROR_LEVEL, "appid: Invalid HTTP Header string.\n");
         return 0;
     }
-    uint8_t* pattern = (uint8_t*)snort_strdup(tmp_string);
+    const uint8_t* pattern = reinterpret_cast<const uint8_t*>(snort_strdup(tmp_string));
     AppId appId = lua_tointeger(L, ++index);
 
     DetectorHTTPPattern detector;
     detector.pattern = pattern;
-    detector.pattern_size = strlen((char*)pattern);
+    detector.pattern_size = strlen(tmp_string);
     detector.app_id = appId;
     ud->get_odp_ctxt().get_http_matchers().insert_content_type_pattern(detector);
     ud->get_odp_ctxt().get_app_info_mgr().set_app_info_active(appId);
@@ -1860,6 +1897,9 @@ static int detector_register_service_callback(lua_State* L)
 static int detector_callback(const uint8_t* data, uint16_t size, AppidSessionDirection dir,
     AppIdSession& asd, const Packet& p, LuaObject& ud, AppidChangeBits& change_bits)
 {
+    if (ud.lsd.disabled)
+        return APPID_NOMATCH;
+
     if (!data)
     {
         return -10;
@@ -1888,7 +1928,7 @@ static int detector_callback(const uint8_t* data, uint16_t size, AppidSessionDir
     if (lua_pcall(my_lua_state, 0, 1, 0))
     {
         APPID_LOG(&p, TRACE_ERROR_LEVEL, "Detector %s: Error validating %s\n", detector_name,
-            lua_tostring(my_lua_state, -1));
+            lua_message_log(lua_tostring(my_lua_state, -1)));
         ud.lsd.ldp.pkt = nullptr;
         lua_settop(my_lua_state, 0);
         return -10;
@@ -1915,7 +1955,7 @@ static int detector_callback(const uint8_t* data, uint16_t size, AppidSessionDir
 }
 
 void check_detector_callback(const Packet& p, AppIdSession& asd, AppidSessionDirection dir,
-    AppId app_id, AppidChangeBits& change_bits, AppInfoTableEntry* entry)
+    AppId app_id, AppidChangeBits& change_bits, const AppInfoTableEntry* entry)
 {
     if (!entry)
         entry = asd.get_odp_ctxt().get_app_info_mgr().get_app_info_entry(app_id);
@@ -1926,7 +1966,9 @@ void check_detector_callback(const Packet& p, AppIdSession& asd, AppidSessionDir
         entry->flags & APPINFO_FLAG_SERVICE_DETECTOR_CALLBACK)
     {
         LuaObject* ud = odp_thread_local_ctxt->get_cb_detector(app_id);
-        assert(ud);
+        // Shared callback flags can outlive a detector disabled in this packet manager.
+        if (!ud)
+            return;
 
         if (ud->is_running())
             return;
@@ -2043,7 +2085,7 @@ static inline int get_chp_action_type(lua_State* L, int index, ActionType& actio
     return 0;
 }
 
-static inline int get_chp_action_data(lua_State* L, int index, char** action_data)
+static inline void get_chp_action_data(lua_State* L, int index, char** action_data)
 {
     // An empty string is translated into a nullptr pointer because the action data is optional
     size_t action_data_size = 0;
@@ -2052,8 +2094,6 @@ static inline int get_chp_action_data(lua_State* L, int index, char** action_dat
         *action_data = snort_strdup(tmp_string);
     else
         *action_data = nullptr;
-
-    return 0;
 }
 
 static int add_chp_pattern_action(AppId appIdInstance, int isKeyPattern, HttpFieldIds patternType,
@@ -2145,11 +2185,7 @@ static int detector_add_chp_action(lua_State* L)
     }
 
     // Parameter 6
-    if (get_chp_action_data(L, ++index, &action_data))
-    {
-        snort_free(pattern);
-        return 0;
-    }
+    get_chp_action_data(L, ++index, &action_data);
 
     return add_chp_pattern_action(appIdInstance, key_pattern, ptype, psize, pattern,
         action, action_data, ud->get_odp_ctxt());
@@ -2236,11 +2272,7 @@ static int detector_add_chp_multi_action(lua_State* L)
     }
 
     // Parameter 6
-    if (get_chp_action_data(L, ++index, &action_data))
-    {
-        snort_free(pattern);
-        return 0;
-    }
+    get_chp_action_data(L, ++index, &action_data);
 
     return add_chp_pattern_action(appIdInstance, key_pattern, ptype, psize, pattern,
         action, action_data, ud->get_odp_ctxt());
@@ -2619,11 +2651,11 @@ static int detector_add_rtmp_url(lua_State* L)
         snort_free(host_pattern);
         return 0;
     }
-    uint8_t* schemePattern = (uint8_t*)snort_strdup(tmp_string);
+    const uint8_t* schemePattern = (uint8_t*)snort_strdup(tmp_string);
 
     /* Verify that query pattern is a valid string */
     size_t query_pattern_size;
-    uint8_t* query_pattern = nullptr;
+    const uint8_t* query_pattern = nullptr;
     tmp_string = lua_tolstring(L, ++index, &query_pattern_size);
     if (tmp_string  and query_pattern_size)
         query_pattern = (uint8_t*)snort_strdup(tmp_string);
@@ -2717,7 +2749,8 @@ static int create_custom_application(lua_State* L)
 
     if (control)
     {
-        AppInfoTableEntry* entry = ud->get_odp_ctxt().get_app_info_mgr().add_dynamic_app_entry(tmp_string);
+        const AppInfoTableEntry* entry =
+            ud->get_odp_ctxt().get_app_info_mgr().add_dynamic_app_entry(tmp_string);
         appId = entry->appId;
         AppIdPegCounts::add_app_peg_info(tmp_string, appId);
     }
@@ -2871,7 +2904,7 @@ static int add_url_pattern(lua_State* L)
 
     /* Verify that scheme pattern is a valid string */
     size_t schemePatternSize;
-    uint8_t* schemePattern = nullptr;
+    const uint8_t* schemePattern = nullptr;
     tmp_string = lua_tolstring(L, ++index, &schemePatternSize);
     if (!tmp_string or !schemePatternSize)
     {
@@ -2952,7 +2985,6 @@ static int add_port_pattern_client(lua_State* L)
     }
 
     PortPatternNode* pPattern  = (decltype(pPattern))snort_calloc(sizeof(PortPatternNode));
-    // cppcheck-suppress internalAstError
     pPattern->pattern  = (decltype(pPattern->pattern))snort_calloc(pattern_size);
     pPattern->appId = appid;
     pPattern->protocol = protocol;
@@ -3093,13 +3125,13 @@ static int create_future_flow(lua_State* L)
     SnortProtocolId snort_protocol_id = UNKNOWN_PROTOCOL_ID;
 
     const char* pattern = lua_tostring(L, 2);
-    if (!convert_string_to_address(pattern, &client_addr))
+    if (!pattern or !convert_string_to_address(pattern, &client_addr))
         return 0;
 
     uint16_t client_port = lua_tonumber(L, 3);
 
     pattern = lua_tostring(L, 4);
-    if (!convert_string_to_address(pattern, &server_addr))
+    if (!pattern or !convert_string_to_address(pattern, &server_addr))
         return 0;
 
     uint16_t server_port = lua_tonumber(L, 5);
@@ -3113,7 +3145,7 @@ static int create_future_flow(lua_State* L)
     OdpContext& odp_ctxt = lsd->ldp.asd->get_odp_ctxt();
     if (app_id_to_snort > APP_ID_NONE)
     {
-        AppInfoTableEntry* entry = odp_ctxt.get_app_info_mgr().get_app_info_entry(
+        const AppInfoTableEntry* entry = odp_ctxt.get_app_info_mgr().get_app_info_entry(
             app_id_to_snort);
         if (!entry)
             return 0;
@@ -3497,7 +3529,7 @@ static int detector_publish_device_info(lua_State* L)
         return 0;
 
     DeviceInfoEvent event(pkt, service_type, device_name, kv_pairs);
-    DataBus::publish(DataBus::get_id(deviceinfo_pub_key), DeviceInfoEventIds::DEVICEINFO, event);
+    DataBus::publish(get_deviceinfo_pub_id(), DeviceInfoEventIds::DEVICEINFO, event);
 
     return 0;
 }
@@ -3627,14 +3659,14 @@ static const luaL_Reg detector_methods[] =
     { "setUserDetectorDataItem",   set_user_detector_data_item },
 
      /* CIP registration */
-    {"addCipConnectionClass",    detector_add_cip_connection_class},
-    {"addCipPath",               detector_add_cip_path},
-    {"addCipSetAttribute",       detector_add_cip_set_attribute},
+    {"addCipConnectionClass",       detector_add_cip_connection_class},
+    {"addCipPath",                  detector_add_cip_path},
+    {"addCipSetAttribute",          detector_add_cip_set_attribute},
     {"addCipExtendedSymbolService", detector_add_cip_extended_symbol_service},
-    {"addCipService",            detector_add_cip_service},
-    {"addEnipCommand",           detector_add_enip_command},
+    {"addCipService",               detector_add_cip_service},
+    {"addEnipCommand",              detector_add_enip_command},
 
-    {"publishDeviceInfo",        detector_publish_device_info},
+    {"publishDeviceInfo",           detector_publish_device_info},
 
 #ifdef REG_TEST
     {"luaRemoveRegistryTableTest", lua_remove_registry_table_test},
@@ -3707,6 +3739,12 @@ int register_detector(lua_State* L)
 int LuaStateDescriptor::lua_validate(AppIdDiscoveryArgs& args)
 {
     auto my_lua_state = odp_thread_local_ctxt->get_lua_state();
+    if (disabled)
+    {
+        if (my_lua_state)
+            lua_settop(my_lua_state, 0);
+        return APPID_NOMATCH;
+    }
     if (!my_lua_state)
     {
         APPID_LOG(args.pkt, TRACE_ERROR_LEVEL, "lua detector %s: no LUA state\n", package_info.name.c_str());
@@ -3722,15 +3760,15 @@ int LuaStateDescriptor::lua_validate(AppIdDiscoveryArgs& args)
     ldp.asd = &args.asd;
     ldp.change_bits = &args.change_bits;
     ldp.pkt = args.pkt;
-    const char* validateFn = package_info.validateFunctionName.c_str();
 
-    if ((!validateFn) or (validateFn[0] == '\0'))
+    if (package_info.validateFunctionName.empty())
     {
         ldp.pkt = nullptr;
         lua_settop(my_lua_state, 0);
         return APPID_NOMATCH;
     }
 
+    const char* validateFn = package_info.validateFunctionName.c_str();
     lua_getfield(my_lua_state, -1, validateFn); // get the function we want to call
 
     if (lua_pcall(my_lua_state, 0, 1, 0))
@@ -3739,7 +3777,7 @@ int LuaStateDescriptor::lua_validate(AppIdDiscoveryArgs& args)
         // efficiency and with minimum defensive checks. Errors are dealt as exceptions
         // that don't impact processing by other detectors or future packets by the same detector.
         APPID_LOG(args.pkt, TRACE_ERROR_LEVEL, "lua detector %s: error validating %s\n",
-            package_info.name.c_str(), lua_tostring(my_lua_state, -1));
+            package_info.name.c_str(), lua_message_log(lua_tostring(my_lua_state, -1)));
         ldp.pkt = nullptr;
         odp_thread_local_ctxt->free_detector_flow();
         lua_settop(my_lua_state, 0);
@@ -3794,6 +3832,7 @@ LuaServiceDetector::LuaServiceDetector(AppIdDiscovery* sdm, const std::string& d
     custom_detector = is_custom;
     minimum_matches = min_match;
     proto = protocol;
+
     handler->register_detector(name, this, proto);
 }
 
@@ -3828,7 +3867,7 @@ LuaServiceObject::LuaServiceObject(AppIdDiscovery* sdm, const std::string& detec
             if (detector != appid_detectors->end())
                 ad = detector->second;
         }
-        sd = (ServiceDetector*)ad;
+        sd = static_cast<ServiceDetector*>(ad);
     }
 
     UserData<LuaServiceObject>::push(L, DETECTOR, this);
@@ -3848,6 +3887,7 @@ int LuaServiceDetector::validate(AppIdDiscoveryArgs& args)
 
     std::string name = this->name + "_";
     lua_getglobal(my_lua_state, name.c_str());
+    // cppcheck-suppress constVariableReference -- validation mutates detector state through UserData
     auto& ud = *UserData<LuaServiceObject>::check(my_lua_state, DETECTOR, -1);
     return ud->lsd.lua_validate(args);
 }
@@ -3861,6 +3901,7 @@ LuaClientDetector::LuaClientDetector(AppIdDiscovery* cdm, const std::string& det
     custom_detector = is_custom;
     minimum_matches = min_match;
     proto = protocol;
+
     handler->register_detector(name, this, proto);
 }
 
@@ -3894,7 +3935,7 @@ LuaClientObject::LuaClientObject(const std::string& detector_name,
             if (detector != appid_detectors->end())
                 ad = detector->second;
         }
-        cd = (ClientDetector*)ad;
+        cd = static_cast<ClientDetector*>(ad);
     }
 
     UserData<LuaClientObject>::push(L, DETECTOR, this);
@@ -3921,6 +3962,7 @@ int LuaClientDetector::validate(AppIdDiscoveryArgs& args)
 
     std::string name = this->name + "_";
     lua_getglobal(my_lua_state, name.c_str());
+    // cppcheck-suppress constVariableReference -- validation mutates detector state through UserData
     auto& ud = *UserData<LuaClientObject>::check(my_lua_state, DETECTOR, -1);
     return ud->lsd.lua_validate(args);
 }

@@ -232,6 +232,7 @@ public:
         return out_protos;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     std::vector<uint16_t> get_xport_protos()
     {
         std::vector<uint16_t> out_protos;
@@ -365,6 +366,7 @@ public:
         nat_count_start = natCountStart;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     uint32_t get_nat_count() const
     {
         std::lock_guard<std::mutex> lck(host_tracker_lock);
@@ -383,6 +385,7 @@ public:
         return ++nat_count;
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     void set_cache_idx(uint8_t idx)
     {
         std::lock_guard<std::mutex> lck(host_tracker_lock);
@@ -400,9 +403,10 @@ public:
         return cache_idx;
     }
 
-    bool set_device_name(const char*);
+    bool set_device_name(const char*, bool priority = false);
 
     bool set_visibility(bool v = true);
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     size_t get_visibility() const {return visibility;}
 
 
@@ -436,6 +440,7 @@ public:
     void remove_flow(RNAFlow*);
 
     void update_cache_interface( uint8_t idx );
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     CacheInterface * get_cache_interface() { return cache_interface; }
 
 private:
@@ -460,6 +465,7 @@ private:
     std::vector<DeviceFingerprint, HostDeviceFpAllocator> ua_fps;
     std::string device_name;
     std::string hardware;
+    bool priority_device_name = false;
     bool priority_hardware = false;
 
     // flows that we belong to
@@ -487,6 +493,9 @@ private:
     bool add_payload_no_lock(const AppId, HostApplication*, size_t);
     HostApplication* find_service_no_lock(Port, IpProtocol, AppId);
     void update_ha_no_lock(HostApplication& dst, HostApplication& src);
+
+    // Drops vendor / version info learned for the service's previous identity
+    void reset_service_info_no_lock(HostApplication&);
 
     HostApplication* find_and_add_service_no_lock(Port, IpProtocol, uint32_t lseen,
         bool& is_new, AppId, uint16_t max_services = 0);

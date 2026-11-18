@@ -73,13 +73,12 @@ bool TcpAckOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const TcpAckOption& rhs = (const TcpAckOption&)ips;
+    const TcpAckOption& rhs = static_cast<const TcpAckOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus TcpAckOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(tcpAckPerfStats);
 
     if ( !p->ptrs.tcph )
@@ -150,7 +149,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* ack_ctor(Module* p, IpsInfo&)
 {
-    AckModule* m = (AckModule*)p;
+    const AckModule* m = static_cast<AckModule*>(p);
     return new TcpAckOption(m->data);
 }
 
@@ -193,4 +192,3 @@ const BaseApi* ips_ack[] =
     &ack_api.base,
     nullptr
 };
-

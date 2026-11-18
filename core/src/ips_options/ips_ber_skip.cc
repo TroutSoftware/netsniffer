@@ -75,7 +75,7 @@ bool BerSkipOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const BerSkipOption& rhs = (const BerSkipOption&)ips;
+    const BerSkipOption& rhs = static_cast<const BerSkipOption&>(ips);
 
     if ( type != rhs.type )
         return false;
@@ -88,13 +88,12 @@ bool BerSkipOption::operator==(const IpsOption& ips) const
 
 IpsOption::EvalStatus BerSkipOption::eval(Cursor& c, Packet*)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(berSkipPerfStats);
 
     BerReader ber(c);
     BerElement e;
 
-    if ( !ber.read(c.start(), e) )
+    if ( !ber.read_uncapped(c.start(), e) )
         return NO_MATCH;
 
     if ( e.type != type )
@@ -184,7 +183,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* ber_skip_ctor(Module* p, IpsInfo&)
 {
-    BerSkipModule* m = (BerSkipModule*)p;
+    const BerSkipModule* m = static_cast<BerSkipModule*>(p);
     return new BerSkipOption(m->type, m->optional);
 }
 
@@ -227,4 +226,3 @@ const BaseApi* ips_ber_skip[] =
     &ber_skip_api.base,
     nullptr
 };
-

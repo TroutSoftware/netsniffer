@@ -124,6 +124,7 @@ bool HostTracker::add_mac(const uint8_t* mac, uint8_t ttl, uint8_t primary)
         {
             if ( hm_t.visibility )
             {
+                hm_t.last_seen = last_seen;
                 return false;
             }
 
@@ -205,7 +206,7 @@ bool HostTracker::get_hostmac(const uint8_t* mac, HostMac& hm)
 
     lock_guard<mutex> lck(host_tracker_lock);
 
-    for ( auto& ahm : macs )
+    for ( const auto& ahm : macs )
         if ( !memcmp(mac, ahm.mac, MAC_SIZE) )
         {
             if ( !ahm.visibility )
@@ -355,6 +356,7 @@ bool HostTracker::add_service(Port port, IpProtocol proto, AppId appid, bool inf
         {
             s.appid = appid;
             s.inferred_appid = inferred_appid;
+            reset_service_info_no_lock(s);
             if ( added )
                 *added = true;
         }
@@ -363,6 +365,7 @@ bool HostTracker::add_service(Port port, IpProtocol proto, AppId appid, bool inf
         {
             if ( added )
                 *added = true;
+            reset_service_info_no_lock(s);
             s.visibility = true;
             num_visible_services++;
         }
@@ -378,6 +381,7 @@ bool HostTracker::add_service(Port port, IpProtocol proto, AppId appid, bool inf
     return true;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void HostTracker::clear_service(HostApplication& ha)
 {
     lock_guard<mutex> lck(host_tracker_lock);
@@ -394,7 +398,6 @@ void HostTracker::clear_service(HostApplication& ha)
 
 bool HostTracker::add_client_payload(HostClient& hc, AppId payload, size_t max_payloads)
 {
-    Payload_t* invisible_swap_candidate = nullptr;
     std::lock_guard<std::mutex> lck(host_tracker_lock);
 
     auto it = std::find_if(clients.begin(), clients.end(),
@@ -402,6 +405,7 @@ bool HostTracker::add_client_payload(HostClient& hc, AppId payload, size_t max_p
         { return c.id == hc.id and c.service == hc.service; });
     if (it != clients.end())
     {
+        Payload_t* invisible_swap_candidate = nullptr;
         HostClient& client = *it;
         for ( auto& pld : client.payloads )
         {
@@ -458,6 +462,7 @@ bool HostTracker::add_service(const HostApplication& app, bool* added)
         {
             s.appid = app.appid;
             s.inferred_appid = app.inferred_appid;
+            reset_service_info_no_lock(s);
             if ( added )
                 *added = true;
         }
@@ -466,6 +471,7 @@ bool HostTracker::add_service(const HostApplication& app, bool* added)
         {
             if ( added )
                 *added = true;
+            reset_service_info_no_lock(s);
             s.visibility = true;
             num_visible_services++;
         }
@@ -554,6 +560,7 @@ HostApplication* HostTracker::find_and_add_service_no_lock(Port port, IpProtocol
             if ( (appid != APP_ID_NONE and s.appid != appid) or !s.visibility )
             {
                 s.appid = appid;
+                reset_service_info_no_lock(s);
                 is_new = true;
                 s.hits = 1;
                 if ( !s.visibility )
@@ -594,6 +601,7 @@ HostApplication* HostTracker::find_and_add_service_no_lock(Port port, IpProtocol
         available->user[0] = '\0';
         available->user_login = 0;
         available->banner_updated = false;
+        reset_service_info_no_lock(*available);
         available->visibility = true;
         return available;
     }
@@ -610,7 +618,7 @@ HostApplication HostTracker::add_service(Port port, IpProtocol proto, uint32_t l
     bool& is_new, AppId appid)
 {
     lock_guard<mutex> lck(host_tracker_lock);
-    HostApplication* ha = find_and_add_service_no_lock(port, proto, lseen, is_new, appid);
+    const HostApplication* ha = find_and_add_service_no_lock(port, proto, lseen, is_new, appid);
     return *ha;
 }
 
@@ -629,12 +637,14 @@ void HostTracker::update_service(const HostApplication& ha)
     }
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void HostTracker::update_service_port(HostApplication& app, Port port)
 {
     lock_guard<mutex> lck(host_tracker_lock);
     app.port = port;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void HostTracker::update_service_proto(HostApplication& app, IpProtocol proto)
 {
     lock_guard<mutex> lck(host_tracker_lock);
@@ -653,6 +663,12 @@ void HostTracker::update_ha_no_lock(HostApplication& dst, HostApplication& src)
             dst.info.emplace_back(i.version, i.vendor);
 
     dst.hits = src.hits;
+}
+
+void HostTracker::reset_service_info_no_lock(HostApplication& ha)
+{
+    // clear() keeps the capacity, so the host cache memory accounting is unchanged
+    ha.info.clear();
 }
 
 bool HostTracker::update_service_info(HostApplication& ha, const char* vendor,
@@ -798,16 +814,19 @@ bool HostTracker::add_udp_fingerprint(uint32_t fpid)
     return result.second;
 }
 
-bool HostTracker::set_device_name(const char* name)
+bool HostTracker::set_device_name(const char* name, bool priority)
 {
     std::lock_guard<std::mutex> lck(host_tracker_lock);
-    if ( name && device_name != name )
+    if (!name)
+        return false;
+    if (priority)
+        priority_device_name = true;
+    if ((priority || !priority_device_name) && device_name != name)
     {
         device_name = name;
         return true;
     }
-    else
-        return false;
+    return false;
 }
 
 bool HostTracker::add_smb_fingerprint(uint32_t fpid)
@@ -824,6 +843,7 @@ bool HostTracker::add_deviceinfo_fingerprint(uint32_t fpid)
     return result.second;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 std::string HostTracker::get_deviceinfo_hardware()
 {
     lock_guard<mutex> lck(host_tracker_lock);
@@ -897,6 +917,7 @@ bool HostTracker::set_visibility(bool v)
         udp_fpids.clear();
         smb_fpids.clear();
         device_name.clear();
+        priority_device_name = false;
         cpe_fpids.clear();
         deviceinfo_fpids.clear();
         host_type = HostType::HOST_TYPE_HOST;
@@ -1189,7 +1210,7 @@ HostApplicationInfo::HostApplicationInfo(const char *ver, const char *ven)
 static inline string to_time_string(uint32_t p_time)
 {
     time_t raw_time = (time_t) p_time;
-    struct tm* timeinfo = gmtime(&raw_time);
+    const struct tm* timeinfo = gmtime(&raw_time);
     char buffer[30];
     strftime(buffer, 30, "%F %T", timeinfo);
     return buffer;

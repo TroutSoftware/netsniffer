@@ -126,6 +126,7 @@ AppIdSession* AppIdSession::allocate_session(const Packet* p, IpProtocol proto,
         );
     is_session_monitored(asd->flags, p, inspector);
     asd->flow = p->flow;
+    asd->set_flow(p->flow);
     asd->stats.first_packet_second = p->pkth->ts.tv_sec;
     asd->snort_protocol_id = asd->config.snort_proto_ids[PROTO_INDEX_UNSYNCHRONIZED];
 
@@ -209,6 +210,7 @@ AppIdSession::~AppIdSession()
     }
 
     delete tsession;
+    tsession = nullptr;
     free_flow_data();
     service_candidates.clear();
     client_candidates.clear();
@@ -222,25 +224,6 @@ AppIdSession::~AppIdSession()
         api.asd = nullptr;
 
     inspector.rem_ref();
-}
-
-// FIXIT-RC X Move this to somewhere more generally available/appropriate (decode_data.h).
-static inline PktType get_pkt_type_from_ip_proto(IpProtocol proto)
-{
-    switch (proto)
-    {
-    case IpProtocol::TCP:
-        return PktType::TCP;
-    case IpProtocol::UDP:
-        return PktType::UDP;
-    case IpProtocol::ICMPV4:
-        return PktType::ICMP;
-    case IpProtocol::IP:
-        return PktType::IP;
-    default:
-        break;
-    }
-    return PktType::NONE;
 }
 
 AppIdSession* AppIdSession::create_future_session(const Packet* ctrlPkt, const SfIp* cliIp,
@@ -264,9 +247,7 @@ AppIdSession* AppIdSession::create_future_session(const Packet* ctrlPkt, const S
         (InspectorManager::get_inspector(MOD_NAME, MOD_USAGE));
     assert(inspector);
 
-    // FIXIT-RC - port parameter passed in as 0 since we may not know client port, verify
-
-    AppIdSession* asd = new AppIdSession(proto, cliIp, 0, *inspector, odp_ctxt,
+    AppIdSession* asd = new AppIdSession(proto, cliIp, cliPort, *inspector, odp_ctxt,
         ctrlPkt->pkth->address_space_id
 #ifndef DISABLE_TENANT_ID
         ,ctrlPkt->pkth->tenant_id
@@ -289,7 +270,7 @@ AppIdSession* AppIdSession::create_future_session(const Packet* ctrlPkt, const S
     {
         sfip_ntop(cliIp, src_ip, sizeof(src_ip));
         sfip_ntop(srvIp, dst_ip, sizeof(dst_ip));
-        	APPID_LOG(ctrlPkt, TRACE_DEBUG_LEVEL, "Related flow created for %s-%u -> %s-%u %u\n",
+        APPID_LOG(ctrlPkt, TRACE_DEBUG_LEVEL, "Related flow created for %s-%u -> %s-%u %u\n",
             src_ip, (unsigned)cliPort, dst_ip, (unsigned)srvPort, (unsigned)proto);
         asd->in_expected_cache = true;
     }
@@ -297,10 +278,10 @@ AppIdSession* AppIdSession::create_future_session(const Packet* ctrlPkt, const S
     return asd;
 }
 
-void AppIdSession::initialize_future_session(AppIdSession& expected, uint64_t flags)
+void AppIdSession::initialize_future_session(AppIdSession& expected, uint64_t session_flags)
 {
 
-    expected.set_session_flags(flags |
+    expected.set_session_flags(session_flags |
         get_session_flags(
         APPID_SESSION_SPECIAL_MONITORED |
         APPID_SESSION_DISCOVER_APP |
@@ -311,7 +292,7 @@ void AppIdSession::initialize_future_session(AppIdSession& expected, uint64_t fl
 }
 
 void AppIdSession::reinit_session_data(AppidChangeBits& change_bits,
-    ThirdPartyAppIdContext* curr_tp_appid_ctxt)
+    const ThirdPartyAppIdContext* curr_tp_appid_ctxt)
 {
     misc_app_id = APP_ID_NONE;
 
@@ -351,7 +332,11 @@ void AppIdSession::reinit_session_data(AppidChangeBits& change_bits,
     init_tpPackets = 0;
     resp_tpPackets = 0;
 
-    scan_flags &= ~SCAN_HTTP_HOST_URL_FLAG;
+    std::for_each(api.hsessions.begin(), api.hsessions.end(),
+        [](const std::unique_ptr<AppIdHttpSession>& hsession)
+        {
+            hsession->scan_flags &= ~SCAN_HTTP_HOST_URL_FLAG;
+        });
     clear_session_flags(APPID_SESSION_SERVICE_DETECTED |
         APPID_SESSION_CLIENT_DETECTED | APPID_SESSION_SSL_SESSION |
         APPID_SESSION_HTTP_SESSION | APPID_SESSION_APP_REINSPECT);
@@ -391,7 +376,7 @@ void AppIdSession::sync_with_snort_protocol_id(AppId newAppId, Packet* p, AppidC
             break;
     }
 
-    AppInfoTableEntry* entry = odp_ctxt.get_app_info_mgr().get_app_info_entry(newAppId);
+    const AppInfoTableEntry* entry = odp_ctxt.get_app_info_mgr().get_app_info_entry(newAppId);
     if (!entry)
         return;
 
@@ -412,7 +397,7 @@ void AppIdSession::sync_with_snort_protocol_id(AppId newAppId, Packet* p, AppidC
 }
 
 void AppIdSession::check_ssl_detection_restart(AppidChangeBits& change_bits,
-    ThirdPartyAppIdContext* curr_tp_appid_ctxt)
+    const ThirdPartyAppIdContext* curr_tp_appid_ctxt)
 {
     if (get_session_flags(APPID_SESSION_DECRYPTED) or !flow->is_proxied())
         return;
@@ -457,7 +442,7 @@ void AppIdSession::check_tunnel_detection_restart()
     if (tp_payload_app_id != APP_ID_HTTP_TUNNEL or get_session_flags(APPID_SESSION_HTTP_TUNNEL))
         return;
 
-    AppIdHttpSession* hsession = get_http_session();
+    AppIdHttpSession* hsession = get_current_http_session();
     if (!hsession or !hsession->get_tunnel())
         return;
 
@@ -488,7 +473,11 @@ void AppIdSession::check_tunnel_detection_restart()
 
     init_tpPackets = 0;
     resp_tpPackets = 0;
-    scan_flags &= ~SCAN_HTTP_HOST_URL_FLAG;
+    std::for_each(api.hsessions.begin(), api.hsessions.end(),
+        [](const std::unique_ptr<AppIdHttpSession>& hsession)
+        {
+            hsession->scan_flags &= ~SCAN_HTTP_HOST_URL_FLAG;
+        });
     clear_session_flags(APPID_SESSION_SERVICE_DETECTED | APPID_SESSION_CLIENT_DETECTED |
         APPID_SESSION_HTTP_SESSION | APPID_SESSION_APP_REINSPECT);
 
@@ -497,7 +486,7 @@ void AppIdSession::check_tunnel_detection_restart()
 }
 
 void AppIdSession::check_app_detection_restart(AppidChangeBits& change_bits,
-    ThirdPartyAppIdContext* curr_tp_appid_ctxt)
+    const ThirdPartyAppIdContext* curr_tp_appid_ctxt)
 {
     check_ssl_detection_restart(change_bits, curr_tp_appid_ctxt);
     check_tunnel_detection_restart();
@@ -645,11 +634,14 @@ void AppIdSession::examine_ssl_metadata(AppidChangeBits& change_bits, bool parti
 
     if (!tsession->is_tls_host_published())
     {
-        if (tsession->get_tls_host())
+        if (const char* selected_tls_host = tsession->get_tls_host())
         {
-            api.set_tls_host(tsession->get_tls_host());
+            api.set_tls_host(selected_tls_host);
             api.set_tls_sni(tsession->get_tls_sni());
             change_bits.set(APPID_TLSHOST_BIT);
+            if (const char* tls_type = tsession->get_matched_tls_type_str())
+                APPID_LOG(CURRENT_PACKET, TRACE_DEBUG_LEVEL,
+                    "tls host selected %s: %s\n", tls_type, selected_tls_host);
         }
     }
     else if (tsession->is_tls_host_mismatched() and
@@ -669,12 +661,12 @@ void AppIdSession::examine_rtmp_metadata(AppidChangeBits& change_bits)
     AppId referred_payload_id = APP_ID_NONE;
     char* version = nullptr;
 
-    AppIdHttpSession* hsession = get_http_session();
+    AppIdHttpSession* hsession = get_current_http_session();
     if (!hsession)
         return;
 
     const string* field;
-    if ((scan_flags & SCAN_HTTP_USER_AGENT_FLAG) and
+    if ((hsession->scan_flags & SCAN_HTTP_USER_AGENT_FLAG) and
         hsession->client.get_id() <= APP_ID_NONE and
         (field = hsession->get_field(REQ_AGENT_FID)))
     {
@@ -690,7 +682,7 @@ void AppIdSession::examine_rtmp_metadata(AppidChangeBits& change_bits)
         if ( api.service.get_id() <= APP_ID_NONE )
             set_service_appid_data(service_id, change_bits);
 
-        scan_flags &= ~SCAN_HTTP_USER_AGENT_FLAG;
+        hsession->scan_flags &= ~SCAN_HTTP_USER_AGENT_FLAG;
         snort_free(agent_version);
     }
 
@@ -718,7 +710,7 @@ void AppIdSession::examine_rtmp_metadata(AppidChangeBits& change_bits)
     }
 }
 
-void AppIdSession::set_client_appid_data(AppId id, char* version, bool published)
+void AppIdSession::set_client_appid_data(AppId id, const char* version, bool published)
 {
     if (id <= APP_ID_NONE or id == APP_ID_HTTP)
         return;
@@ -745,14 +737,14 @@ void AppIdSession::set_client_appid_data(AppId id, char* version, bool published
         client_info_unpublished = true;
 }
 
-void AppIdSession::set_client_appid_data(AppId id, AppidChangeBits& change_bits, char* version)
+void AppIdSession::set_client_appid_data(AppId id, AppidChangeBits& change_bits, const char* version)
 {
     set_client_appid_data(id, version, true);
     if (version)
         change_bits.set(APPID_CLIENT_INFO_BIT);
 }
 
-void AppIdSession::set_payload_appid_data(AppId id, char* version)
+void AppIdSession::set_payload_appid_data(AppId id, const char* version)
 {
     if (id <= APP_ID_NONE)
         return;
@@ -764,7 +756,7 @@ void AppIdSession::set_payload_appid_data(AppId id, char* version)
     api.payload.set_version(version);
 }
 
-void AppIdSession::set_service_appid_data(AppId id, AppidChangeBits& change_bits, char* version)
+void AppIdSession::set_service_appid_data(AppId id, AppidChangeBits& change_bits, const char* version)
 {
     if (id <= APP_ID_NONE)
         return;
@@ -806,6 +798,7 @@ void AppIdSession::delete_session_data()
     api.payload.reset();
     api.delete_session_data();
     delete tsession;
+    tsession = nullptr;
 }
 
 int AppIdSession::add_flow_data(AppIdFlowData* data, unsigned id)
@@ -1183,6 +1176,12 @@ AppIdHttpSession* AppIdSession::get_http_session(uint32_t stream_index) const
 
 AppIdHttpSession* AppIdSession::create_http_session(int64_t stream_id)
 {
+    while (api.hsessions.size() >= pkt_thread_odp_ctxt->max_http_streams_per_flow)
+    {
+        APPID_LOG(SAFE_CURRENT_PACKET, TRACE_DEBUG_LEVEL, "Max HTTP sessions reached (%d), deleting oldest session\n", pkt_thread_odp_ctxt->max_http_streams_per_flow);
+        auto oldest = api.hsessions.begin();
+        api.hsessions.erase(oldest);
+    }
     auto hsession = std::make_unique<AppIdHttpSession>(*this, stream_id);
     auto tmp_hsession = hsession.get();
     api.hsessions.push_back(std::move(hsession));
@@ -1191,12 +1190,37 @@ AppIdHttpSession* AppIdSession::create_http_session(int64_t stream_id)
 
 AppIdHttpSession* AppIdSession::get_matching_http_session(int64_t stream_id) const
 {
+    uint32_t matched_stream_index;
+    return get_matching_http_session(stream_id, matched_stream_index);
+}
+
+AppIdHttpSession* AppIdSession::get_matching_http_session(int64_t stream_id, uint32_t& matched_stream_index) const
+{
     for (uint32_t stream_index=0; stream_index < api.hsessions.size(); stream_index++)
     {
         if(stream_id == api.hsessions[stream_index]->get_httpx_stream_id())
+        {
+            matched_stream_index = stream_index;
             return api.hsessions[stream_index].get();
+        }
     }
     return nullptr;
+}
+
+AppIdHttpSession *AppIdSession::get_current_http_session() const
+{
+    if (get_session_flags(APPID_SESSION_HTTP2_SESSION) and flow and flow->stream_intf)
+    {
+        int64_t stream_id;
+        flow->stream_intf->get_stream_id(flow, stream_id);
+        if (stream_id == 0xFFFFFFFF)
+        {
+            uint32_t num_hsessions = api.get_hsessions_size();
+            return num_hsessions ? get_http_session(num_hsessions - 1) : nullptr;
+        }
+        return get_matching_http_session(stream_id);
+    }
+    return get_http_session();
 }
 
 void AppIdSession::delete_all_http_sessions()
@@ -1208,10 +1232,18 @@ AppIdDnsSession* AppIdSession::create_dns_session()
 {
     if (flow->stream_intf)
     {
+        while (api.dsessions.size() >= pkt_thread_odp_ctxt->max_http_streams_per_flow)
+        {
+            auto oldest = api.dsessions.begin();
+            delete oldest->second;
+            api.dsessions.erase(oldest);
+        }
         int64_t stream_id;
         flow->stream_intf->get_stream_id(flow, stream_id);
-        api.dsessions.emplace(stream_id, new AppIdDnsSession());
-        return api.dsessions[stream_id];
+        auto insert_result = api.dsessions.try_emplace(stream_id, nullptr);
+        if (insert_result.second)
+            insert_result.first->second = new AppIdDnsSession();
+        return insert_result.first->second;
     }
     else
     {
@@ -1286,7 +1318,7 @@ bool AppIdSession::is_tp_appid_available() const
     return true;
 }
 
-bool AppIdSession::need_to_delete_tp_conn(ThirdPartyAppIdContext* curr_tp_appid_ctxt) const
+bool AppIdSession::need_to_delete_tp_conn(const ThirdPartyAppIdContext* curr_tp_appid_ctxt) const
 {
     // do not delete a third-party connection when reload third-party is in progress, and
     // third-party context swap isn't complete; since all open connections will be deleted
@@ -1301,7 +1333,7 @@ void AppIdSession::set_tp_app_id(const Packet& p, AppidSessionDirection dir, App
     if (tp_app_id != app_id)
     {
         tp_app_id = app_id;
-        AppInfoTableEntry* entry =
+        const AppInfoTableEntry* entry =
             odp_ctxt.get_app_info_mgr().get_app_info_entry(tp_app_id);
         if (entry)
         {
@@ -1317,7 +1349,7 @@ void AppIdSession::set_tp_payload_app_id(const Packet& p, AppidSessionDirection 
     if (tp_payload_app_id != app_id)
     {
         tp_payload_app_id = app_id;
-        AppInfoTableEntry* entry =
+        const AppInfoTableEntry* entry =
             odp_ctxt.get_app_info_mgr().get_app_info_entry(tp_payload_app_id);
         if (entry)
         {
@@ -1327,14 +1359,15 @@ void AppIdSession::set_tp_payload_app_id(const Packet& p, AppidSessionDirection 
     }
 }
 
-void AppIdSession::publish_shadow_traffic_event(const uint32_t& shadow_traffic_bits, snort::Flow* flow)
+void AppIdSession::publish_shadow_traffic_event(
+    const uint32_t& shadow_traffic_bits, snort::Flow* event_flow)
 {
     if (shadow_traffic_bits == appid_previous_shadow_traffic_bits)
         return;
 
     const char* app_name;
     std::string str_print;
-    Packet* curr_packet = nullptr;
+    const Packet* curr_packet = nullptr;
 
     if (shadow_traffic_bits & ShadowTraffic_Type_Domain_Fronting)
     {
@@ -1365,7 +1398,8 @@ void AppIdSession::publish_shadow_traffic_event(const uint32_t& shadow_traffic_b
     }
 
     ShadowTrafficEvent shadow_event(shadow_traffic_bits, "", "", app_name, ShadowTrafficDetectionSource::APPID);
-    DataBus::publish(AppIdInspector::get_shadowtraffic_pub_id(), ShadowTrafficEventIds::SHADOWTRAFFIC_FLOW_DETECTED, shadow_event, flow);
+    DataBus::publish(AppIdInspector::get_shadowtraffic_pub_id(),
+        ShadowTrafficEventIds::SHADOWTRAFFIC_FLOW_DETECTED, shadow_event, event_flow);
 
     if (PacketTracer::is_active())
     {
@@ -1404,7 +1438,7 @@ void AppIdSession::publish_appid_event(AppidChangeBits& change_bits, const Packe
 
     if (consumed_ha_data)
     {
-        AppIdHttpSession* hsession = get_http_session();
+        const AppIdHttpSession* hsession = get_http_session();
         if (hsession)
         {
             if (hsession->get_field(MISC_URL_FID))
@@ -1451,7 +1485,7 @@ void AppIdSession::check_shadow_traffic_bits(AppId id, uint32_t& shadow_bits, Ap
 {
    if (id > APP_ID_NONE)
    {
-        uint32_t attributeBits = api.asd->get_odp_ctxt().get_app_info_mgr().getAttributeBits(id);
+        AppInfoAttrsType attributeBits = api.asd->get_odp_ctxt().get_app_info_mgr().getAttributeBits(id);
         if (attributeBits & ATTR_APPENCRYPTEDDNS)
         {
             shadow_bits |= ShadowTraffic_Type_Encrypted_DNS;
@@ -1517,5 +1551,26 @@ void AppIdSession::check_domain_fronting_status(const std::string& host)
         uint32_t shadow_bits = get_shadow_traffic_bits();
         shadow_bits |= ShadowTraffic_Type_Domain_Fronting;
         set_shadow_traffic_bits(shadow_bits);
+    }
+}
+
+void AppIdSession::handle_http2_stream_end_event(const int64_t stream_id)
+{
+    for(auto it = api.hsessions.begin(); it != api.hsessions.end(); ++it)
+    {
+        if ((*it)->get_httpx_stream_id() == stream_id)
+        {
+            APPID_LOG(SAFE_CURRENT_PACKET, TRACE_DEBUG_LEVEL, "HTTP2 stream ended, deleting HTTP session for stream: %ld\n", stream_id);
+            api.hsessions.erase(it);
+            break;
+        }
+    }
+    
+    auto dns_session = api.dsessions.find(stream_id);
+    if (dns_session != api.dsessions.end())
+    {
+        APPID_LOG(SAFE_CURRENT_PACKET, TRACE_DEBUG_LEVEL, "HTTP2 stream ended, deleting DNS session for stream: %ld\n", stream_id);
+        delete dns_session->second;
+        api.dsessions.erase(dns_session);
     }
 }

@@ -191,7 +191,7 @@ WHITESPACE         {GRP_WHITESPACE}{1,16}
 <indobj>{WHITESPACE}                              { }
 <indobj>{INDIRECT_OBJ_CLOSE}                      { POP(); h_ind_obj_close(); EXEC(h_array_nesting()); }
 <indobj>{INDIRECT_OBJ_PARTIAL_CLOSE}              { state_add(yyleng); }
-<indobj>{OBJ_ARRAY_OPEN}                          { PUSH(array); ++obj_array.nesting_level; }
+<indobj>{OBJ_ARRAY_OPEN}                          { EXEC(h_array_open()); }
 <indobj>{OBJ_REFERENCE}                           { indirect_obj.ref_met = true; }
 <indobj>{OBJ_BOOLEAN}                             { }
 <indobj>{OBJ_INT_NUM}                             { }
@@ -200,7 +200,7 @@ WHITESPACE         {GRP_WHITESPACE}{1,16}
 <indobj>{OBJ_NAME}                                { }
 
 <array>{WHITESPACE}                               { }
-<array>{OBJ_ARRAY_OPEN}                           { PUSH(array); ++obj_array.nesting_level; }
+<array>{OBJ_ARRAY_OPEN}                           { EXEC(h_array_open()); }
 <array>{OBJ_ARRAY_CLOSE}                          { POP(); --obj_array.nesting_level; if (YY_START == dictnr) EXEC(h_dict_other()); }
 <array>{OBJ_REFERENCE}                            { indirect_obj.ref_met = true; }
 <array>{OBJ_BOOLEAN}                              { }
@@ -231,7 +231,7 @@ WHITESPACE         {GRP_WHITESPACE}{1,16}
 <array>{OBJ_DICT_CLOSE}                           { return PDFRet::INCORRECT_BRACKETS_NESTING; }
 <dictnr>{OBJ_DICT_CLOSE}                          { POP(); EXEC(h_dict_close()); }
 <dictnr>{WHITESPACE}                              { state_add(yyleng); }
-<dictnr>{OBJ_REFERENCE}                           { dictionaries.top().consecutive_number = false; EXEC(h_dict_other()); h_ref(); }
+<dictnr>{OBJ_REFERENCE}                           { dictionaries.top().consecutive_number = false; EXEC(h_dict_other()); EXEC(h_ref()); }
 <dictnr>{OBJ_BOOLEAN}                             { EXEC(h_dict_other()); }
 <dictnr>{OBJ_PARTIAL_BOOL}                        { state_add(yyleng); }
 <dictnr>{OBJ_INT_NUM}                             { EXEC(h_dict_number()); h_stream_length(); state_add(yyleng); }
@@ -239,7 +239,7 @@ WHITESPACE         {GRP_WHITESPACE}{1,16}
 <dictnr>{OBJ_NULL}                                { EXEC(h_dict_other()); }
 <dictnr>{OBJ_PARTIAL_NULL}                        { state_add(yyleng); }
 <dictnr>{OBJ_NAME}                                { EXEC(h_dict_name()); state_add(yyleng); }
-<dictnr>{OBJ_ARRAY_OPEN}                          { PUSH(array); ++obj_array.nesting_level; EXEC(h_dict_other()); }
+<dictnr>{OBJ_ARRAY_OPEN}                          { EXEC(h_array_open()); EXEC(h_dict_other()); }
 <dictnr>{OBJ_ARRAY_CLOSE}                         { return PDFRet::INCORRECT_BRACKETS_NESTING; }
 <dictnr>{OBJ_LIT_STR_OPEN}                        { EXEC(h_dict_other()); if (h_lit_str()) PUSH(jslstr); else PUSH(litstr); yyless(0); }
 <dictnr>{OBJ_HEX_STR_OPEN}                        { EXEC(h_dict_other()); if (h_hex_str()) PUSH(jshstr); else PUSH(hexstr); yyless(0); state_add(yyleng); }
@@ -516,6 +516,17 @@ PDFTokenizer::PDFRet PDFTokenizer::h_lit_u16_unescape()
     return PDFRet::EOS;
 }
 
+PDFTokenizer::PDFRet PDFTokenizer::h_array_open()
+{
+    if ((unsigned)obj_array.nesting_level >= dictionaries_max_size)
+        return PDFRet::DICTIONARY_NESTING_OVERFLOW;
+
+    PUSH(array);
+    ++obj_array.nesting_level;
+
+    return PDFRet::EOS;
+}
+
 PDFTokenizer::PDFRet PDFTokenizer::h_array_nesting()
 {
     if (obj_array.nesting_level)
@@ -592,15 +603,21 @@ void PDFTokenizer::h_stream_length()
         obj_stream.rem_length = snort::SnortStrtol(yytext, nullptr, 10);
 }
 
-void PDFTokenizer::h_ref()
+PDFTokenizer::PDFRet PDFTokenizer::h_ref()
 {
     if (!strcmp(obj_entry.key, "/JS"))
+    {
+        if (js_stream_refs.size() >= PDFTOKENIZER_MAX_JS_STREAM_REFS)
+            return PDFRet::DICTIONARY_NESTING_OVERFLOW;
         js_stream_refs.insert(snort::SnortStrtoul(yytext, nullptr, 10));
+    }
     else if (!strcmp(obj_entry.key, "/Length"))
     {
         obj_stream.is_ref_len = true;
         obj_stream.rem_length = -1;
     }
+
+    return PDFRet::EOS;
 }
 
 void PDFTokenizer::h_ind_obj_open()
@@ -762,6 +779,9 @@ PDFTokenizer::PDFRet PDFTokenizer::process()
     if (YY_CURRENT_BUFFER_LVALUE->yy_buf_size > YY_BUF_SIZE)
         r = PDFTokenizer::TOKEN_TOO_LONG;
 
+    if (state_len > YY_BUF_SIZE)
+        r = PDFTokenizer::TOKEN_TOO_LONG;
+
     if (r != PDFTokenizer::EOS)
         yy_flush_buffer(YY_CURRENT_BUFFER);
 
@@ -771,6 +791,10 @@ PDFTokenizer::PDFRet PDFTokenizer::process()
 void PDFTokenizer::state_add(int len)
 {
     state_len += len;
+
+    if (state_len > YY_BUF_SIZE)
+        state_len = YY_BUF_SIZE + 1;
+
     state_added = true;
 }
 
@@ -778,7 +802,7 @@ void PDFTokenizer::state_store()
 {
     state_act();
 
-    if (state_len == 0)
+    if (state_len == 0 or state_len > YY_BUF_SIZE)
         return;
 
     if (YY_START == hexstr)

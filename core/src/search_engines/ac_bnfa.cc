@@ -77,7 +77,7 @@ public:
     { return bnfa_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&bnfa_counts; }
+    { return reinterpret_cast<PegCount*>(&bnfa_counts); }
 
     Usage get_usage() const override
     { return GLOBAL; }
@@ -126,7 +126,7 @@ public:
 
 int AcBnfaMpse::search( const uint8_t* T, int n, MpseMatch match, void* context, int* current_state)
 {
-    Profile profile(bnfa_stats);  // cppcheck-suppress unreadVariable
+    Profile profile(bnfa_stats);
 
     bnfa_counts.searches++;
     bnfa_counts.bytes += n;
@@ -205,4 +205,3 @@ const BaseApi* se_ac_bnfa[] =
     &bnfa_api.base,
     nullptr
 };
-

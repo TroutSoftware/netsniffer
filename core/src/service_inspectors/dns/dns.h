@@ -84,6 +84,7 @@ struct DNSNameState
     uint8_t txt_bytes_seen = 0;
     uint8_t name_state = 0;
     uint8_t alerted = 0;
+    bool name_len_capped = false;
     uint16_t offset = 0;
     uint8_t relative = 0;
     std::string dns_name;
@@ -196,7 +197,7 @@ public:
     DnsResponseFqdn()
     {}
 
-    DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, DNSData* dnsSessionData);
+    DnsResponseFqdn(const unsigned char* data, uint16_t bytes_unused, const DNSData* dnsSessionData);
 
     FqdnTtl get_fqdn();
     void update_ttl(uint32_t ttl);
@@ -234,12 +235,12 @@ struct DNSData
 
     bool publish_response() const;
     bool has_events() const;
-    bool valid_dns(const DNSHdr&) const;
+    static bool valid_dns(const DNSHdr&);
 
-    bool decode_rdata(const snort::Packet* p, const uint8_t* rr, const uint8_t* rdata, uint16_t rdlength,
-        uint16_t type, std::string& rdata_str) const;
-    void get_rr_data(const snort::Packet *p, const std::vector<uint16_t>& tabs,
-        std::string& rrs, std::string* ttls = nullptr) const;
+    static bool decode_rdata(const snort::Packet* p, const uint8_t* rr, const uint8_t* rdata,
+        uint16_t rdlength, uint16_t type, std::string& rdata_str);
+    static void get_rr_data(const snort::Packet *p, const std::vector<uint16_t>& tabs,
+        std::string& rrs, std::string* ttls = nullptr);
     void get_answers(const snort::Packet *p, std::string& answers, std::string& ttls) const
     { get_rr_data(p, answer_tabs, answers, &ttls); }
     void get_auth(const snort::Packet *p, std::string& auth) const { get_rr_data(p, auth_tabs, auth); }
@@ -269,6 +270,7 @@ private:
 class DnsFlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(DnsFlowData)
     DnsFlowData();
     ~DnsFlowData() override;
 
@@ -284,6 +286,7 @@ public:
 class DnsUdpFlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(DnsUdpFlowData)
     DnsUdpFlowData();
 
     static void init()
@@ -321,4 +324,3 @@ private:
 };
 
 #endif
-

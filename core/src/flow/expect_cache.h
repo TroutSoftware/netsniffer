@@ -56,9 +56,12 @@ public:
 
     bool check(snort::Packet*, snort::Flow*);
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     unsigned long get_expects() { return expects; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     unsigned long get_realized() { return realized; }
     unsigned long get_prunes() { return prunes; }
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     unsigned long get_overflows() { return overflows; }
     void reset_stats()
     {
@@ -75,13 +78,13 @@ private:
     snort::ExpectFlow* get_flow(ExpectNode*, uint32_t, int16_t);
     bool set_data(ExpectNode*, snort::ExpectFlow*&, snort::FlowData*);
     ExpectNode* find_node_by_packet(snort::Packet*, snort::FlowKey&);
-    bool process_expected(ExpectNode*, snort::FlowKey&, snort::Packet*, snort::Flow*);
+    bool process_expected(ExpectNode*, const snort::FlowKey&, snort::Packet*, snort::Flow*);
 
 private:
-    class ZHash* hash_table;
-    ExpectNode* nodes;
-    snort::ExpectFlow* pool;
-    snort::ExpectFlow* free_list;
+    class ZHash* hash_table = nullptr;
+    ExpectNode* nodes = nullptr;
+    snort::ExpectFlow* pool = nullptr;
+    snort::ExpectFlow* free_list = nullptr;
 
     unsigned long expects = 0;
     unsigned long realized = 0;
@@ -90,4 +93,3 @@ private:
 };
 
 #endif
-

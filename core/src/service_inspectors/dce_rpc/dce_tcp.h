@@ -72,6 +72,7 @@ struct dce2TcpStats
     PegCount tcp_expected_sessions;
     PegCount tcp_expected_realized_sessions;
     PegCount tcp_pkts;
+    PegCount tcp_frag_budget_blocks;
     PegCount concurrent_sessions;
     PegCount max_concurrent_sessions;
 };
@@ -79,35 +80,13 @@ struct dce2TcpStats
 extern THREAD_LOCAL dce2TcpStats dce2_tcp_stats;
 extern THREAD_LOCAL snort::ProfileStats dce2_tcp_pstat_main;
 
-inline bool DCE2_TcpAutodetect(snort::Packet* p)
-{
-    if (p->dsize >= sizeof(DceRpcCoHdr))
-    {
-        const DceRpcCoHdr* co_hdr = (const DceRpcCoHdr*)p->data;
-
-        if ((DceRpcCoVersMaj(co_hdr) == DCERPC_PROTO_MAJOR_VERS__5)
-            && (DceRpcCoVersMin(co_hdr) == DCERPC_PROTO_MINOR_VERS__0)
-            && ((p->is_from_client()
-            && DceRpcCoPduType(co_hdr) == DCERPC_PDU_TYPE__BIND)
-            || (p->is_from_server()
-            && DceRpcCoPduType(co_hdr) == DCERPC_PDU_TYPE__BIND_ACK))
-            && (DceRpcCoFragLen(co_hdr) >= sizeof(DceRpcCoHdr)))
-        {
-            return true;
-        }
-    }
-    else if ((*p->data == DCERPC_PROTO_MAJOR_VERS__5) && p->is_from_client())
-    {
-        return true;
-    }
-
-    return false;
-}
-
 struct DCE2_TcpSsnData
 {
     DCE2_SsnData sd;  // This member must be first
     DCE2_CoTracker co_tracker;
+    // No initializer: DCE2_TcpSsnData is zeroed via memset on every creation path
+    // (dce_tcp.cc, dce_expected_session.cc), so it must remain a trivial type.
+    uint32_t retained_co_seg_bytes;
 };
 
 enum DCE2_TcpFlowState
@@ -120,6 +99,7 @@ enum DCE2_TcpFlowState
 class Dce2TcpFlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(Dce2TcpFlowData)
     Dce2TcpFlowData();
     ~Dce2TcpFlowData() override;
 
@@ -161,4 +141,3 @@ private:
 DCE2_TcpSsnData* get_dce2_tcp_session_data(snort::Flow*);
 
 #endif
-

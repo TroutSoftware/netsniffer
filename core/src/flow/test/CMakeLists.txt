@@ -18,6 +18,7 @@ add_cpputest( flow_control_test
 
 add_cpputest( flow_cache_test
     SOURCES
+        ../deferred_trust.cc
         ../dump_flows.cc
         ../dump_flows_serializer.cc
         ../flow_cache.cc
@@ -37,5 +38,17 @@ add_cpputest( flow_test
     SOURCES
         ../flow.cc
         ../flow_data.cc
+        ../flow_stash.cc
         flow_stubs.h
+        ../../sfip/sf_ip.cc
+)
+
+add_cpputest( survivor_flow_data_test
+    SOURCES
+        ../flow.cc
+        ../flow_data.cc
+        ../flow_stash.cc
+        ../../framework/survivor_flow_data.cc
+        flow_stubs.h
+        ../../sfip/sf_ip.cc
 )

@@ -45,6 +45,7 @@ public:
     const NormalizerConfig* get_config()
     { return &config; }
 
+    // cppcheck-suppress uselessOverride ; override retained to document the derived interface contract
     Usage get_usage() const override
     { return CONTEXT; }
 
@@ -52,7 +53,7 @@ private:
     bool set_ip4(const char*, const snort::Value&, snort::SnortConfig*);
     bool set_tcp(const char*, const snort::Value&, snort::SnortConfig*);
 
-    void add_test_peg(const PegInfo&) const;
+    static void add_test_peg(const PegInfo&);
 
     NormalizerConfig config;
 

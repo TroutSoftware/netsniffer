@@ -58,7 +58,7 @@ public:
     void set_file_type(uint64_t index);
     void set_file_name(const char* file_name, uint32_t name_size);
     void set_url(const char* url, uint32_t url_size);
-    void set_host(const char* host_name, uint32_t host_size);
+    void set_host(const char* new_host_name, uint32_t host_size);
 
     void set_weak_url(const char* url_name, uint32_t url_size);
     void set_weak_file_name(const char* file_name, uint32_t name_size);
@@ -79,7 +79,7 @@ public:
     void set_file_direction(FileDirection dir);
     FileDirection get_file_direction() const;
     uint8_t* get_file_sig_sha256() const;
-    std::string sha_to_string(const uint8_t* sha256) const;
+    std::string sha_to_string(const uint8_t* digest) const;
     void set_file_id(uint64_t index);
     uint64_t get_file_id() const;
 
@@ -112,7 +112,7 @@ public:
 
     FileVerdict verdict = FILE_VERDICT_UNKNOWN;
     bool processing_complete = false;
-    std::mutex user_file_data_mutex;
+    std::recursive_mutex user_file_data_mutex;
     struct timeval pending_expire_time = {0, 0};
 
     void set_re_eval();
@@ -193,13 +193,26 @@ public:
     char* get_UTF8_fname(size_t* converted_len);
     void set_not_cacheable() { cacheable = false; }
     bool is_cacheable() { return cacheable; }
-    bool segments_queued() { return (file_segments != nullptr); }
+    // cppcheck-suppress unusedFunction ; installed file-cache API accessor
+    void pin() { ++in_use; }
+    // cppcheck-suppress unusedFunction ; installed file-cache API accessor
+    void unpin() { if ( in_use > 0 ) --in_use; }
+    // cppcheck-suppress unusedFunction ; installed file-cache API accessor
+    bool is_in_use() const { return in_use > 0; }
+    void set_cache_dup() { cache_dup = true; }
+    // cppcheck-suppress unusedFunction ; installed file-cache API accessor
+    bool is_cache_dup() const { return cache_dup; }
+    void set_limit_excluded() { limit_excluded = true; }
+    bool is_limit_excluded() const { return limit_excluded; }
+    bool segments_queued() const { return (file_segments != nullptr); }
 
     // Configuration functions
     void remove_segments();
+    // cppcheck-suppress duplInheritedMember ; derived reset intentionally hides base reset for context-specific state
     void reset();
     void set_config(FileConfig* fc) { config = fc; }
     FileConfig* get_config() { return config; }
+    // cppcheck-suppress unusedFunction ; installed file API accessor
     void set_inspector(FileInspect* ins) { inspector = ins; }
     FileInspect* get_inspector() { return inspector; }
     double get_duration() const { return duration; }  // Duration in seconds (fractional)
@@ -208,9 +221,12 @@ public:
     const std::string& get_source() const { return source; }
     void set_source(Flow *flow);
     bool get_timedout() const { return timedout; }
+    // cppcheck-suppress unusedFunction ; installed file API accessor
     void set_timedout() { timedout = true; }
 
 private:
+    void stop_file_capture_unlocked();
+
     uint64_t processed_bytes = 0;
     void* file_type_context;
     void* file_signature_context;
@@ -218,6 +234,9 @@ private:
     FileInspect* inspector;
     FileConfig*  config;
     bool cacheable = true;
+    bool cache_dup = false;
+    bool limit_excluded = false;
+    int in_use = 0;
     hr_time start_time = TIME_POINT_ZERO;
     double duration = 0.0;  // File processing duration in seconds (fractional)
     std::string source;
@@ -231,4 +250,3 @@ private:
 };
 }
 #endif
-

@@ -75,14 +75,15 @@ private:
     static const StrCode method_list[];
 
     void parse_start_line() override;
-    bool http_name_nocase_ok(const uint8_t* start);
+    void raise_deferred_scan_events();
+    static bool http_name_nocase_ok(const uint8_t* start);
     static bool is_all_uppercase(const uint8_t* start, int32_t length);
     static bool has_raw_control_character(const Field& line);
     bool handle_zero_nine();
+    int32_t start_line_end() const;
 
     Field method;
     HttpUri* uri = nullptr;
-
     ParameterMap* query_params = nullptr;
     ParameterMap* body_params = nullptr;
 };

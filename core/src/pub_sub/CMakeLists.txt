@@ -28,6 +28,7 @@ set (PUB_SUB_INCLUDES
     http_transaction_end_event.h
     intrinsic_event_ids.h
     netflow_event.h
+    mcp_detection_event.h
     opportunistic_tls_event.h
     packet_events.h
     quic_events.h
@@ -56,7 +57,6 @@ add_library( pub_sub OBJECT
     http_form_data_event.cc
     http_request_body_event.cc
     http_transaction_end_event.cc
-    quic_events.cc
     sip_events.cc
     ssh_events.cc
 )

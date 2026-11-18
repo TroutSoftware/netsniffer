@@ -121,11 +121,16 @@ const PegInfo base_pegs[] =
     { CountType::SUM, "no_flow_no_inspector", "packets without flow: no flow tracking inspector configured" },
     { CountType::SUM, "no_flow_paf_no_flow", "packets without flow: PAF payload but no flow exists" },
 
+    // Per-flow memory accounting, sampled only at flow release/retire.
+    // Live-flow numbers are available via the dump_flows control command.
+    { CountType::MAX, "released_max_flow_mem", "peak memory used by a single logical flow in bytes (sampled at release)" },
+    { CountType::SUM, "released_total_flow_mem", "cumulative memory of all flows sampled at release/retire (excludes still-active flows)" },
+
     // Keep the NOW stats at the bottom as it requires special sum_stats logic
     { CountType::NOW, "allowlist_flows", "number of flows moved to the allowlist" },
     { CountType::NOW, "current_flows", "current number of flows in cache" },
-    { CountType::NOW, "uni_flows", "number of uni flows in cache" },
-    { CountType::NOW, "uni_ip_flows", "number of uni ip flows in cache" },
+    { CountType::NOW, "uni_flows", "number of uni flows in the uni prune candidate list" },
+    { CountType::NOW, "uni_ip_flows", "number of uni ip flows in the uni prune candidate list" },
     { CountType::END, nullptr, nullptr }
 };
 
@@ -175,6 +180,9 @@ void base_prep()
     stream_base_stats.pdu_eof_prunes = flow_con->get_proto_prune_count(PruneReason::END_OF_FLOW, PktType::PDU);
     stream_base_stats.allowlist_eof_prunes = flow_con->get_proto_prune_count(PruneReason::END_OF_FLOW, static_cast<PktType>(allowlist_lru_index));
     stream_base_stats.excess_to_allowlist = flow_con->get_excess_to_allowlist_count();
+
+    stream_base_stats.released_max_flow_mem = flow_con->get_released_max_flow_mem();
+    stream_base_stats.released_total_flow_mem = flow_con->get_released_total_flow_mem();
 
     stream_base_stats.allowlist_flows = flow_con->get_allowlist_flow_count();
     stream_base_stats.current_flows = flow_con->get_num_flows();
@@ -266,8 +274,10 @@ void StreamBase::tinit()
     assert(!flow_con);
     assert(config.flow_cache_cfg.max_flows);
 
-    // this is temp added to suppress the compiler error only
-    flow_con = new FlowControl(config.flow_cache_cfg);
+    FlowCacheConfig thread_cfg = config.flow_cache_cfg;
+    apply_daq_capability_gate(thread_cfg);
+
+    flow_con = new FlowControl(thread_cfg);
 
     {
         std::lock_guard<std::mutex> flow_control_lock(crash_dump_flow_control_mutex);

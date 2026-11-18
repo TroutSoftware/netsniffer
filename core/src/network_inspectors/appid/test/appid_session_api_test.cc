@@ -38,6 +38,13 @@ static AppIdConfig config;
 static OdpContext odpctxt(config, nullptr);
 static Flow flow;
 
+THREAD_LOCAL AppIdDebug* appidDebug = nullptr;
+
+namespace snort
+{
+    Packet* DetectionEngine::get_current_packet() { return nullptr; }
+}
+
 void ApplicationDescriptor::set_id(const Packet&, AppIdSession&, AppidSessionDirection, AppId, AppidChangeBits&) { }
 void AppIdModule::reset_stats() {}
 
@@ -84,6 +91,7 @@ void AppIdSession::set_application_ids_service(AppId service_id, AppidChangeBits
     api.set_application_ids_service(service_id, change_bits, *flow);
 }
 
+// cppcheck-suppress constParameterReference
 void AppIdSession::examine_ssl_metadata(AppidChangeBits& bits, bool)
 {
     api.set_tls_host(tsession->get_tls_sni());
@@ -424,7 +432,7 @@ TEST(appid_session_api, get_first_stream_appids_for_http3)
 TEST(appid_session_api, get_tls_host)
 {
     AppidChangeBits change_bits;
-    char* host = snort_strdup(APPID_UT_TLS_HOST);
+    const char* host = snort_strdup(APPID_UT_TLS_HOST);
     mock_session->tsession->set_tls_sni(host, 0);
     mock_session->examine_ssl_metadata(change_bits, true);
     auto val = mock_session->get_api().get_tls_host();
@@ -648,7 +656,7 @@ TEST(appid_session_api, is_http_inspection_done)
     CHECK_FALSE(val);
     mock_session->service_disco_state = APPID_DISCO_STATE_STATEFUL;
     mock_session->set_session_flags(APPID_SESSION_SSL_SESSION);
-    char* host = snort_strdup(APPID_UT_TLS_HOST);
+    const char* host = snort_strdup(APPID_UT_TLS_HOST);
     mock_session->tsession->set_tls_sni(host, 0);
     mock_session->examine_ssl_metadata(change_bits, true);
     val = mock_session->get_api().is_http_inspection_done();
@@ -706,7 +714,7 @@ TEST(appid_session_api, service_none_sni_reaches_threshold)
 
     AppidChangeBits change_bits;
 
-    char* sni = snort_strdup("random-sni.com");
+    const char* sni = snort_strdup("random-sni.com");
     asd.tsession->set_tls_sni(sni, 0);
     asd.examine_ssl_metadata(change_bits, true);
 

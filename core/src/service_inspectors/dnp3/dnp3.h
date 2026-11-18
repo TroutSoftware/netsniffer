@@ -97,6 +97,8 @@
 #define DNP3_OK true
 #define DNP3_FAIL false
 
+#define DNP3_MAX_OCTETS 2920 // using max length of dnp3 packet (DNP3_LPDU_MAX) times 10
+
 struct Dnp3Stats
 {
     PegCount total_packets;
@@ -170,6 +172,7 @@ struct dnp3_session_data_t
 class Dnp3FlowData : public snort::FlowData
 {
 public:
+    FLOW_DATA_SIZE_OF(Dnp3FlowData)
     Dnp3FlowData();
     ~Dnp3FlowData() override;
 

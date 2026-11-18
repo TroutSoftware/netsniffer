@@ -215,7 +215,7 @@ RpcServiceDetector::RpcServiceDetector(ServiceDiscovery* sd)
     proto = IpProtocol::TCP;
     detectorType = DETECTOR_TYPE_DECODER;
 
-    struct rpcent* rpc;
+    const struct rpcent* rpc;
     RPCProgram* prog;
 
     if (!rpc_programs)
@@ -224,7 +224,7 @@ RpcServiceDetector::RpcServiceDetector(ServiceDiscovery* sd)
         {
             if (rpc->r_name)
             {
-                prog = (RPCProgram*)snort_calloc(sizeof(RPCProgram));
+                prog = static_cast<RPCProgram*>(snort_calloc(sizeof(RPCProgram)));
                 prog->program = rpc->r_number;
                 prog->next = rpc_programs;
                 rpc_programs = prog;
@@ -359,11 +359,8 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
     AppIdSession& asd, Packet* pkt, ServiceRPCData* rd, const char** pname, uint32_t* program)
 {
     const ServiceRPCCall* call = nullptr;
-    const ServiceRPCReply* reply = nullptr;
-    const ServiceRPCPortmap* pm = nullptr;
     const ServiceRPCAuth* a = nullptr;
     uint32_t tmp = 0;
-    uint32_t val = 0;
     const uint8_t* end = nullptr;
     const RPCProgram* rprog = nullptr;
 
@@ -380,7 +377,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
             if (size < sizeof(ServiceRPC))
                 return APPID_NOMATCH;
 
-            const ServiceRPC* rpc = (const ServiceRPC*)data;
+            const ServiceRPC* rpc = reinterpret_cast<const ServiceRPC*>(data);
 
             if (ntohl(rpc->type) == RPC_TYPE_REPLY)
             {
@@ -396,7 +393,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
         rd->state = RPC_STATE_DONE;
         if (size < sizeof(ServiceRPCCall))
             return APPID_NOT_COMPATIBLE;
-        call = (const ServiceRPCCall*)data;
+        call = reinterpret_cast<const ServiceRPCCall*>(data);
         if (ntohl(call->header.type) != RPC_TYPE_CALL)
             return APPID_NOT_COMPATIBLE;
         if (ntohl(call->version) != 2)
@@ -408,7 +405,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
         if (sizeof(ServiceRPCCall) > (tmp > size ? 0 : size - tmp))
             return APPID_NOT_COMPATIBLE;
         data += (sizeof(ServiceRPCCall) - sizeof(ServiceRPCAuth)) + tmp;
-        a = (const ServiceRPCAuth*)data;
+        a = reinterpret_cast<const ServiceRPCAuth*>(data);
         tmp = ntohl(a->length);
         if (sizeof(ServiceRPCAuth) > (tmp > (unsigned)(end-data) ? 0 : (unsigned)(end-data) - tmp))
             return APPID_NOT_COMPATIBLE;
@@ -423,7 +420,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                 if ((PROGRAM_LENGTH + VERSION_LENGTH + sizeof(NetId)) > (unsigned)(end - data))
                     return APPID_NOT_COMPATIBLE;
                 data += (PROGRAM_LENGTH + VERSION_LENGTH);
-                const NetId* net_id = (const NetId*) data;
+                const NetId* net_id = reinterpret_cast<const NetId*>(data);
                 tmp = ntohl(net_id->length);
                 if (tmp == 0 or tmp > (unsigned)(end - data) - sizeof(NetId))
                     return APPID_NOT_COMPATIBLE;
@@ -436,8 +433,8 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
             {
                 if (end-data < (int)sizeof(ServiceRPCPortmap))
                     return APPID_NOT_COMPATIBLE;
-                pm = (const ServiceRPCPortmap*)data;
-                rd->proto = (IpProtocol)ntohl(pm->proto);
+                const ServiceRPCPortmap* pm = reinterpret_cast<const ServiceRPCPortmap*>(data);
+                rd->proto = static_cast<IpProtocol>(ntohl(pm->proto));
             }
             break;
         default:
@@ -456,7 +453,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
         rd->state = RPC_STATE_DONE;
         if (size < sizeof(ServiceRPCReply))
             return APPID_NOMATCH;
-        reply = (const ServiceRPCReply*)data;
+        const ServiceRPCReply* reply = reinterpret_cast<const ServiceRPCReply*>(data);
         if (ntohl(reply->header.type) != RPC_TYPE_REPLY)
             return APPID_NOMATCH;
 
@@ -483,7 +480,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
             return APPID_NOMATCH;
         data += sizeof(ServiceRPCReply) + tmp;
         tmp = ntohl(reply->reply_state);
-        val = ntohl(reply->state);
+        const uint32_t val = ntohl(reply->state);
         if (tmp == RPC_REPLY_ACCEPTED)
         {
             if (val > RPC_MAX_ACCEPTED)
@@ -497,7 +494,8 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                 {
                     if (sizeof(UniversalAddress) > (unsigned)(end-data))
                         return APPID_NOMATCH;
-                    const UniversalAddress* u_addr = (const UniversalAddress*) data;
+                    const UniversalAddress* u_addr =
+                        reinterpret_cast<const UniversalAddress*>(data);
                     tmp = ntohl(u_addr->length);
                     if (tmp == 0 or tmp > (unsigned)(end - data) - sizeof(UniversalAddress))
                         return APPID_NOMATCH;
@@ -532,7 +530,7 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                     const ServiceRPCPortmapReply* pmr = nullptr;
                     if (end-data < (int)sizeof(ServiceRPCPortmapReply))
                         return APPID_NOMATCH;
-                    pmr = (const ServiceRPCPortmapReply*)data;
+                    pmr = reinterpret_cast<const ServiceRPCPortmapReply*>(data);
                     if (pmr->port)
                     {
                         const SfIp* dip = pkt->ptrs.ip_api.get_dst();
@@ -540,12 +538,13 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
                         tmp = ntohl(pmr->port);
 
                         AppIdSession* pf = AppIdSession::create_future_session(pkt, dip, 0, sip,
-                            (uint16_t)tmp, rd->proto, asd.config.snort_proto_ids[PROTO_INDEX_SUNRPC],
+                            static_cast<uint16_t>(tmp), rd->proto,
+                            asd.config.snort_proto_ids[PROTO_INDEX_SUNRPC],
                             asd.get_odp_ctxt(), false, false, true);
 
                         if (pf)
                         {
-                            pf->add_flow_data_id((uint16_t)tmp, this);
+                            pf->add_flow_data_id(static_cast<uint16_t>(tmp), this);
                             pf->service_disco_state = APPID_DISCO_STATE_STATEFUL;
                             pf->set_session_flags(asd.get_session_flags(
                                 APPID_SESSION_SPECIAL_MONITORED |
@@ -582,8 +581,6 @@ int RpcServiceDetector::validate_packet(const uint8_t* data, uint16_t size,
 int RpcServiceDetector::rpc_udp_validate(AppIdDiscoveryArgs& args)
 {
     ServiceRPCData* rd;
-    AppIdServiceSubtype sub;
-    AppIdServiceSubtype* subtype;
     uint32_t program = 0;
     const char* pname = nullptr;
     int rval;
@@ -591,6 +588,7 @@ int RpcServiceDetector::rpc_udp_validate(AppIdDiscoveryArgs& args)
     Packet* pkt = args.pkt;
     const AppidSessionDirection dir = args.dir;
     uint16_t size = args.size;
+    AppIdServiceSubtypeList subtypes;
 
     if (!size)
     {
@@ -598,7 +596,7 @@ int RpcServiceDetector::rpc_udp_validate(AppIdDiscoveryArgs& args)
         goto done;
     }
 
-    rd = (ServiceRPCData*)data_get(args.asd);
+    rd = static_cast<ServiceRPCData*>(data_get(args.asd));
     if (!rd)
     {
         rd = new ServiceRPCData((dir == APP_ID_FROM_INITIATOR) ? RPC_STATE_CALL : RPC_STATE_REPLY);
@@ -620,21 +618,20 @@ done:
         {
             if (pname && *pname)
             {
-                sub.service = pname;
-                subtype = &sub;
+                AppIdServiceSubtype* subtype = subtypes.emplace();
+                if (subtype)
+                    subtype->service = pname;
             }
             else if (program)
             {
                 char subname[64];
                 snprintf(subname, sizeof(subname), "(%u)", program);
-                sub.service = subname;
-                subtype = &sub;
+                AppIdServiceSubtype* subtype = subtypes.emplace();
+                if (subtype)
+                    subtype->service = subname;
             }
-            else
-                subtype = nullptr;
-
-            add_service(args.change_bits, args.asd, pkt, dir, APP_ID_SUN_RPC,
-                nullptr, nullptr, subtype);
+            add_service_with_subtypes(args.change_bits, args.asd, pkt, dir, APP_ID_SUN_RPC,
+                    nullptr, nullptr, subtypes);
         }
         args.asd.set_session_flags(APPID_SESSION_CONTINUE);
         return APPID_SUCCESS;
@@ -670,19 +667,18 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
     const ServiceRPCCall* call;
     const ServiceRPCReply* reply;
 
-    AppIdServiceSubtype sub;
-    AppIdServiceSubtype* subtype;
     uint32_t program = 0;
     const char* pname = nullptr;
     const uint8_t* data = args.data;
     Packet* pkt = args.pkt;
     AppidSessionDirection dir = args.dir;
     uint16_t size = args.size;
+    AppIdServiceSubtypeList subtypes;
 
     if (!size)
         goto inprocess;
 
-    rd = (ServiceRPCData*)data_get(args.asd);
+    rd = static_cast<ServiceRPCData*>(data_get(args.asd));
     if (!rd)
     {
         rd = new ServiceRPCData(RPC_STATE_CALL); 
@@ -720,7 +716,7 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
         case RPC_TCP_STATE_FRAG:
             if (size < sizeof(ServiceRPCFragment))
                 goto bail;
-            frag = (const ServiceRPCFragment*)data;
+            frag = reinterpret_cast<const ServiceRPCFragment*>(data);
             data += sizeof(ServiceRPCFragment);
             size -= sizeof(ServiceRPCFragment);
 
@@ -740,7 +736,7 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
                 size -= length;
                 if (rd->tcppos[dir] >= offsetof(ServiceRPCCall, cred))
                 {
-                    call = (ServiceRPCCall*)rd->tcpdata[dir];
+                    call = reinterpret_cast<ServiceRPCCall*>(rd->tcpdata[dir]);
                     if (ntohl(call->header.type) != RPC_TYPE_CALL)
                         goto bail;
                     if (ntohl(call->version) != 2)
@@ -760,7 +756,7 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
                 size -= length;
                 if (rd->tcppos[dir] >= offsetof(ServiceRPCReply, verify))
                 {
-                    reply = (ServiceRPCReply*)rd->tcpdata[dir];
+                    reply = reinterpret_cast<ServiceRPCReply*>(rd->tcpdata[dir]);
                     if (ntohl(reply->header.type) != RPC_TYPE_REPLY)
                         goto fail;
                     rd->tcpstate[dir] = RPC_TCP_STATE_VERIFY;
@@ -782,7 +778,8 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
                 // this warning:
                 //     dereferencing type-punned pointer will break strict-aliasing rules
                 // investigate recoding to eliminate this and improve readability
-                length = ntohl(((ServiceRPCCall*)rd->tcpdata[dir])->cred.length);
+                auto* tcp_call = reinterpret_cast<ServiceRPCCall*>(rd->tcpdata[dir]);
+                length = ntohl(tcp_call->cred.length);
                 if (length > (rd->tcpsize[dir] & ~RPC_TCP_FRAG_MASK) ||
                     rd->tcpfragpos[dir]+length > (rd->tcpsize[dir] & ~RPC_TCP_FRAG_MASK))
                     goto bail;
@@ -799,8 +796,9 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
             size -= length;
             if (rd->tcppos[dir] >= rd->tcpauthsize[dir])
             {
-                ((ServiceRPCCall*)rd->tcpdata[dir])->cred.flavor = 0;
-                ((ServiceRPCCall*)rd->tcpdata[dir])->cred.length = 0;
+                auto* tcp_call = reinterpret_cast<ServiceRPCCall*>(rd->tcpdata[dir]);
+                tcp_call->cred.flavor = 0;
+                tcp_call->cred.length = 0;
                 rd->tcpstate[dir] = RPC_TCP_STATE_VERIFY;
                 rd->tcppos[dir] = 0;
             }
@@ -821,9 +819,11 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
             if (rd->tcppos[dir] >= sizeof(ServiceRPCAuth))
             {
                 if (dir == APP_ID_FROM_INITIATOR)
-                    length = ntohl(((ServiceRPCCall*)rd->tcpdata[dir])->verify.length);
+                    length = ntohl(reinterpret_cast<ServiceRPCCall*>(
+                        rd->tcpdata[dir])->verify.length);
                 else
-                    length = ntohl(((ServiceRPCReply*)rd->tcpdata[dir])->verify.length);
+                    length = ntohl(reinterpret_cast<ServiceRPCReply*>(
+                        rd->tcpdata[dir])->verify.length);
                 if (length > (rd->tcpsize[dir] & ~RPC_TCP_FRAG_MASK) ||
                     rd->tcpfragpos[dir]+length > (rd->tcpsize[dir] & ~RPC_TCP_FRAG_MASK))
                     goto bail;
@@ -846,8 +846,9 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
             {
                 if (dir == APP_ID_FROM_INITIATOR)
                 {
-                    ((ServiceRPCCall*)rd->tcpdata[dir])->verify.flavor = 0;
-                    ((ServiceRPCCall*)rd->tcpdata[dir])->verify.length = 0;
+                    auto* tcp_call = reinterpret_cast<ServiceRPCCall*>(rd->tcpdata[dir]);
+                    tcp_call->verify.flavor = 0;
+                    tcp_call->verify.length = 0;
                     rd->tcpstate[dir] = RPC_TCP_STATE_PARTIAL;
                     rd->tcppos[dir] = sizeof(ServiceRPCCall);
                     if (rd->tcpfragpos[dir] >= (rd->tcpsize[dir] & ~RPC_TCP_FRAG_MASK))
@@ -871,8 +872,9 @@ int RpcServiceDetector::rpc_tcp_validate(AppIdDiscoveryArgs& args)
                 }
                 else
                 {
-                    ((ServiceRPCReply*)rd->tcpdata[dir])->verify.flavor = 0;
-                    ((ServiceRPCReply*)rd->tcpdata[dir])->verify.length = 0;
+                    auto* tcp_reply = reinterpret_cast<ServiceRPCReply*>(rd->tcpdata[dir]);
+                    tcp_reply->verify.flavor = 0;
+                    tcp_reply->verify.length = 0;
                     rd->tcpstate[dir] = RPC_TCP_STATE_REPLY_HEADER;
                     if (rd->tcpfragpos[dir]+sizeof(uint32_t) > (rd->tcpsize[dir] &
                         ~RPC_TCP_FRAG_MASK))
@@ -978,20 +980,21 @@ inprocess:
         {
             if (pname && *pname)
             {
-                sub.service = pname;
-                subtype = &sub;
+                AppIdServiceSubtype* subtype = subtypes.emplace();
+                if (subtype)
+                    subtype->service = pname;
             }
             else if (program)
             {
                 char subname[64];
                 snprintf(subname, sizeof(subname), "(%u)", program);
-                sub.service = subname;
-                subtype = &sub;
+                AppIdServiceSubtype* subtype = subtypes.emplace();
+                if (subtype)
+                    subtype->service = subname;
             }
-            else
-                subtype = nullptr;
-            add_service(args.change_bits, args.asd, pkt, dir, APP_ID_SUN_RPC,
-                nullptr, nullptr, subtype);
+
+            add_service_with_subtypes(args.change_bits, args.asd, pkt, dir, APP_ID_SUN_RPC,
+                nullptr, nullptr, subtypes);
         }
         args.asd.set_session_flags(APPID_SESSION_CONTINUE);
         return APPID_SUCCESS;
@@ -1031,4 +1034,3 @@ bail:
     }
     goto done;
 }
-

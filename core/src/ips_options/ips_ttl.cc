@@ -70,13 +70,12 @@ bool TtlOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const TtlOption& rhs = (const TtlOption&)ips;
+    const TtlOption& rhs = static_cast<const TtlOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus TtlOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(ttlCheckPerfStats);
 
     if(!p->ptrs.ip_api.is_ip())
@@ -151,7 +150,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* ttl_ctor(Module* p, IpsInfo&)
 {
-    TtlModule* m = (TtlModule*)p;
+    const TtlModule* m = static_cast<TtlModule*>(p);
     return new TtlOption(m->data);
 }
 
@@ -194,4 +193,3 @@ const BaseApi* ips_ttl[] =
     &ttl_api.base,
     nullptr
 };
-

@@ -120,20 +120,24 @@ int AppIdDiscovery::add_service_port(AppIdDetector*, const ServiceDetectorPort&)
 void ApplicationDescriptor::set_id(const snort::Packet&, AppIdSession&, AppidSessionDirection, AppId, AppidChangeBits&){}
 int dcerpc_validate(const uint8_t*, int){return 0; }
 AppIdDiscovery::~AppIdDiscovery() { }
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
 AppIdConfig config;
 AppIdContext ctxt(config);
 ServiceDetector::ServiceDetector() {}
+// cppcheck-suppress constParameterReference
 int ServiceDetector::incompatible_data(AppIdSession& asd, const snort::Packet* pkt, AppidSessionDirection dir) { return 0; }
+// cppcheck-suppress constParameterReference
 int ServiceDetector::fail_service(AppIdSession& asd, const snort::Packet* pkt, AppidSessionDirection dir) { return 0; }
+// cppcheck-suppress constParameterReference
 int ServiceDetector::service_inprocess(AppIdSession& asd, const snort::Packet* pkt, AppidSessionDirection dir) { return 0; }
-int ServiceDetector::add_service_consume_subtype(AppIdSession& asd, const snort::Packet* pkt,
-    AppidSessionDirection dir, AppId appId, const char* vendor, const char* version,
-    AppIdServiceSubtype* subtype, AppidChangeBits& change_bits)
+int ServiceDetector::add_service_with_subtypes(AppidChangeBits& change_bits, AppIdSession& asd,
+    const snort::Packet* pkt, AppidSessionDirection dir, AppId appId, const char* vendor,
+    const char* version, AppIdServiceSubtypeList& subtypes)
     { return 0; }
+// cppcheck-suppress constParameterReference
 int ServiceDetector::add_service(AppidChangeBits& change_bits, AppIdSession& asd,
     const snort::Packet* pkt, AppidSessionDirection dir, AppId appId, const char* vendor,
-    const char* version, AppIdServiceSubtype* subtype)
+    const char* version)
     { return 0; }
 void ServiceDetector::register_appid(AppId appId, unsigned extractsInfo, OdpContext& odp_ctxt) {}
 
@@ -212,7 +216,8 @@ AppIdFlowData* AppIdSession::get_flow_data(unsigned) const
 //void AppIdPegCounts::inc_payload_count(AppId, bool) { }
 
 THREAD_LOCAL AppIdStats appid_stats;
-void AppIdModule::show_dynamic_stats() { }
+void AppIdModule::collect_dynamic_stats(snort::stats::Builder&,
+    const snort::stats::DynamicStatsPolicy&) const { }
 
 // Stubs for app_info_table.cc
 AppInfoTableEntry* AppInfoManager::get_app_info_entry(int)

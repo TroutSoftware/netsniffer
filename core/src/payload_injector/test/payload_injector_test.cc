@@ -61,7 +61,9 @@ void Active::block_session(snort::Packet* p, bool force)
         p->flow->set_state(Flow::FlowState::BLOCK);
 }
 void DetectionEngine::disable_all(snort::Packet*) { }
+Flow::Flow() { }
 Flow::~Flow() = default;
+void FlowStash::reset() { }
 IpsContext::IpsContext(unsigned int) { }
 IpsContext::~IpsContext() = default;
 DataBus::DataBus() = default;
@@ -105,8 +107,8 @@ bool Inspector::get_buf(const char*, Packet*, InspectionBuffer&) { return false;
 class StreamSplitter* Inspector::get_splitter(bool) { return nullptr; }
 }
 
-void show_stats(PegCount*, const PegInfo*, unsigned, const char*) { }
-void show_stats(PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
+void show_stats(const PegCount*, const PegInfo*, unsigned, const char*) { }
+void show_stats(const PegCount*, const PegInfo*, const std::vector<unsigned>&, const char*, FILE*) { }
 
 // MockInspector class
 
@@ -176,7 +178,7 @@ TEST_GROUP(payload_injector_test)
 {
     PayloadInjectorModule mod;
     InjectionControl control;
-    PayloadInjectorCounts* counts = (PayloadInjectorCounts*)mod.get_counts();
+    PayloadInjectorCounts* counts = reinterpret_cast<PayloadInjectorCounts*>(mod.get_counts());
     Flow flow;
     Active active;
 
@@ -546,7 +548,7 @@ TEST_GROUP(payload_injector_translate_err_test)
 {
     PayloadInjectorModule mod;
     InjectionControl control;
-    PayloadInjectorCounts* counts = (PayloadInjectorCounts*)mod.get_counts();
+    PayloadInjectorCounts* counts = reinterpret_cast<PayloadInjectorCounts*>(mod.get_counts());
     Flow flow;
     Active active;
     InjectionReturnStatus status = INJECTION_SUCCESS;

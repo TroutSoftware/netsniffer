@@ -82,3 +82,43 @@ add_catch_test( dce_http_server_splitter_test
     SOURCES
         dce_http_server_splitter.cc
 )
+
+add_catch_test( dce_co_test
+    NO_TEST_SOURCE
+    SOURCES
+        test/dce_co_test.cc
+        dce_co.cc
+)
+
+add_catch_test( dce_co_frag_budget_test
+    NO_TEST_SOURCE
+    SOURCES
+        test/dce_co_frag_budget_test.cc
+        dce_co.cc
+)
+
+add_catch_test( dce_smb2_lru_test
+    NO_TEST_SOURCE
+    SOURCES
+        test/dce_smb2_lru_test.cc
+        dce_smb2.cc
+        dce_smb2_utils.cc
+)
+
+add_catch_test( dce_smb2_async_interim_test
+    NO_TEST_SOURCE
+    SOURCES
+        test/dce_smb2_async_interim_test.cc
+        dce_smb2_commands.cc
+        dce_smb2.cc
+        dce_smb2_utils.cc
+)
+
+add_catch_test( dce_smb2_inspect_bounds_test
+    NO_TEST_SOURCE
+    SOURCES
+        test/dce_smb2_inspect_bounds_test.cc
+        dce_smb2_commands.cc
+        dce_smb2.cc
+        dce_smb2_utils.cc
+)

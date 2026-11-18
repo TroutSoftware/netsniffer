@@ -26,6 +26,7 @@
 #include <cstdint>
 #include "dce_smb2.h"
 
+#include "detection/detection_engine.h"
 #include "flow/flow_key.h"
 #include "stream/stream.h"
 
@@ -79,29 +80,39 @@ DCE2_Smb2RequestTracker::~DCE2_Smb2RequestTracker()
 
 DCE2_Smb2FileTracker::DCE2_Smb2FileTracker(uint64_t file_id_v, DCE2_Smb2TreeTracker* ttr_v,
     DCE2_Smb2SessionTracker* str_v, Flow* flow_v) :   file_id(file_id_v), ttr(ttr_v),
-    str(str_v), parent_flow(flow_v), ignore(false), upload(false), multi_channel_file(false)
+    str(str_v), parent_flow(flow_v), ignore(false), upload(false), multi_channel_file(false),
+    in_lru(false)
 {
     dce2_smb_stats.v2_total_file_trackers++;
     SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL,
         GET_CURRENT_PACKET, "File tracker 0x%" PRIx64 " created\n", file_id);
-    str->update_cache_size(sizeof(DCE2_Smb2FileTracker));
+    // Newly created is most recently used, so enter at the front, furthest from eviction.
+    if (smb2_ftracker_lru)
+    {
+        smb2_ftracker_lru->push_front(this);
+        lru_pos = smb2_ftracker_lru->begin();
+        in_lru = true;
+        if (dce2_smb_stats.v2_max_file_trackers < smb2_ftracker_lru->size())
+            dce2_smb_stats.v2_max_file_trackers = smb2_ftracker_lru->size();
+    }
+    str->update_cache_size(SMB2_FTRACKER_CACHE_COST);
 }
 
 DCE2_Smb2FileTracker::~DCE2_Smb2FileTracker(void)
 {
     SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_DEBUG_LEVEL,
         nullptr, "File tracker with file id: 0x%" PRIx64 " tracker terminating\n", file_id);
+    // Unlink first so a partly destroyed tracker can never be picked as a victim.
+    if (in_lru and smb2_ftracker_lru)
+    {
+        smb2_ftracker_lru->erase(lru_pos);
+        in_lru = false;
+    }
     auto all_conn_trackers = str->conn_trackers.get_all_entry();
     for ( const auto& h : all_conn_trackers )
     {
-        if (h.second->ftracker_tcp)
-        {
-            if (h.second->ftracker_tcp == this)
-            {
-                h.second->ftracker_tcp = nullptr;
-                h.second->ftracker_local = nullptr;
-            }
-        }
+        if (h.second->ftracker_tcp and h.second->ftracker_tcp == this)
+            h.second->set_ftracker_tcp(nullptr);
     }
     if (multi_channel_file)
         dce2_smb_stats.v2_mc_file_transfers++;
@@ -110,7 +121,7 @@ DCE2_Smb2FileTracker::~DCE2_Smb2FileTracker(void)
         DCE2_CoCleanTracker(co_tracker);
         snort_free((void*)co_tracker);
     }
-    str->update_cache_size(-(int)sizeof(DCE2_Smb2FileTracker));
+    str->update_cache_size(-(int)SMB2_FTRACKER_CACHE_COST);
 }
 
 DCE2_Smb2TreeTracker::DCE2_Smb2TreeTracker (uint32_t tid_v, uint8_t share_type_v) :
@@ -146,6 +157,9 @@ DCE2_Smb2SessionTracker::~DCE2_Smb2SessionTracker(void)
     {
         removeTtracker(h.first);
     }
+    int pending_requests = req_trackers.GetSize();
+    if ( pending_requests > 0 )
+        update_cache_size(-(int)(pending_requests * sizeof(DCE2_Smb2RequestTracker)));
     update_cache_size(-(int)sizeof(DCE2_Smb2SessionTracker));
 }
 
@@ -159,12 +173,11 @@ void DCE2_Smb2SessionTracker::removeSessionFromAllConnection()
         {
             for (auto& t : all_tree_trackers)
             {
-                DCE2_Smb2FileTracker* ftr = t.second->findFtracker(
+                const DCE2_Smb2FileTracker* ftr = t.second->findFtracker(
                     h.second->ftracker_tcp->file_id);
                 if (ftr and ftr == h.second->ftracker_tcp)
                 {
-                    h.second->ftracker_tcp = nullptr;
-                    h.second->ftracker_local = nullptr;
+                    h.second->set_ftracker_tcp(nullptr);
                     break;
                 }
             }
@@ -176,6 +189,18 @@ void DCE2_Smb2SessionTracker::removeSessionFromAllConnection()
 void DCE2_Smb2SessionTracker::update_cache_size(int size)
 {
     DCE2_SmbSessionCacheUpdateSize(size);
+}
+
+// A session can span several TCP flows, so every channel has to be consulted.
+bool DCE2_Smb2SessionTracker::is_ftracker_active(const DCE2_Smb2FileTracker* ftracker)
+{
+    auto all_conn_trackers = conn_trackers.get_all_entry();
+    for ( const auto& h : all_conn_trackers )
+    {
+        if (h.second->ftracker_tcp == ftracker)
+            return true;
+    }
+    return false;
 }
 
 DCE2_Smb2SsnData::DCE2_Smb2SsnData()
@@ -190,8 +215,11 @@ DCE2_Smb2SsnData::DCE2_Smb2SsnData()
     max_file_depth = FileService::get_max_file_depth();
     max_outstanding_requests = 10;  // Until Negotiate
     flow = p->flow;
+    flow_id.key = *flow->key;
     SmbKeyHash hasher;
     flow_key = hasher(*flow->key);
+    if (!flow_key)
+        flow_key = 1;
 }
 
 DCE2_Smb2SsnData::~DCE2_Smb2SsnData()
@@ -202,9 +230,7 @@ DCE2_Smb2SsnData::~DCE2_Smb2SsnData()
         auto sptr = it->second.lock();
         if (sptr)
         {
-            if (flow_key)
-                sptr->removeConnectionTracker(flow_key); // remove tcp connection from session
-                                                         // tracker
+            sptr->removeConnectionTracker(flow_id);
             auto ttrs = sptr->tree_trackers.get_all_entry();
             for (const auto& titer: ttrs)
             {
@@ -223,15 +249,19 @@ DCE2_Smb2SsnData::~DCE2_Smb2SsnData()
 
 void DCE2_Smb2SsnData::set_reassembled_data(uint8_t* nb_ptr, uint16_t co_len)
 {
-    NbssHdr* nb_hdr = (NbssHdr*)nb_ptr;
-    SmbNtHdr* smb_hdr = (SmbNtHdr*)((uint8_t*)nb_hdr + sizeof(NbssHdr));
+    NbssHdr* nb_hdr = reinterpret_cast<NbssHdr*>(nb_ptr);
+    SmbNtHdr* smb_hdr = reinterpret_cast<SmbNtHdr*>(reinterpret_cast<uint8_t*>(nb_hdr) + sizeof(NbssHdr));
+
+    // Drop ftracker_tcp if the underlying file tracker was freed; the fields below
+    // fall back to a zeroed id/tid when it is null.
+    revalidate_ftracker_tcp();
 
     uint32_t tid = (ftracker_tcp and ftracker_tcp->ttr) ? ftracker_tcp->ttr->get_tid() : 0;
     smb_hdr->smb_tid = alignedNtohl((const uint32_t*)&tid);
 
     if (DetectionEngine::get_current_packet()->is_from_client())
     {
-        Smb2WriteRequestHdr* write = (Smb2WriteRequestHdr*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+        Smb2WriteRequestHdr* write = reinterpret_cast<Smb2WriteRequestHdr*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint32_t nb_len = sizeof(SmbNtHdr) + sizeof(Smb2WriteRequestHdr) + co_len;
 
         if (nb_len > UINT16_MAX)
@@ -250,7 +280,7 @@ void DCE2_Smb2SsnData::set_reassembled_data(uint8_t* nb_ptr, uint16_t co_len)
     }
     else
     {
-        Smb2ReadResponseHdr* read = (Smb2ReadResponseHdr*)((uint8_t*)smb_hdr + sizeof(SmbNtHdr));
+        Smb2ReadResponseHdr* read = reinterpret_cast<Smb2ReadResponseHdr*>(reinterpret_cast<uint8_t*>(smb_hdr) + sizeof(SmbNtHdr));
         uint32_t nb_len = sizeof(SmbNtHdr) + sizeof(Smb2ReadResponseHdr) + co_len;
 
         if (nb_len > UINT16_MAX)
@@ -292,9 +322,9 @@ static inline bool DCE2_Smb2FindSidTid(DCE2_Smb2SsnData* ssd, const uint64_t sid
 static void DCE2_Smb2Inspect(DCE2_Smb2SsnData* ssd, const Smb2Hdr* smb_hdr,
     const uint8_t* end)
 {
-    const uint8_t* smb_data = (const uint8_t*)smb_hdr + SMB2_HEADER_LENGTH;
+    const uint8_t* smb_data = reinterpret_cast<const uint8_t*>(smb_hdr) + SMB2_HEADER_LENGTH;
     uint16_t command = alignedNtohs(&(smb_hdr->command));
-    int16_t structure_size = alignedNtohs((const uint16_t*)smb_data);
+    int16_t structure_size = alignedNtohs(reinterpret_cast<const uint16_t*>(smb_data));
     DCE2_Smb2SessionTracker* str = nullptr;
     DCE2_Smb2TreeTracker* ttr = nullptr;
     uint32_t tid = 0;
@@ -315,8 +345,13 @@ static void DCE2_Smb2Inspect(DCE2_Smb2SsnData* ssd, const Smb2Hdr* smb_hdr,
     case SMB2_COM_NEGOTIATE:
         if (structure_size == SMB2_NEGOTIATE_RESPONSE_STRUC_SIZE)
         {
-            const Smb2NegotiateResponseHdr* neg_resp_hdr = (const
-                Smb2NegotiateResponseHdr*)smb_data;
+            // Avoid forming a pointer beyond one-past-the-end for the check.
+            if (static_cast<size_t>(end - smb_data) < SMB2_NEGOTIATE_RESPONSE_STRUC_SIZE - 1)
+            {
+                dce2_smb_stats.v2_hdr_err++;
+                break;
+            }
+            const Smb2NegotiateResponseHdr* neg_resp_hdr = reinterpret_cast<const Smb2NegotiateResponseHdr*>(smb_data);
             if (neg_resp_hdr->capabilities & SMB2_GLOBAL_CAP_MULTI_CHANNEL)
             {
                 //total multichannel sessions
@@ -492,6 +527,24 @@ void DCE2_Smb2Process(DCE2_Smb2SsnData* ssd)
     // Process the header
     if (p->is_pdu_start())
     {
+        // Skip leading NBSS keep-alive frames.  NbssIsEmptyCtrl treats type
+        // 0x85 as header-only so its advertised length cannot consume the
+        // following SMB message.
+        while (data_len >= sizeof(NbssHdr) and
+            NbssIsEmptyCtrl(reinterpret_cast<const NbssHdr*>(data_ptr)))
+        {
+            data_ptr += sizeof(NbssHdr);
+            data_len -= sizeof(NbssHdr);
+            dce2_smb_stats.v2_empty_nbss_frames_consumed++;
+        }
+        if (data_len == 0)
+        {
+            // Batch of empty frames with no SMB message behind it: nothing to
+            // parse and nothing a rule can match on.
+            DetectionEngine::disable_all(p);
+            return;
+        }
+
         // Check header length
         if (data_len < sizeof(NbssHdr) + SMB2_HEADER_LENGTH)
         {
@@ -500,8 +553,8 @@ void DCE2_Smb2Process(DCE2_Smb2SsnData* ssd)
                 "Header error with data length %d\n",data_len);
             return;
         }
-        const Smb2Hdr* smb_hdr = (const Smb2Hdr*)(data_ptr + sizeof(NbssHdr));
-        const Smb2TransformHdr* smb_trans_hdr = (const Smb2TransformHdr*)(data_ptr +
+        const Smb2Hdr* smb_hdr = reinterpret_cast<const Smb2Hdr*>(data_ptr + sizeof(NbssHdr));
+        const Smb2TransformHdr* smb_trans_hdr = reinterpret_cast<const Smb2TransformHdr*>(data_ptr +
             sizeof(NbssHdr));
         uint32_t smb_proto_id = SmbTransformId(smb_trans_hdr);
         uint64_t sid = smb_trans_hdr->session_id;
@@ -527,31 +580,46 @@ void DCE2_Smb2Process(DCE2_Smb2SsnData* ssd)
         // multiple requests up to the maximum size<88> that is supported by the transport."
         do
         {
-            DCE2_Smb2Inspect(ssd, smb_hdr, data_ptr +  data_len);
+            // Compound requests advance smb_hdr by a sender-controlled offset;
+            // revalidate the remaining bytes before reading the next header.
+            const uint8_t* const hdr_start = reinterpret_cast<const uint8_t*>(smb_hdr);
+            const uint8_t* const packet_end = data_ptr + data_len;
+            const size_t remaining = static_cast<size_t>(packet_end - hdr_start);
+            if (remaining < SMB2_HEADER_LENGTH + sizeof(uint16_t))
+            {
+                dce2_smb_stats.v2_hdr_err++;
+                SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_ERROR_LEVEL, p,
+                    "truncated smb2 header\n");
+                return;
+            }
+
             // In case of message compounding, find the offset of the next smb command
             next_command_offset = alignedNtohl(&(smb_hdr->next_command));
-            if (next_command_offset + (const uint8_t*)smb_hdr > (data_ptr + data_len))
+            const bool bad_next_command_offset = next_command_offset and
+                (next_command_offset < SMB2_HEADER_LENGTH + sizeof(uint16_t) or
+                next_command_offset > remaining);
+
+            // Preserve inspection of the current command before reporting a bad
+            // following offset.  Existing stats account the current command even
+            // when its NextCommand field is malformed.
+            const uint8_t* const command_end =
+                next_command_offset and not bad_next_command_offset
+                ? hdr_start + next_command_offset : packet_end;
+            DCE2_Smb2Inspect(ssd, smb_hdr, command_end);
+
+            if (bad_next_command_offset)
             {
                 dce_alert(GID_DCE2, DCE2_SMB_BAD_NEXT_COMMAND_OFFSET,
-                    (dce2CommonStats*)&dce2_smb_stats, ssd->sd);
+                    reinterpret_cast<dce2CommonStats*>(&dce2_smb_stats), ssd->sd);
                 SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_ERROR_LEVEL,
                     p, "bad next command offset\n");
                 dce2_smb_stats.v2_bad_next_cmd_offset++;
                 return;
             }
+
             if (next_command_offset)
             {
-                // Check if adding next_command_offset would cause integer overflow
-                if (next_command_offset > SIZE_MAX - (uintptr_t)((const uint8_t*)smb_hdr))
-                {
-                    dce_alert(GID_DCE2, DCE2_SMB_BAD_NEXT_COMMAND_OFFSET,
-                        (dce2CommonStats*)&dce2_smb_stats, ssd->sd);
-                    SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_ERROR_LEVEL,
-                        p, "integer overflow in next command offset\n");
-                    dce2_smb_stats.v2_bad_next_cmd_offset++;
-                    return;
-                }
-                smb_hdr = (const Smb2Hdr*)((const uint8_t*)smb_hdr + next_command_offset);
+                smb_hdr = reinterpret_cast<const Smb2Hdr*>(command_end);
                 compound_request_index++;
             }
 
@@ -566,8 +634,8 @@ void DCE2_Smb2Process(DCE2_Smb2SsnData* ssd)
         }
         while (next_command_offset and smb_hdr);
     }
-    else if ( ssd->ftracker_tcp and ssd->ftracker_local and (ssd->ftracker_local->smb2_pdu_state ==
-        DCE2_SMB_PDU_STATE__RAW_DATA))
+    else if ( ssd->ftracker_local and (ssd->ftracker_local->smb2_pdu_state ==
+        DCE2_SMB_PDU_STATE__RAW_DATA) and ssd->revalidate_ftracker_tcp())
     {
         SMB_DEBUG(dce_smb_trace, DEFAULT_TRACE_OPTION_ID, TRACE_INFO_LEVEL,
             p, "raw data file_name_hash %" PRIu64 " fid 0x%" PRIx64 " dir %s\n",
@@ -586,13 +654,30 @@ DCE2_SmbVersion DCE2_Smb2Version(const Packet* p)
     if ( p->has_paf_payload() and
         (p->dsize > sizeof(NbssHdr) + DCE2_SMB_ID_SIZE) )     // DCE2_SMB_ID is u32
     {
-        const Smb2Hdr* smb_hdr = (const Smb2Hdr*)(p->data + sizeof(NbssHdr));
-        uint32_t smb_version_id = SmbId((const SmbNtHdr*)smb_hdr);
+        const uint8_t* data  = p->data;
+        uint16_t dsize = p->dsize;
 
-        if (smb_version_id == DCE2_SMB_ID)
-            return DCE2_SMB_VERSION_1;
-        else if (smb_version_id == DCE2_SMB2_ID)
-            return DCE2_SMB_VERSION_2;
+        // Skip any leading empty-ctrl frames batched by PAF so the magic
+        // comparison reads the first real NBSS message frame, not a
+        // keep-alive.  Failing to skip here causes the flow to be classified
+        // as DCE2_SMB_VERSION_NULL and permanently skipped.
+        while (dsize >= sizeof(NbssHdr) and
+            NbssIsEmptyCtrl(reinterpret_cast<const NbssHdr*>(data)))
+        {
+            data  += sizeof(NbssHdr);
+            dsize -= sizeof(NbssHdr);
+        }
+
+        if (dsize > sizeof(NbssHdr) + DCE2_SMB_ID_SIZE)
+        {
+            const Smb2Hdr* smb_hdr = reinterpret_cast<const Smb2Hdr*>(data + sizeof(NbssHdr));
+            uint32_t smb_version_id = SmbId(reinterpret_cast<const SmbNtHdr*>(smb_hdr));
+
+            if (smb_version_id == DCE2_SMB_ID)
+                return DCE2_SMB_VERSION_1;
+            else if (smb_version_id == DCE2_SMB2_ID)
+                return DCE2_SMB_VERSION_2;
+        }
     }
 
     return DCE2_SMB_VERSION_NULL;

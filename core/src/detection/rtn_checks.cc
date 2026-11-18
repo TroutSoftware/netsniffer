@@ -46,7 +46,7 @@ using namespace snort;
 #define CHECK_SRC_PORT       0x08
 #define CHECK_DST_PORT       0x10
 
-static int CheckAddrPort(sfip_var_t* rule_addr, PortObject* po, Packet* p,
+static int CheckAddrPort(sfip_var_t* rule_addr, const PortObject* po, Packet* p,
     uint32_t flags, int mode)
 {
     const SfIp* pkt_addr;
@@ -237,6 +237,7 @@ int CheckDstPortNotEq(Packet* p, RuleTreeNode* rtn_idx,
     return 0;
 }
 
+// cppcheck-suppress constParameterPointer ; preserve the public declaration and ABI
 int CheckProto(Packet* p, RuleTreeNode* rtn_idx, RuleFpList*, int check_ports)
 {
     if ( !check_ports )
@@ -260,4 +261,3 @@ int RuleListEnd(Packet*, RuleTreeNode*, RuleFpList*, int)
 {
     return 1;
 }
-

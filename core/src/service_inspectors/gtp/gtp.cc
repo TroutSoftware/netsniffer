@@ -26,6 +26,7 @@
 
 #include "gtp.h"
 
+#include <cinttypes>
 #include "protocols/packet.h"
 #include "trace/trace_api.h"
 
@@ -39,7 +40,7 @@ using namespace snort;
 THREAD_LOCAL GTP_Stats gtp_stats;
 
 // Analyzes GTP packets for anomalies/exploits.
-static inline int GTP_Process(const GTPConfig& config, Packet* p, GTP_Roptions* pRopts)
+static inline int GTP_Process(const GTPConfig& config, const Packet* p, GTP_Roptions* pRopts)
 {
     const uint8_t* gtp_buff =  p->data;
     static THREAD_LOCAL uint64_t msg_id = 0;
@@ -53,7 +54,7 @@ static inline int GTP_Process(const GTPConfig& config, Packet* p, GTP_Roptions* 
      * Using msg_id avoids initializing info_elements for every message
      * Tabled based info_elements improves information element search performance */
     gtpMsg.msg_id = ++msg_id;
-    debug_logf(gtp_inspect_trace, p, "message id: %lu\n", gtpMsg.msg_id);
+    debug_logf(gtp_inspect_trace, p, "message id: %" PRIu64 "\n", gtpMsg.msg_id);
 
     int status = gtp_parse(config, &gtpMsg, gtp_buff, p->dsize);
 
@@ -82,17 +83,18 @@ static GTP_Roptions* GTPGetNewSession(Packet* packetp)
 void GTPmain(const GTPConfig& config, Packet* packetp)
 {
     /* Attempt to get a previously allocated GTP block. */
-    GtpFlowData* gfd = (GtpFlowData*)packetp->flow->get_flow_data(GtpFlowData::inspector_id);
+    GtpFlowData* gfd = static_cast<GtpFlowData*>(
+        packetp->flow->get_flow_data(GtpFlowData::inspector_id));
     GTP_Roptions* pRopts = gfd ? &gfd->ropts : nullptr;
 
     if ( !pRopts )
     {
         pRopts = GTPGetNewSession(packetp);
 
+        // cppcheck-suppress knownConditionTrueFalse ; flow data may be absent before session setup
         if ( !pRopts )
             return;
     }
 
     GTP_Process(config, packetp, pRopts);
 }
-

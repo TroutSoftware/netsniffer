@@ -86,7 +86,7 @@ void KMapDelete(KMAP* km)
     snort_free(km);
 }
 
-static KEYNODE* KMapAddKeyNode(KMAP* km,void* key, int n, void* userdata)
+static KEYNODE* KMapAddKeyNode(KMAP* km,const void* key, int n, void* userdata)
 {
     KEYNODE* knode;
 
@@ -137,7 +137,7 @@ int KMapAdd(KMAP* km, void* key, int n, void* userdata)
 
     int type = 0;
     const unsigned char* P = (unsigned char*)key;
-    std::string xkey; // cppcheck-suppress variableScope
+    std::string xkey;
 
     if ( km->nocase )
     {
@@ -264,7 +264,7 @@ void* KMapFind(KMAP* ks, void* key, int n)
 {
     assert(n > 0);
 
-    std::string xkey; // cppcheck-suppress variableScope
+    std::string xkey;
     const unsigned char* T = (unsigned char*)key;
 
     if ( ks->nocase )
@@ -345,4 +345,3 @@ void* KMapFindNext(KMAP* km)
 }
 
 } //namespace snort
-

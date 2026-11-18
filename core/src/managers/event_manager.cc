@@ -87,7 +87,7 @@ void EventManager::release_plugins()
 // lookups
 
 static Output* get_out(const char* key)
-{ return (Output*)PluginManager::get_interface(key); }
+{ return static_cast<Output*>(PluginManager::get_interface(key)); }
 
 static Output* get_out(const char* key, const char* pfx)
 {
@@ -115,6 +115,7 @@ void EventManager::release_outputs(OutputSet* ofn)
     delete ofn;
 }
 
+// cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
 void EventManager::add_output(OutputSet** ofn, Logger* eh)
 {
     if ( !*ofn )
@@ -206,7 +207,7 @@ void EventManager::reload_outputs()
 }
 
 void EventManager::call_alerters(
-    OutputSet* idx, Packet* pkt, const char* message, const Event& event)
+    const OutputSet* idx, Packet* pkt, const char* message, const Event& event)
 {
     if ( idx )
     {
@@ -219,7 +220,7 @@ void EventManager::call_alerters(
 }
 
 void EventManager::call_loggers(
-    OutputSet* idx, Packet* pkt, const char* message, Event* event)
+    const OutputSet* idx, Packet* pkt, const char* message, Event* event)
 {
     if ( idx )
     {
@@ -230,4 +231,3 @@ void EventManager::call_loggers(
     for ( auto p : s_loggers.outputs )
         p->log(pkt, message, event);
 }
-

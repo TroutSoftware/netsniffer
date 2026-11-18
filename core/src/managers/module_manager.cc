@@ -235,15 +235,14 @@ static void dump_field_lua(const string& key, const Parameter* p, bool table = f
     else if ( !p->deflt )
         return;
 
-    else if ( p->is_quoted() )
-    {
-        const char* s = p->deflt;
-        cout << key << " = '" << s << "'";
-    }
     else
     {
-        const char* s = p->deflt ? p->deflt : "0";
-        cout << key << " = " << s;
+        const char* s = p->deflt;
+
+        if ( p->is_quoted() )
+            cout << key << " = '" << s << "'";
+        else
+            cout << key << " = " << s;
     }
 
     cout << endl;
@@ -1392,7 +1391,7 @@ void ModuleManager::get_accumulated_counts(Module* mod, unsigned instance_id, st
     out = mod->counts[instance_id];
 }
 
-void ModuleManager::dump_stats(const char* skip, bool dynamic)
+void ModuleManager::dump_stats(const char* skip)
 {
     auto mods = PluginManager::get_all_modules();
     mods.sort(comp_mods);
@@ -1404,18 +1403,10 @@ void ModuleManager::dump_stats(const char* skip, bool dynamic)
             if (is_dynamic_stats_module(mod) || mod->global_stats())
             {
                 lock_guard<mutex> lock(stats_mutex);
-                if ( dynamic )
-                    mod->show_dynamic_stats();
-                else
-                    mod->show_stats();
+                mod->show_stats();
             }
             else
-            {
-                if ( dynamic )
-                    mod->show_dynamic_stats();
-                else
-                    mod->show_stats();
-            }
+                mod->show_stats();
         }
     }
 }

@@ -41,7 +41,14 @@ DecodeResult B64Decode::decode_data(const uint8_t* start, const uint8_t* end, ui
     uint32_t act_encode_size = 0, act_decode_size = 0;
     uint32_t i = 0;
 
-    if (!buffer->check_restore_buffer() || !decode_buf)
+    const DecodeBuffer::RestoreResult restore_result = buffer->check_restore_buffer(end - start);
+    if (restore_result == DecodeBuffer::RestoreResult::NO_INPUT)
+    {
+        reset_decode_state();
+        return DECODE_FAIL;
+    }
+
+    if (restore_result == DecodeBuffer::RestoreResult::EXCEEDED || !decode_buf)
     {
         reset_decode_state();
         return DECODE_EXCEEDED;
@@ -65,7 +72,7 @@ DecodeResult B64Decode::decode_data(const uint8_t* start, const uint8_t* end, ui
     if (i)
     {
         act_encode_size = act_encode_size - i;
-        buffer->save_buffer(buffer->get_encode_buff() + act_encode_size, i);
+        buffer->save_buffer(act_encode_size, i);
     }
     else
         buffer->reset_saved();
@@ -132,11 +139,9 @@ namespace snort
 int sf_base64decode(uint8_t* inbuf, uint32_t inbuf_size, uint8_t* outbuf, uint32_t outbuf_size,
     uint32_t* bytes_written)
 {
-    uint8_t* cursor, * endofinbuf;
+    const uint8_t* cursor, * endofinbuf;
     uint8_t* outbuf_ptr;
     uint8_t base64data[4], * base64data_ptr; /* temporary holder for current base64 chunk */
-    uint8_t tableval_a, tableval_b, tableval_c, tableval_d;
-
     uint32_t n;
     uint32_t max_base64_chars; /* The max number of decoded base64 chars that fit into outbuf */
 
@@ -173,10 +178,10 @@ int sf_base64decode(uint8_t* inbuf, uint32_t inbuf_size, uint8_t* outbuf, uint32
                 }
 
                 /* retrieve values from lookup table */
-                tableval_a = sf_decode64tab[base64data[0]];
-                tableval_b = sf_decode64tab[base64data[1]];
-                tableval_c = sf_decode64tab[base64data[2]];
-                tableval_d = sf_decode64tab[base64data[3]];
+                const uint8_t tableval_a = sf_decode64tab[base64data[0]];
+                const uint8_t tableval_b = sf_decode64tab[base64data[1]];
+                const uint8_t tableval_c = sf_decode64tab[base64data[2]];
+                const uint8_t tableval_d = sf_decode64tab[base64data[3]];
 
                 if (*bytes_written < outbuf_size)
                 {
@@ -217,4 +222,3 @@ int sf_base64decode(uint8_t* inbuf, uint32_t inbuf_size, uint8_t* outbuf, uint32
         return(0);
 }
 } // namespace snort
-

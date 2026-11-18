@@ -70,13 +70,12 @@ bool IcodeOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const IcodeOption& rhs = (const IcodeOption&)ips;
+    const IcodeOption& rhs = static_cast<const IcodeOption&>(ips);
     return ( config == rhs.config );
 }
 
 IpsOption::EvalStatus IcodeOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(icmpCodePerfStats);
 
     // return 0  if we don't have an icmp header
@@ -152,7 +151,7 @@ static void mod_dtor(Module* m)
 
 static IpsOption* icode_ctor(Module* p, IpsInfo&)
 {
-    IcodeModule* m = (IcodeModule*)p;
+    const IcodeModule* m = static_cast<IcodeModule*>(p);
     return new IcodeOption(m->data);
 }
 
@@ -195,4 +194,3 @@ const BaseApi* ips_icode[] =
     &icode_api.base,
     nullptr
 };
-

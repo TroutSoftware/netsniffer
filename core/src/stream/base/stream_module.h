@@ -51,13 +51,14 @@ static const std::map<std::string, PktType> protocol_to_type =
 };
 
 
-#ifdef DEBUG_MSGS
 enum
 {
-    TRACE_BASE = 0,
-    TRACE_FLOW
-};
+    TRACE_FLOW_MEM = 0,
+#ifdef DEBUG_MSGS
+    TRACE_BASE,
+    TRACE_FLOW,
 #endif
+};
 
 //-------------------------------------------------------------------------
 // stream module
@@ -127,6 +128,12 @@ struct BaseStats
      PegCount no_flow_no_inspector;
      PegCount no_flow_paf_no_flow;
 
+     // Per-flow memory accounting, sampled at flow release/retire only.
+     // For live-flow numbers use the dump_flows control (walks the cache
+     // and reports each flow's Flow::get_mem_usage()).
+     PegCount released_max_flow_mem;
+     PegCount released_total_flow_mem;
+
      // Keep the NOW stats at the bottom as it requires special sum_stats logic
      PegCount allowlist_flows;
      PegCount current_flows;
@@ -187,7 +194,7 @@ public:
     void report_progress() override;
 
 private:
-    bool tune_resources(unsigned work_limit);
+    static bool tune_resources(unsigned work_limit);
 };
 
 class StreamModule : public snort::Module
@@ -229,5 +236,6 @@ private:
 
 extern void base_prep();
 extern void base_reset();
+extern void apply_daq_capability_gate(FlowCacheConfig&);
 
 #endif

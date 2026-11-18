@@ -33,6 +33,7 @@
 #include "protocols/vlan.h"
 #include "pub_sub/stream_event_ids.h"
 #include "stream/stream.h"
+#include "trace/trace_api.h"
 #include "utils/util.h"
 
 #include "icmp_ha.h"
@@ -149,6 +150,7 @@ static int ProcessIcmpUnreach(Packet* p)
     skey.init_address_space(sc, 0);
     skey.init_mpls(sc, 0);
     skey.padding = skey.flags.padding_bits = 0;
+    skey.flags.tunnel_encapsulated = p->is_tunnel_encapsulated();
     skey.flags.group_used = p->is_inter_group_flow();
     skey.init_groups(p->pkth->ingress_group, p->pkth->egress_group, reversed);
 #ifndef DISABLE_TENANT_ID
@@ -174,10 +176,11 @@ static int ProcessIcmpUnreach(Packet* p)
 
     if (ssn)
     {
-        /* Mark this session as dead. */
-        ssn->ssn_state.session_flags |= SSNFLAG_DROP_CLIENT;
-        ssn->ssn_state.session_flags |= SSNFLAG_DROP_SERVER;
+        ssn->block();
         ssn->session_state |= STREAM_STATE_UNREACH;
+
+        trace_logf(stream_icmp_trace, TRACE_ICMP_STATE, p,
+            "icmp unreachable: blocked embedded flow\n");
     }
 
     return 0;
@@ -188,12 +191,18 @@ static int ProcessIcmpUnreach(Packet* p)
 //-------------------------------------------------------------------------
 
 IcmpSession::IcmpSession(Flow* f) : Session(f)
-{ }
+{
+    if (flow)
+        flow->add_mem(sizeof(*this));
+}
 
 IcmpSession::~IcmpSession()
-{ }
+{
+    if (flow)
+        flow->sub_mem(sizeof(*this));
+}
 
-bool IcmpSession::setup(Packet*)
+bool IcmpSession::setup(Packet* p)
 {
     echo_count = 0;
     ssn_time.tv_sec = 0;
@@ -201,8 +210,11 @@ bool IcmpSession::setup(Packet*)
     flow->ssn_state.session_flags |= SSNFLAG_SEEN_SENDER;
     SESSION_STATS_ADD(icmpStats)
 
-    StreamIcmpConfig* pc = get_icmp_cfg(flow->ssn_server);
+    const StreamIcmpConfig* pc = get_icmp_cfg(flow->ssn_server);
     flow->set_default_session_timeout(pc->session_timeout, false);
+
+    trace_logf(stream_icmp_trace, TRACE_ICMP_STATE, p,
+        "session setup, timeout=%u\n", pc->session_timeout);
 
     return true;
 }
@@ -223,6 +235,10 @@ int IcmpSession::process(Packet* p)
     {
         DataBus::publish(Stream::get_pub_id(), StreamEventIds::ICMP_BIDIRECTIONAL, p);
         flow->ssn_state.session_flags |= SSNFLAG_ESTABLISHED;
+
+        trace_logf(stream_icmp_trace, TRACE_ICMP_STATE, p,
+            "established: bidirectional (session_flags=0x%08x)\n",
+            flow->ssn_state.session_flags);
     }
 
     switch (p->ptrs.icmph->type)
@@ -239,4 +255,3 @@ int IcmpSession::process(Packet* p)
 
     return status;
 }
-

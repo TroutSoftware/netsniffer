@@ -203,7 +203,7 @@ const PegInfo* BoModule::get_pegs() const
 { return simple_pegs; }
 
 PegCount* BoModule::get_counts() const
-{ return (PegCount*)&bostats; }
+{ return reinterpret_cast<PegCount*>(&bostats); }
 
 ProfileStats* BoModule::get_profile() const
 { return &boPerfStats; }
@@ -314,7 +314,7 @@ static void PrecalcPrefix()
  *      CRC         1
  *
  */
-static int BoGetDirection(Packet* p, const char* pkt_data)
+static int BoGetDirection(const Packet* p, const char* pkt_data)
 {
     /* Check for the default port on either side */
     if ( p->ptrs.dp == BO_DEFAULT_PORT )
@@ -427,7 +427,6 @@ public:
 
 void BackOrifice::eval(Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     Profile profile(boPerfStats);
 
     const char* const magic_cookie = "*!*QWTY?";
@@ -553,4 +552,3 @@ SO_PUBLIC const BaseApi* snort_plugins[] =
 #else
 const BaseApi* sin_bo = &bo_api.base;
 #endif
-

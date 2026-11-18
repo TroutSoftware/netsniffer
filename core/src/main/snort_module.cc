@@ -24,6 +24,8 @@
 
 #include "snort_module.h"
 
+#include <grp.h>
+#include <pwd.h>
 #include <set>
 #include <string>
 
@@ -158,9 +160,9 @@ static const Command snort_cmds[] =
     { "show_heap_profile", main_show_heap_profile, nullptr, "show jemalloc memory profiling configuration"},
     { "show_plugins", main_show_plugins, nullptr, "show loaded plugins" },
     { "show_config_generation", main_show_config_generation, nullptr, "show loaded configuration ID"},
+    { "show_control_port", main_show_control_port, nullptr, "show TCP control channel port"},
     { "show_snort_cpu", show_snort_cpu, nullptr, "show snort cpu usage"},
     { "show_snort_packet_latency", show_snort_packet_latency, nullptr, "show snort packet latency data"},
-
 
     { nullptr, nullptr, nullptr, nullptr }
 };
@@ -221,6 +223,7 @@ static const TraceOption snort_trace_options[] =
 #ifdef DEBUG_MSGS
     { "main", TRACE_MAIN, "enable main trace logging" },
     { "mime", TRACE_MIME, "enable mime trace logging" },
+    { "conf", TRACE_CONF, "enable configuration trace logging" },
 #endif
 
     { nullptr, 0, nullptr }
@@ -274,7 +277,7 @@ static const Parameter s_params[] =
 
 #ifdef SHELL
     { "-j", Parameter::PT_PORT, nullptr, nullptr,
-      "<port> to listen for Telnet connections" },
+      "<port> to listen for Telnet connections (use 0 for auto-assigned port)" },
 #endif
 
     { "-k", Parameter::PT_ENUM, "all|noip|notcp|noudp|noicmp|none", "all",
@@ -361,6 +364,15 @@ static const Parameter s_params[] =
 #ifdef SHELL
     { "--control-socket", Parameter::PT_STRING, nullptr, nullptr,
       "<file> to create unix socket" },
+
+    { "--control-socket-uid", Parameter::PT_STRING, nullptr, nullptr,
+      "<username> or <uid> allowed to connect to control socket" },
+
+    { "--control-socket-gid", Parameter::PT_STRING, nullptr, nullptr,
+      "<groupname> or <gid> allowed to connect to control socket" },
+
+    { "--control-secret-file", Parameter::PT_STRING, nullptr, nullptr,
+      "<file> containing base64-encoded shared secret for control channel authentication" },
 #endif
 
     { "--create-instance-file", Parameter::PT_IMPLIED, nullptr, nullptr,
@@ -699,7 +711,7 @@ const PegInfo* SnortModule::get_pegs() const
 { return proc_names; }
 
 PegCount* SnortModule::get_counts() const
-{ return (PegCount*)&proc_stats; }
+{ return reinterpret_cast<PegCount*>(&proc_stats); }
 
 void SnortModule::reset_stats()
 {
@@ -877,7 +889,52 @@ bool SnortModule::set(const char*, Value& v, SnortConfig* sc)
     else if ( is(v, "--control-socket") )
     {
         sc->remote_control_socket = v.get_string();
-        sc->remote_control_port = 0;
+        sc->remote_control_port = -1;
+    }
+
+    else if ( is(v, "--control-socket-uid") )
+    {
+        const char* uid_str = v.get_string();
+        char* endptr = nullptr;
+        long uid_val = strtol(uid_str, &endptr, 10);
+
+        if (*endptr == '\0' && uid_val >= 0)
+        {
+            sc->control_socket_uid = static_cast<uid_t>(uid_val);
+        }
+        else
+        {
+            const struct passwd* pw = getpwnam(uid_str);
+            if (pw)
+                sc->control_socket_uid = pw->pw_uid;
+            else
+                ParseError("Unknown user '%s' for --control-socket-uid", uid_str);
+        }
+    }
+
+    else if ( is(v, "--control-socket-gid") )
+    {
+        const char* gid_str = v.get_string();
+        char* endptr = nullptr;
+        long gid_val = strtol(gid_str, &endptr, 10);
+
+        if (*endptr == '\0' && gid_val >= 0)
+        {
+            sc->control_socket_gid = static_cast<gid_t>(gid_val);
+        }
+        else
+        {
+            const struct group* gr = getgrnam(gid_str);
+            if (gr)
+                sc->control_socket_gid = gr->gr_gid;
+            else
+                ParseError("Unknown group '%s' for --control-socket-gid", gid_str);
+        }
+    }
+
+    else if ( is(v, "--control-secret-file") )
+    {
+        sc->control_secret_file = v.get_string();
     }
 #endif
 
@@ -1227,8 +1284,10 @@ bool SnortModule::end(const char*, int, SnortConfig* sc)
 {
     cli_mode = false;
 
+#ifdef ENABLE_DETECTION_OFFLOAD
     if ( sc->offload_threads and ThreadConfig::get_instance_max() != 1 )
         ParseError("You can not enable experimental offload with more than one packet thread.");
+#endif
 
     if ( no_warn_flowbits )
     {

@@ -36,6 +36,7 @@ using namespace std::string_literals;
 
 static constexpr int nesting_level = 10;
 typedef pair<string, string> Chunk;
+typedef pair<Chunk, PDFTokenizer::PDFRet> ChunkRet;
 
 static void test_pdf_proc(const string& source, const string& expected,
     PDFTokenizer::PDFRet ret = PDFTokenizer::PDFRet::EOS)
@@ -80,6 +81,38 @@ static void test_pdf_proc(const vector<Chunk>& chunks)
     }
 
     delete[] state_buf;
+}
+
+static int test_pdf_proc(const vector<ChunkRet>& chunks)
+{
+    snort::istreambuf_glue in_buf;
+    istream in(&in_buf);
+    ostringstream out;
+    char* state_buf = nullptr;
+    int state_len = 0;
+    PDFTokenizer extractor(in, out, state_buf, state_len, nesting_level);
+
+    for (const auto& chunk_ret : chunks)
+    {
+        auto chunk = chunk_ret.first;
+        auto ret = chunk_ret.second;
+        auto src = chunk.first;
+        auto exp = chunk.second;
+
+        in_buf.pubsetbuf(nullptr,0)
+            ->pubsetbuf(state_buf, state_len)
+            ->pubsetbuf(const_cast<char*>(src.c_str()), src.length());
+        out.str("");
+
+        auto r = extractor.process();
+
+        CHECK(ret == r);
+        CHECK(exp == out.str());
+    }
+
+    delete[] state_buf;
+
+    return state_len;
 }
 
 TEST_CASE("basic", "[PDFTokenizer]")
@@ -408,11 +441,43 @@ TEST_CASE("basic", "[PDFTokenizer]")
             "",  PDFTokenizer::PDFRet::TOKEN_TOO_LONG
         );
     }
+    SECTION("accumulated reassembly state too long")
+    {
+        std::string body;
+        for (int i = 0; i < 300; ++i)
+            body += std::string(16, '9') + std::string(48, '\0');
+        test_pdf_proc(body, "", PDFTokenizer::PDFRet::TOKEN_TOO_LONG);
+    }
     SECTION("dictionary nesting overflow")
     {
         test_pdf_proc(
             "1 0 obj"
             "<< << << << << << << << << << << << << >> >> >> >> >> >> >> >> >> >> >> >> >>"
+            "endobj",
+            "", PDFTokenizer::PDFRet::DICTIONARY_NESTING_OVERFLOW
+        );
+    }
+    SECTION("js stream references overflow")
+    {
+        std::string body = "1 0 obj\n<<";
+        for (unsigned i = 1; i <= PDFTOKENIZER_MAX_JS_STREAM_REFS + 1; ++i)
+            body += "/JS " + std::to_string(i) + " 0 R ";
+        body += ">>\nendobj\n";
+        test_pdf_proc(body, "", PDFTokenizer::PDFRet::DICTIONARY_NESTING_OVERFLOW);
+    }
+    SECTION("js stream references under cap")
+    {
+        std::string body = "1 0 obj\n<<";
+        for (unsigned i = 1; i <= 8; ++i)
+            body += "/JS " + std::to_string(i) + " 0 R ";
+        body += ">>\nendobj\n";
+        test_pdf_proc(body, "", PDFTokenizer::PDFRet::EOS);
+    }
+    SECTION("array nesting overflow")
+    {
+        test_pdf_proc(
+            "1 0 obj"
+            "[ [ [ [ [ [ [ [ [ [ [ ] ] ] ] ] ] ] ] ] ] ]"
             "endobj",
             "", PDFTokenizer::PDFRet::DICTIONARY_NESTING_OVERFLOW
         );
@@ -1163,6 +1228,21 @@ TEST_CASE("split", "[PDFTokenizer]")
                 "foo"
             }
         });
+    }
+    SECTION("accumulated reassembly state too long across PDUs")
+    {
+        std::string chunk1, chunk2;
+        for (int i = 0; i < 240; ++i)
+            chunk1 += std::string(16, '9') + std::string(48, '\0');  // 15360 bytes
+        for (int i = 0; i < 300; ++i)
+            chunk2 += std::string(16, '9') + std::string(48, '\0');  // 19200 bytes
+
+        int state_len = test_pdf_proc({
+            {{chunk1, ""}, PDFTokenizer::PDFRet::EOS},
+            {{chunk2, ""}, PDFTokenizer::PDFRet::TOKEN_TOO_LONG},
+        });
+
+        CHECK((state_len == 16384 + 1)); // YY_BUF_SIZE + 1
     }
 }
 

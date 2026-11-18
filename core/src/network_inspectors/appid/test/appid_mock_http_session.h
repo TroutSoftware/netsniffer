@@ -25,8 +25,8 @@
 
 typedef AppIdHttpSession::pair_t pair_t;
 
-AppIdHttpSession::AppIdHttpSession(AppIdSession& session, int64_t http2_stream_id)
-    : asd(session), httpx_stream_id(http2_stream_id)
+AppIdHttpSession::AppIdHttpSession(AppIdSession& appid_session, int64_t http2_stream_id)
+    : asd(appid_session), httpx_stream_id(http2_stream_id)
 {
     for ( int i = 0; i < NUM_METADATA_FIELDS; i++)
         meta_data[i] = nullptr;
@@ -76,8 +76,8 @@ void AppIdHttpSession::update_url(AppidChangeBits&)
 class MockAppIdHttpSession : public AppIdHttpSession
 {
 public:
-    MockAppIdHttpSession(AppIdSession& asd)
-        : AppIdHttpSession(asd, 0)
+    MockAppIdHttpSession(AppIdSession& asd, int64_t stream_id = 0)
+        : AppIdHttpSession(asd, stream_id)
     {
         meta_data[REQ_AGENT_FID] = new std::string(USERAGENT);
         meta_data[REQ_HOST_FID] = new std::string(HOST);
@@ -104,6 +104,7 @@ public:
         }
     }
 
+    // cppcheck-suppress unusedFunction ; entry point retained for external, conditional, or test use
     static AppIdHttpSession* init_http_session(AppIdSession& asd)
     {
         AppIdHttpSession* hsession = new MockAppIdHttpSession(asd);

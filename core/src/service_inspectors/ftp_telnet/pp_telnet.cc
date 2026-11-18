@@ -98,12 +98,8 @@ int normalize_telnet(
         }
         else
         {
-            if ( on_ftp_channel )
-            {
-                return FTPP_SUCCESS;
-            }
             /* Okay, it wasn't an IAC also its a midstream pickup */
-            if (*read_ptr > 0x7F && Stream::is_midstream(p->flow))
+            if (!on_ftp_channel && *read_ptr > 0x7F && Stream::is_midstream(p->flow))
             {
                 consec_8bit_chars++;
                 if (consec_8bit_chars > CONSECUTIVE_8BIT_THRESHOLD)
@@ -293,13 +289,13 @@ int normalize_telnet(
         {
             sb_start = read_ptr;
 
-            if ((read_ptr + 2) >= end) break;
             switch (*(read_ptr+2))
             {
             case 0x26: /* Encryption -- RFC 2946 */
                 /* printf("Telnet: Saw SB for Encryption\n"); */
                 if ((read_ptr + 3) >= end) break;
                 read_ptr += 3;
+                // cppcheck-suppress knownConditionTrueFalse ; cursor position depends on packet contents
                 if (read_ptr >= end) break;
                 switch (*read_ptr)
                 {
@@ -363,11 +359,10 @@ int normalize_telnet(
 
             if (sb_start)
             {
-                /* Didn't find the IAC SE.  Normalize out the IAC SB
-                 * and restart from there. Presumption is this is
-                 * just someone trying to fool us, since we usually
-                 * see the entire IAC SB ... IAC SE in one packet. */
-                read_ptr = sb_start+2;
+                /* Didn't find the IAC SE.  read_ptr == end, so alert and
+                 * stop; rewinding to sb_start+2 and re-entering the outer
+                 * loop would rescan to end for every unterminated IAC SB
+                 * in the payload (O(N^2) on adversarial input). */
                 if (!tnssn)
                 {
                     /* Its an FTP session */
@@ -380,7 +375,7 @@ int normalize_telnet(
                     ret = FTPP_ALERT;
                 }
 
-                continue;
+                break;
             }
 
             /* Okay, found the IAC SE -- move past it */
@@ -421,4 +416,3 @@ int normalize_telnet(
 
     return ret;
 }
-

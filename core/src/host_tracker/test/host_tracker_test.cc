@@ -318,7 +318,7 @@ TEST(host_tracker, copy_data_test)
 {
     test_time = 1562198400;
     HostTracker ht;
-    uint8_t mac[6] = {254, 237, 222, 173, 190, 239};
+    const uint8_t mac[6] = {254, 237, 222, 173, 190, 239};
     ht.add_mac(mac, 50, 1);
 
     uint8_t p_hops = 0;
@@ -339,13 +339,38 @@ TEST(host_tracker, copy_data_test)
     delete p_macs;
 }
 
+//  Test that re-adding a known visible mac refreshes its last_seen
+TEST(host_tracker, add_mac_updates_last_seen_test)
+{
+    test_time = 1562198400;
+    HostTracker ht;
+    const uint8_t mac[6] = {254, 237, 222, 173, 190, 239};
+    CHECK(true == ht.add_mac(mac, 50, 0));
+
+    test_time = 1562198500;
+    ht.update_last_seen();
+    CHECK(false == ht.add_mac(mac, 50, 0));
+
+    uint8_t p_hops = 0;
+    uint32_t p_last_seen = 0;
+    list<HostMac>* p_macs = nullptr;
+    ht.copy_data(p_hops, p_last_seen, p_macs);
+
+    CHECK(1562198500 == p_last_seen);
+    CHECK(nullptr != p_macs);
+    CHECK(1 == p_macs->size());
+    CHECK(1562198500 == p_macs->front().last_seen);
+
+    delete p_macs;
+}
+
 TEST(host_tracker, stringify)
 {
     test_time = 1562198400; // this time will be updated and should not be seen in stringify
     HostTracker ht;
 
-    uint8_t mac1[6] = {254, 237, 222, 173, 190, 239};
-    uint8_t mac2[6] = {202, 254, 192, 255, 238, 0};
+    const uint8_t mac1[6] = {254, 237, 222, 173, 190, 239};
+    const uint8_t mac2[6] = {202, 254, 192, 255, 238, 0};
     test_time = 1562198404; // this time should be the time of the first mac address
     ht.update_last_seen();
     ht.add_mac(mac1, 9, 0);
@@ -425,6 +450,96 @@ TEST(host_tracker, rediscover_host)
     expected += "\n    id: 2, service: 200, version: one";
 
     STRCMP_EQUAL(expected.c_str(), host_tracker_string.c_str());
+}
+
+//  Vendor / version learned for one service must not carry over to the
+//  service that replaces it on the same port and protocol
+TEST(host_tracker, service_info_cleared_on_appid_change_test)
+{
+    HostTracker ht;
+    bool is_new = false;
+
+    ht.add_service(80, IpProtocol::TCP, 100, is_new, 11236);
+    HostApplication ha(80, IpProtocol::TCP, 11236, false);
+    CHECK(true == ht.update_service_info(ha, "HPE", "2.78", 4));
+    CHECK(1 == ha.info.size());
+
+    // the copy used for the new service event has no stale info
+    is_new = false;
+    auto new_ha = ht.add_service(80, IpProtocol::TCP, 200, is_new, 676);
+    CHECK(true == is_new);
+    CHECK(676 == new_ha.appid);
+    CHECK(true == new_ha.info.empty());
+
+    // only the new service's info is reported afterwards
+    HostApplication ha2(80, IpProtocol::TCP, 676, false);
+    CHECK(true == ht.update_service_info(ha2, "Grimm", nullptr, 4));
+    CHECK(1 == ha2.info.size());
+    STRCMP_EQUAL("Grimm", ha2.info.front().vendor);
+    STRCMP_EQUAL("", ha2.info.front().version);
+
+    // same for the add service function used by inferred services
+    CHECK(true == ht.add_service(80, IpProtocol::TCP, 11236, true));
+    CHECK(true == ht.get_services().front().info.empty());
+}
+
+TEST(host_tracker, service_info_kept_on_same_appid_test)
+{
+    HostTracker ht;
+    bool is_new = false;
+
+    ht.add_service(80, IpProtocol::TCP, 100, is_new, 11236);
+    HostApplication ha(80, IpProtocol::TCP, 11236, false);
+    CHECK(true == ht.update_service_info(ha, "HPE", "2.78", 4));
+
+    is_new = false;
+    auto same_ha = ht.add_service(80, IpProtocol::TCP, 200, is_new, 11236);
+    CHECK(false == is_new);
+    CHECK(1 == same_ha.info.size());
+    STRCMP_EQUAL("HPE", same_ha.info.front().vendor);
+    STRCMP_EQUAL("2.78", same_ha.info.front().version);
+
+    // a detection without vendor / version must not clear what is known
+    HostApplication ha2(80, IpProtocol::TCP, 11236, false);
+    CHECK(true == ht.update_service_info(ha2, nullptr, nullptr, 4));
+    CHECK(1 == ht.get_services().front().info.size());
+}
+
+TEST(host_tracker, service_info_cleared_on_rediscovery_test)
+{
+    HostTracker ht;
+    bool is_new = false;
+
+    ht.add_service(80, IpProtocol::TCP, 100, is_new, 11236);
+    HostApplication ha(80, IpProtocol::TCP, 11236, false);
+    CHECK(true == ht.update_service_info(ha, "HPE", "2.78", 4));
+
+    CHECK(true == ht.set_service_visibility(80, IpProtocol::TCP, false));
+
+    is_new = false;
+    auto new_ha = ht.add_service(80, IpProtocol::TCP, 200, is_new, 11236);
+    CHECK(true == is_new);
+    CHECK(true == new_ha.info.empty());
+}
+
+TEST(host_tracker, service_info_cleared_on_slot_reuse_test)
+{
+    HostTracker ht;
+    bool is_new = false;
+
+    ht.add_service(80, IpProtocol::TCP, 100, is_new, 11236);
+    HostApplication ha(80, IpProtocol::TCP, 11236, false);
+    CHECK(true == ht.update_service_info(ha, "HPE", "2.78", 4));
+
+    CHECK(true == ht.set_service_visibility(80, IpProtocol::TCP, false));
+
+    // the invisible slot of port 80 is reused for port 8080
+    is_new = false;
+    auto new_ha = ht.add_service(8080, IpProtocol::TCP, 200, is_new, 676);
+    CHECK(true == is_new);
+    CHECK(1 == ht.get_services().size());
+    CHECK(8080 == new_ha.port);
+    CHECK(true == new_ha.info.empty());
 }
 
 int main(int argc, char** argv)

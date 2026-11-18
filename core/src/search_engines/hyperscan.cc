@@ -209,7 +209,7 @@ public:
     { return hyper_pegs; }
 
     PegCount* get_counts() const override
-    { return (PegCount*)&hyper_counts; }
+    { return reinterpret_cast<PegCount*>(&hyper_counts); }
 
     Usage get_usage() const override
     { return GLOBAL; }
@@ -383,9 +383,9 @@ int HyperscanMpse::prep_patterns(SnortConfig* sc)
 
 #ifdef REG_TEST
     hs_platform_info_t info = { HS_TUNE_FAMILY_SNB, 0, 0, 0 };
-    auto pinfo = &info;
+    const auto* pinfo = &info;
 #else
-    hs_platform_info_t* pinfo = nullptr;
+    const hs_platform_info_t* pinfo = nullptr;
 #endif
 
     if ( hs_compile_multi(&pats[0], &flags[0], &ids[0], pvector.size(), HS_MODE_BLOCK,
@@ -475,7 +475,7 @@ int HyperscanMpse::match(
 int HyperscanMpse::search(
     const uint8_t* buf, int n, MpseMatch mf, void* pv, int* current_state)
 {
-    Profile profile(hyper_stats);  // cppcheck-suppress unreadVariable
+    Profile profile(hyper_stats);
 
     *current_state = 0;
     ScanContext scan(this, mf, pv);
@@ -561,4 +561,3 @@ const BaseApi* se_hyperscan[] =
     &hs_api.base,
     nullptr
 };
-

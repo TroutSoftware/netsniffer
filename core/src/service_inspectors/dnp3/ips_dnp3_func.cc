@@ -73,25 +73,25 @@ bool Dnp3FuncOption::operator==(const IpsOption& ips) const
     if ( !IpsOption::operator==(ips) )
         return false;
 
-    const Dnp3FuncOption& rhs = (const Dnp3FuncOption&)ips;
+    const Dnp3FuncOption& rhs = static_cast<const Dnp3FuncOption&>(ips);
     return (func == rhs.func);
 }
 
 IpsOption::EvalStatus Dnp3FuncOption::eval(Cursor&, Packet* p)
 {
-    // cppcheck-suppress unreadVariable
     RuleProfile profile(dnp3_func_perf_stats);
 
     if ((p->has_tcp_data() && !p->is_full_pdu()) || !p->flow || !p->dsize)
         return NO_MATCH;
 
-    Dnp3FlowData* fd = (Dnp3FlowData*)p->flow->get_flow_data(Dnp3FlowData::inspector_id);
+    Dnp3FlowData* fd = static_cast<Dnp3FlowData*>(
+        p->flow->get_flow_data(Dnp3FlowData::inspector_id));
 
     if (!fd)
         return NO_MATCH;
 
     dnp3_session_data_t* dnp3_session = &fd->dnp3_session;
-    dnp3_reassembly_data_t* rdata;
+    const dnp3_reassembly_data_t* rdata;
 
     if (dnp3_session->direction == DNP3_CLIENT)
         rdata = &(dnp3_session->client_rdata);
@@ -178,7 +178,7 @@ static void dnp3_func_mod_dtor(Module* m)
 
 static IpsOption* dnp3_func_ctor(Module* p, IpsInfo&)
 {
-    Dnp3FuncModule* m = (Dnp3FuncModule*)p;
+    const Dnp3FuncModule* m = static_cast<Dnp3FuncModule*>(p);
     return new Dnp3FuncOption(m->func);
 }
 
@@ -218,4 +218,3 @@ static const IpsApi dnp3_func_api =
 
 // added to snort_plugins in dnp3.cc
 const BaseApi* ips_dnp3_func = &dnp3_func_api.base;
-
