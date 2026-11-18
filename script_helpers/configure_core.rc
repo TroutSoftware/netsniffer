@@ -230,7 +230,7 @@ _lldb_cmd_to_stdout
 
 chmod +x "$BASE_BUILD_FOLDER/$NETWORK_LLDB_LAUNCH_SCRIPT"
 
-echo "To build and launch lldb with snort, run: $LLDB_LAUNCH_SCRIPT"
+echo "To build and launch lldb with snort in network mode, run: $NETWORK_LLDB_LAUNCH_SCRIPT"
 
 
 CLANGD_LAUNCH_SCRIPT="clangd.sh"

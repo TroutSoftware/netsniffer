@@ -23,7 +23,8 @@ namespace {
 
 const char *s_name = "discovery_wip";
 const char *s_help =
-    "This module is under development"; // TODO: Replace with help text for your plugin
+    "This module is under development"; // TODO: Replace with help text for your
+                                        // plugin
 
 } // namespace
 

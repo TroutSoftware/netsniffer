@@ -12,17 +12,16 @@
 
 // Debug includes
 
-
 namespace bacnet_ip {
 
 /// Fixed size of the bvlc struct
-constexpr std::size_t BVLC_SIZE = 4;  
+constexpr std::size_t BVLC_SIZE = 4;
 
 /// Fixed value for a BACnet/ip bvlc header type
 constexpr uint8_t BVLS_BACNET_IP_TYPE = 0x81;
 
 /// Minimum size for a NPDU struct
-constexpr std::size_t NPDU_MIN_SIZE = 2;  
+constexpr std::size_t NPDU_MIN_SIZE = 2;
 
 /// NPDU Control byte mask, it true Network_layer, otherwise APDU
 constexpr uint8_t NPDU_IS_NETWORK_LAYER_MASK = 0x80;
@@ -56,7 +55,6 @@ constexpr uint8_t NPDU_MAX_ADDRESS_LENGTH = 0x07;
 
 /// The first MSG type (in NPDU data) for vendor types
 constexpr uint8_t BACNET_MSG_TYPE_FIRST_VENDOR_RANGE = 0x80;
-
 
 } // namespace bacnet_ip
 

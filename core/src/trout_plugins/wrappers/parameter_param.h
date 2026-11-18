@@ -83,7 +83,7 @@ template <ParamElementsConcept... list> class Param {
     return FindType<CheckIsHelpText>::get_cstring();
   }
 
-  // Extractor functions for elements where we might need a default value and
+  // Extractor functions for elements where we might need a value and
   // know there can only be one
   static consteval void *get_range() {
     if constexpr (count_of_range_elements) {

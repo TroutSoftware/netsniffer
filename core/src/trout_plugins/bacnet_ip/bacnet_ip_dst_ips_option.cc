@@ -4,9 +4,9 @@
 
 // Snort includes
 #include <framework/module.h>
-//#include <framework/range.h>
-//#include <hash/hash_key_operations.h>
-//#include <log/messages.h>
+// #include <framework/range.h>
+// #include <hash/hash_key_operations.h>
+// #include <log/messages.h>
 #include <protocols/packet.h>
 
 // System includes
@@ -56,11 +56,12 @@ class IpsOption : public snort::IpsOption {
       : snort::IpsOption(s_name), settings(module.get_settings()) {}
 
   // Hash compare is used as a fast way to compare two instances of IpsOption
-  uint32_t hash() const override { return 0 }
+  uint32_t hash() const override{return 0}
 
   // If hashes match a real comparison check is made
-  bool operator==(const snort::IpsOption &/*ips*/) const override {
-    // This ips option doesn't take any arguments, so two instances are always equal
+  bool operator==(const snort::IpsOption & /*ips*/) const override {
+    // This ips option doesn't take any arguments, so two instances are always
+    // equal
     return true;
   }
 
@@ -74,41 +75,44 @@ class IpsOption : public snort::IpsOption {
       return snort::IpsOption::NO_MATCH;
     }
 
-    
+    // BVLC header
+    // byte 0: Type, should be BVLS_BACNET_IP_TYPE
+
     // Byte 0: version, must be 1
-    // Byte 1: 
-/*
-    EvalStatus result = settings->getter_func(c, *flow_data);
+    // Byte 1:
+    /*
+        EvalStatus result = settings->getter_func(c, *flow_data);
 
-    // Check if a filter should be applied
-    if (result == snort::IpsOption::MATCH && settings->match_list.size() != 0) {
-      // We assume no match, until proven otherwise
-      result = snort::IpsOption::NO_MATCH;
-      for (auto &ele : settings->match_list) {
-        assert(ele.matcher);
-        bool matches = ele.matcher->match(c, *flow_data);
+        // Check if a filter should be applied
+        if (result == snort::IpsOption::MATCH && settings->match_list.size() !=
+       0) {
+          // We assume no match, until proven otherwise
+          result = snort::IpsOption::NO_MATCH;
+          for (auto &ele : settings->match_list) {
+            assert(ele.matcher);
+            bool matches = ele.matcher->match(c, *flow_data);
 
-        if (ele.invert_result) {
-          matches = !matches;
+            if (ele.invert_result) {
+              matches = !matches;
+            }
+
+            if (matches) {
+              result = snort::IpsOption::MATCH;
+              break;
+            }
+          }
         }
 
-        if (matches) {
-          result = snort::IpsOption::MATCH;
-          break;
+        if (settings->invert_result) {
+          if (result == snort::IpsOption::MATCH) {
+            return snort::IpsOption::NO_MATCH;
+          }
+          if (result == snort::IpsOption::NO_MATCH) {
+            return snort::IpsOption::MATCH;
+          }
         }
-      }
-    }
-
-    if (settings->invert_result) {
-      if (result == snort::IpsOption::MATCH) {
-        return snort::IpsOption::NO_MATCH;
-      }
-      if (result == snort::IpsOption::NO_MATCH) {
-        return snort::IpsOption::MATCH;
-      }
-    }
-    return result;
-*/    
+        return result;
+    */
   }
 
   snort::CursorActionType get_cursor_type() const override {

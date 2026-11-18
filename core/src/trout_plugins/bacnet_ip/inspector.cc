@@ -26,25 +26,24 @@
 
 namespace bacnet_ip {
 
-
 namespace {
 
 class NPDUReader {
   const std::span<const uint8_t> &data;
   std::size_t &read_pos;
   bool underflow = false;
-  
+
   bool has_data(size_t length) {
     if (underflow) {
       return false;
     }
     if (data.size() < read_pos + length && length > 0) {
       Pegs::get<"packet_underflow">().inc();
-      
+
       underflow = true;
       return false;
     }
-    
+
     return true;
   }
 
@@ -52,8 +51,8 @@ class NPDUReader {
     if (has_data(sizeof(uint8_t))) {
       return data[read_pos++];
     }
-    
-    return std::nullopt;    
+
+    return std::nullopt;
   }
 
   std::optional<uint16_t> read_uint16_t() {
@@ -93,9 +92,11 @@ class NPDUReader {
 
   std::optional<std::span<const uint8_t>> apdu;
   std::optional<std::span<const uint8_t>> network_msg;
-  
+
 public:
-  NPDUReader(const std::span<const uint8_t> &data, std::size_t &read_pos, bool ignore_version) : data(data), read_pos(read_pos) {
+  NPDUReader(const std::span<const uint8_t> &data, std::size_t &read_pos,
+             bool ignore_version)
+      : data(data), read_pos(read_pos) {
     version = read_uint8_t();
 
     if (version != 1) {
@@ -104,24 +105,25 @@ public:
         return;
       }
     }
-    
+
     control_byte = read_uint8_t();
 
     // Bail if we didn't get a control_byte
-    if(!control_byte.has_value()) {
+    if (!control_byte.has_value()) {
       return;
     }
     // Decode control byte
     bool is_network_layer = *control_byte & NPDU_IS_NETWORK_LAYER_MASK;
     bool has_dest_mask = *control_byte & NPDU_HAS_DEST_MASK;
     bool has_src_mask = *control_byte & NPDU_HAS_SRC_MASK;
-    [[maybe_unused]]bool reply_expected = *control_byte & NPDU_REPLY_EXPECT_MASK;
+    [[maybe_unused]] bool reply_expected =
+        *control_byte & NPDU_REPLY_EXPECT_MASK;
     uint8_t priority = *control_byte & NPDU_PRIORITY_MASK;
 
     if (has_dest_mask) {
       dest_network = read_uint16_t();
       std::optional<uint16_t> len = read_uint8_t();
-      
+
       if (len.has_value()) {
         // A len of 0 means the msg is a broadcast
         is_broadcast = (*len == 0);
@@ -129,9 +131,9 @@ public:
         if (*len > NPDU_MAX_ADDRESS_LENGTH) {
           Pegs::get<"spec_violations">().inc();
         }
-        
-        if (*len) {         
-          dest_addr = read_span(*len);          
+
+        if (*len) {
+          dest_addr = read_span(*len);
         }
       }
     }
@@ -139,17 +141,16 @@ public:
     if (has_src_mask) {
       src_network = read_uint16_t();
       std::optional<uint16_t> len = read_uint8_t();
-      
+
       if (len.has_value()) {
         if (*len > NPDU_MAX_ADDRESS_LENGTH || len == 0) {
           Pegs::get<"spec_violations">().inc();
         }
-        
-        if (*len) {         
-          src_addr = read_span(*len);          
+
+        if (*len) {
+          src_addr = read_span(*len);
         }
       }
-      
     }
 
     if (has_dest_mask) {
@@ -174,46 +175,44 @@ public:
       }
     }
 
+    if (underflow) {
+      std::cerr << "MKRTEST msg had data underflow" << std::endl;
+    }
 
-
-if(underflow) {
-std::cerr << "MKRTEST msg had data underflow" << std::endl;
-}
-
-std::cerr << "MKRTEST version: " << (int)*version << std::endl;
-std::cerr << "MKRTEST priority: " << (int)priority << std::endl;;
-if (has_dest_mask) {
-std::cerr << "MKRTEST dest_nework: " << *dest_network << std::endl;
-if(*is_broadcast) {
-  std::cerr << "MKRTEST is broadcast" << std::endl;
-} else {
-  std::cerr << "MKRTEST is NOT broadcast" << std::endl;
-  std::cerr << "MKRTEST dest_addr: ";
-  for (auto c: *dest_addr) {
-    std::cerr << (int)c;
-  }
-  std::cerr << std::endl;  
-}
-}
-if (src_addr) {
-  std::cerr << "MKRTEST src addr: ";
-  for (auto c: *src_addr) {
-    std::cerr << (int)c;
-  }
-  std::cerr << std::endl;    
-}
-if (hop_count) {
-  std::cerr << "MKRTEST hop count: " << (int)*hop_count << std::endl;
-}
-
-    
+    std::cerr << "MKRTEST version: " << (int)*version << std::endl;
+    std::cerr << "MKRTEST priority: " << (int)priority << std::endl;
+    ;
+    if (has_dest_mask) {
+      std::cerr << "MKRTEST dest_nework: " << *dest_network << std::endl;
+      if (*is_broadcast) {
+        std::cerr << "MKRTEST is broadcast" << std::endl;
+      } else {
+        std::cerr << "MKRTEST is NOT broadcast" << std::endl;
+        std::cerr << "MKRTEST dest_addr: ";
+        for (auto c : *dest_addr) {
+          std::cerr << (int)c;
+        }
+        std::cerr << std::endl;
+      }
+    }
+    if (src_addr) {
+      std::cerr << "MKRTEST src addr: ";
+      for (auto c : *src_addr) {
+        std::cerr << (int)c;
+      }
+      std::cerr << std::endl;
+    }
+    if (hop_count) {
+      std::cerr << "MKRTEST hop count: " << (int)*hop_count << std::endl;
+    }
   }
 };
 
-} // namespace {
+} // namespace
 
 void Inspector::eval(snort::Packet *p) {
-std::cerr << "MKRTEST: --------------------(new msg)--------------------" << std::endl;
+  std::cerr << "MKRTEST: --------------------(new msg)--------------------"
+            << std::endl;
   assert(p);
   assert(p->data);
 
@@ -230,7 +229,7 @@ std::cerr << "MKRTEST: --------------------(new msg)--------------------" << std
   // that is a C++26 feature and we are currently on C++23
   const std::span<const uint8_t> data(p->data, p->dsize);
   std::size_t read_pos = 0;
-  
+
   // Decode bvlc
   if (data.size() < read_pos + BVLC_SIZE) {
     // Not enough data for a complete bvlc
@@ -243,11 +242,11 @@ std::cerr << "MKRTEST: --------------------(new msg)--------------------" << std
   }
 
   uint8_t msg_function = data[read_pos++];
-  
+
   uint16_t msg_len = data[read_pos++];
   msg_len <<= 8;
   msg_len |= data[read_pos++];
-  
+
   assert(read_pos <= data.size());
 
   if (msg_len > data.size()) {
@@ -268,7 +267,8 @@ std::cerr << "MKRTEST: --------------------(new msg)--------------------" << std
 
   Pegs::get<"bacnet_ip_packets_received">().inc();
 
-  std::cerr << "MKRTEST - got msg_function: " << msg_function << " msg length: " << msg_len << std::endl;
+  std::cerr << "MKRTEST - got msg_function: " << msg_function
+            << " msg length: " << msg_len << std::endl;
 }
 
 Inspector::Inspector(Module *module) : settings(module->get_settings()) {}

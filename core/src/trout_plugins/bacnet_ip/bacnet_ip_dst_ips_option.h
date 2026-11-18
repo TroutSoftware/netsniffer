@@ -13,6 +13,6 @@ namespace bacnet_ip {
 
 extern const snort::IpsApi ips_option;
 
-} // namespace mqtt_plugin
+} // namespace bacnet_ip
 
 #endif // #ifndef ips_option_mqtt_field_7FA3C91E

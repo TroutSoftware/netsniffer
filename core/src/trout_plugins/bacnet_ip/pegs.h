@@ -13,7 +13,6 @@
 
 // Debug includes
 
-
 namespace bacnet_ip {
 
 using namespace trout::templates;
@@ -30,7 +29,6 @@ using Pegs = PegList<
   Peg<Name<"spec_violations">,              Type<PegType::SUM>, HelpText<"The number of BACnet specification violations seen">>
 >;
 // clang-format on
-
 
 } // namespace bacnet_ip
 

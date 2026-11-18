@@ -50,6 +50,8 @@ template <typename T>
 concept BasedOn_LogBase = std::derived_from<T, LogBase>;
 
 class LogDB {
+// TODO: Make this depend on the SnortConfig::get_reload_id(), so each
+//       reload "cycle" has its own little world
   static std::mutex mutex;
   static std::map<std::string, std::shared_ptr<LogBase>> db;
   static bool register_obj(std::string, std::shared_ptr<LogBase>);
@@ -172,7 +174,7 @@ public:
   // shutdown
   virtual void flush() {};
 
-  //  Do not rely on actuall functions of the DataLossTracker
+  //  Do not rely on actual functions of the DataLossTracker
   using DataLossTracker = Common::DirtyTracker;
   bool has_lost_data(DataLossTracker &df) {
     df.clear_dirty();
